@@ -13,10 +13,11 @@ type Token @entity(immutable: false) {
   name: String!
   symbol: String!
   decimals: BigInt!
-  Volume: BigInt!
+  volume: BigInt!
   totalDeposits: BigInt!
   totalWithdrawals: BigInt!
   totalSettledAmount: BigInt!
+  totalTokens: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
   operatorCommission: BigInt!
   userTokens: [UserToken!]! @derivedFrom(field: "token")
@@ -55,7 +56,7 @@ type Operator @entity(immutable: false) {
   totalRails: BigInt!
   totalCommission: BigInt!
   totalApprovals: BigInt!
-  Volume: BigInt!
+  volume: BigInt!
 
   rails: [Rail!]! @derivedFrom(field: "operator")
   operatorApprovals: [OperatorApproval!]! @derivedFrom(field: "operator")
@@ -98,7 +99,7 @@ type Rail @entity(immutable: false) {
   rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
 }
 
-type RateChangeQueue @entity(immutable: true) {
+type RateChangeQueue @entity(immutable: false) {
   id: Bytes! # railId,startEpoch
   startEpoch: BigInt!
   untilEpoch: BigInt!

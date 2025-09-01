@@ -6,7 +6,8 @@ import {
   DailyOperatorMetric,
   WeeklyMetric,
 } from "../../../generated/schema";
-import { DateHelpers, PAYMENTS_NETWORK_STATS_ID, ZERO_BIG_INT } from "./constants";
+import { DateHelpers, ZERO_BIG_INT } from "./constants";
+import { getPaymentsMetricEntityId } from "../keys";
 
 // Core metric entity creation and loading functions
 export class MetricsEntityManager {
@@ -114,19 +115,22 @@ export class MetricsEntityManager {
   }
 
   static loadOrCreatePaymentsMetric(): PaymentsMetric {
-    const id = Bytes.fromUTF8(PAYMENTS_NETWORK_STATS_ID);
-    let metric = PaymentsMetric.load(Bytes.fromByteArray(id));
+    const id = getPaymentsMetricEntityId();
+    let metric = PaymentsMetric.load(id);
 
     if (!metric) {
-      metric = new PaymentsMetric(Bytes.fromByteArray(id));
+      metric = new PaymentsMetric(id);
       metric.totalRails = ZERO_BIG_INT;
       metric.totalOperators = ZERO_BIG_INT;
       metric.totalTokens = ZERO_BIG_INT;
       metric.totalAccounts = ZERO_BIG_INT;
       metric.totalFilBurned = ZERO_BIG_INT;
+      metric.totalZeroRateRails = ZERO_BIG_INT;
       metric.totalActiveRails = ZERO_BIG_INT;
       metric.totalTerminatedRails = ZERO_BIG_INT;
       metric.totalFinalizedRails = ZERO_BIG_INT;
+      metric.uniquePayers = ZERO_BIG_INT;
+      metric.uniquePayees = ZERO_BIG_INT;
     }
 
     return metric;

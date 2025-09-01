@@ -14,6 +14,14 @@ import {
   UserToken,
 } from "../../generated/schema";
 import { DEFAULT_DECIMALS } from "./constants";
+import { ZERO_BIG_INT } from "./metrics";
+import {
+  getOperatorApprovalEntityId,
+  getRailEntityId,
+  getRateChangeQueueEntityId,
+  getSettlementEntityId,
+  getUserTokenEntityId,
+} from "./keys";
 
 class TokenDetails {
   token: Token;
@@ -100,6 +108,14 @@ export const getTokenDetails = (address: Address): TokenDetails => {
       token.decimals = DEFAULT_DECIMALS;
     }
 
+    token.volume = ZERO_BIG_INT;
+    token.totalDeposits = ZERO_BIG_INT;
+    token.totalWithdrawals = ZERO_BIG_INT;
+    token.totalSettledAmount = ZERO_BIG_INT;
+    token.userFunds = ZERO_BIG_INT;
+    token.operatorCommission = ZERO_BIG_INT;
+    token.totalTokens = ZERO_BIG_INT;
+
     return new TokenDetails(token, true);
   }
 
@@ -108,7 +124,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
 
 // UserToken entity functions
 export const createOrLoadUserToken = (account: Account, token: Token): UserTokenWithIsNew => {
-  const id = account.id.concat(token.id);
+  const id = getUserTokenEntityId(account.id, token.id);
   let userToken = UserToken.load(id);
   if (!userToken) {
     userToken = new UserToken(id);
@@ -149,7 +165,7 @@ export const createOperatorApproval = (
   lockupAllowance: GraphBN,
   rateAllowance: GraphBN,
 ): OperatorApproval => {
-  const id = client.id.concat(operator.id).concat(token.id);
+  const id = getOperatorApprovalEntityId(client.id, operator.id, token.id);
   const operatorApproval = new OperatorApproval(id);
   operatorApproval.client = client.id;
   operatorApproval.operator = operator.id;
@@ -176,7 +192,7 @@ export const createRail = (
   serviceFeeRecipient: Address,
   blockNumber: GraphBN,
 ): Rail => {
-  const rail = new Rail(Bytes.fromByteArray(Bytes.fromBigInt(railId)));
+  const rail = new Rail(getRailEntityId(railId));
   rail.railId = railId;
   rail.payer = payer.id;
   rail.payee = payee.id;
@@ -209,7 +225,7 @@ export const createRateChangeQueue = (
   untilEpoch: GraphBN,
   rate: GraphBN,
 ): RateChangeQueue => {
-  const id = rail.id.concat(Bytes.fromByteArray(Bytes.fromBigInt(startEpoch)));
+  const id = getRateChangeQueueEntityId(rail.railId, startEpoch);
   const rateChangeQueue = new RateChangeQueue(id);
   rateChangeQueue.rail = rail.id;
   rateChangeQueue.startEpoch = startEpoch;
@@ -229,7 +245,7 @@ export const createSettlement = (
   operatorCommission: GraphBN,
   settledUpto: GraphBN,
 ): Settlement => {
-  const id = rail.id.concat(Bytes.fromByteArray(Bytes.fromBigInt(settledUpto)));
+  const id = getSettlementEntityId(rail.railId, settledUpto);
   const settlement = new Settlement(id);
   settlement.rail = rail.id;
   settlement.totalSettledAmount = totalSettledAmount;

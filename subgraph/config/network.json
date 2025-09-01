@@ -1,5 +1,5 @@
 {
   "network": "filecoin-testnet",
-  "paymentsContractAddress": "0x0000000000000000000000000000000000000000",
-  "paymentsContractStartBlock": 0
+  "paymentsContractAddress": "0xbB0592e7f0c8db5A4908C1c79BE913f19857682A",
+  "paymentsContractStartBlock": 2942569
 }

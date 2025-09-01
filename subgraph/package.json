@@ -1,5 +1,5 @@
 {
-  "name": "@payments/subgraph",
+  "name": "@filoz/filecoin-pay-subgraph",
   "version": "3.0.0",
   "description": "A subgraph to index data from payments actor to serve as data layer for frontend integration",
   "private": false,
@@ -20,11 +20,11 @@
     "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
     "prebuild": "pnpm codegen",
     "build": "graph build",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ maci-subgraph",
-    "create-local": "graph create --node http://localhost:8020/ maci-subgraph",
-    "remove-local": "graph remove --node http://localhost:8020/ maci-subgraph",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 maci-subgraph --network localhost",
-    "deploy:mainnet": "graph deploy --node https://api.studio.thegraph.com/deploy/ maci-subgraph --network mainnet",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ filecoin-pay-subgraph",
+    "create-local": "graph create --node http://localhost:8020/ filecoin-pay-subgraph",
+    "remove-local": "graph remove --node http://localhost:8020/ filecoin-pay-subgraph",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 filecoin-pay-subgraph --network localhost",
+    "deploy:mainnet": "graph deploy --node https://api.studio.thegraph.com/deploy/ filecoin-pay-subgraph --network mainnet",
     "test": "graph test",
     "test:coverage": "graph test && graph test -c"
   },

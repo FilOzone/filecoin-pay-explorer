@@ -24,7 +24,8 @@ import {
   getTokenDetails,
   updateOperatorLockup,
 } from "./utils/helpers";
-import { MetricsCollectionOrchestrator } from "./utils/metrics";
+import { MetricsCollectionOrchestrator, ZERO_BIG_INT } from "./utils/metrics";
+import { getRailEntityId } from "./utils/keys";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -70,8 +71,10 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     isNewOperator = true;
     operator = new Operator(operatorAddress);
     operator.address = operatorAddress;
-    operator.totalRails = GraphBN.zero();
-    operator.totalApprovals = GraphBN.zero();
+    operator.totalRails = ZERO_BIG_INT;
+    operator.totalApprovals = ZERO_BIG_INT;
+    operator.totalCommission = ZERO_BIG_INT;
+    operator.volume = ZERO_BIG_INT;
   }
 
   const id = clientAddress.concat(operator.id).concat(tokenAddress);
@@ -83,9 +86,8 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     operatorApproval.client = clientAddress;
     operatorApproval.operator = operatorAddress;
     operatorApproval.token = tokenAddress;
-    operatorApproval.isApproved = isApproved;
-    operatorApproval.lockupUsage = GraphBN.zero();
-    operatorApproval.rateUsage = GraphBN.zero();
+    operatorApproval.lockupUsage = ZERO_BIG_INT;
+    operatorApproval.rateUsage = ZERO_BIG_INT;
 
     operator.totalApprovals = operator.totalApprovals.plus(ONE_BIG_INT);
     if (clientAccount) {
@@ -168,7 +170,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
 export function handleRailTerminated(event: RailTerminatedEvent): void {
   const railId = event.params.railId;
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(getRailEntityId(railId));
 
   if (!rail) {
     log.warning("[handleRailTerminated] Rail not found for railId: {}", [railId.toString()]);
@@ -203,7 +205,7 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
   const oldLockupFixed = event.params.oldLockupFixed;
   const newLockupFixed = event.params.newLockupFixed;
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(Bytes.fromByteArray(Bytes.fromBigInt(railId)));
 
   if (!rail) {
     log.warning("[handleRailLockupModified] Rail not found for railId: {}", [railId.toString()]);
@@ -241,7 +243,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   const oldRate = event.params.oldRate;
   const newRate = event.params.newRate;
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(getRailEntityId(railId));
 
   if (!rail) {
     log.warning("[handleRailPaymentRateModified] Rail not found for railId: {}", [railId.toString()]);
@@ -332,7 +334,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
   const filBurnedResult = paymentsContract.try_NETWORK_FEE();
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(getRailEntityId(railId));
 
   if (!rail) {
     log.warning("[handleSettlementCompleted] Rail not found for railId: {}", [railId.toString()]);
@@ -397,6 +399,12 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const accountAddress = event.params.from;
   const amount = event.params.amount;
 
+  log.debug("[handleDepositRecorded] Deposit recorded for token: {}, account: {}, amount: {}", [
+    tokenAddress.toHexString(),
+    accountAddress.toHexString(),
+    amount.toString(),
+  ]);
+
   const tokenWithIsNew = getTokenDetails(tokenAddress);
   const token = tokenWithIsNew.token;
   const isNewToken = tokenWithIsNew.isNew;
@@ -411,6 +419,7 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
 
   token.userFunds = token.userFunds.plus(amount);
   token.totalDeposits = token.totalDeposits.plus(amount);
+  token.totalTokens = isNewUserToken ? token.totalTokens.plus(GraphBN.fromI32(1)) : token.totalTokens;
   token.save();
 
   if (isNewUserToken) {
@@ -472,7 +481,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const netPayeeAmount = event.params.netPayeeAmount;
   const operatorCommission = event.params.operatorCommission;
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(getRailEntityId(railId));
 
   if (!rail) {
     log.warning("[handleRailOneTimePaymentProcessed] Rail not found for railId: {}", [railId.toString()]);
@@ -523,7 +532,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
 export function handleRailFinalized(event: RailFinalizedEvent): void {
   const railId = event.params.railId;
 
-  const rail = Rail.load(Bytes.fromHexString(railId.toHexString()));
+  const rail = Rail.load(getRailEntityId(railId));
 
   if (!rail) {
     log.warning("[handleRailFinalized] Rail not found for railId: {}", [railId.toString()]);
@@ -549,5 +558,7 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
 }
 
 function calculateOneTimePayment(operatorCommission: GraphBN, commissionRateBps: GraphBN): GraphBN {
-  return operatorCommission.times(COMMISSION_MAX_BPS).div(commissionRateBps);
+  return commissionRateBps.equals(ZERO_BIG_INT)
+    ? ZERO_BIG_INT
+    : operatorCommission.times(COMMISSION_MAX_BPS).div(commissionRateBps);
 }
