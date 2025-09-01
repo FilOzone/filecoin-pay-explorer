@@ -65,12 +65,12 @@ export const GET_WEEKLY_METRICS = gql`
 // Query for top tokens by volume
 export const GET_TOP_TOKENS = gql`
   query GetTopTokens($first: Int = 4) {
-    tokens(first: $first, orderBy: Volume, orderDirection: desc) {
+    tokens(first: $first, orderBy: volume, orderDirection: desc) {
       id
       name
       symbol
       decimals
-      Volume
+      volume
       totalDeposits
       totalWithdrawals
       totalSettledAmount
@@ -108,13 +108,13 @@ export const GET_DAILY_TOKEN_METRICS = gql`
 // Query for top operators by volume
 export const GET_TOP_OPERATORS = gql`
   query GetTopOperators($first: Int = 4) {
-    operators(first: $first, orderBy: Volume, orderDirection: desc) {
+    operators(first: $first, orderBy: volume, orderDirection: desc) {
       id
       address
       totalRails
       totalCommission
       totalApprovals
-      Volume
+      volume
     }
   }
 `;

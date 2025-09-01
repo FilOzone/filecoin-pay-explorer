@@ -77,7 +77,7 @@ export const topTokens: Token[] = [
     name: "Filecoin",
     symbol: "FIL",
     decimals: BigInt(18),
-    Volume: BigInt("45000000000000000000000000"), // 45M FIL
+    volume: BigInt("45000000000000000000000000"), // 45M FIL
     totalDeposits: BigInt("12000000000000000000000000"),
     totalWithdrawals: BigInt("8000000000000000000000000"),
     totalSettledAmount: BigInt("35000000000000000000000000"),
@@ -89,7 +89,7 @@ export const topTokens: Token[] = [
     name: "USD Coin",
     symbol: "USDC",
     decimals: BigInt(6),
-    Volume: BigInt("89000000000000"), // 89M USDC
+    volume: BigInt("89000000000000"), // 89M USDC
     totalDeposits: BigInt("25000000000000"),
     totalWithdrawals: BigInt("18000000000000"),
     totalSettledAmount: BigInt("67000000000000"),
@@ -101,7 +101,7 @@ export const topTokens: Token[] = [
     name: "Wrapped Bitcoin",
     symbol: "WBTC",
     decimals: BigInt(8),
-    Volume: BigInt("1200000000000"), // 12K WBTC
+    volume: BigInt("1200000000000"), // 12K WBTC
     totalDeposits: BigInt("400000000000"),
     totalWithdrawals: BigInt("250000000000"),
     totalSettledAmount: BigInt("950000000000"),
@@ -113,7 +113,7 @@ export const topTokens: Token[] = [
     name: "Ethereum",
     symbol: "ETH",
     decimals: BigInt(18),
-    Volume: BigInt("8500000000000000000000"), // 8.5K ETH
+    volume: BigInt("8500000000000000000000"), // 8.5K ETH
     totalDeposits: BigInt("3200000000000000000000"),
     totalWithdrawals: BigInt("2100000000000000000000"),
     totalSettledAmount: BigInt("6300000000000000000000"),
@@ -132,7 +132,7 @@ export const generateDailyTokenMetrics = (tokens: Token[], days: number = 30): T
       date.setDate(date.getDate() - (days - 1 - i));
       const timestamp = Math.floor(date.getTime() / 1000);
 
-      const baseVolume = Number(token.Volume) / 365; // Average daily volume
+      const basevolume = Number(token.volume) / 365; // Average daily volume
       const randomMultiplier = 0.7 + Math.random() * 0.6; // 70% to 130% of base
 
       metrics.push({
@@ -145,7 +145,7 @@ export const generateDailyTokenMetrics = (tokens: Token[], days: number = 30): T
         },
         timestamp: BigInt(timestamp),
         date: date.toISOString().split("T")[0],
-        volume: BigInt(Math.floor(Number(baseVolume) * randomMultiplier)),
+        volume: BigInt(Math.floor(Number(basevolume) * randomMultiplier)),
         deposit: BigInt(Math.floor((Number(token.totalDeposits) / 365) * randomMultiplier)),
         withdrawal: BigInt(Math.floor((Number(token.totalWithdrawals) / 365) * randomMultiplier)),
         settledAmount: BigInt(Math.floor((Number(token.totalSettledAmount) / 365) * randomMultiplier)),
@@ -168,7 +168,7 @@ export const topOperators: Operator[] = [
     totalRails: BigInt("15847"),
     totalCommission: BigInt("1200000000000000000000"), // 1.2K FIL
     totalApprovals: BigInt("2847"),
-    Volume: BigInt("22000000000000000000000000"), // 22M FIL
+    volume: BigInt("22000000000000000000000000"), // 22M FIL
   },
   {
     id: "0xa2",
@@ -176,7 +176,7 @@ export const topOperators: Operator[] = [
     totalRails: BigInt("12934"),
     totalCommission: BigInt("980000000000000000000"), // 980 FIL
     totalApprovals: BigInt("2134"),
-    Volume: BigInt("18500000000000000000000000"), // 18.5M FIL
+    volume: BigInt("18500000000000000000000000"), // 18.5M FIL
   },
   {
     id: "0xa3",
@@ -184,7 +184,7 @@ export const topOperators: Operator[] = [
     totalRails: BigInt("8765"),
     totalCommission: BigInt("650000000000000000000"), // 650 FIL
     totalApprovals: BigInt("1456"),
-    Volume: BigInt("12300000000000000000000000"), // 12.3M FIL
+    volume: BigInt("12300000000000000000000000"), // 12.3M FIL
   },
   {
     id: "0xa4",
@@ -192,7 +192,7 @@ export const topOperators: Operator[] = [
     totalRails: BigInt("6543"),
     totalCommission: BigInt("420000000000000000000"), // 420 FIL
     totalApprovals: BigInt("987"),
-    Volume: BigInt("8900000000000000000000000"), // 8.9M FIL
+    volume: BigInt("8900000000000000000000000"), // 8.9M FIL
   },
 ];
 
@@ -206,7 +206,7 @@ export const generateDailyOperatorMetrics = (operators: Operator[], days: number
       date.setDate(date.getDate() - (days - 1 - i));
       const timestamp = Math.floor(date.getTime() / 1000);
 
-      const baseVolume = Number(operator.Volume) / 365; // Average daily volume
+      const basevolume = Number(operator.volume) / 365; // Average daily volume
       const randomMultiplier = 0.7 + Math.random() * 0.6;
 
       metrics.push({
@@ -217,8 +217,8 @@ export const generateDailyOperatorMetrics = (operators: Operator[], days: number
         },
         timestamp: BigInt(timestamp),
         date: date.toISOString().split("T")[0],
-        volume: BigInt(Math.floor(Number(baseVolume) * randomMultiplier)),
-        settledAmount: BigInt(Math.floor(Number(baseVolume) * 0.8 * randomMultiplier)),
+        volume: BigInt(Math.floor(Number(basevolume) * randomMultiplier)),
+        settledAmount: BigInt(Math.floor(Number(basevolume) * 0.8 * randomMultiplier)),
         commissionEarned: BigInt(Math.floor((Number(operator.totalCommission) / 365) * randomMultiplier)),
         railsCreated: BigInt(Math.floor(Math.random() * 20 + 5)),
         settlementsProcessed: BigInt(Math.floor(Math.random() * 50 + 10)),

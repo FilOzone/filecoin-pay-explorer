@@ -19,7 +19,7 @@ const mockResponses: Record<string, any> = {
 };
 
 // Enhanced client that can switch between mock and real data
-export const executeQuery = async (query: string, variables?: any, operationName?: string): Promise<any> => {
+export const executeQuery = async <T>(query: string, variables?: any, operationName?: string): Promise<T> => {
   if (USE_MOCK_DATA) {
     // Extract operation name from query if not provided
     const opName = operationName || query.match(/query\s+(\w+)/)?.[1];
@@ -34,5 +34,5 @@ export const executeQuery = async (query: string, variables?: any, operationName
   }
 
   // Use real GraphQL endpoint when USE_MOCK_DATA is false
-  return graphqlClient.request(query, variables);
+  return graphqlClient.request<T>(query, variables);
 };

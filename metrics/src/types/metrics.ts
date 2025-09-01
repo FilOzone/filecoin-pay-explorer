@@ -50,7 +50,7 @@ export interface Token {
   name: string;
   symbol: string;
   decimals: bigint;
-  Volume: bigint;
+  volume: bigint;
   totalDeposits: bigint;
   totalWithdrawals: bigint;
   totalSettledAmount: bigint;
@@ -85,7 +85,7 @@ export interface Operator {
   totalRails: bigint;
   totalCommission: bigint;
   totalApprovals: bigint;
-  Volume: bigint;
+  volume: bigint;
 }
 
 export interface OperatorMetric {

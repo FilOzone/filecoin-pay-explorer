@@ -72,7 +72,7 @@ export const TokenMetrics: React.FC = () => {
         </div>
       </div>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 gap-6'>
         {topTokens &&
           topTokens.slice(0, 4).map((token, index) => {
             return (
@@ -106,10 +106,10 @@ export const TokenMetrics: React.FC = () => {
                     <div className='text-right'>
                       <p className='text-white font-bold'>
                         {token.symbol === "FIL"
-                          ? formatFIL(token.Volume)
-                          : formatToken(token.Volume, token.decimals, token.symbol)}
+                          ? formatFIL(token.volume)
+                          : formatToken(token.volume, token.decimals, token.symbol)}
                       </p>
-                      <p className='text-gray-400 text-xs'>Daily Volume</p>
+                      <p className='text-gray-400 text-xs'>Volume</p>
                     </div>
                   </div>
 
@@ -122,8 +122,8 @@ export const TokenMetrics: React.FC = () => {
                         </div>
                         <span className='text-white text-sm font-medium'>
                           {token.symbol === "FIL"
-                            ? formatFIL(token.Volume)
-                            : formatToken(token.Volume, token.decimals, token.symbol)}
+                            ? formatFIL(token.volume)
+                            : formatToken(token.volume, token.decimals, token.symbol)}
                         </span>
                       </div>
 
