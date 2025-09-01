@@ -1,15 +1,15 @@
-import { Bytes, BigInt, Address } from "@graphprotocol/graph-ts";
+import { Bytes, BigInt } from "@graphprotocol/graph-ts";
 import { PAYMENTS_NETWORK_STATS_ID } from "./metrics";
 
 export function getRailEntityId(railId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(railId));
 }
 
-export function getUserTokenEntityId(account: Address, token: Address): Bytes {
+export function getUserTokenEntityId(account: Bytes, token: Bytes): Bytes {
   return account.concat(token);
 }
 
-export function getOperatorApprovalEntityId(client: Address, operator: Address, token: Address): Bytes {
+export function getOperatorApprovalEntityId(client: Bytes, operator: Bytes, token: Bytes): Bytes {
   return client.concat(operator).concat(token);
 }
 

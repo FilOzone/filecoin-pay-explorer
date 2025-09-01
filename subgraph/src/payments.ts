@@ -358,6 +358,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   settlement.totalSettledAmount = totalSettledAmount;
   settlement.totalNetPayeeAmount = totalNetPayeeAmount;
   settlement.operatorCommission = operatorCommission;
+  settlement.filBurned = filBurnedResult.reverted ? ZERO_BIG_INT : filBurnedResult.value;
   settlement.settledUpto = event.params.settledUpTo;
 
   // update funds for payer and payee

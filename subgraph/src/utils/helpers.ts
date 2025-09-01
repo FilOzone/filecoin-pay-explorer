@@ -9,7 +9,6 @@ import {
   PaymentsMetric,
   Rail,
   RateChangeQueue,
-  Settlement,
   Token,
   UserToken,
 } from "../../generated/schema";
@@ -234,28 +233,6 @@ export const createRateChangeQueue = (
   rateChangeQueue.save();
 
   return rateChangeQueue;
-};
-
-// Settlement entity functions
-export const createSettlement = (
-  rail: Rail,
-  totalSettledAmount: GraphBN,
-  totalNetPayeeAmount: GraphBN,
-  paymentFees: GraphBN,
-  operatorCommission: GraphBN,
-  settledUpto: GraphBN,
-): Settlement => {
-  const id = getSettlementEntityId(rail.railId, settledUpto);
-  const settlement = new Settlement(id);
-  settlement.rail = rail.id;
-  settlement.totalSettledAmount = totalSettledAmount;
-  settlement.totalNetPayeeAmount = totalNetPayeeAmount;
-  settlement.paymentFees = paymentFees;
-  settlement.operatorCommission = operatorCommission;
-  settlement.settledUpto = settledUpto;
-  settlement.save();
-
-  return settlement;
 };
 
 // Payments entity functions

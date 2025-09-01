@@ -112,7 +112,7 @@ type Settlement @entity(immutable: true) {
   rail: Rail!
   totalSettledAmount: BigInt!
   totalNetPayeeAmount: BigInt!
-  paymentFees: BigInt!
+  filBurned: BigInt!
   operatorCommission: BigInt!
   settledUpto: BigInt!
 }
