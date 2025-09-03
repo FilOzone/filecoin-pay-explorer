@@ -117,18 +117,18 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
 
 export function handleRailCreated(event: RailCreatedEvent): void {
   const railId = event.params.railId;
-  const payee = event.params.payee;
-  const payer = event.params.payer;
+  const payeeAddress = event.params.payee;
+  const payerAddress = event.params.payer;
   const arbiter = event.params.validator;
   const tokenAddress = event.params.token;
   const operatorAddress = event.params.operator;
   const commissionRateBps = event.params.commissionRateBps;
   const serviceFeeRecipient = event.params.serviceFeeRecipient;
 
-  const payerAccountWithIsNew = createOrLoadAccountByAddress(payer);
+  const payerAccountWithIsNew = createOrLoadAccountByAddress(payerAddress);
   const payerAccount = payerAccountWithIsNew.account;
   const isNewPayer = payerAccountWithIsNew.isNew;
-  const payeeAccountWithIsNew = createOrLoadAccountByAddress(payee);
+  const payeeAccountWithIsNew = createOrLoadAccountByAddress(payeeAddress);
   const payeeAccount = payeeAccountWithIsNew.account;
   const isNewPayee = payeeAccountWithIsNew.isNew;
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
@@ -141,9 +141,9 @@ export function handleRailCreated(event: RailCreatedEvent): void {
 
   const rail = createRail(
     railId,
-    payerAccount,
-    payeeAccount,
-    operator,
+    payerAddress,
+    payeeAddress,
+    operatorAddress,
     tokenAddress,
     arbiter,
     GraphBN.zero(),
@@ -151,6 +151,13 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     serviceFeeRecipient,
     event.block.number,
   );
+  const serviceFeeRecipientAccountWithIsNew = createOrLoadAccountByAddress(serviceFeeRecipient);
+  const serviceFeeRecipientUserTokenWithIsNew = createOrLoadUserToken(serviceFeeRecipient, tokenAddress);
+  if (serviceFeeRecipientUserTokenWithIsNew.isNew) {
+    serviceFeeRecipientAccountWithIsNew.account.totalTokens =
+      serviceFeeRecipientAccountWithIsNew.account.totalTokens.plus(ONE_BIG_INT);
+    serviceFeeRecipientAccountWithIsNew.account.save();
+  }
 
   payerAccount.save();
   payeeAccount.save();
@@ -364,6 +371,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   // update funds for payer and payee
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = UserToken.load(rail.payee.concat(rail.token));
+  const serviceFeeRecipientUserToken = UserToken.load(rail.serviceFeeRecipient.concat(rail.token));
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(operatorCommission);
@@ -379,6 +387,11 @@ export function handleRailSettled(event: RailSettledEvent): void {
   if (payeeToken) {
     payeeToken.funds = payeeToken.funds.plus(totalNetPayeeAmount);
     payeeToken.save();
+  }
+
+  if (serviceFeeRecipientUserToken) {
+    serviceFeeRecipientUserToken.funds = serviceFeeRecipientUserToken.funds.plus(operatorCommission);
+    serviceFeeRecipientUserToken.save();
   }
 
   settlement.save();
@@ -414,17 +427,18 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const account = accountWithIsNew.account;
   const isNewAccount = accountWithIsNew.isNew;
 
-  const userTokenWithIsNew = createOrLoadUserToken(account, token);
+  const userTokenWithIsNew = createOrLoadUserToken(accountAddress, tokenAddress);
   const userToken = userTokenWithIsNew.userToken;
   const isNewUserToken = userTokenWithIsNew.isNew;
 
   token.userFunds = token.userFunds.plus(amount);
   token.totalDeposits = token.totalDeposits.plus(amount);
-  token.totalTokens = isNewUserToken ? token.totalTokens.plus(GraphBN.fromI32(1)) : token.totalTokens;
+  token.volume = token.volume.plus(amount);
+  token.totalTokens = isNewUserToken ? token.totalTokens.plus(ONE_BIG_INT) : token.totalTokens;
   token.save();
 
   if (isNewUserToken) {
-    account.totalTokens = account.totalTokens.plus(GraphBN.fromI32(1));
+    account.totalTokens = account.totalTokens.plus(ONE_BIG_INT);
     account.save();
   }
 
@@ -460,6 +474,7 @@ export function handleWithdrawRecorded(event: WithdrawRecordedEvent): void {
   if (token) {
     token.userFunds = token.userFunds.minus(amount);
     token.totalWithdrawals = token.totalWithdrawals.plus(amount);
+    token.volume = token.volume.plus(amount);
     token.save();
   }
   userToken.save();
@@ -496,6 +511,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = UserToken.load(rail.payee.concat(rail.token));
+  const serviceFeeRecipientUserToken = UserToken.load(rail.serviceFeeRecipient.concat(rail.token));
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(operatorCommission);
@@ -509,6 +525,10 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   if (payeeToken) {
     payeeToken.funds = payeeToken.funds.plus(netPayeeAmount);
     payeeToken.save();
+  }
+  if (serviceFeeRecipientUserToken) {
+    serviceFeeRecipientUserToken.funds = serviceFeeRecipientUserToken.funds.plus(operatorCommission);
+    serviceFeeRecipientUserToken.save();
   }
 
   const operator = Operator.load(rail.operator);

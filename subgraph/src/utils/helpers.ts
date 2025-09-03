@@ -14,52 +14,34 @@ import {
 } from "../../generated/schema";
 import { DEFAULT_DECIMALS } from "./constants";
 import { ZERO_BIG_INT } from "./metrics";
-import {
-  getOperatorApprovalEntityId,
-  getRailEntityId,
-  getRateChangeQueueEntityId,
-  getSettlementEntityId,
-  getUserTokenEntityId,
-} from "./keys";
+import { getOperatorApprovalEntityId, getRailEntityId, getRateChangeQueueEntityId, getUserTokenEntityId } from "./keys";
 
 class TokenDetails {
-  token: Token;
-  isNew: boolean;
-
-  constructor(token: Token, isNew: boolean) {
-    this.token = token;
-    this.isNew = isNew;
-  }
+  constructor(
+    public token: Token,
+    public isNew: boolean,
+  ) {}
 }
 
 class AccountWithIsNew {
-  account: Account;
-  isNew: boolean;
-
-  constructor(account: Account, isNew: boolean) {
-    this.account = account;
-    this.isNew = isNew;
-  }
+  constructor(
+    public account: Account,
+    public isNew: boolean,
+  ) {}
 }
 
 class UserTokenWithIsNew {
-  userToken: UserToken;
-  isNew: boolean;
-
-  constructor(userToken: UserToken, isNew: boolean) {
-    this.userToken = userToken;
-    this.isNew = isNew;
-  }
+  constructor(
+    public userToken: UserToken,
+    public isNew: boolean,
+  ) {}
 }
 
 class OperatorWithIsNew {
-  operator: Operator;
-  isNew: boolean;
-
-  constructor(operator: Operator, isNew: boolean) {
-    this.operator = operator;
-    this.isNew = isNew;
-  }
+  constructor(
+    public operator: Operator,
+    public isNew: boolean,
+  ) {}
 }
 
 // Alternative Account entity function for payments-related code
@@ -69,9 +51,9 @@ export const createOrLoadAccountByAddress = (address: Address): AccountWithIsNew
   if (!account) {
     account = new Account(address);
     account.address = address;
-    account.totalRails = GraphBN.zero();
-    account.totalApprovals = GraphBN.zero();
-    account.totalTokens = GraphBN.zero();
+    account.totalRails = ZERO_BIG_INT;
+    account.totalApprovals = ZERO_BIG_INT;
+    account.totalTokens = ZERO_BIG_INT;
     account.save();
     return new AccountWithIsNew(account, true);
   }
@@ -122,17 +104,17 @@ export const getTokenDetails = (address: Address): TokenDetails => {
 };
 
 // UserToken entity functions
-export const createOrLoadUserToken = (account: Account, token: Token): UserTokenWithIsNew => {
-  const id = getUserTokenEntityId(account.id, token.id);
+export const createOrLoadUserToken = (account: Address, token: Address): UserTokenWithIsNew => {
+  const id = getUserTokenEntityId(account, token);
   let userToken = UserToken.load(id);
   if (!userToken) {
     userToken = new UserToken(id);
-    userToken.account = account.id;
-    userToken.token = token.id;
-    userToken.funds = GraphBN.zero();
-    userToken.lockupCurrent = GraphBN.zero();
-    userToken.lockupRate = GraphBN.zero();
-    userToken.lockupLastSettledAt = GraphBN.zero();
+    userToken.account = account;
+    userToken.token = token;
+    userToken.funds = ZERO_BIG_INT;
+    userToken.lockupCurrent = ZERO_BIG_INT;
+    userToken.lockupRate = ZERO_BIG_INT;
+    userToken.lockupLastSettledAt = ZERO_BIG_INT;
     userToken.save();
     return new UserTokenWithIsNew(userToken, true);
   }
@@ -147,8 +129,8 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
   if (!operator) {
     operator = new Operator(address);
     operator.address = address;
-    operator.totalRails = GraphBN.zero();
-    operator.totalApprovals = GraphBN.zero();
+    operator.totalRails = ZERO_BIG_INT;
+    operator.totalApprovals = ZERO_BIG_INT;
     operator.save();
     return new OperatorWithIsNew(operator, true);
   }
@@ -158,21 +140,21 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
 
 // OperatorApproval entity functions
 export const createOperatorApproval = (
-  client: Account,
-  operator: Operator,
-  token: Token,
+  client: Address,
+  operator: Address,
+  token: Address,
   lockupAllowance: GraphBN,
   rateAllowance: GraphBN,
 ): OperatorApproval => {
-  const id = getOperatorApprovalEntityId(client.id, operator.id, token.id);
+  const id = getOperatorApprovalEntityId(client, operator, token);
   const operatorApproval = new OperatorApproval(id);
-  operatorApproval.client = client.id;
-  operatorApproval.operator = operator.id;
-  operatorApproval.token = token.id;
+  operatorApproval.client = client;
+  operatorApproval.operator = operator;
+  operatorApproval.token = token;
   operatorApproval.lockupAllowance = lockupAllowance;
-  operatorApproval.lockupUsage = GraphBN.zero();
+  operatorApproval.lockupUsage = ZERO_BIG_INT;
   operatorApproval.rateAllowance = rateAllowance;
-  operatorApproval.rateUsage = GraphBN.zero();
+  operatorApproval.rateUsage = ZERO_BIG_INT;
   operatorApproval.save();
 
   return operatorApproval;
@@ -181,9 +163,9 @@ export const createOperatorApproval = (
 // Rail entity functions
 export const createRail = (
   railId: GraphBN,
-  payer: Account,
-  payee: Account,
-  operator: Operator,
+  payer: Address,
+  payee: Address,
+  operator: Address,
   token: Address,
   arbiter: Address,
   settledUpTo: GraphBN,
@@ -193,24 +175,24 @@ export const createRail = (
 ): Rail => {
   const rail = new Rail(getRailEntityId(railId));
   rail.railId = railId;
-  rail.payer = payer.id;
-  rail.payee = payee.id;
-  rail.operator = operator.id;
+  rail.payer = payer;
+  rail.payee = payee;
+  rail.operator = operator;
   rail.token = token;
   rail.serviceFeeRecipient = serviceFeeRecipient;
   rail.commissionRateBps = commissionRateBps;
-  rail.paymentRate = GraphBN.zero();
-  rail.lockupFixed = GraphBN.zero();
-  rail.lockupPeriod = GraphBN.zero();
+  rail.paymentRate = ZERO_BIG_INT;
+  rail.lockupFixed = ZERO_BIG_INT;
+  rail.lockupPeriod = ZERO_BIG_INT;
   rail.settledUpto = settledUpTo;
   rail.state = "ZERORATE";
-  rail.endEpoch = GraphBN.zero();
+  rail.endEpoch = ZERO_BIG_INT;
   rail.arbiter = arbiter;
-  rail.totalSettledAmount = GraphBN.zero();
-  rail.totalNetPayeeAmount = GraphBN.zero();
-  rail.totalCommission = GraphBN.zero();
-  rail.totalSettlements = GraphBN.zero();
-  rail.totalRateChanges = GraphBN.zero();
+  rail.totalSettledAmount = ZERO_BIG_INT;
+  rail.totalNetPayeeAmount = ZERO_BIG_INT;
+  rail.totalCommission = ZERO_BIG_INT;
+  rail.totalSettlements = ZERO_BIG_INT;
+  rail.totalRateChanges = ZERO_BIG_INT;
   rail.createdAt = blockNumber;
   rail.save();
 
@@ -245,10 +227,10 @@ export const createOrLoadPayments = (): PaymentsMetric => {
   }
 
   payments = new PaymentsMetric(id);
-  payments.totalRails = GraphBN.zero();
-  payments.totalOperators = GraphBN.zero();
-  payments.totalAccounts = GraphBN.zero();
-  payments.totalTokens = GraphBN.zero();
+  payments.totalRails = ZERO_BIG_INT;
+  payments.totalOperators = ZERO_BIG_INT;
+  payments.totalAccounts = ZERO_BIG_INT;
+  payments.totalTokens = ZERO_BIG_INT;
   payments.save();
 
   return payments;
@@ -264,8 +246,8 @@ export function updateOperatorLockup(
   }
 
   operatorApproval.lockupUsage = operatorApproval.lockupUsage.minus(oldLockup).plus(newLockup);
-  if (operatorApproval.lockupUsage.lt(GraphBN.zero())) {
-    operatorApproval.lockupUsage = GraphBN.zero();
+  if (operatorApproval.lockupUsage.lt(ZERO_BIG_INT)) {
+    operatorApproval.lockupUsage = ZERO_BIG_INT;
   }
   operatorApproval.save();
 }
