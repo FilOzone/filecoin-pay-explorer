@@ -99,7 +99,6 @@ export const HeroStats: React.FC = () => {
             title='Total Rails'
             value={formatCompactNumber(paymentsMetric.totalRails)}
             subtitle='Payment channels created'
-            change='+12.5%'
             changeType='positive'
             icon={Activity}
             gradient='from-purple-500 to-pink-600'
@@ -110,7 +109,6 @@ export const HeroStats: React.FC = () => {
             title='Active Rails'
             value={formatCompactNumber(paymentsMetric.totalActiveRails)}
             subtitle='Currently processing payments'
-            change='+8.3%'
             changeType='positive'
             icon={TrendingUp}
             gradient='from-blue-500 to-cyan-600'
@@ -121,7 +119,6 @@ export const HeroStats: React.FC = () => {
             title='Total Operators'
             value={formatCompactNumber(paymentsMetric.totalOperators)}
             subtitle='Network validators'
-            change='+15.7%'
             changeType='positive'
             icon={Users}
             gradient='from-teal-500 to-green-600'
@@ -132,7 +129,6 @@ export const HeroStats: React.FC = () => {
             title='Total Accounts'
             value={formatCompactNumber(paymentsMetric.totalAccounts)}
             subtitle='Unique network participants'
-            change='+23.1%'
             changeType='positive'
             icon={Coins}
             gradient='from-orange-500 to-red-600'
@@ -164,7 +160,6 @@ export const HeroStats: React.FC = () => {
             title='Finalized Rails'
             value={formatCompactNumber(paymentsMetric.totalFinalizedRails)}
             subtitle='Successfully completed'
-            change='+5.2%'
             changeType='positive'
             icon={Activity}
             gradient='from-green-500 to-teal-600'
