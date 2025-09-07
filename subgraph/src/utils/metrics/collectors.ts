@@ -19,12 +19,14 @@ export abstract class BaseMetricsCollector {
 // Rail Creation Metrics Collector
 export class RailCreationCollector extends BaseMetricsCollector {
   private rail: Rail;
+  private newAccounts: GraphBN;
   private isNewPayer: boolean;
   private isNewPayee: boolean;
   private isNewOperator: boolean;
 
   constructor(
     rail: Rail,
+    newAccounts: GraphBN,
     isNewPayer: boolean,
     isNewPayee: boolean,
     isNewOperator: boolean,
@@ -33,6 +35,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
   ) {
     super(timestamp, blockNumber);
     this.rail = rail;
+    this.newAccounts = newAccounts;
     this.isNewPayer = isNewPayer;
     this.isNewPayee = isNewPayee;
     this.isNewOperator = isNewOperator;
@@ -51,10 +54,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     dailyMetric.railsCreated = dailyMetric.railsCreated.plus(ONE_BIG_INT);
 
-    if (this.isNewPayer || this.isNewPayee) {
-      const newAccountsCount = (this.isNewPayer ? 1 : 0) + (this.isNewPayee ? 1 : 0);
-      dailyMetric.newAccounts = dailyMetric.newAccounts.plus(GraphBN.fromI32(newAccountsCount));
-    }
+    dailyMetric.newAccounts = dailyMetric.newAccounts.plus(this.newAccounts);
 
     // Update unique counts (simplified - in production you'd track sets)
     dailyMetric.uniquePayers = dailyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
@@ -69,10 +69,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     weeklyMetric.railsCreated = weeklyMetric.railsCreated.plus(ONE_BIG_INT);
 
-    if (this.isNewPayer || this.isNewPayee) {
-      const newAccountsCount = (this.isNewPayer ? 1 : 0) + (this.isNewPayee ? 1 : 0);
-      weeklyMetric.newAccounts = weeklyMetric.newAccounts.plus(GraphBN.fromI32(newAccountsCount));
-    }
+    weeklyMetric.newAccounts = weeklyMetric.newAccounts.plus(this.newAccounts);
 
     // Update unique counts (simplified - in production you'd track sets)
     weeklyMetric.uniquePayers = weeklyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
@@ -112,8 +109,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     networkMetric.totalRails = networkMetric.totalRails.plus(ONE_BIG_INT);
     networkMetric.totalZeroRateRails = networkMetric.totalZeroRateRails.plus(ONE_BIG_INT);
-    const newUsersCount = (this.isNewPayer ? 1 : 0) + (this.isNewPayee ? 1 : 0);
-    networkMetric.totalAccounts = networkMetric.totalAccounts.plus(GraphBN.fromI32(newUsersCount));
+    networkMetric.totalAccounts = networkMetric.totalAccounts.plus(this.newAccounts);
 
     if (this.isNewPayee) {
       networkMetric.uniquePayees = networkMetric.uniquePayees.plus(ONE_BIG_INT);
@@ -380,13 +376,22 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
 export class MetricsCollectionOrchestrator {
   static collectRailCreationMetrics(
     rail: Rail,
+    newAccounts: GraphBN,
     isNewPayer: boolean,
     isNewPayee: boolean,
     isNewOperator: boolean,
     timestamp: GraphBN,
     blockNumber: GraphBN,
   ): void {
-    const collector = new RailCreationCollector(rail, isNewPayer, isNewPayee, isNewOperator, timestamp, blockNumber);
+    const collector = new RailCreationCollector(
+      rail,
+      newAccounts,
+      isNewPayer,
+      isNewPayee,
+      isNewOperator,
+      timestamp,
+      blockNumber,
+    );
     collector.collect();
   }
 

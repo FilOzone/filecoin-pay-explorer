@@ -17,7 +17,7 @@ type Token @entity(immutable: false) {
   totalDeposits: BigInt!
   totalWithdrawals: BigInt!
   totalSettledAmount: BigInt!
-  totalTokens: BigInt!
+  totalUsers: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
   operatorCommission: BigInt!
   userTokens: [UserToken!]! @derivedFrom(field: "token")

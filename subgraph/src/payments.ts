@@ -35,19 +35,13 @@ export function handleAccountLockupSettled(event: AccountLockupSettledEvent): vo
   let userToken = UserToken.load(userTokenId);
 
   if (!userToken) {
-    userToken = new UserToken(userTokenId);
-    userToken.account = ownerAddress;
-    userToken.token = tokenAddress;
-    userToken.funds = GraphBN.zero();
-    userToken.lockupCurrent = event.params.lockupCurrent;
-    userToken.lockupRate = event.params.lockupRate;
-    userToken.lockupLastSettledAt = event.params.lockupLastSettledAt;
-  } else {
-    // Update lockup fields from event
-    userToken.lockupCurrent = event.params.lockupCurrent;
-    userToken.lockupRate = event.params.lockupRate;
-    userToken.lockupLastSettledAt = event.params.lockupLastSettledAt;
+    log.debug("[handleAccountLockupSettled] UserToken not found for id: {}", [userTokenId.toHexString()]);
+    return;
   }
+
+  userToken.lockupCurrent = event.params.lockupCurrent;
+  userToken.lockupRate = event.params.lockupRate;
+  userToken.lockupLastSettledAt = event.params.lockupLastSettledAt;
 
   userToken.save();
 }
@@ -127,10 +121,13 @@ export function handleRailCreated(event: RailCreatedEvent): void {
 
   const payerAccountWithIsNew = createOrLoadAccountByAddress(payerAddress);
   const payerAccount = payerAccountWithIsNew.account;
-  const isNewPayer = payerAccountWithIsNew.isNew;
+  const isNewPayer = payerAccount.totalRails.equals(ZERO_BIG_INT);
+  const isNewPayerAccount = payerAccountWithIsNew.isNew;
   const payeeAccountWithIsNew = createOrLoadAccountByAddress(payeeAddress);
   const payeeAccount = payeeAccountWithIsNew.account;
-  const isNewPayee = payeeAccountWithIsNew.isNew;
+  const isNewPayee = payeeAccount.totalRails.equals(ZERO_BIG_INT);
+  const isNewPayeeAccount = payeeAccountWithIsNew.isNew;
+
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
   const operator = operatorWithIsNew.operator;
   const isNewOperator = operatorWithIsNew.isNew;
@@ -151,8 +148,10 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     serviceFeeRecipient,
     event.block.number,
   );
+
   const serviceFeeRecipientAccountWithIsNew = createOrLoadAccountByAddress(serviceFeeRecipient);
   const serviceFeeRecipientUserTokenWithIsNew = createOrLoadUserToken(serviceFeeRecipient, tokenAddress);
+  const isNewServiceFeeRecipientAccount = serviceFeeRecipientAccountWithIsNew.isNew;
   if (serviceFeeRecipientUserTokenWithIsNew.isNew) {
     serviceFeeRecipientAccountWithIsNew.account.totalTokens =
       serviceFeeRecipientAccountWithIsNew.account.totalTokens.plus(ONE_BIG_INT);
@@ -164,8 +163,12 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   operator.save();
 
   // Collect Metrics
+  const newAccounts = GraphBN.fromI32(
+    (isNewPayerAccount ? 1 : 0) + (isNewPayeeAccount ? 1 : 0) + (isNewServiceFeeRecipientAccount ? 1 : 0),
+  );
   MetricsCollectionOrchestrator.collectRailCreationMetrics(
     rail,
+    newAccounts,
     isNewPayer,
     isNewPayee,
     isNewOperator,
@@ -434,7 +437,7 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   token.userFunds = token.userFunds.plus(amount);
   token.totalDeposits = token.totalDeposits.plus(amount);
   token.volume = token.volume.plus(amount);
-  token.totalTokens = isNewUserToken ? token.totalTokens.plus(ONE_BIG_INT) : token.totalTokens;
+  token.totalUsers = isNewUserToken ? token.totalUsers.plus(ONE_BIG_INT) : token.totalUsers;
   token.save();
 
   if (isNewUserToken) {

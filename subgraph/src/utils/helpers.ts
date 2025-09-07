@@ -95,7 +95,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.totalSettledAmount = ZERO_BIG_INT;
     token.userFunds = ZERO_BIG_INT;
     token.operatorCommission = ZERO_BIG_INT;
-    token.totalTokens = ZERO_BIG_INT;
+    token.totalUsers = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);
   }
@@ -107,6 +107,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
 export const createOrLoadUserToken = (account: Address, token: Address): UserTokenWithIsNew => {
   const id = getUserTokenEntityId(account, token);
   let userToken = UserToken.load(id);
+
   if (!userToken) {
     userToken = new UserToken(id);
     userToken.account = account;
