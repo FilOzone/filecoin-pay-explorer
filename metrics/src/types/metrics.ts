@@ -26,7 +26,7 @@ export interface DailyMetric {
   uniquePayers: bigint;
   uniquePayees: bigint;
   uniqueOperators: bigint;
-  newAccounts: bigint;
+  uniqueAccounts: bigint;
 }
 
 export interface WeeklyMetric {
@@ -42,7 +42,7 @@ export interface WeeklyMetric {
   uniquePayers: bigint;
   uniquePayees: bigint;
   uniqueOperators: bigint;
-  newAccounts: bigint;
+  uniqueAccounts: bigint;
 }
 
 export interface Token {
@@ -83,9 +83,17 @@ export interface Operator {
   id: string;
   address: string;
   totalRails: bigint;
-  totalCommission: bigint;
+  totalTokens: bigint;
   totalApprovals: bigint;
+}
+
+export interface OperatorToken {
+  id: string;
+  commissionEarned: bigint;
   volume: bigint;
+  settledAmount: bigint;
+  operator: Operator;
+  token: Token;
 }
 
 export interface OperatorMetric {
@@ -97,9 +105,6 @@ export interface OperatorMetric {
   timestamp: bigint;
   date?: string;
   week?: bigint;
-  volume: bigint;
-  settledAmount: bigint;
-  commissionEarned: bigint;
   railsCreated: bigint;
   settlementsProcessed: bigint;
   uniqueClients: bigint;

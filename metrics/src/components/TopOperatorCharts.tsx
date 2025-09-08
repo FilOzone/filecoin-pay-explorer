@@ -2,13 +2,13 @@ import React from "react";
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Users, Activity, BarChart3, Crown } from "lucide-react";
-import { useTopOperators, useOperatorMetrics } from "../hooks/useMetrics";
+import { useTopOperatorTokens, useOperatorMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { formatFIL, formatDate, YAxisTickFormatter } from "../utils/formatters";
+import { formatDate, YAxisTickFormatter, formatAddress } from "../utils/formatters";
 
 export const TopOperatorCharts: React.FC = () => {
-  const { data: topOperators, isLoading: operatorsLoading } = useTopOperators();
+  const { data: topOperators, isLoading: operatorsLoading } = useTopOperatorTokens();
   const { data: operatorMetrics, isLoading: metricsLoading, isError, error, refetch } = useOperatorMetrics();
 
   const isLoading = operatorsLoading || metricsLoading;
@@ -38,7 +38,7 @@ export const TopOperatorCharts: React.FC = () => {
 
   // Process chart data for top operators
   const chartData = operatorMetrics
-    .filter((metric) => topOperators.some((op) => op.id === metric.operator.id))
+    .filter((metric) => topOperators.some((op) => op.operator.id === metric.operator.id))
     .reduce((acc: any[], metric) => {
       const dateKey = formatDate(metric.timestamp);
 
@@ -48,12 +48,12 @@ export const TopOperatorCharts: React.FC = () => {
         acc.push(existingEntry);
       }
 
-      const operatorIndex = topOperators.findIndex((op) => op.id === metric.operator.id);
+      const operatorIndex = topOperators.findIndex((op) => op.operator.id === metric.operator.id);
       const operatorKey = `Operator ${operatorIndex + 1}`;
 
-      existingEntry[`${operatorKey}_volume`] = Number(metric.volume);
-      existingEntry[`${operatorKey}_commission`] = Number(metric.commissionEarned);
-      existingEntry[`${operatorKey}_settlements`] = Number(metric.settlementsProcessed);
+      existingEntry[`${operatorKey}_unique-clients`] = Number(metric.uniqueClients);
+      existingEntry[`${operatorKey}_rails-created`] = Number(metric.railsCreated);
+      existingEntry[`${operatorKey}_settlements-processed`] = Number(metric.settlementsProcessed);
 
       return acc;
     }, [])
@@ -69,13 +69,12 @@ export const TopOperatorCharts: React.FC = () => {
           <p className='text-gray-300 text-sm mb-2'>{label}</p>
           {payload.map((entry: any, index: number) => {
             const [operator, metric] = entry.dataKey.split("_");
-            const metricName = metric === "volume" ? "Volume" : metric === "commission" ? "Commission" : "Settlements";
+            const metricName = metric.replace("-", " ");
             return (
               <div key={index} className='flex items-center gap-2'>
                 <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
                 <span className='text-white text-sm'>
-                  {operator} {metricName}:{" "}
-                  {metric === "settlements" ? entry.value.toLocaleString() : formatFIL(BigInt(entry.value))}
+                  {operator} {metricName}: {entry.value.toLocaleString()}
                 </span>
               </div>
             );
@@ -108,28 +107,28 @@ export const TopOperatorCharts: React.FC = () => {
 
       {/* Charts Grid */}
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-        {/* Volume Performance */}
+        {/* Rails Created */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
             <Activity className='w-4 h-4 text-purple-400' />
-            Volume Performance
+            Rails Created
           </h4>
           <div className='h-64'>
             <ResponsiveContainer width='100%' height='100%'>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
                 <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, true)} fontSize={12} />
+                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
                 <Tooltip content={<CustomTooltip />} />
                 {topOperators.slice(0, 4).map((operator, index) => (
                   <Line
                     key={operator.id}
                     type='monotone'
-                    dataKey={`Operator ${index + 1}_volume`}
+                    dataKey={`Operator ${index + 1}_rails-created`}
                     stroke={operatorColors[index]}
                     strokeWidth={2}
                     dot={{ fill: operatorColors[index], strokeWidth: 2, r: 4 }}
-                    name={`Operator ${index + 1} Volume`}
+                    name={`Operator ${index + 1} Rails Created`}
                   />
                 ))}
               </LineChart>
@@ -137,25 +136,25 @@ export const TopOperatorCharts: React.FC = () => {
           </div>
         </div>
 
-        {/* Commission Earnings */}
+        {/* Unique Users */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
             <Users className='w-4 h-4 text-green-400' />
-            Commission Earnings
+            Unique Users
           </h4>
           <div className='h-64'>
             <ResponsiveContainer width='100%' height='100%'>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
                 <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, true)} fontSize={12} />
+                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
                 <Tooltip content={<CustomTooltip />} />
                 {topOperators.slice(0, 4).map((operator, index) => (
                   <Bar
                     key={operator.id}
-                    dataKey={`Operator ${index + 1}_commission`}
+                    dataKey={`Operator ${index + 1}_unique-clients`}
                     fill={operatorColors[index]}
-                    name={`Operator ${index + 1} Commission`}
+                    name={`Operator ${index + 1} Unique Users`}
                     radius={[2, 2, 0, 0]}
                   />
                 ))}
@@ -181,7 +180,7 @@ export const TopOperatorCharts: React.FC = () => {
               {topOperators.slice(0, 4).map((operator, index) => (
                 <Bar
                   key={operator.id}
-                  dataKey={`Operator ${index + 1}_settlements`}
+                  dataKey={`Operator ${index + 1}_settlements-processed`}
                   fill={operatorColors[index]}
                   name={`Operator ${index + 1} Settlements`}
                   radius={[2, 2, 0, 0]}
@@ -200,6 +199,7 @@ export const TopOperatorCharts: React.FC = () => {
             <span className='text-sm text-gray-300'>
               Operator {index + 1}
               {index === 0 && <Crown className='w-3 h-3 inline ml-1 text-yellow-400' />}
+              <span className='ml-1'>{formatAddress(operator.operator.address)}</span>
             </span>
           </div>
         ))}

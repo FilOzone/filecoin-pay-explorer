@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
-import { Activity, Flame, Calendar, BarChart3, Zap } from "lucide-react";
+import { Activity, Flame, Calendar, BarChart3, Users } from "lucide-react";
 import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -64,7 +64,7 @@ export const TrendChart: React.FC = () => {
         settlements: Number(metric.totalRailSettlements || 0),
         finalized: Number(metric.railsFinalized || 0),
         terminated: Number(metric.railsTerminated || 0),
-        uniqueUsers: Number(metric.uniquePayers || 0) + Number(metric.uniquePayees || 0),
+        uniqueUsers: Number(metric.uniqueAccounts || 0),
       };
     })
     .reverse(); // Reverse to show chronological order
@@ -174,32 +174,26 @@ export const TrendChart: React.FC = () => {
         {/* Rail Settlements */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
-            <Zap className='w-4 h-4 text-blue-400' />
-            Rail Settlements
+            <Users className='w-4 h-4 text-blue-400' />
+            New Users
           </h4>
 
           <div className='h-64'>
             <ResponsiveContainer width='100%' height='100%'>
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id='volumeGradient' x1='0' y1='0' x2='0' y2='1'>
-                    <stop offset='5%' stopColor='#3B82F6' stopOpacity={0.3} />
-                    <stop offset='95%' stopColor='#3B82F6' stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
                 <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
                 <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area
+                <Line
                   type='monotone'
-                  dataKey='settlements'
+                  dataKey='uniqueUsers'
                   stroke='#3B82F6'
                   strokeWidth={2}
-                  fill='url(#volumeGradient)'
-                  name='Rail Settlements'
+                  dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
+                  name='Unique Users'
                 />
-              </AreaChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -249,6 +243,14 @@ export const TrendChart: React.FC = () => {
                 strokeWidth={2}
                 dot={{ fill: "#F59E0B", strokeWidth: 2, r: 4 }}
                 name='Active Rails'
+              />
+              <Line
+                type='monotone'
+                dataKey='settlements'
+                stroke='#8B5CF6'
+                strokeWidth={2}
+                dot={{ fill: "#8B5CF6", strokeWidth: 2, r: 4 }}
+                name='Rail Settlements'
               />
             </LineChart>
           </ResponsiveContainer>

@@ -36,7 +36,7 @@ export const GET_DAILY_METRICS = gql`
       uniquePayers
       uniquePayees
       uniqueOperators
-      newAccounts
+      uniqueAccounts
     }
   }
 `;
@@ -57,7 +57,7 @@ export const GET_WEEKLY_METRICS = gql`
       uniquePayers
       uniquePayees
       uniqueOperators
-      newAccounts
+      uniqueAccounts
     }
   }
 `;
@@ -106,15 +106,26 @@ export const GET_DAILY_TOKEN_METRICS = gql`
 `;
 
 // Query for top operators by volume
-export const GET_TOP_OPERATORS = gql`
-  query GetTopOperators($first: Int = 4) {
-    operators(first: $first, orderBy: volume, orderDirection: desc) {
+export const GET_TOP_OPERATOR_TOKENS = gql`
+  query GetTopOperatorTokens($first: Int = 4) {
+    operatorTokens(first: $first, orderBy: volume, orderDirection: desc) {
       id
-      address
-      totalRails
-      totalCommission
-      totalApprovals
+      commissionEarned
       volume
+      settledAmount
+      operator {
+        id
+        address
+        totalRails
+        totalTokens
+        totalApprovals
+      }
+      token {
+        id
+        name
+        symbol
+        decimals
+      }
     }
   }
 `;
@@ -135,9 +146,6 @@ export const GET_DAILY_OPERATOR_METRICS = gql`
       }
       timestamp
       date
-      volume
-      settledAmount
-      commissionEarned
       railsCreated
       settlementsProcessed
       uniqueClients

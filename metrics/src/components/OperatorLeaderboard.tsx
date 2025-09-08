@@ -1,16 +1,15 @@
 import { motion } from "framer-motion";
-import { Activity, Crown, TrendingUp, Users } from "lucide-react";
+import { Activity, Crown, Users } from "lucide-react";
 import React from "react";
-import { useTopOperators, useOperatorMetrics } from "../hooks/useMetrics";
-import { formatAddress, formatFIL, formatCompactNumber } from "../utils/formatters";
+import { useTopOperatorTokens } from "../hooks/useMetrics";
+import { formatAddress, formatCompactNumber, formatToken } from "../utils/formatters";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
 
 export const OperatorLeaderboard: React.FC = () => {
-  const { data: topOperators, isLoading: operatorsLoading } = useTopOperators();
-  const { data: operatorMetrics, isLoading: metricsLoading, isError, error, refetch } = useOperatorMetrics();
+  const { data: topOperatorTokens, isLoading: operatorsLoading, isError, error, refetch } = useTopOperatorTokens();
 
-  const isLoading = operatorsLoading || metricsLoading;
+  const isLoading = operatorsLoading;
 
   if (isLoading) {
     return (
@@ -31,7 +30,7 @@ export const OperatorLeaderboard: React.FC = () => {
     );
   }
 
-  if (isError || !operatorMetrics) {
+  if (isError) {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
@@ -73,11 +72,8 @@ export const OperatorLeaderboard: React.FC = () => {
       </div>
 
       <div className='space-y-4'>
-        {topOperators &&
-          topOperators.slice(0, 4).map((operator, index) => {
-            // Get the latest metrics for this operator
-            const latestMetrics = operatorMetrics?.filter((m) => m.operator.id === operator.id)?.[0];
-
+        {topOperatorTokens &&
+          topOperatorTokens.slice(0, 4).map((operator, index) => {
             return (
               <motion.div
                 key={operator.id}
@@ -109,29 +105,36 @@ export const OperatorLeaderboard: React.FC = () => {
 
                     <div>
                       <h4 className='text-white font-medium'>Operator #{index + 1}</h4>
-                      <p className='text-gray-400 text-sm'>{formatAddress(operator.address)}</p>
+                      <p className='text-gray-400 text-sm'>{formatAddress(operator.operator.address)}</p>
                     </div>
                   </div>
 
                   <div className='flex items-center gap-6 text-right'>
                     <div>
-                      <p className='text-white font-medium'>{formatFIL(latestMetrics?.volume || operator.Volume)}</p>
-                      <p className='text-gray-400 text-xs'>Daily Volume</p>
+                      <p className='text-white font-medium'>
+                        {formatToken(operator.volume, operator.token.decimals, operator.token.symbol)}
+                      </p>
+                      <p className='text-gray-400 text-xs'>Volume</p>
                     </div>
-
-                    <div className='flex items-center gap-4 text-sm'>
+                    <div>
+                      <p className='text-white font-medium'>
+                        {formatToken(operator.commissionEarned, operator.token.decimals, operator.token.symbol)}
+                      </p>
+                      <p className='text-gray-400 text-xs'>Commission</p>
+                    </div>
+                    <div>
                       <div className='flex items-center gap-1 text-green-400'>
                         <Activity className='w-3 h-3' />
-                        <span>{formatCompactNumber(operator.totalRails)}</span>
+                        <span>{formatCompactNumber(operator.operator.totalRails)}</span>
                       </div>
+                      <p className='text-gray-400 text-xs'>Rails</p>
+                    </div>
+                    <div>
                       <div className='flex items-center gap-1 text-blue-400'>
                         <Users className='w-3 h-3' />
-                        <span>{formatCompactNumber(operator.totalApprovals)}</span>
+                        <span>{formatCompactNumber(operator.operator.totalApprovals)}</span>
                       </div>
-                      <div className='flex items-center gap-1 text-purple-400'>
-                        <TrendingUp className='w-3 h-3' />
-                        <span>{formatFIL(latestMetrics?.commissionEarned || operator.totalCommission)}</span>
-                      </div>
+                      <p className='text-gray-400 text-xs'>Approvals</p>
                     </div>
                   </div>
                 </div>
