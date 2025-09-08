@@ -50,14 +50,28 @@ type OperatorApproval @entity(immutable: false) {
   token: Token!
 }
 
+type OperatorToken @entity(immutable: false) {
+  id: Bytes! # operator address,token address
+  commissionEarned: BigInt!
+  volume: BigInt!
+  lockupAllowance: BigInt!
+  rateAllowance: BigInt!
+  lockupUsage: BigInt!
+  rateUsage: BigInt!
+  settledAmount: BigInt!
+
+  operator: Operator!
+  token: Token!
+}
+
 type Operator @entity(immutable: false) {
   id: Bytes! # address
   address: Bytes!
   totalRails: BigInt!
-  totalCommission: BigInt!
+  totalTokens: BigInt!
   totalApprovals: BigInt!
-  volume: BigInt!
 
+  operatorTokens: [OperatorToken!]! @derivedFrom(field: "operator")
   rails: [Rail!]! @derivedFrom(field: "operator")
   operatorApprovals: [OperatorApproval!]! @derivedFrom(field: "operator")
 }
@@ -156,7 +170,7 @@ type DailyMetric @entity(immutable: false) {
   uniquePayers: BigInt!
   uniquePayees: BigInt!
   uniqueOperators: BigInt!
-  newAccounts: BigInt!
+  uniqueAccounts: BigInt!
 }
 
 type WeeklyMetric @entity(immutable: false) {
@@ -177,7 +191,7 @@ type WeeklyMetric @entity(immutable: false) {
   uniquePayers: BigInt!
   uniquePayees: BigInt!
   uniqueOperators: BigInt!
-  newAccounts: BigInt!
+  uniqueAccounts: BigInt!
 }
 
 type DailyTokenMetric @entity(immutable: false) {
@@ -203,11 +217,6 @@ type DailyOperatorMetric @entity(immutable: false) {
   operator: Operator!
   timestamp: BigInt!
   date: String! # YYYY-MM-DD format
-  # Performance metrics
-  volume: BigInt!
-  settledAmount: BigInt!
-  commissionEarned: BigInt!
-
   # Rail management
   railsCreated: BigInt!
   settlementsProcessed: BigInt!

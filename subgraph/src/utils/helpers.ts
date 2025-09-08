@@ -6,6 +6,7 @@ import {
   Account,
   Operator,
   OperatorApproval,
+  OperatorToken,
   PaymentsMetric,
   Rail,
   RateChangeQueue,
@@ -14,7 +15,13 @@ import {
 } from "../../generated/schema";
 import { DEFAULT_DECIMALS } from "./constants";
 import { ZERO_BIG_INT } from "./metrics";
-import { getOperatorApprovalEntityId, getRailEntityId, getRateChangeQueueEntityId, getUserTokenEntityId } from "./keys";
+import {
+  getOperatorApprovalEntityId,
+  getOperatorTokenEntityId,
+  getRailEntityId,
+  getRateChangeQueueEntityId,
+  getUserTokenEntityId,
+} from "./keys";
 
 class TokenDetails {
   constructor(
@@ -40,6 +47,13 @@ class UserTokenWithIsNew {
 class OperatorWithIsNew {
   constructor(
     public operator: Operator,
+    public isNew: boolean,
+  ) {}
+}
+
+class OperatorTokenWithIsNew {
+  constructor(
+    public operatorToken: OperatorToken,
     public isNew: boolean,
   ) {}
 }
@@ -132,6 +146,7 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
     operator.address = address;
     operator.totalRails = ZERO_BIG_INT;
     operator.totalApprovals = ZERO_BIG_INT;
+    operator.totalTokens = ZERO_BIG_INT;
     operator.save();
     return new OperatorWithIsNew(operator, true);
   }
@@ -159,6 +174,30 @@ export const createOperatorApproval = (
   operatorApproval.save();
 
   return operatorApproval;
+};
+
+export const createOrLoadOperatorToken = (operator: Bytes, token: Bytes): OperatorTokenWithIsNew => {
+  const id = getOperatorTokenEntityId(operator, token);
+  let operatorToken = OperatorToken.load(id);
+
+  if (!operatorToken) {
+    operatorToken = new OperatorToken(id);
+    operatorToken.operator = operator;
+    operatorToken.token = token;
+    operatorToken.commissionEarned = ZERO_BIG_INT;
+    operatorToken.volume = ZERO_BIG_INT;
+    operatorToken.lockupAllowance = ZERO_BIG_INT;
+    operatorToken.rateAllowance = ZERO_BIG_INT;
+    operatorToken.lockupUsage = ZERO_BIG_INT;
+    operatorToken.rateUsage = ZERO_BIG_INT;
+    operatorToken.settledAmount = ZERO_BIG_INT;
+
+    operatorToken.save();
+
+    return new OperatorTokenWithIsNew(operatorToken, true);
+  }
+
+  return new OperatorTokenWithIsNew(operatorToken, false);
 };
 
 // Rail entity functions
@@ -251,4 +290,46 @@ export function updateOperatorLockup(
     operatorApproval.lockupUsage = ZERO_BIG_INT;
   }
   operatorApproval.save();
+}
+
+export function updateOperatorRate(
+  operatorApproval: OperatorApproval | null,
+  oldRate: GraphBN,
+  newRate: GraphBN,
+): void {
+  if (!operatorApproval) {
+    return;
+  }
+
+  operatorApproval.rateUsage = operatorApproval.rateUsage.minus(oldRate).plus(newRate);
+  if (operatorApproval.rateUsage.lt(ZERO_BIG_INT)) {
+    operatorApproval.rateUsage = ZERO_BIG_INT;
+  }
+}
+
+export function updateOperatorTokenLockup(
+  operatorToken: OperatorToken | null,
+  oldLockup: GraphBN,
+  newLockup: GraphBN,
+): void {
+  if (!operatorToken) {
+    return;
+  }
+
+  operatorToken.lockupUsage = operatorToken.lockupUsage.minus(oldLockup).plus(newLockup);
+  if (operatorToken.lockupUsage.lt(ZERO_BIG_INT)) {
+    operatorToken.lockupUsage = ZERO_BIG_INT;
+  }
+  operatorToken.save();
+}
+
+export function updateOperatorTokenRate(operatorToken: OperatorToken | null, oldRate: GraphBN, newRate: GraphBN): void {
+  if (!operatorToken) {
+    return;
+  }
+
+  operatorToken.rateUsage = operatorToken.rateUsage.minus(oldRate).plus(newRate);
+  if (operatorToken.rateUsage.lt(ZERO_BIG_INT)) {
+    operatorToken.rateUsage = ZERO_BIG_INT;
+  }
 }

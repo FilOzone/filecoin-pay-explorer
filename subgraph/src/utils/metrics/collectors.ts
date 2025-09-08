@@ -54,7 +54,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     dailyMetric.railsCreated = dailyMetric.railsCreated.plus(ONE_BIG_INT);
 
-    dailyMetric.newAccounts = dailyMetric.newAccounts.plus(this.newAccounts);
+    dailyMetric.uniqueAccounts = dailyMetric.uniqueAccounts.plus(this.newAccounts);
 
     // Update unique counts (simplified - in production you'd track sets)
     dailyMetric.uniquePayers = dailyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
@@ -69,7 +69,7 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     weeklyMetric.railsCreated = weeklyMetric.railsCreated.plus(ONE_BIG_INT);
 
-    weeklyMetric.newAccounts = weeklyMetric.newAccounts.plus(this.newAccounts);
+    weeklyMetric.uniqueAccounts = weeklyMetric.uniqueAccounts.plus(this.newAccounts);
 
     // Update unique counts (simplified - in production you'd track sets)
     weeklyMetric.uniquePayers = weeklyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
@@ -175,9 +175,6 @@ export class SettlementCollector extends BaseMetricsCollector {
       this.timestamp,
     );
 
-    operatorMetric.volume = operatorMetric.volume.plus(this.totalSettledAmount);
-    operatorMetric.settledAmount = operatorMetric.settledAmount.plus(this.totalNetPayeeAmount);
-    operatorMetric.commissionEarned = operatorMetric.commissionEarned.plus(this.operatorCommission);
     operatorMetric.settlementsProcessed = operatorMetric.settlementsProcessed.plus(ONE_BIG_INT);
 
     operatorMetric.save();
@@ -294,6 +291,15 @@ export class TokenActivityCollector extends BaseMetricsCollector {
   collect(): void {
     this.updateTokenMetrics();
     this.updateNetworkMetrics();
+    this.updateDailyMetrics();
+  }
+
+  private updateDailyMetrics(): void {
+    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
+    dailyMetric.uniqueAccounts = this.isNewAccount
+      ? dailyMetric.uniqueAccounts.plus(ONE_BIG_INT)
+      : dailyMetric.uniqueAccounts;
+    dailyMetric.save();
   }
 
   private updateTokenMetrics(): void {

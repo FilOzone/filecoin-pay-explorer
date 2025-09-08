@@ -32,7 +32,7 @@ export class MetricsEntityManager {
       metric.uniquePayers = ZERO_BIG_INT;
       metric.uniquePayees = ZERO_BIG_INT;
       metric.uniqueOperators = ZERO_BIG_INT;
-      metric.newAccounts = ZERO_BIG_INT;
+      metric.uniqueAccounts = ZERO_BIG_INT;
     }
 
     return metric;
@@ -59,7 +59,7 @@ export class MetricsEntityManager {
       metric.uniquePayers = ZERO_BIG_INT;
       metric.uniquePayees = ZERO_BIG_INT;
       metric.uniqueOperators = ZERO_BIG_INT;
-      metric.newAccounts = ZERO_BIG_INT;
+      metric.uniqueAccounts = ZERO_BIG_INT;
     }
 
     return metric;
@@ -102,9 +102,6 @@ export class MetricsEntityManager {
       metric.timestamp = GraphBN.fromI64(dayStart);
       metric.date = DateHelpers.getDateString(dayStart);
 
-      metric.volume = ZERO_BIG_INT;
-      metric.settledAmount = ZERO_BIG_INT;
-      metric.commissionEarned = ZERO_BIG_INT;
       metric.railsCreated = ZERO_BIG_INT;
       metric.settlementsProcessed = ZERO_BIG_INT;
       metric.uniqueClients = ZERO_BIG_INT;

@@ -9,6 +9,10 @@ export function getUserTokenEntityId(account: Bytes, token: Bytes): Bytes {
   return account.concat(token);
 }
 
+export function getOperatorTokenEntityId(operator: Bytes, token: Bytes): Bytes {
+  return operator.concat(token);
+}
+
 export function getOperatorApprovalEntityId(client: Bytes, operator: Bytes, token: Bytes): Bytes {
   return client.concat(operator).concat(token);
 }
