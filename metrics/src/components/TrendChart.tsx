@@ -5,7 +5,7 @@ import { Activity, Flame, Calendar, BarChart3, Users } from "lucide-react";
 import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { formatDate, formatToken, YAxisTickFormatter } from "../utils/formatters";
+import { formatDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
 
 export const TrendChart: React.FC = () => {
   const [timeframe, setTimeframe] = useState<"daily" | "weekly">("daily");
@@ -79,9 +79,7 @@ export const TrendChart: React.FC = () => {
               <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
               <span className='text-white text-sm'>
                 {entry.name}:{" "}
-                {entry.name === "FIL Burned"
-                  ? formatToken(BigInt(entry.value), 18, "FIL")
-                  : entry.value.toLocaleString()}
+                {entry.name === "FIL Burned" ? formatFIL(BigInt(entry.value)) : entry.value.toLocaleString()}
               </span>
             </div>
           ))}
@@ -156,7 +154,7 @@ export const TrendChart: React.FC = () => {
                 </defs>
                 <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
                 <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, true)} fontSize={12} />
+                <YAxis stroke='#9CA3AF' tickFormatter={formatFIL} fontSize={12} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area
                   type='monotone'

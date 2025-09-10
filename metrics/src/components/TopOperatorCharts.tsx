@@ -175,7 +175,7 @@ export const TopOperatorCharts: React.FC = () => {
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
               <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-              <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
+              <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false, 1)} fontSize={12} />
               <Tooltip content={<CustomTooltip />} />
               {topOperators.slice(0, 4).map((operator, index) => (
                 <Bar

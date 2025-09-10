@@ -15,15 +15,20 @@ export const formatDate = (timestamp: bigint): string => {
 
 export function formatCompactNumber(value: number | string | bigint, decimals: number = 2) {
   value = Number(value);
-  const i = value === 0 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
+  const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
   const sizes = ["", "K", "M", "B", "Qa", "Qi"];
   return `${(value / Math.pow(1000, i)).toFixed(decimals)} ${sizes[i]}`;
 }
 
-export function formatToken(value: number | string | bigint, tokenDecimals: number | bigint = 18, symbol: string = "") {
+export function formatToken(
+  value: number | string | bigint,
+  tokenDecimals: number | bigint = 18,
+  symbol: string = "",
+  decimals: number = 2,
+) {
   const divisor = BigInt(10) ** BigInt(tokenDecimals);
   const unitValue = BigInt(value) / divisor;
-  return `${formatCompactNumber(unitValue)} ${symbol}`;
+  return `${formatCompactNumber(unitValue, decimals)} ${symbol}`;
 }
 
 export const formatFIL = (attoFil: string | bigint) => {
@@ -56,12 +61,12 @@ export const formatFIL = (attoFil: string | bigint) => {
   return "0 FIL";
 };
 
-export function YAxisTickFormatter(value: number, isToken: boolean, tokenDecimals: number = 18) {
+export function YAxisTickFormatter(value: number, isToken: boolean, decimals: number = 0) {
   return isToken
     ? (() => {
-        const divisor = BigInt(10) ** BigInt(tokenDecimals);
+        const divisor = BigInt(10) ** BigInt(decimals);
         const unitValue = BigInt(value) / divisor;
         return `${formatCompactNumber(unitValue, 0)}`;
       })()
-    : formatCompactNumber(value, 0);
+    : formatCompactNumber(value, decimals);
 }
