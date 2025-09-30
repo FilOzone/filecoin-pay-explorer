@@ -5,7 +5,7 @@ import { Activity, Flame, Calendar, BarChart3, Users } from "lucide-react";
 import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { formatDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
+import { formatDate, formatWeekDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
 
 export const TrendChart: React.FC = () => {
   const [timeframe, setTimeframe] = useState<"daily" | "weekly">("daily");
@@ -53,21 +53,19 @@ export const TrendChart: React.FC = () => {
     );
   }
 
-  const chartData = metrics
-    .map((metric) => {
-      const isDaily = timeframe === "daily";
-      return {
-        date: isDaily ? formatDate(metric.timestamp) : `Week ${(metric as any).week}`,
-        filBurned: Number(metric.filBurned),
-        railsCreated: Number(metric.railsCreated || 0),
-        activeRails: Number(metric.activeRailsCount || 0),
-        settlements: Number(metric.totalRailSettlements || 0),
-        finalized: Number(metric.railsFinalized || 0),
-        terminated: Number(metric.railsTerminated || 0),
-        uniqueUsers: Number(metric.uniqueAccounts || 0),
-      };
-    })
-    .reverse(); // Reverse to show chronological order
+  const chartData = metrics.map((metric) => {
+    const isDaily = timeframe === "daily";
+    return {
+      date: isDaily ? formatDate(metric.timestamp) : formatWeekDate(metric.timestamp),
+      filBurned: Number(metric.filBurned),
+      railsCreated: Number(metric.railsCreated || 0),
+      activeRails: Number(metric.activeRailsCount || 0),
+      settlements: Number(metric.totalRailSettlements || 0),
+      finalized: Number(metric.railsFinalized || 0),
+      terminated: Number(metric.railsTerminated || 0),
+      uniqueUsers: Number(metric.uniqueAccounts || 0),
+    };
+  });
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
