@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="64" height="64" viewBox="0 0 152 152" role="img" aria-labelledby="titleDesc">
+  <title id="titleDesc">Pay Metrics favicon (light border)</title>
+
+  <defs>
+    <style>
+      .blue { fill: #0ea5ff; }          
+      .icon-bg { fill: none; stroke: #e5e7eb; stroke-width: 10; } 
+    </style>
+    <clipPath id="iconClip">
+      <rect x="6" y="6" width="140" height="140" rx="28" ry="28" />
+    </clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="152" height="152" rx="30" ry="30" class="icon-bg"/>
+  <rect x="12" y="12" width="128" height="128" rx="20" ry="20" fill="transparent"/>
+
+  <g clip-path="url(#iconClip)">
+    <rect x="30" y="72" width="20" height="48" rx="4" class="blue" />
+    <rect x="60" y="52" width="20" height="68" rx="4" class="blue" />
+    <rect x="90" y="28" width="20" height="92" rx="4" class="blue" />
+  </g>
+
+  <desc>Favicon icon: rounded square with three ascending bars, light gray outline.</desc>
+</svg>
