@@ -13,14 +13,6 @@ export const formatDate = (timestamp: bigint): string => {
   });
 };
 
-export const formatWeekDate = (timestamp: bigint): string => {
-  const date = new Date(Number(timestamp) * 1000);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `Week of ${year}-${month}-${day}`;
-};
-
 export function formatCompactNumber(value: number | string | bigint, decimals: number = 2) {
   value = Number(value);
   const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
