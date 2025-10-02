@@ -34,27 +34,36 @@ export function formatToken(
 export const formatFIL = (attoFil: string | bigint) => {
   if (!attoFil || attoFil === "0") return "0 FIL";
 
+  const value = BigInt(attoFil);
+  const filDivisor = BigInt(10) ** BigInt(18);
+  const filValue = value / filDivisor;
+  
+  // If >= 1 FIL, show as FIL with compact notation
+  if (filValue >= 1) {
+    return `${formatCompactNumber(filValue, 1)} FIL`;
+  }
+  
+  // For fractional FIL (>= 0.001 FIL), show with more decimals
+  const filValueWithDecimals = Number(value) / Number(filDivisor);
+  if (filValueWithDecimals >= 0.001) {
+    return `${filValueWithDecimals.toFixed(3)} FIL`;
+  }
+
+  // For smaller amounts, use appropriate smaller units
   const units = [
-    { name: "FIL", decimals: 18 },
-    { name: "milliFIL", decimals: 15 },
-    { name: "microFIL", decimals: 12 },
     { name: "nanoFIL", decimals: 9 },
     { name: "picoFIL", decimals: 6 },
     { name: "femtoFIL", decimals: 3 },
     { name: "attoFIL", decimals: 0 },
   ];
 
-  const value = BigInt(attoFil);
-
   for (const unit of units) {
     const divisor = BigInt(10) ** BigInt(unit.decimals);
     const unitValue = value / divisor;
 
     if (unitValue >= 1) {
-      const decimals = unit.name === "FIL" ? 1 : 2;
-      return unit.name === "FIL"
-        ? `${formatCompactNumber(unitValue, decimals)} FIL`
-        : `${unitValue.toString()} ${unit.name}`;
+      // Use compact formatting for smaller units
+      return `${formatCompactNumber(unitValue, 2)} ${unit.name}`;
     }
   }
 
