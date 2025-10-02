@@ -17,7 +17,7 @@ export function formatCompactNumber(value: number | string | bigint, decimals: n
   value = Number(value);
   const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
   const sizes = ["", "K", "M", "B", "Qa", "Qi"];
-  return `${(value / Math.pow(1000, i)).toFixed(decimals)} ${sizes[i]}`;
+  return `${(value / Math.pow(1000, i)).toFixed(decimals).replace(/\.?0+$/, "")} ${sizes[i]}`;
 }
 
 export function formatToken(
@@ -37,12 +37,12 @@ export const formatFIL = (attoFil: string | bigint) => {
   const value = BigInt(attoFil);
   const filDivisor = BigInt(10) ** BigInt(18);
   const filValue = value / filDivisor;
-  
+
   // If >= 1 FIL, show as FIL with compact notation
   if (filValue >= 1) {
     return `${formatCompactNumber(filValue, 1)} FIL`;
   }
-  
+
   // For fractional FIL (>= 0.001 FIL), show with more decimals
   const filValueWithDecimals = Number(value) / Number(filDivisor);
   if (filValueWithDecimals >= 0.001) {

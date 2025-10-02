@@ -53,18 +53,20 @@ export const TrendChart: React.FC = () => {
     );
   }
 
-  const chartData = metrics.map((metric) => {
-    return {
-      date: formatDate(metric.timestamp),
-      filBurned: Number(metric.filBurned),
-      railsCreated: Number(metric.railsCreated || 0),
-      activeRails: Number(metric.activeRailsCount || 0),
-      settlements: Number(metric.totalRailSettlements || 0),
-      finalized: Number(metric.railsFinalized || 0),
-      terminated: Number(metric.railsTerminated || 0),
-      uniqueUsers: Number(metric.uniqueAccounts || 0),
-    };
-  });
+  const chartData = metrics
+    .map((metric) => {
+      return {
+        date: formatDate(metric.timestamp),
+        filBurned: Number(metric.filBurned),
+        railsCreated: Number(metric.railsCreated || 0),
+        activeRails: Number(metric.activeRailsCount || 0),
+        settlements: Number(metric.totalRailSettlements || 0),
+        finalized: Number(metric.railsFinalized || 0),
+        terminated: Number(metric.railsTerminated || 0),
+        uniqueUsers: Number(metric.uniqueAccounts || 0),
+      };
+    })
+    .reverse();
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
