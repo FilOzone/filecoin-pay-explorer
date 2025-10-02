@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="600" height="200" viewBox="0 0 600 200" role="img" aria-labelledby="titleDesc">
+  <title id="titleDesc">Pay Metrics logo (light text/borders)</title>
+
+  <defs>
+    <style>
+      .light { fill: #e5e7eb; }         /* light gray (text + outline) */
+      .blue { fill: #0ea5ff; }          /* bars */
+      .icon-bg { fill: none; stroke: #e5e7eb; stroke-width: 10; }
+      .name { font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 700; letter-spacing: 1px; }
+    </style>
+    <clipPath id="iconClip">
+      <rect x="6" y="6" width="140" height="140" rx="28" ry="28" />
+    </clipPath>
+  </defs>
+
+  <!-- Icon -->
+  <g transform="translate(10,30)">
+    <rect x="0" y="0" width="152" height="152" rx="30" ry="30" class="icon-bg"/>
+    <rect x="12" y="12" width="128" height="128" rx="20" ry="20" fill="transparent"/>
+
+    <g clip-path="url(#iconClip)">
+      <rect x="30" y="72" width="20" height="48" rx="4" class="blue" />
+      <rect x="60" y="52" width="20" height="68" rx="4" class="blue" />
+      <rect x="90" y="28" width="20" height="92" rx="4" class="blue" />
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(190,80)">
+    <text class="name light" x="0" y="-6" font-size="48">PAY</text>
+    <text class="name light" x="0" y="56" font-size="48">METRICS</text>
+  </g>
+
+  <desc>Logo: rounded square icon with three ascending bars, light gray outline and text.</desc>
+</svg>

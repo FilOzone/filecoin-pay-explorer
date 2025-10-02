@@ -24,9 +24,7 @@ function App() {
           <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4'>
             <div className='flex items-center justify-between'>
               <div className='flex items-center gap-3'>
-                <div className='w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg flex items-center justify-center'>
-                  <span className='text-white font-bold text-sm'>F</span>
-                </div>
+                <img src='/logo.svg' alt='Filecoin Pay Metrics' className='h-12' />
                 <div>
                   <h1 className='text-white font-bold text-lg'>Filecoin Payments</h1>
                   <p className='text-gray-400 text-xs'>Network Analytics Dashboard</p>
