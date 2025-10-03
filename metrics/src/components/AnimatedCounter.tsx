@@ -31,8 +31,8 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({
             setDisplayValue(value);
             clearInterval(counter);
           } else {
-            const formattedValue = startValue.toLocaleString(undefined, {
-              maximumFractionDigits: numericValue < 10 ? 2 : 0
+            const formattedValue = Math.floor(startValue).toLocaleString(undefined, {
+              maximumFractionDigits: 0
             });
             setDisplayValue(formattedValue + suffix);
           }

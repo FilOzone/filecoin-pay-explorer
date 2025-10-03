@@ -6,7 +6,7 @@ import { AnimatedCounter } from "./AnimatedCounter";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
-import { formatFIL, formatCompactNumber } from "../utils/formatters";
+import { formatFIL, formatCountableMetric } from "../utils/formatters";
 
 export const HeroStats: React.FC = () => {
   const { data: paymentsMetric, isLoading, isError, error, refetch } = usePaymentsMetrics();
@@ -97,7 +97,7 @@ export const HeroStats: React.FC = () => {
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
           <MetricCard
             title='Total Rails'
-            value={formatCompactNumber(paymentsMetric.totalRails)}
+            value={formatCountableMetric(paymentsMetric.totalRails)}
             subtitle='Payment channels created'
             changeType='positive'
             icon={Activity}
@@ -107,7 +107,7 @@ export const HeroStats: React.FC = () => {
 
           <MetricCard
             title='Active Rails'
-            value={formatCompactNumber(paymentsMetric.totalActiveRails)}
+            value={formatCountableMetric(paymentsMetric.totalActiveRails)}
             subtitle='Currently processing payments'
             changeType='positive'
             icon={TrendingUp}
@@ -117,7 +117,7 @@ export const HeroStats: React.FC = () => {
 
           <MetricCard
             title='Total Operators'
-            value={formatCompactNumber(paymentsMetric.totalOperators)}
+            value={formatCountableMetric(paymentsMetric.totalOperators)}
             subtitle='Network validators'
             changeType='positive'
             icon={Users}
@@ -127,7 +127,7 @@ export const HeroStats: React.FC = () => {
 
           <MetricCard
             title='Total Accounts'
-            value={formatCompactNumber(paymentsMetric.totalAccounts)}
+            value={formatCountableMetric(paymentsMetric.totalAccounts)}
             subtitle='Unique network participants'
             changeType='positive'
             icon={Coins}
@@ -140,7 +140,7 @@ export const HeroStats: React.FC = () => {
         <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mt-6'>
           <MetricCard
             title='Unique Payers'
-            value={formatCompactNumber(paymentsMetric.uniquePayers)}
+            value={formatCountableMetric(paymentsMetric.uniquePayers)}
             subtitle='Active payment senders'
             icon={DollarSign}
             gradient='from-indigo-500 to-purple-600'
@@ -149,7 +149,7 @@ export const HeroStats: React.FC = () => {
 
           <MetricCard
             title='Unique Payees'
-            value={formatCompactNumber(paymentsMetric.uniquePayees)}
+            value={formatCountableMetric(paymentsMetric.uniquePayees)}
             subtitle='Payment recipients'
             icon={Users}
             gradient='from-cyan-500 to-blue-600'
@@ -158,7 +158,7 @@ export const HeroStats: React.FC = () => {
 
           <MetricCard
             title='Finalized Rails'
-            value={formatCompactNumber(paymentsMetric.totalFinalizedRails)}
+            value={formatCountableMetric(paymentsMetric.totalFinalizedRails)}
             subtitle='Successfully completed'
             changeType='positive'
             icon={Activity}

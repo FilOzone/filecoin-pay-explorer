@@ -78,7 +78,7 @@ export const TrendChart: React.FC = () => {
               <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
               <span className='text-white text-sm'>
                 {entry.name}:{" "}
-                {entry.name === "FIL Burned" ? formatFIL(BigInt(entry.value)) : entry.value.toLocaleString()}
+                {entry.name === "FIL Burned" ? formatFIL(BigInt(entry.value)) : Math.round(entry.value).toLocaleString()}
               </span>
             </div>
           ))}

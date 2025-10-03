@@ -4,7 +4,7 @@ import { Shield, Activity, Zap, CheckCircle } from "lucide-react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { formatCompactNumber } from "../utils/formatters";
+import { formatCountableMetric } from "../utils/formatters";
 
 export const NetworkHealth: React.FC = () => {
   const { data: paymentsMetric, isLoading, isError, error, refetch } = usePaymentsMetrics();
@@ -78,7 +78,7 @@ export const NetworkHealth: React.FC = () => {
     {
       title: "Activity Level",
       value: "High",
-      description: `${formatCompactNumber(activeRails)} active`,
+      description: `${formatCountableMetric(activeRails)} active`,
       icon: Activity,
       color: "text-blue-400",
       bgColor: "from-blue-500",

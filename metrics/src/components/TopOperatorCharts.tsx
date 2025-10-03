@@ -74,7 +74,7 @@ export const TopOperatorCharts: React.FC = () => {
               <div key={index} className='flex items-center gap-2'>
                 <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
                 <span className='text-white text-sm'>
-                  {operator} {metricName}: {entry.value.toLocaleString()}
+                  {operator} {metricName}: {Math.round(entry.value).toLocaleString()}
                 </span>
               </div>
             );

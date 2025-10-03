@@ -20,6 +20,10 @@ export function formatCompactNumber(value: number | string | bigint, decimals: n
   return `${(value / Math.pow(1000, i)).toFixed(decimals).replace(/\.?0+$/, "")} ${sizes[i]}`;
 }
 
+export function formatCountableMetric(value: number | string | bigint) {
+  return formatCompactNumber(value, 0);
+}
+
 export function formatToken(
   value: number | string | bigint,
   tokenDecimals: number | bigint = 18,

@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Activity, Crown, Users } from "lucide-react";
 import React from "react";
 import { useTopOperatorTokens } from "../hooks/useMetrics";
-import { formatAddress, formatCompactNumber, formatToken } from "../utils/formatters";
+import { formatAddress, formatCountableMetric, formatToken } from "../utils/formatters";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
 
@@ -125,14 +125,14 @@ export const OperatorLeaderboard: React.FC = () => {
                     <div>
                       <div className='flex items-center gap-1 text-green-400'>
                         <Activity className='w-3 h-3' />
-                        <span>{formatCompactNumber(operator.operator.totalRails)}</span>
+                        <span>{formatCountableMetric(operator.operator.totalRails)}</span>
                       </div>
                       <p className='text-gray-400 text-xs'>Rails</p>
                     </div>
                     <div>
                       <div className='flex items-center gap-1 text-blue-400'>
                         <Users className='w-3 h-3' />
-                        <span>{formatCompactNumber(operator.operator.totalApprovals)}</span>
+                        <span>{formatCountableMetric(operator.operator.totalApprovals)}</span>
                       </div>
                       <p className='text-gray-400 text-xs'>Approvals</p>
                     </div>
