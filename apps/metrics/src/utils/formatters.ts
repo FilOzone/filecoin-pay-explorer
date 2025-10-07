@@ -12,7 +12,7 @@ export function formatCompactNumber(value: number | string | bigint, decimals: n
   value = Number(value);
   const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
   const sizes = ["", "K", "M", "B", "Qa", "Qi"];
-  return `${(value / 1000 ** i).toFixed(decimals).replace(/\.?0+$/, "")} ${sizes[i]}`;
+  return `${(value / 1000 ** i).toFixed(decimals).replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1")} ${sizes[i]}`;
 }
 
 export function formatToken(

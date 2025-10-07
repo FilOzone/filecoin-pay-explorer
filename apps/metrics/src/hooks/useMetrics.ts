@@ -13,11 +13,11 @@ import type {
   PaymentsMetric,
   DailyMetric,
   WeeklyMetric,
-  Token,
-  TokenMetric,
-  OperatorMetric,
   OperatorToken,
-} from "../types/metrics";
+  Token,
+  DailyOperatorMetric as OperatorMetric,
+  DailyTokenMetric as TokenMetric,
+} from "@filecoin-pay/types";
 
 // Hook for payments metrics
 export const usePaymentsMetrics = () =>
