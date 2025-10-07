@@ -1,0 +1,18 @@
+schema:
+  - "../subgraph/schemas/schema.v1.graphql"
+  # Define custom scalars that The Graph uses
+  - |
+    scalar BigInt
+    scalar Bytes
+generates:
+  ./src/generated/graphql.ts:
+    plugins:
+      - typescript
+    config:
+      skipTypename: false
+      enumsAsTypes: true
+      futureProofEnums: true
+      nonOptionalTypename: true
+      scalars:
+        BigInt: ../index#BigInt
+        Bytes: ../index#Bytes

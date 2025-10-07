@@ -1,0 +1,45 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"],
+      "env": ["NODE_ENV"]
+    },
+    "dev": {
+      "persistent": true,
+      "cache": false
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "type-check": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "cache": true
+    },
+    "clean": {
+      "cache": false
+    },
+    "codegen": {
+      "outputs": ["generated/**", "src/generated/**", "schema.graphql"],
+      "cache": true
+    },
+    "generate": {
+      "dependsOn": ["^generate"],
+      "outputs": ["generated/**", "src/generated/**"],
+      "cache": true
+    },
+    "deploy": {
+      "dependsOn": ["build"],
+      "cache": false
+    }
+  },
+  "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": ["NETWORK", "VERSION", "VITE_*"]
+}
