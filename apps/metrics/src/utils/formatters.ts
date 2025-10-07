@@ -1,23 +1,18 @@
-export const formatPercentage = (value: number): string => {
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-};
+export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
-export const formatAddress = (address: string): string => {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-};
+export const formatAddress = (address: string): string => `${address.slice(0, 6)}...${address.slice(-4)}`;
 
-export const formatDate = (timestamp: bigint): string => {
-  return new Date(Number(timestamp) * 1000).toLocaleDateString("en-US", {
+export const formatDate = (timestamp: bigint): string =>
+  new Date(Number(timestamp) * 1000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
-};
 
 export function formatCompactNumber(value: number | string | bigint, decimals: number = 2) {
   value = Number(value);
   const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
   const sizes = ["", "K", "M", "B", "Qa", "Qi"];
-  return `${(value / Math.pow(1000, i)).toFixed(decimals).replace(/\.?0+$/, "")} ${sizes[i]}`;
+  return `${(value / 1000 ** i).toFixed(decimals).replace(/\.?0+$/, "")} ${sizes[i]}`;
 }
 
 export function formatToken(

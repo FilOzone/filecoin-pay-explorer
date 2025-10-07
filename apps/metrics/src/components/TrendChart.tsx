@@ -6,6 +6,7 @@ import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
 import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { formatDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
+import type { ChartEntry } from "./TopOperatorCharts";
 
 export const TrendChart: React.FC = () => {
   const [timeframe, setTimeframe] = useState<"daily" | "weekly">("daily");
@@ -54,28 +55,27 @@ export const TrendChart: React.FC = () => {
   }
 
   const chartData = metrics
-    .map((metric) => {
-      return {
-        date: formatDate(metric.timestamp),
-        filBurned: Number(metric.filBurned),
-        railsCreated: Number(metric.railsCreated || 0),
-        activeRails: Number(metric.activeRailsCount || 0),
-        settlements: Number(metric.totalRailSettlements || 0),
-        finalized: Number(metric.railsFinalized || 0),
-        terminated: Number(metric.railsTerminated || 0),
-        uniqueUsers: Number(metric.uniqueAccounts || 0),
-      };
-    })
+    .map((metric) => ({
+      date: formatDate(metric.timestamp),
+      filBurned: Number(metric.filBurned),
+      railsCreated: Number(metric.railsCreated || 0),
+      activeRails: Number(metric.activeRailsCount || 0),
+      settlements: Number(metric.totalRailSettlements || 0),
+      finalized: Number(metric.railsFinalized || 0),
+      terminated: Number(metric.railsTerminated || 0),
+      uniqueUsers: Number(metric.uniqueAccounts || 0),
+    }))
     .reverse();
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function CustomTooltip({ active, payload, label }: any) {
     if (active && payload && payload.length) {
       return (
         <div className='bg-gray-800/95 backdrop-blur-sm border border-gray-600 rounded-lg p-4 shadow-xl'>
           <p className='text-gray-300 text-sm mb-2'>{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry: ChartEntry, index: number) => (
             <div key={index} className='flex items-center gap-2'>
-              <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
+              <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color as string }} />
               <span className='text-white text-sm'>
                 {entry.name}:{" "}
                 {entry.name === "FIL Burned" ? formatFIL(BigInt(entry.value)) : entry.value.toLocaleString()}
@@ -86,7 +86,7 @@ export const TrendChart: React.FC = () => {
       );
     }
     return null;
-  };
+  }
 
   return (
     <motion.div

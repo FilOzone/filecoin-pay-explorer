@@ -7,6 +7,8 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { formatDate, YAxisTickFormatter, formatAddress } from "../utils/formatters";
 
+export type ChartEntry = Record<string, string | number>;
+
 export const TopOperatorCharts: React.FC = () => {
   const { data: topOperators, isLoading: operatorsLoading } = useTopOperatorTokens();
   const { data: operatorMetrics, isLoading: metricsLoading, isError, error, refetch } = useOperatorMetrics();
@@ -39,7 +41,7 @@ export const TopOperatorCharts: React.FC = () => {
   // Process chart data for top operators
   const chartData = operatorMetrics
     .filter((metric) => topOperators.some((op) => op.operator.id === metric.operator.id))
-    .reduce((acc: Record<string, string | number>[], metric) => {
+    .reduce((acc: ChartEntry[], metric) => {
       const dateKey = formatDate(metric.timestamp);
 
       let existingEntry = acc.find((entry) => entry.date === dateKey);
@@ -62,17 +64,18 @@ export const TopOperatorCharts: React.FC = () => {
 
   const operatorColors = ["#8B5CF6", "#10B981", "#F59E0B", "#EF4444"];
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function CustomTooltip({ active, payload, label }: any) {
     if (active && payload && payload.length) {
       return (
         <div className='bg-gray-800/95 backdrop-blur-sm border border-gray-600 rounded-lg p-4 shadow-xl'>
           <p className='text-gray-300 text-sm mb-2'>{label}</p>
-          {payload.map((entry: any, index: number) => {
-            const [operator, metric] = entry.dataKey.split("_");
+          {payload.map((entry: Record<string, string | number>, index: number) => {
+            const [operator, metric] = (entry.dataKey as string).split("_");
             const metricName = metric.replace("-", " ");
             return (
               <div key={index} className='flex items-center gap-2'>
-                <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color }} />
+                <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color as string }} />
                 <span className='text-white text-sm'>
                   {operator} {metricName}: {entry.value.toLocaleString()}
                 </span>
@@ -83,7 +86,7 @@ export const TopOperatorCharts: React.FC = () => {
       );
     }
     return null;
-  };
+  }
 
   return (
     <motion.div

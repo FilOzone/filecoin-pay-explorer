@@ -20,64 +20,48 @@ import type {
 } from "../types/metrics";
 
 // Hook for payments metrics
-export const usePaymentsMetrics = () => {
-  return useQuery({
+export const usePaymentsMetrics = () =>
+  useQuery({
     queryKey: ["paymentsMetrics"],
     queryFn: async () => {
-      const data = await executeQuery<{ paymentsMetrics: PaymentsMetric[] }>(
-        GET_PAYMENTS_METRICS,
-        {},
-        "GetPaymentsMetrics",
-      );
+      const data = await executeQuery<{ paymentsMetrics: PaymentsMetric[] }>(GET_PAYMENTS_METRICS, {});
       return data.paymentsMetrics[0];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
-};
 
 // Hook for daily metrics
-export const useDailyMetrics = (days: number = 30) => {
-  return useQuery({
+export const useDailyMetrics = (days: number = 30) =>
+  useQuery({
     queryKey: ["dailyMetrics", days],
     queryFn: async () => {
-      const data = await executeQuery<{ dailyMetrics: DailyMetric[] }>(
-        GET_DAILY_METRICS,
-        { first: days },
-        "GetDailyMetrics",
-      );
+      const data = await executeQuery<{ dailyMetrics: DailyMetric[] }>(GET_DAILY_METRICS, { first: days });
       return data.dailyMetrics;
     },
     staleTime: 5 * 60 * 1000,
   });
-};
 
 // Hook for weekly metrics
-export const useWeeklyMetrics = (weeks: number = 12) => {
-  return useQuery({
+export const useWeeklyMetrics = (weeks: number = 12) =>
+  useQuery({
     queryKey: ["weeklyMetrics", weeks],
     queryFn: async () => {
-      const data = await executeQuery<{ weeklyMetrics: WeeklyMetric[] }>(
-        GET_WEEKLY_METRICS,
-        { first: weeks },
-        "GetWeeklyMetrics",
-      );
+      const data = await executeQuery<{ weeklyMetrics: WeeklyMetric[] }>(GET_WEEKLY_METRICS, { first: weeks });
       return data.weeklyMetrics;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
-};
 
 // Hook for top tokens
-export const useTopTokens = (limit: number = 4) => {
-  return useQuery({
+export const useTopTokens = (limit: number = 4) =>
+  useQuery({
     queryKey: ["topTokens", limit],
     queryFn: async () => {
-      const data = await executeQuery<{ tokens: Token[] }>(GET_TOP_TOKENS, { first: limit }, "GetTopTokens");
+      const data = await executeQuery<{ tokens: Token[] }>(GET_TOP_TOKENS, { first: limit });
       return data.tokens;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
-};
 
 // Hook for token metrics with timeframe support
 export const useTokenMetrics = (period: number = 30) => {
@@ -88,11 +72,7 @@ export const useTokenMetrics = (period: number = 30) => {
     queryFn: async () => {
       const data = await executeQuery<{
         dailyTokenMetrics: TokenMetric[];
-      }>(
-        GET_DAILY_TOKEN_METRICS,
-        { first: period, tokenIds: topTokensQuery.data?.map((t) => t.id) },
-        "GetDailyTokenMetrics",
-      );
+      }>(GET_DAILY_TOKEN_METRICS, { first: period, tokenIds: topTokensQuery.data?.map((t) => t.id) });
       return data.dailyTokenMetrics;
     },
     staleTime: 5 * 60 * 1000,
@@ -101,20 +81,15 @@ export const useTokenMetrics = (period: number = 30) => {
 };
 
 // Hook for top operators
-export const useTopOperatorTokens = (limit: number = 4) => {
-  return useQuery({
+export const useTopOperatorTokens = (limit: number = 4) =>
+  useQuery({
     queryKey: ["topOperatorTokens", limit],
     queryFn: async () => {
-      const data = await executeQuery<{ operatorTokens: OperatorToken[] }>(
-        GET_TOP_OPERATOR_TOKENS,
-        { first: limit },
-        "GetTopOperatorTokens",
-      );
+      const data = await executeQuery<{ operatorTokens: OperatorToken[] }>(GET_TOP_OPERATOR_TOKENS, { first: limit });
       return data.operatorTokens;
     },
     staleTime: 10 * 60 * 1000,
   });
-};
 
 // Hook for operator metrics with timeframe support
 export const useOperatorMetrics = (period: number = 30) => {
@@ -123,11 +98,10 @@ export const useOperatorMetrics = (period: number = 30) => {
   return useQuery({
     queryKey: ["operatorMetrics", period],
     queryFn: async () => {
-      const data = await executeQuery<{ dailyOperatorMetrics: OperatorMetric[] }>(
-        GET_DAILY_OPERATOR_METRICS,
-        { first: period, operatorIds: topOperatorTokensQuery.data?.map((o) => o.operator.id) },
-        "GetDailyOperatorMetrics",
-      );
+      const data = await executeQuery<{ dailyOperatorMetrics: OperatorMetric[] }>(GET_DAILY_OPERATOR_METRICS, {
+        first: period,
+        operatorIds: topOperatorTokensQuery.data?.map((o) => o.operator.id),
+      });
       return data.dailyOperatorMetrics;
     },
     staleTime: 5 * 60 * 1000,

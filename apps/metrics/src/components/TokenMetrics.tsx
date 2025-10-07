@@ -74,102 +74,100 @@ export const TokenMetrics: React.FC = () => {
 
       <div className='grid grid-cols-1 gap-6'>
         {topTokens &&
-          topTokens.slice(0, 4).map((token, index) => {
-            return (
-              <motion.div
-                key={token.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.1 * index }}
-                className='relative group'
-              >
-                <div className='absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-600/10 rounded-xl blur-xl group-hover:blur-2xl transition-all duration-300 opacity-0 group-hover:opacity-100' />
+          topTokens.slice(0, 4).map((token, index) => (
+            <motion.div
+              key={token.id}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, delay: 0.1 * index }}
+              className='relative group'
+            >
+              <div className='absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-600/10 rounded-xl blur-xl group-hover:blur-2xl transition-all duration-300 opacity-0 group-hover:opacity-100' />
 
-                <div className='relative bg-gray-900/30 border border-gray-700/30 rounded-xl p-5 hover:border-gray-600/50 transition-colors duration-300'>
-                  <div className='flex items-center justify-between mb-4'>
-                    <div className='flex items-center gap-3'>
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                          token.symbol === "FIL"
-                            ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                            : "bg-gradient-to-r from-green-500 to-teal-600 text-white"
-                        }`}
-                      >
-                        {token.symbol}
-                      </div>
-                      <div>
-                        <h4 className='text-white font-medium'>{token.name}</h4>
-                        <p className='text-gray-400 text-sm'>{token.symbol}</p>
-                      </div>
+              <div className='relative bg-gray-900/30 border border-gray-700/30 rounded-xl p-5 hover:border-gray-600/50 transition-colors duration-300'>
+                <div className='flex items-center justify-between mb-4'>
+                  <div className='flex items-center gap-3'>
+                    <div
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                        token.symbol === "FIL"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                          : "bg-gradient-to-r from-green-500 to-teal-600 text-white"
+                      }`}
+                    >
+                      {token.symbol}
                     </div>
+                    <div>
+                      <h4 className='text-white font-medium'>{token.name}</h4>
+                      <p className='text-gray-400 text-sm'>{token.symbol}</p>
+                    </div>
+                  </div>
 
-                    <div className='text-right'>
-                      <p className='text-white font-bold'>
+                  <div className='text-right'>
+                    <p className='text-white font-bold'>
+                      {token.symbol === "FIL"
+                        ? formatFIL(token.volume)
+                        : formatToken(token.volume, token.decimals, token.symbol)}
+                    </p>
+                    <p className='text-gray-400 text-xs'>Volume</p>
+                  </div>
+                </div>
+
+                <div className='grid grid-cols-2 gap-4'>
+                  <div className='space-y-3'>
+                    <div className='flex flex-wrap items-center justify-between'>
+                      <div className='flex items-center gap-2 text-gray-400'>
+                        <TrendingUp className='w-3 h-3' />
+                        <span className='text-xs'>Total Volume</span>
+                      </div>
+                      <span className='text-white text-sm font-medium'>
                         {token.symbol === "FIL"
                           ? formatFIL(token.volume)
                           : formatToken(token.volume, token.decimals, token.symbol)}
-                      </p>
-                      <p className='text-gray-400 text-xs'>Volume</p>
+                      </span>
+                    </div>
+
+                    <div className='flex flex-wrap items-center justify-between'>
+                      <div className='flex items-center gap-2 text-gray-400'>
+                        <Users className='w-3 h-3' />
+                        <span className='text-xs'>User Funds</span>
+                      </div>
+                      <span className='text-white text-sm font-medium'>
+                        {token.symbol === "FIL"
+                          ? formatFIL(token.userFunds)
+                          : formatToken(token.userFunds, token.decimals, token.symbol)}
+                      </span>
                     </div>
                   </div>
 
-                  <div className='grid grid-cols-2 gap-4'>
-                    <div className='space-y-3'>
-                      <div className='flex flex-wrap items-center justify-between'>
-                        <div className='flex items-center gap-2 text-gray-400'>
-                          <TrendingUp className='w-3 h-3' />
-                          <span className='text-xs'>Total Volume</span>
-                        </div>
-                        <span className='text-white text-sm font-medium'>
-                          {token.symbol === "FIL"
-                            ? formatFIL(token.volume)
-                            : formatToken(token.volume, token.decimals, token.symbol)}
-                        </span>
+                  <div className='space-y-3'>
+                    <div className='flex flex-wrap items-center justify-between'>
+                      <div className='flex items-center gap-2 text-gray-400'>
+                        <Lock className='w-3 h-3' />
+                        <span className='text-xs'>Deposits</span>
                       </div>
-
-                      <div className='flex flex-wrap items-center justify-between'>
-                        <div className='flex items-center gap-2 text-gray-400'>
-                          <Users className='w-3 h-3' />
-                          <span className='text-xs'>User Funds</span>
-                        </div>
-                        <span className='text-white text-sm font-medium'>
-                          {token.symbol === "FIL"
-                            ? formatFIL(token.userFunds)
-                            : formatToken(token.userFunds, token.decimals, token.symbol)}
-                        </span>
-                      </div>
+                      <span className='text-white text-sm font-medium'>
+                        {token.symbol === "FIL"
+                          ? formatFIL(token.totalDeposits)
+                          : formatToken(token.totalDeposits, token.decimals, token.symbol)}
+                      </span>
                     </div>
 
-                    <div className='space-y-3'>
-                      <div className='flex flex-wrap items-center justify-between'>
-                        <div className='flex items-center gap-2 text-gray-400'>
-                          <Lock className='w-3 h-3' />
-                          <span className='text-xs'>Deposits</span>
-                        </div>
-                        <span className='text-white text-sm font-medium'>
-                          {token.symbol === "FIL"
-                            ? formatFIL(token.totalDeposits)
-                            : formatToken(token.totalDeposits, token.decimals, token.symbol)}
-                        </span>
+                    <div className='flex flex-wrap items-center justify-between'>
+                      <div className='flex items-center gap-2 text-gray-400'>
+                        <Coins className='w-3 h-3' />
+                        <span className='text-xs'>Settled</span>
                       </div>
-
-                      <div className='flex flex-wrap items-center justify-between'>
-                        <div className='flex items-center gap-2 text-gray-400'>
-                          <Coins className='w-3 h-3' />
-                          <span className='text-xs'>Settled</span>
-                        </div>
-                        <span className='text-white text-sm font-medium'>
-                          {token.symbol === "FIL"
-                            ? formatFIL(token.totalSettledAmount)
-                            : formatToken(token.totalSettledAmount, token.decimals, token.symbol)}
-                        </span>
-                      </div>
+                      <span className='text-white text-sm font-medium'>
+                        {token.symbol === "FIL"
+                          ? formatFIL(token.totalSettledAmount)
+                          : formatToken(token.totalSettledAmount, token.decimals, token.symbol)}
+                      </span>
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
+            </motion.div>
+          ))}
       </div>
     </motion.div>
   );

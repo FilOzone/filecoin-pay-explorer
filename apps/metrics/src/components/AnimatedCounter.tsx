@@ -35,9 +35,8 @@ export const AnimatedCounter: React.FC<AnimatedCounterProps> = ({ value, duratio
         }, 1000 / 60);
 
         return () => clearInterval(counter);
-      } else {
-        setDisplayValue(value);
       }
+      setDisplayValue(value);
     }, delay * 1000);
 
     return () => clearTimeout(timer);
