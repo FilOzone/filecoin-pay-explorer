@@ -26,8 +26,9 @@
     "remove-local": "graph remove --node http://localhost:8020/ filecoin-pay-subgraph",
     "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 filecoin-pay-subgraph --network localhost",
     "deploy:mainnet": "graph deploy --node https://api.studio.thegraph.com/deploy/ filecoin-pay-subgraph --network mainnet",
+    "pretest": "pnpm codegen",
     "test": "graph test",
-    "test:coverage": "graph test && graph test -c"
+    "test:coverage": "graph test -c"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.97.0",

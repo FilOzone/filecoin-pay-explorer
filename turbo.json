@@ -4,7 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "build/**", ".next/**", "!.next/cache/**"],
+      "outputs": ["dist/**", "build/**", "src/generated/**", ".next/**", "!.next/cache/**"],
       "env": ["NODE_ENV"]
     },
     "dev": {
@@ -12,15 +12,16 @@
       "cache": false
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "cache": true
     },
     "type-check": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": ["src/generated/**"],
+      "cache": true
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"],
+      "outputs": ["generated/**", "schema.graphql", "subgraph.yaml"],
       "cache": true
     },
     "clean": {
