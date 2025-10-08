@@ -1,21 +1,6 @@
 # Filecoin Pay Explorer
 
-A production-ready monorepo for the Filecoin Payment Explorer ecosystem, including subgraph indexing, metrics dashboard, and payment explorer applications.
-
-## 🏗️ Project Structure
-
-```
-filecoin-pay-explorer/
-├── apps/
-│   └── metrics/              # Metrics dashboard React app
-├── packages/
-│   ├── subgraph/             # The Graph subgraph for indexing payment data
-│   ├── shared-types/         # Auto-generated TypeScript types from GraphQL schema
-│   └── typescript-config/    # Shared TypeScript configurations
-├── package.json              # Root workspace configuration
-├── pnpm-workspace.yaml       # PNPM workspace definition
-└── turbo.json                # Turborepo build pipeline
-```
+A monorepo for the Filecoin Payment Explorer ecosystem, including subgraph indexing, metrics dashboard, and payment explorer applications.
 
 ### Apps
 
@@ -32,12 +17,12 @@ filecoin-pay-explorer/
   - Publishes GraphQL schema
   - Deployable to The Graph network
 
-- **`packages/shared-types`** - Shared TypeScript types
+- **`packages/types`** - Shared TypeScript types
   - Auto-generated from subgraph schema
   - Used across all frontend apps
   - Ensures type safety across the stack
 
-- **`packages/typescript-config`** - Shared TypeScript configurations
+- **`packages/configs`** - Shared TypeScript configurations
   - Base config for all packages
   - React-specific config for apps
   - Node-specific config for tooling
@@ -71,10 +56,7 @@ This will install dependencies for all packages and set up workspace links.
 pnpm dev
 
 # Run specific app
-pnpm --filter @filoz/metrics dev
-
-# Run subgraph development
-pnpm --filter @filoz/filecoin-pay-subgraph dev
+pnpm --filter @filecoin-pay/metrics dev
 ```
 
 ### Building
@@ -84,7 +66,7 @@ pnpm --filter @filoz/filecoin-pay-subgraph dev
 pnpm build
 
 # Build specific package
-pnpm --filter @filoz/shared-types build
+pnpm --filter @filecoin-pay/types build
 ```
 
 ### Type Generation
@@ -93,7 +75,7 @@ The monorepo automatically generates TypeScript types from the subgraph schema:
 
 ```bash
 # Generate types from subgraph schema
-pnpm --filter @filoz/shared-types generate
+pnpm --filter @filecoin-pay/types generate
 
 # This runs automatically during build
 pnpm build
@@ -106,10 +88,10 @@ pnpm build
 pnpm test
 
 # Run subgraph tests
-pnpm --filter @filoz/filecoin-pay-subgraph test
+pnpm --filter @filecoin-pay/subgraph test
 
 # Run with coverage
-pnpm --filter @filoz/filecoin-pay-subgraph test:coverage
+pnpm --filter @filecoin-pay/subgraph test:coverage
 ```
 
 ### Linting & Formatting
@@ -123,41 +105,6 @@ pnpm format
 
 # Check formatting
 pnpm format:check
-```
-
-## 📦 Adding New Apps/Packages
-
-### Adding a New App (e.g., Explorer)
-
-```bash
-# Create new app directory
-mkdir apps/explorer
-
-# Add package.json with workspace dependencies
-cd apps/explorer
-pnpm init
-```
-
-Then add to `package.json`:
-
-```json
-{
-  "name": "@filoz/explorer",
-  "dependencies": {
-    "@filoz/shared-types": "workspace:*"
-  }
-}
-```
-
-### Adding a New Shared Package
-
-```bash
-# Create new package
-mkdir packages/shared-ui
-
-# Add package.json
-cd packages/shared-ui
-pnpm init
 ```
 
 ## 🔄 Workflow
@@ -182,15 +129,6 @@ pnpm --filter @filoz/metrics build
 # Deploy dist/ to your hosting (Vercel, Netlify, etc.)
 ```
 
-## 🛠️ Tech Stack
-
-- **Monorepo**: Turborepo + pnpm workspaces
-- **Subgraph**: The Graph Protocol, AssemblyScript
-- **Frontend**: React, TypeScript, Vite
-- **Styling**: TailwindCSS
-- **Data Fetching**: TanStack Query, GraphQL Request
-- **Type Generation**: GraphQL Code Generator
-
 ## 📝 Scripts Reference
 
 | Command           | Description                    |
@@ -203,37 +141,6 @@ pnpm --filter @filoz/metrics build
 | `pnpm format`     | Format all files with Prettier |
 | `pnpm clean`      | Clean all build artifacts      |
 | `pnpm type-check` | Type check all TypeScript      |
-
-## 🔗 Workspace Dependencies
-
-Use `workspace:*` protocol for internal dependencies:
-
-```json
-{
-  "dependencies": {
-    "@filoz/shared-types": "workspace:*"
-  }
-}
-```
-
-This ensures monorepo packages always use the local version.
-
-## 🚦 CI/CD Considerations
-
-Turborepo provides intelligent caching and parallel execution:
-
-```bash
-# CI build command
-turbo run build --cache-dir=.turbo
-
-# CI test command
-turbo run test --cache-dir=.turbo
-```
-
-Set up remote caching for faster CI builds:
-
-- Vercel Remote Cache (recommended)
-- Custom remote cache server
 
 ## 📚 Additional Resources
 
