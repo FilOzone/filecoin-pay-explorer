@@ -31,7 +31,7 @@ A monorepo for the Filecoin Payment Explorer ecosystem, including subgraph index
 
 ### Prerequisites
 
-- **Node.js** >= 18.0.0
+- **Node.js** >= 22.0.0
 - **pnpm** >= 9.0.0
 
 Install pnpm if you haven't:
