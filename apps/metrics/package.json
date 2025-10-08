@@ -1,0 +1,42 @@
+{
+  "name": "@filecoin-pay/metrics",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "clean": "rm -rf dist",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@filecoin-pay/types": "workspace:*",
+    "@tanstack/react-query": "^5.83.0",
+    "framer-motion": "^12.23.11",
+    "graphql-request": "^7.2.0",
+    "lucide-react": "^0.533.0",
+    "postcss": "^8.4.35",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "recharts": "^3.1.0",
+    "tailwindcss": "^3.4.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "babel-plugin-react-compiler": "^19.1.0-rc.3",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "globals": "^16.4.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "vite": "^7.1.7"
+  }
+}
