@@ -112,8 +112,8 @@ pnpm format:check
 ### Making Schema Changes
 
 1. Update schema in `packages/subgraph/schemas/schema.v1.graphql`
-2. Build subgraph: `pnpm --filter @filoz/filecoin-pay-subgraph build`
-3. Generate types: `pnpm --filter @filoz/shared-types generate`
+2. Build subgraph: `pnpm --filter @filecoin-pay/subgraph build`
+3. Generate types: `pnpm --filter @filecoin-pay/types generate`
 4. Types are automatically available in all apps
 
 ### Deploying
@@ -122,10 +122,10 @@ Each component deploys independently:
 
 ```bash
 # Deploy subgraph
-pnpm --filter @filoz/filecoin-pay-subgraph deploy
+pnpm --filter @filecoin-pay/subgraph deploy
 
 # Build metrics app for deployment
-pnpm --filter @filoz/metrics build
+pnpm --filter @filecoin-pay/metrics build
 # Deploy dist/ to your hosting (Vercel, Netlify, etc.)
 ```
 
