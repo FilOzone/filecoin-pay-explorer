@@ -1,11 +1,11 @@
-# @filoz/shared-types
+# @filecoin-pay/types
 
 Shared TypeScript types for the Filecoin Pay Explorer monorepo, auto-generated from the subgraph GraphQL schema.
 
 ## Usage
 
 ```typescript
-import { PaymentsMetric, Token, Rail } from "@filoz/shared-types";
+import { PaymentsMetric, Token, Rail } from "@filecoin-pay/types";
 ```
 
 ## Generation
