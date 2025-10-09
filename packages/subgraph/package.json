@@ -3,17 +3,12 @@
   "version": "3.0.0",
   "description": "A subgraph to index data from payments actor to serve as data layer for frontend integration",
   "private": false,
-  "files": [
-    "build",
-    "schemas",
-    "config",
-    "templates",
-    "README.md"
-  ],
+  "files": ["build", "schemas", "config", "templates", "README.md"],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
+    "lint": "biome lint",
     "precodegen": "rm -rf ./generated && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
     "generate:yaml": "mustache ./config/${NETWORK:-network}.json ./templates/subgraph.template.yaml > subgraph.yaml",

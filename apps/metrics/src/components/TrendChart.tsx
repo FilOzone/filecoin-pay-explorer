@@ -1,11 +1,11 @@
-import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
-import { Activity, Flame, Calendar, BarChart3, Users } from "lucide-react";
+import { Activity, BarChart3, Calendar, Flame, Users } from "lucide-react";
+import React, { useState } from "react";
+import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
-import { LoadingSpinner } from "./LoadingSpinner";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { formatDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { LoadingSpinner } from "./LoadingSpinner";
 import type { ChartEntry } from "./TopOperatorCharts";
 
 export const TrendChart: React.FC = () => {
@@ -67,7 +67,7 @@ export const TrendChart: React.FC = () => {
     }))
     .reverse();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Tooltip props are of type any
   function CustomTooltip({ active, payload, label }: any) {
     if (active && payload && payload.length) {
       return (

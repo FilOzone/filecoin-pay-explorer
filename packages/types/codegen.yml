@@ -1,5 +1,5 @@
 schema:
-  - "../subgraph/schemas/schema.v1.graphql"
+  - "@filecoin-pay/subgraph/schemas/schema.v1.graphql"
   # Define custom scalars that The Graph uses
   - |
     scalar BigInt

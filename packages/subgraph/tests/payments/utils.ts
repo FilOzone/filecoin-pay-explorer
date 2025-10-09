@@ -1,13 +1,13 @@
-import { BigInt as GraphBN, ethereum, Address } from "@graphprotocol/graph-ts";
+import { Address, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { newMockEvent } from "matchstick-as";
 
 import {
-  DepositRecorded,
-  WithdrawRecorded,
-  RailCreated,
-  OperatorApprovalUpdated,
   AccountLockupSettled,
+  DepositRecorded,
+  OperatorApprovalUpdated,
+  RailCreated,
+  WithdrawRecorded,
 } from "../../generated/Payments/Payments";
 
 export function createDepositRecordedEvent(

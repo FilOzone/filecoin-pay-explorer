@@ -9,15 +9,15 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "type-check": "turbo run type-check",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.2.5",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.3",
-    "prettier": "^3.3.3",
     "turbo": "^2.5.8"
   },
   "packageManager": "pnpm@9.15.2",

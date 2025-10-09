@@ -28,15 +28,15 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { MetricsCollectionOrchestrator, ZERO_BIG_INT } from "./utils/metrics";
 import { getRailEntityId } from "./utils/keys";
+import { MetricsCollectionOrchestrator, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
   const ownerAddress = event.params.owner;
 
   const userTokenId = ownerAddress.concat(tokenAddress);
-  let userToken = UserToken.load(userTokenId);
+  const userToken = UserToken.load(userTokenId);
 
   if (!userToken) {
     log.debug("[handleAccountLockupSettled] UserToken not found for id: {}", [userTokenId.toHexString()]);
@@ -114,7 +114,6 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   // update Metrics
   MetricsCollectionOrchestrator.collectOperatorApprovalMetrics(
     operatorAddress,
-    clientAddress,
     isNewApproval,
     isNewOperator,
     event.block.timestamp,
@@ -202,7 +201,6 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
 
   // collect rail state change metrics
   MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
-    rail,
     rail.state,
     "TERMINATED",
     event.block.timestamp,
@@ -270,7 +268,6 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
 
     // Collect rail State change metrics
     MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
-      rail,
       "ZERORATE",
       "ACTIVE",
       event.block.timestamp,
@@ -455,7 +452,6 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
     tokenAddress,
-    accountAddress,
     amount,
     true,
     isNewAccount,
@@ -489,7 +485,6 @@ export function handleWithdrawRecorded(event: WithdrawRecordedEvent): void {
   // collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
     tokenAddress,
-    accountAddress,
     amount,
     false,
     false,
@@ -579,7 +574,6 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
 
   // Collect rail state change metrics
   MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
-    rail,
     rail.state,
     "FINALIZED",
     event.block.timestamp,

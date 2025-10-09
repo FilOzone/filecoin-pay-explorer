@@ -13,11 +13,13 @@ A monorepo for the Filecoin Payment Explorer ecosystem, including subgraph index
 ### Packages
 
 - **`packages/subgraph`** - The Graph protocol subgraph
+
   - Indexes Filecoin payment contract events
   - Publishes GraphQL schema
   - Deployable to The Graph network
 
 - **`packages/types`** - Shared TypeScript types
+
   - Auto-generated from subgraph schema
   - Used across all frontend apps
   - Ensures type safety across the stack
@@ -131,16 +133,16 @@ pnpm --filter @filecoin-pay/metrics build
 
 ## 📝 Scripts Reference
 
-| Command           | Description                    |
-| ----------------- | ------------------------------ |
-| `pnpm install`    | Install all dependencies       |
-| `pnpm dev`        | Run all apps in dev mode       |
-| `pnpm build`      | Build all packages and apps    |
-| `pnpm test`       | Run all tests                  |
-| `pnpm lint`       | Lint all packages              |
-| `pnpm format`     | Format all files with Prettier |
-| `pnpm clean`      | Clean all build artifacts      |
-| `pnpm type-check` | Type check all TypeScript      |
+| Command           | Description                 |
+| ----------------- | --------------------------- |
+| `pnpm install`    | Install all dependencies    |
+| `pnpm dev`        | Run all apps in dev mode    |
+| `pnpm build`      | Build all packages and apps |
+| `pnpm test`       | Run all tests               |
+| `pnpm lint`       | Lint all packages           |
+| `pnpm format`     | Format all files with Biome |
+| `pnpm clean`      | Clean all build artifacts   |
+| `pnpm type-check` | Type check all TypeScript   |
 
 ## 📚 Additional Resources
 

@@ -204,13 +204,11 @@ export class SettlementCollector extends BaseMetricsCollector {
 
 // Rail State Change Collector
 export class RailStateChangeCollector extends BaseMetricsCollector {
-  private rail: Rail;
   private previousState: string;
   private newState: string;
 
-  constructor(rail: Rail, previousState: string, newState: string, timestamp: GraphBN, blockNumber: GraphBN) {
+  constructor(previousState: string, newState: string, timestamp: GraphBN, blockNumber: GraphBN) {
     super(timestamp, blockNumber);
-    this.rail = rail;
     this.previousState = previousState;
     this.newState = newState;
   }
@@ -263,7 +261,6 @@ export class RailStateChangeCollector extends BaseMetricsCollector {
 // Token Activity Collector (for deposits/withdrawals)
 export class TokenActivityCollector extends BaseMetricsCollector {
   private tokenAddress: Address;
-  private accountAddress: Address;
   private amount: GraphBN;
   private isDeposit: boolean;
   private isNewAccount: boolean;
@@ -271,7 +268,6 @@ export class TokenActivityCollector extends BaseMetricsCollector {
 
   constructor(
     tokenAddress: Address,
-    accountAddress: Address,
     amount: GraphBN,
     isDeposit: boolean,
     isNewAccount: boolean,
@@ -281,7 +277,6 @@ export class TokenActivityCollector extends BaseMetricsCollector {
   ) {
     super(timestamp, blockNumber);
     this.tokenAddress = tokenAddress;
-    this.accountAddress = accountAddress;
     this.amount = amount;
     this.isDeposit = isDeposit;
     this.isNewAccount = isNewAccount;
@@ -336,13 +331,11 @@ export class TokenActivityCollector extends BaseMetricsCollector {
 // Operator Approval Collector
 export class OperatorApprovalCollector extends BaseMetricsCollector {
   private operatorAddress: Address;
-  private clientAddress: Address;
   private isNewApproval: boolean;
   private isNewOperator: boolean;
 
   constructor(
     operatorAddress: Address,
-    clientAddress: Address,
     isNewApproval: boolean,
     isNewOperator: boolean,
     timestamp: GraphBN,
@@ -350,7 +343,6 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
   ) {
     super(timestamp, blockNumber);
     this.operatorAddress = operatorAddress;
-    this.clientAddress = clientAddress;
     this.isNewApproval = isNewApproval;
     this.isNewOperator = isNewOperator;
   }
@@ -423,19 +415,17 @@ export class MetricsCollectionOrchestrator {
   }
 
   static collectRailStateChangeMetrics(
-    rail: Rail,
     previousState: string,
     newState: string,
     timestamp: GraphBN,
     blockNumber: GraphBN,
   ): void {
-    const collector = new RailStateChangeCollector(rail, previousState, newState, timestamp, blockNumber);
+    const collector = new RailStateChangeCollector(previousState, newState, timestamp, blockNumber);
     collector.collect();
   }
 
   static collectTokenActivityMetrics(
     tokenAddress: Address,
-    accountAddress: Address,
     amount: GraphBN,
     isDeposit: boolean,
     isNewAccount: boolean,
@@ -445,7 +435,6 @@ export class MetricsCollectionOrchestrator {
   ): void {
     const collector = new TokenActivityCollector(
       tokenAddress,
-      accountAddress,
       amount,
       isDeposit,
       isNewAccount,
@@ -458,7 +447,6 @@ export class MetricsCollectionOrchestrator {
 
   static collectOperatorApprovalMetrics(
     operatorAddress: Address,
-    clientAddress: Address,
     isNewApproval: boolean,
     isNewOperator: boolean,
     timestamp: GraphBN,
@@ -466,7 +454,6 @@ export class MetricsCollectionOrchestrator {
   ): void {
     const collector = new OperatorApprovalCollector(
       operatorAddress,
-      clientAddress,
       isNewApproval,
       isNewOperator,
       timestamp,

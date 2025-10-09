@@ -1,28 +1,28 @@
 /* eslint-disable no-underscore-dangle, @typescript-eslint/no-unnecessary-type-assertion */
 import { BigInt } from "@graphprotocol/graph-ts";
-import { test, describe, afterEach, clearStore, assert, beforeAll } from "matchstick-as";
+import { afterEach, assert, beforeAll, clearStore, describe, test } from "matchstick-as";
 
-import { Account, Token, UserToken, Operator, OperatorApproval } from "../../generated/schema";
+import { Account, Operator, OperatorApproval, Token, UserToken } from "../../generated/schema";
 import {
-  handleDepositRecorded,
-  handleWithdrawRecorded,
-  handleRailCreated,
-  handleOperatorApprovalUpdated,
   handleAccountLockupSettled,
+  handleDepositRecorded,
+  handleOperatorApprovalUpdated,
+  handleRailCreated,
+  handleWithdrawRecorded,
 } from "../../src/payments";
 import {
-  DEFAULT_TOKEN_ADDRESS,
   DEFAULT_ACCOUNT_ADDRESS,
   DEFAULT_OPERATOR_ADDRESS,
-  mockPaymentsContract,
+  DEFAULT_TOKEN_ADDRESS,
   mockERC20Contract,
+  mockPaymentsContract,
 } from "../common";
 
 import {
-  createDepositRecordedEvent,
-  createWithdrawRecordedEvent,
-  createOperatorApprovalUpdatedEvent,
   createAccountLockupSettledEvent,
+  createDepositRecordedEvent,
+  createOperatorApprovalUpdatedEvent,
+  createWithdrawRecordedEvent,
 } from "./utils";
 
 export {
