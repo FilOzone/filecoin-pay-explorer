@@ -14,5 +14,5 @@ generates:
       futureProofEnums: true
       nonOptionalTypename: true
       scalars:
-        BigInt: ../index#BigInt
-        Bytes: ../index#Bytes
+        BigInt: ../index.js#BigInt
+        Bytes: ../index.js#Bytes
