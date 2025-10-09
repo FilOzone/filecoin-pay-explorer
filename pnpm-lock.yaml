@@ -145,9 +145,6 @@ importers:
       '@filecoin-pay/configs':
         specifier: workspace:*
         version: link:../configs
-      '@filecoin-pay/subgraph':
-        specifier: workspace:*
-        version: link:../subgraph
       graphql:
         specifier: ^16.9.0
         version: 16.11.0
