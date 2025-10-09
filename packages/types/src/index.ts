@@ -1,5 +1,5 @@
 // Re-export all generated GraphQL types
-export * from "./generated/graphql";
+export * from "./generated/graphql.js";
 
 export type Hex = `0x${string}`;
 export type Address = Hex;

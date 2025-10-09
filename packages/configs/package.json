@@ -4,6 +4,7 @@
   "private": true,
   "description": "Shared TypeScript configuration for Filecoin Pay Explorer monorepo",
   "exports": {
-    "./typescript/*": "./typescript/*.json"
+    "./typescript/*": "./typescript/*.json",
+    "./biome/*": "./biome/*.json"
   }
 }

@@ -1,4 +1,4 @@
-# Subgraph Deployment and Client Usage
+# Filecoin Pay Subgraph Deployment and Client Usage
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
@@ -89,6 +89,7 @@ Follow these steps to build and deploy the subgraph:
 If you need to make changes to the subgraph's logic, schema, or configuration, follow these general steps:
 
 1.  **Modify Code:** Edit the relevant files:
+
     - `schema.graphql`: To change the data structure and entities being stored.
     - `subgraph.yaml`: To update contract addresses, ABIs, start blocks, or event handlers.
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.

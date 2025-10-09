@@ -57,7 +57,9 @@ export const useTopTokens = (limit: number = 4) =>
   useQuery({
     queryKey: ["topTokens", limit],
     queryFn: async () => {
-      const data = await executeQuery<{ tokens: Token[] }>(GET_TOP_TOKENS, { first: limit });
+      const data = await executeQuery<{ tokens: Token[] }>(GET_TOP_TOKENS, {
+        first: limit,
+      });
       return data.tokens;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -72,7 +74,10 @@ export const useTokenMetrics = (period: number = 30) => {
     queryFn: async () => {
       const data = await executeQuery<{
         dailyTokenMetrics: TokenMetric[];
-      }>(GET_DAILY_TOKEN_METRICS, { first: period, tokenIds: topTokensQuery.data?.map((t) => t.id) });
+      }>(GET_DAILY_TOKEN_METRICS, {
+        first: period,
+        tokenIds: topTokensQuery.data?.map((t) => t.id),
+      });
       return data.dailyTokenMetrics;
     },
     staleTime: 5 * 60 * 1000,
@@ -98,7 +103,9 @@ export const useOperatorMetrics = (period: number = 30) => {
   return useQuery({
     queryKey: ["operatorMetrics", period],
     queryFn: async () => {
-      const data = await executeQuery<{ dailyOperatorMetrics: OperatorMetric[] }>(GET_DAILY_OPERATOR_METRICS, {
+      const data = await executeQuery<{
+        dailyOperatorMetrics: OperatorMetric[];
+      }>(GET_DAILY_OPERATOR_METRICS, {
         first: period,
         operatorIds: topOperatorTokensQuery.data?.map((o) => o.operator.id),
       });
