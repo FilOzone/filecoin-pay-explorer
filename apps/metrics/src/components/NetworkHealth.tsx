@@ -1,10 +1,10 @@
-import React from "react";
 import { motion } from "framer-motion";
-import { Shield, Activity, Zap, CheckCircle } from "lucide-react";
+import { Activity, CheckCircle, Shield, Zap } from "lucide-react";
+import React from "react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
-import { LoadingSpinner } from "./LoadingSpinner";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { formatCompactNumber } from "../utils/formatters";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 export const NetworkHealth: React.FC = () => {
   const { data: paymentsMetric, isLoading, isError, error, refetch } = usePaymentsMetrics();

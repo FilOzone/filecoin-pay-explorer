@@ -14,7 +14,6 @@ import {
   UserToken,
 } from "../../generated/schema";
 import { DEFAULT_DECIMALS } from "./constants";
-import { ZERO_BIG_INT } from "./metrics";
 import {
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -22,6 +21,7 @@ import {
   getRateChangeQueueEntityId,
   getUserTokenEntityId,
 } from "./keys";
+import { ZERO_BIG_INT } from "./metrics";
 
 class TokenDetails {
   constructor(

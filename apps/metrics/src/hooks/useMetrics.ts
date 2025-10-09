@@ -1,23 +1,23 @@
+import type {
+  DailyMetric,
+  DailyOperatorMetric as OperatorMetric,
+  OperatorToken,
+  PaymentsMetric,
+  Token,
+  DailyTokenMetric as TokenMetric,
+  WeeklyMetric,
+} from "@filecoin-pay/types";
 import { useQuery } from "@tanstack/react-query";
 import { executeQuery } from "../services/graphql/client";
 import {
-  GET_PAYMENTS_METRICS,
   GET_DAILY_METRICS,
-  GET_WEEKLY_METRICS,
-  GET_TOP_TOKENS,
-  GET_DAILY_TOKEN_METRICS,
-  GET_TOP_OPERATOR_TOKENS,
   GET_DAILY_OPERATOR_METRICS,
+  GET_DAILY_TOKEN_METRICS,
+  GET_PAYMENTS_METRICS,
+  GET_TOP_OPERATOR_TOKENS,
+  GET_TOP_TOKENS,
+  GET_WEEKLY_METRICS,
 } from "../services/graphql/queries";
-import type {
-  PaymentsMetric,
-  DailyMetric,
-  WeeklyMetric,
-  OperatorToken,
-  Token,
-  DailyOperatorMetric as OperatorMetric,
-  DailyTokenMetric as TokenMetric,
-} from "@filecoin-pay/types";
 
 // Hook for payments metrics
 export const usePaymentsMetrics = () =>

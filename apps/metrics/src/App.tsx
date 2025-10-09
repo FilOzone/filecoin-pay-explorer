@@ -2,8 +2,8 @@ import { motion } from "framer-motion";
 import { HeroStats } from "./components/HeroStats";
 import { OperatorLeaderboard } from "./components/OperatorLeaderboard";
 import { TokenMetrics } from "./components/TokenMetrics";
-import { TrendChart } from "./components/TrendChart";
 import { TopOperatorCharts } from "./components/TopOperatorCharts";
+import { TrendChart } from "./components/TrendChart";
 
 function App() {
   return (

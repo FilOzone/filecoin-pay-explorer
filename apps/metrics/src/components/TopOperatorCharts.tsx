@@ -1,11 +1,11 @@
-import React from "react";
 import { motion } from "framer-motion";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
-import { Users, Activity, BarChart3, Crown } from "lucide-react";
-import { useTopOperatorTokens, useOperatorMetrics } from "../hooks/useMetrics";
-import { LoadingSpinner } from "./LoadingSpinner";
+import { Activity, BarChart3, Crown, Users } from "lucide-react";
+import React from "react";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useOperatorMetrics, useTopOperatorTokens } from "../hooks/useMetrics";
+import { formatAddress, formatDate, YAxisTickFormatter } from "../utils/formatters";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { formatDate, YAxisTickFormatter, formatAddress } from "../utils/formatters";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 export type ChartEntry = Record<string, string | number>;
 
@@ -64,7 +64,7 @@ export const TopOperatorCharts: React.FC = () => {
 
   const operatorColors = ["#8B5CF6", "#10B981", "#F59E0B", "#EF4444"];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Tooltip props are of type any
   function CustomTooltip({ active, payload, label }: any) {
     if (active && payload && payload.length) {
       return (

@@ -1,12 +1,12 @@
-import React from "react";
 import { motion } from "framer-motion";
-import { Zap, Users, Coins, Activity, TrendingUp, DollarSign } from "lucide-react";
-import { MetricCard } from "./MetricCard";
-import { AnimatedCounter } from "./AnimatedCounter";
-import { LoadingSpinner } from "./LoadingSpinner";
-import { ErrorBoundary } from "./ErrorBoundary";
+import { Activity, Coins, DollarSign, TrendingUp, Users, Zap } from "lucide-react";
+import React from "react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
-import { formatFIL, formatCompactNumber } from "../utils/formatters";
+import { formatCompactNumber, formatFIL } from "../utils/formatters";
+import { AnimatedCounter } from "./AnimatedCounter";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { LoadingSpinner } from "./LoadingSpinner";
+import { MetricCard } from "./MetricCard";
 
 export const HeroStats: React.FC = () => {
   const { data: paymentsMetric, isLoading, isError, error, refetch } = usePaymentsMetrics();

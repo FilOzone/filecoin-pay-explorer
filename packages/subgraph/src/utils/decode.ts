@@ -29,31 +29,31 @@ export class AbiValue {
   }
 
   static fromString(value: string): AbiValue {
-    let result = new AbiValue(AbiType.STRING);
+    const result = new AbiValue(AbiType.STRING);
     result.stringValue = value;
     return result;
   }
 
   static fromAddress(value: Address): AbiValue {
-    let result = new AbiValue(AbiType.ADDRESS);
+    const result = new AbiValue(AbiType.ADDRESS);
     result.addressValue = value;
     return result;
   }
 
   static fromBool(value: boolean): AbiValue {
-    let result = new AbiValue(AbiType.BOOL);
+    const result = new AbiValue(AbiType.BOOL);
     result.boolValue = value;
     return result;
   }
 
   static fromBytes(value: Bytes): AbiValue {
-    let result = new AbiValue(AbiType.BYTES);
+    const result = new AbiValue(AbiType.BYTES);
     result.bytesValue = value;
     return result;
   }
 
   static fromUint256(value: BigInt): AbiValue {
-    let result = new AbiValue(AbiType.UINT256);
+    const result = new AbiValue(AbiType.UINT256);
     result.uint256Value = value;
     return result;
   }
@@ -133,8 +133,8 @@ export function decodeAbi(data: Bytes, types: AbiType[]): AbiValue[] {
     throw new Error("Insufficient data length for ABI decoding");
   }
 
-  let results: AbiValue[] = [];
-  let dynamicDataOffsets: number[] = [];
+  const results: AbiValue[] = [];
+  const dynamicDataOffsets: number[] = [];
 
   // First pass: read header and collect offsets for dynamic types
   for (let i = 0; i < types.length; i++) {
@@ -216,9 +216,10 @@ function isDynamicType(type: AbiType): boolean {
  */
 function decodeStaticType(slot: Uint8Array, type: AbiType): AbiValue {
   switch (type) {
-    case AbiType.ADDRESS:
+    case AbiType.ADDRESS: {
       const addressBytes = slot.subarray(12, 32); // Last 20 bytes
       return AbiValue.fromAddress(Address.fromBytes(Bytes.fromUint8Array(addressBytes)));
+    }
 
     case AbiType.BOOL:
       return AbiValue.fromBool(slot[31] != 0);

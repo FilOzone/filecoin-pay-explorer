@@ -1,4 +1,4 @@
-import { Bytes, BigInt } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { PAYMENTS_NETWORK_STATS_ID } from "./metrics";
 
 export function getRailEntityId(railId: BigInt): Bytes {

@@ -1,4 +1,4 @@
 {
-  "**/*.{ts,js}": ["prettier --ignore-unknown --write"],
-  "*": ["prettier --ignore-unknown --write"]
+  "**/*.{ts,js}": ["biome format --write", "biome lint --fix"],
+  "*": ["biome format --write"]
 }

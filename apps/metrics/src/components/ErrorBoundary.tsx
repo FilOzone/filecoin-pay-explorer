@@ -1,6 +1,6 @@
-import React from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import React from "react";
 
 interface ErrorBoundaryProps {
   error?: Error;

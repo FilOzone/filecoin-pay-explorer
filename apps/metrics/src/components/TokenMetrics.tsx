@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Coins, Lock, TrendingUp, Users } from "lucide-react";
 import React from "react";
-import { useTopTokens, useTokenMetrics } from "../hooks/useMetrics";
+import { useTokenMetrics, useTopTokens } from "../hooks/useMetrics";
 import { formatFIL, formatToken } from "../utils/formatters";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
