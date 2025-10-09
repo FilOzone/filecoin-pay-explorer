@@ -17,11 +17,10 @@
     "generate": "graphql-codegen --config codegen.yml",
     "build": "pnpm generate && tsc",
     "clean": "rm -rf dist generated",
-    "lint": "biome lint",
+    "lint": "biome check --write",
     "type-check": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
-    "@filecoin-pay/subgraph": "workspace:*",
     "@filecoin-pay/configs": "workspace:*",
     "graphql": "^16.9.0"
   },
