@@ -1,4 +1,4 @@
 {
-  "**/*.{ts,js}": ["biome format --write", "biome lint --fix"],
+  "**/*.{ts,js}": ["biome check --write"],
   "*": ["biome format --write"]
 }

@@ -1,9 +1,6 @@
 {
   "root": false,
   "extends": "//",
-  "formatter": {
-    "ignore": ["templates/**"]
-  },
   "linter": {
     "enabled": true,
     "rules": { "recommended": false },
