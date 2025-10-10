@@ -12,7 +12,8 @@
   "dependencies": {
     "@filecoin-pay/ui": "workspace:*",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",

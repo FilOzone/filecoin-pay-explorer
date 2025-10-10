@@ -1,18 +1,14 @@
-import { Footer } from "@filecoin-pay/ui/components/footer";
-import { Header } from "@filecoin-pay/ui/components/header";
-import { ThemeProvider } from "@filecoin-pay/ui/components/theme-provider";
+import { Route, Routes } from "react-router-dom";
+import Layout from "./Layout";
+import Home from "./pages/Home";
 
 function App() {
   return (
-    <ThemeProvider defaultTheme='system' storageKey='vite-ui-theme'>
-      <div className='min-h-screen flex flex-col'>
-        <Header />
-        <main className='container mx-auto flex-1 px-3 sm:px-4 py-6'>
-          <h1 className='text-2xl font-semibold'>Filecoin Pay Explorer</h1>
-        </main>
-        <Footer />
-      </div>
-    </ThemeProvider>
+    <Layout>
+      <Routes>
+        <Route path='/' element={<Home />} />
+      </Routes>
+    </Layout>
   );
 }
 
