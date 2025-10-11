@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "biome check --write",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
+    "@tanstack/react-query": "^5.83.0",
+    "graphql-request": "^7.2.0",
+    "lucide-react": "^0.545.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.4"
