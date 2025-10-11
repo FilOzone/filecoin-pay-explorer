@@ -211,7 +211,7 @@ export const createRail = (
   settledUpTo: GraphBN,
   commissionRateBps: GraphBN,
   serviceFeeRecipient: Address,
-  blockNumber: GraphBN,
+  timestamp: GraphBN,
 ): Rail => {
   const rail = new Rail(getRailEntityId(railId));
   rail.railId = railId;
@@ -233,7 +233,7 @@ export const createRail = (
   rail.totalCommission = ZERO_BIG_INT;
   rail.totalSettlements = ZERO_BIG_INT;
   rail.totalRateChanges = ZERO_BIG_INT;
-  rail.createdAt = blockNumber;
+  rail.createdAt = timestamp;
   rail.save();
 
   return rail;
