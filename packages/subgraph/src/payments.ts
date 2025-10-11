@@ -158,7 +158,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     GraphBN.zero(),
     commissionRateBps,
     serviceFeeRecipient,
-    event.block.number,
+    event.block.timestamp,
   );
 
   payerAccount.save();
