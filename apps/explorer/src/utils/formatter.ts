@@ -1,3 +1,5 @@
+import { UNLIMITED_THRESHOLD } from "./constants";
+
 export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
 export const formatAddress = (address: string): string => `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -21,8 +23,8 @@ export function formatToken(
   symbol: string = "",
   decimals: number = 2,
 ) {
-  const divisor = BigInt(10) ** BigInt(tokenDecimals);
-  const unitValue = BigInt(value) / divisor;
+  const divisor = 10 ** Number(tokenDecimals);
+  const unitValue = Number(value) / divisor;
   return `${formatCompactNumber(unitValue, decimals)} ${symbol}`;
 }
 
@@ -65,12 +67,11 @@ export const formatFIL = (attoFil: string | bigint) => {
   return "0 FIL";
 };
 
-export function YAxisTickFormatter(value: number, isToken: boolean, decimals: number = 0) {
-  return isToken
-    ? (() => {
-        const divisor = BigInt(10) ** BigInt(decimals);
-        const unitValue = BigInt(value) / divisor;
-        return `${formatCompactNumber(unitValue, 0)}`;
-      })()
-    : formatCompactNumber(value, decimals);
-}
+export const isUnlimitedValue = (value: number | string | bigint): boolean => {
+  try {
+    const bigIntValue = BigInt(value);
+    return bigIntValue > UNLIMITED_THRESHOLD;
+  } catch {
+    return false;
+  }
+};
