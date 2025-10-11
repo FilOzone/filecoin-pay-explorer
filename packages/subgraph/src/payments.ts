@@ -1,4 +1,4 @@
-import { Bytes, BigInt as GraphBN, log } from "@graphprotocol/graph-ts";
+import { Bytes, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -14,7 +14,6 @@ import {
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
 import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
-import { ONE_BIG_INT } from "./utils/constants";
 import {
   createOrLoadAccountByAddress,
   createOrLoadOperator,
@@ -29,7 +28,7 @@ import {
   updateOperatorTokenRate,
 } from "./utils/helpers";
 import { getRailEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, ZERO_BIG_INT } from "./utils/metrics";
+import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -91,14 +90,8 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     }
   }
 
-  const allowanceChange =
-    lockupAllowance > operatorApproval.lockupAllowance
-      ? lockupAllowance.minus(operatorApproval.lockupAllowance)
-      : operatorApproval.lockupAllowance.minus(lockupAllowance);
-
   operator.totalTokens = isNewOperatorToken ? operator.totalTokens.plus(ONE_BIG_INT) : operator.totalTokens;
 
-  operatorToken.volume = operatorToken.volume.plus(allowanceChange);
   operatorToken.lockupAllowance = lockupAllowance;
   operatorToken.rateAllowance = rateAllowance;
 
@@ -144,9 +137,9 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   const operator = operatorWithIsNew.operator;
   const isNewOperator = operatorWithIsNew.isNew;
 
-  payerAccount.totalRails = payerAccount.totalRails.plus(GraphBN.fromI32(1));
-  payeeAccount.totalRails = payeeAccount.totalRails.plus(GraphBN.fromI32(1));
-  operator.totalRails = operator.totalRails.plus(GraphBN.fromI32(1));
+  payerAccount.totalRails = payerAccount.totalRails.plus(ONE_BIG_INT);
+  payeeAccount.totalRails = payeeAccount.totalRails.plus(ONE_BIG_INT);
+  operator.totalRails = operator.totalRails.plus(ONE_BIG_INT);
 
   const rail = createRail(
     railId,
@@ -155,7 +148,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     operatorAddress,
     tokenAddress,
     arbiter,
-    GraphBN.zero(),
+    ZERO_BIG_INT,
     commissionRateBps,
     serviceFeeRecipient,
     event.block.timestamp,
@@ -166,7 +159,9 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   operator.save();
 
   // Collect Metrics
-  const newAccounts = GraphBN.fromI32((isNewPayerAccount ? 1 : 0) + (isNewPayeeAccount ? 1 : 0));
+  const newAccounts = (isNewPayerAccount ? ONE_BIG_INT : ZERO_BIG_INT).plus(
+    isNewPayeeAccount ? ONE_BIG_INT : ZERO_BIG_INT,
+  );
   MetricsCollectionOrchestrator.collectRailCreationMetrics(
     rail,
     newAccounts,
@@ -263,7 +258,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   rail.paymentRate = event.params.newRate;
-  if (oldRate.equals(GraphBN.zero()) && newRate.gt(GraphBN.zero()) && rail.state !== "Active") {
+  if (oldRate.equals(ZERO_BIG_INT) && newRate.gt(ZERO_BIG_INT) && rail.state !== "Active") {
     rail.state = "ACTIVE";
 
     // Collect rail State change metrics
@@ -274,17 +269,18 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       event.block.number,
     );
   }
-  rail.totalRateChanges = rail.totalRateChanges.plus(GraphBN.fromI32(1));
 
   const rateChangeQueue = rail.rateChangeQueue.load();
-  if (rateChangeQueue.length === 0 && oldRate.equals(GraphBN.zero())) {
+  if (rateChangeQueue.length === 0 && oldRate.equals(ZERO_BIG_INT)) {
     rail.settledUpto = event.block.number;
   } else {
     if (rateChangeQueue.length === 0) {
       createRateChangeQueue(rail, rail.settledUpto, event.block.number, newRate);
+      rail.totalRateChanges = rail.totalRateChanges.plus(ONE_BIG_INT);
     } else if (event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)) {
       const lastRateChange = rateChangeQueue[rateChangeQueue.length - 1];
       createRateChangeQueue(rail, lastRateChange.untilEpoch, event.block.number, newRate);
+      rail.totalRateChanges = rail.totalRateChanges.plus(ONE_BIG_INT);
     }
   }
 
@@ -310,16 +306,16 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   if (oldRate.notEqual(newRate)) {
-    let effectiveLockupPeriod = GraphBN.zero();
+    let effectiveLockupPeriod = ZERO_BIG_INT;
     if (isTerminated) {
       effectiveLockupPeriod = rail.endEpoch.minus(event.block.number);
-      if (effectiveLockupPeriod.lt(GraphBN.zero())) {
-        effectiveLockupPeriod = GraphBN.zero();
+      if (effectiveLockupPeriod.lt(ZERO_BIG_INT)) {
+        effectiveLockupPeriod = ZERO_BIG_INT;
       }
     } else if (payerToken) {
       effectiveLockupPeriod = rail.lockupPeriod.minus(event.block.number.minus(payerToken.lockupLastSettledAt));
     }
-    if (effectiveLockupPeriod.gt(GraphBN.zero())) {
+    if (effectiveLockupPeriod.gt(ZERO_BIG_INT)) {
       const oldLockup = oldRate.times(effectiveLockupPeriod);
       const newLockup = newRate.times(effectiveLockupPeriod);
       // update operator lockup usage and save
@@ -357,7 +353,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   rail.totalSettledAmount = rail.totalSettledAmount.plus(totalSettledAmount);
   rail.totalNetPayeeAmount = rail.totalNetPayeeAmount.plus(totalNetPayeeAmount);
   rail.totalCommission = rail.totalCommission.plus(operatorCommission);
-  rail.totalSettlements = rail.totalSettlements.plus(GraphBN.fromI32(1));
+  rail.totalSettlements = rail.totalSettlements.plus(ONE_BIG_INT);
   rail.settledUpto = event.params.settledUpTo;
 
   // Create a new Settlement entity
@@ -406,7 +402,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
     totalSettledAmount,
     totalNetPayeeAmount,
     operatorCommission,
-    filBurnedResult.reverted ? GraphBN.zero() : filBurnedResult.value,
+    filBurnedResult.reverted ? ZERO_BIG_INT : filBurnedResult.value,
     timestamp,
     blockNumber,
   );
@@ -566,8 +562,8 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
   const operatorApproval = OperatorApproval.load(operatorAprrovalId);
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
   const oldLockup = rail.lockupFixed.plus(rail.lockupPeriod.times(rail.paymentRate));
-  updateOperatorLockup(operatorApproval, oldLockup, GraphBN.zero());
-  updateOperatorTokenLockup(operatorToken, oldLockup, GraphBN.zero());
+  updateOperatorLockup(operatorApproval, oldLockup, ZERO_BIG_INT);
+  updateOperatorTokenLockup(operatorToken, oldLockup, ZERO_BIG_INT);
 
   rail.state = "FINALIZED";
   rail.save();
