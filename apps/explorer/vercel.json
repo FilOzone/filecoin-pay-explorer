@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd ../.. && pnpm build --filter=@filecoin-pay/explorer...",
+  "installCommand": "pnpm install",
+  "outputDirectory": "dist"
+}
