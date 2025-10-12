@@ -275,12 +275,12 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     rail.settledUpto = event.block.number;
   } else {
     if (rateChangeQueue.length === 0) {
-      createRateChangeQueue(rail, rail.settledUpto, event.block.number, newRate);
-      rail.totalRateChanges = rail.totalRateChanges.plus(ONE_BIG_INT);
+      const isNew = createRateChangeQueue(rail, rail.settledUpto, event.block.number, newRate).isNew;
+      rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
     } else if (event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)) {
       const lastRateChange = rateChangeQueue[rateChangeQueue.length - 1];
-      createRateChangeQueue(rail, lastRateChange.untilEpoch, event.block.number, newRate);
-      rail.totalRateChanges = rail.totalRateChanges.plus(ONE_BIG_INT);
+      const isNew = createRateChangeQueue(rail, lastRateChange.untilEpoch, event.block.number, newRate).isNew;
+      rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
     }
   }
 
