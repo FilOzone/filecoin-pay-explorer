@@ -1,5 +1,6 @@
 import { Logo } from "@filecoin-pay/ui/components/logo";
 import { ThemeToggle } from "@filecoin-pay/ui/components/theme-toggle";
+import { Link } from "react-router-dom";
 
 function Header() {
   return (
@@ -10,7 +11,10 @@ function Header() {
         </a>
 
         <nav aria-label='Main navigation' className='hidden gap-2 sm:flex'>
-          {/* Future: add links to other pages here */}
+          <Link to='/console'>Console</Link>
+          <Link to='/rails'>Rails</Link>
+          <Link to='/accounts'>Accounts</Link>
+          <Link to='/operators'>Operators</Link>
         </nav>
 
         <div className='flex items-center gap-1'>

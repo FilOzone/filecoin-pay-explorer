@@ -7,12 +7,14 @@ import OperatorDetail from "./pages/OperatorDetail";
 import Operators from "./pages/Operators";
 import RailDetail from "./pages/RailDetail";
 import Rails from "./pages/Rails";
+import UserConsole from "./pages/UserConsole";
 
 function App() {
   return (
     <Layout>
       <Routes>
         <Route path='/' element={<Home />} />
+        <Route path='/console' element={<UserConsole />} />
         <Route path='/rails' element={<Rails />} />
         <Route path='/rail/:railId' element={<RailDetail />} />
         <Route path='/accounts' element={<Accounts />} />
