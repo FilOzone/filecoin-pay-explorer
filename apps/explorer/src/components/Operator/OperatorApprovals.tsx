@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AllowanceDisplay } from "@/components/shared/AllowanceDisplay";
+import { AllowanceDisplay } from "@/components/shared";
 import { useOperatorApprovals } from "@/hooks/useOperatorDetails";
 import { formatAddress, formatToken } from "@/utils/formatter";
 
