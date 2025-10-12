@@ -1,4 +1,6 @@
-import { AllowanceDisplay } from "./AllowanceDisplay";
-import { MetricItem } from "./MetricItem";
+import AllowanceDisplay from "./AllowanceDisplay";
+import Footer from "./Footer";
+import Header from "./Header";
+import MetricItem from "./MetricItem";
 
-export { AllowanceDisplay, MetricItem };
+export { AllowanceDisplay, MetricItem, Footer, Header };

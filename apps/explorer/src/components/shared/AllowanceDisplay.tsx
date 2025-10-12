@@ -15,7 +15,7 @@ interface AllowanceDisplayProps {
   precision?: number;
 }
 
-export const AllowanceDisplay: React.FC<AllowanceDisplayProps> = ({
+const AllowanceDisplay: React.FC<AllowanceDisplayProps> = ({
   value,
   tokenDecimals,
   symbol,
@@ -33,3 +33,5 @@ export const AllowanceDisplay: React.FC<AllowanceDisplayProps> = ({
 
   return <span>{formatValue(value, tokenDecimals, symbol, precision)}</span>;
 };
+
+export default AllowanceDisplay;

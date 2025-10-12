@@ -1,4 +1,4 @@
-export const MetricItem: React.FC<{
+const MetricItem: React.FC<{
   title: string;
   value: React.ReactNode;
 }> = ({ title, value }) => (
@@ -7,3 +7,5 @@ export const MetricItem: React.FC<{
     <p className='text-2xl font-semibold'>{value ?? "N/A"}</p>
   </div>
 );
+
+export default MetricItem;

@@ -1,11 +1,10 @@
-import { Footer } from "@filecoin-pay/ui/components/footer";
-import { Header } from "@filecoin-pay/ui/components/header";
+import { Footer, Header } from "./components/shared";
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className='min-h-screen flex flex-col'>
       <Header />
-      {children}
+      <div className='max-w-screen-2xl mx-auto w-full'>{children}</div>
       <Footer />
     </div>
   );
