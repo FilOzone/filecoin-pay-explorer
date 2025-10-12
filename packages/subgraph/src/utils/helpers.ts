@@ -58,6 +58,13 @@ class OperatorTokenWithIsNew {
   ) {}
 }
 
+class RateChangeQueueWithIsNew {
+  constructor(
+    public rateChangeQueue: RateChangeQueue,
+    public isNew: boolean,
+  ) {}
+}
+
 // Alternative Account entity function for payments-related code
 export const createOrLoadAccountByAddress = (address: Address): AccountWithIsNew => {
   let account = Account.load(address);
@@ -245,16 +252,21 @@ export const createRateChangeQueue = (
   startEpoch: GraphBN,
   untilEpoch: GraphBN,
   rate: GraphBN,
-): RateChangeQueue => {
+): RateChangeQueueWithIsNew => {
   const id = getRateChangeQueueEntityId(rail.railId, startEpoch);
-  const rateChangeQueue = new RateChangeQueue(id);
+  let rateChangeQueue = RateChangeQueue.load(id);
+  const isNew = !rateChangeQueue;
+
+  if (!rateChangeQueue) {
+    rateChangeQueue = new RateChangeQueue(id);
+  }
   rateChangeQueue.rail = rail.id;
   rateChangeQueue.startEpoch = startEpoch;
   rateChangeQueue.untilEpoch = untilEpoch;
   rateChangeQueue.rate = rate;
   rateChangeQueue.save();
 
-  return rateChangeQueue;
+  return new RateChangeQueueWithIsNew(rateChangeQueue, isNew);
 };
 
 // Payments entity functions
