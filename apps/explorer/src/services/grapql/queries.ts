@@ -322,13 +322,7 @@ export const GET_ACCOUNT_DETAILS = gql`
 
 export const GET_ACCOUNT_TOKENS = gql`
   query GetAccountTokens($accountId: Bytes!, $first: Int!, $skip: Int!) {
-    userTokens(
-      where: { account: $accountId }
-      first: $first
-      skip: $skip
-      orderBy: funds
-      orderDirection: desc
-    ) {
+    userTokens(where: { account: $accountId }, first: $first, skip: $skip, orderBy: funds, orderDirection: desc) {
       id
       funds
       lockupCurrent
@@ -358,6 +352,8 @@ export const GET_ACCOUNT_RAILS = gql`
       state
       paymentRate
       totalSettledAmount
+      lockupPeriod
+      settledUpto
       createdAt
       payer {
         id
