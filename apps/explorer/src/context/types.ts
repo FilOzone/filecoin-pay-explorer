@@ -1,27 +1,14 @@
-import { PaymentsService, PDPVerifier, Synapse, type UploadResult, WarmStorageService } from "@filoz/synapse-sdk";
+import { PaymentsService, Synapse } from "@filoz/synapse-sdk";
+import type { Hex } from "viem";
+import type { ChainConstants } from "@/utils/constants";
 
-export interface IStorageCheck {
-  rateAllowanceNeeded: bigint;
-  lockupAllowanceNeeded: bigint;
-  currentRateAllowance: bigint;
-  currentLockupAllowance: bigint;
-  currentRateUsed: bigint;
-  currentLockupUsed: bigint;
-  sufficient: boolean;
-  message?: string;
-  costs: {
-    perEpoch: bigint;
-    perDay: bigint;
-    perMonth: bigint;
-  };
-  depositAmountNeeded: bigint;
+export interface IConstants {
+  network: "calibration" | "mainnet";
+  usdfcAddress: Hex;
 }
 
 export interface SynapseContextType {
-  synapse: Synapse | null;
+  constants: ChainConstants;
   paymentsService: PaymentsService | null;
-  warmStorageService: WarmStorageService | null;
-  pdpVerifier: PDPVerifier | null;
-  checkStorageAllowance: (sizeInBytes: number, withCDN: boolean) => Promise<IStorageCheck | undefined>;
-  uploadFile: (file: File) => Promise<UploadResult | undefined>;
+  synapse: Synapse | null;
 }

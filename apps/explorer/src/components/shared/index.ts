@@ -1,5 +1,5 @@
 import AllowanceDisplay from "./AllowanceDisplay";
-import CustomConnectButton from "./ConnectButton";
+import CustomConnectButton from "./CustomConnectButton";
 import Footer from "./Footer";
 import Header from "./Header";
 import MetricItem from "./MetricItem";

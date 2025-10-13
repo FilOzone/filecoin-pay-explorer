@@ -1,10 +1,11 @@
 import { Button } from "@filecoin-pay/ui/components/button";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { Balance, NetworkOptions } from "./components";
 
 const CustomConnectButton = () => {
   return (
     <ConnectButton.Custom>
-      {({ account, chain, openAccountModal, openChainModal, openConnectModal, mounted }) => {
+      {({ account, chain, openChainModal, openConnectModal, mounted }) => {
         const ready = mounted;
         const connected = ready && account && chain;
         return (
@@ -35,29 +36,8 @@ const CustomConnectButton = () => {
               }
               return (
                 <div style={{ display: "flex", gap: 12 }}>
-                  <Button onClick={openAccountModal} type='button'>
-                    {account.displayName}
-                    {account.displayBalance ? ` (${account.displayBalance})` : ""}
-                  </Button>
-                  <Button onClick={openChainModal} style={{ display: "flex", alignItems: "center" }} type='button'>
-                    {chain.hasIcon && (
-                      <div
-                        style={{
-                          background: chain.iconBackground,
-                          width: 12,
-                          height: 12,
-                          borderRadius: 999,
-                          overflow: "hidden",
-                          marginRight: 4,
-                        }}
-                      >
-                        {chain.iconUrl && (
-                          <img alt={chain.name ?? "Chain icon"} src={chain.iconUrl} style={{ width: 12, height: 12 }} />
-                        )}
-                      </div>
-                    )}
-                    {chain.name}
-                  </Button>
+                  <Balance />
+                  <NetworkOptions chainId={chain.id} chainName={chain.name} />
                 </div>
               );
             })()}
