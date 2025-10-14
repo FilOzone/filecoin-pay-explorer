@@ -1,17 +1,23 @@
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Logo } from "@filecoin-pay/ui/components/logo";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+} from "@filecoin-pay/ui/components/navigation-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@filecoin-pay/ui/components/sheet";
 import { ThemeToggle } from "@filecoin-pay/ui/components/theme-toggle";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Menu, X } from "lucide-react";
+import { LayoutDashboard, Menu, Network, Shield, Users, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 const navigationLinks = [
-  { name: "Console", href: "/console" },
-  { name: "Rails", href: "/rails" },
-  { name: "Accounts", href: "/accounts" },
-  { name: "Operators", href: "/operators" },
+  { name: "Console", href: "/console", icon: LayoutDashboard },
+  { name: "Rails", href: "/rails", icon: Network },
+  { name: "Accounts", href: "/accounts", icon: Users },
+  { name: "Operators", href: "/operators", icon: Shield },
 ];
 
 function Header() {
@@ -23,29 +29,32 @@ function Header() {
   };
 
   return (
-    <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'>
+    <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
       <div className='max-w-screen-2xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8'>
         {/* Logo */}
-        <a href='/' className='inline-flex items-center gap-2 transition-opacity hover:opacity-80'>
+        <Link to='/' className='inline-flex items-center gap-2 transition-opacity hover:opacity-80'>
           <Logo />
-        </a>
+        </Link>
 
         {/* Desktop Navigation */}
-        <nav aria-label='Main navigation' className='hidden md:flex items-center gap-1'>
-          {navigationLinks.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className={cn(
-                "px-4 py-2 text-sm font-medium rounded-md transition-colors",
-                "hover:bg-accent hover:text-accent-foreground",
-                isActiveLink(link.href) ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-              )}
-            >
-              {link.name}
-            </Link>
-          ))}
-        </nav>
+        <NavigationMenu className='hidden md:flex'>
+          <NavigationMenuList>
+            {navigationLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = isActiveLink(link.href);
+              return (
+                <NavigationMenuItem key={link.href}>
+                  <NavigationMenuLink active={isActive} asChild>
+                    <Link to={link.href} className='flex-row items-center gap-2 transition-all duration-200'>
+                      <Icon className='h-4 w-4' />
+                      {link.name}
+                    </Link>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              );
+            })}
+          </NavigationMenuList>
+        </NavigationMenu>
 
         {/* Right Side Actions */}
         <div className='flex items-center gap-3'>
@@ -58,22 +67,27 @@ function Header() {
                 {isOpen ? <X className='h-5 w-5' /> : <Menu className='h-5 w-5' />}
               </Button>
             </SheetTrigger>
-            <SheetContent side='right' className='w-64'>
+            <SheetContent side='right' className='w-72'>
               <nav className='flex flex-col gap-2 mt-12'>
-                {navigationLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    to={link.href}
-                    onClick={() => setIsOpen(false)}
-                    className={cn(
-                      "px-4 py-3 text-sm font-medium rounded-md transition-colors",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      isActiveLink(link.href) ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {link.name}
-                  </Link>
-                ))}
+                {navigationLinks.map((link) => {
+                  const Icon = link.icon;
+                  const isActive = isActiveLink(link.href);
+                  return (
+                    <Link
+                      key={link.href}
+                      to={link.href}
+                      onClick={() => setIsOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        isActive ? "bg-accent text-accent-foreground font-semibold" : "text-muted-foreground",
+                      )}
+                    >
+                      <Icon className='h-5 w-5' />
+                      {link.name}
+                    </Link>
+                  );
+                })}
               </nav>
             </SheetContent>
           </Sheet>
