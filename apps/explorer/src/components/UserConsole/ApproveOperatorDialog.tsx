@@ -15,6 +15,7 @@ import { AlertCircle, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, isAddress, maxUint256, parseUnits } from "viem";
 import { useReadContracts } from "wagmi";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
@@ -52,10 +53,15 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
   const [rateAllowance, setRateAllowance] = useState("");
   const [maxLockupPeriod, setMaxLockupPeriod] = useState("");
   const [isUnlimited, setIsUnlimited] = useState(false);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { synapse } = useSynapse();
+  const { synapse, constants } = useSynapse();
+
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+  });
 
   // Click outside handlers
   useEffect(() => {
@@ -203,14 +209,17 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
         : 0n;
 
     try {
-      const approvalResponse = await synapse?.payments.approveService(
-        operatorAddress,
-        rateInWei,
-        lockupInWei,
-        BigInt(maxLockupPeriod),
-      );
-      await approvalResponse?.wait();
-      onOpenChange(false);
+      await execute({
+        functionName: "setOperatorApproval",
+        args: [tokenAddress, operatorAddress, true, rateInWei, lockupInWei, BigInt(maxLockupPeriod)],
+        metadata: {
+          type: "approveOperator",
+          operator: operatorAddress,
+          token: tokenDetails.symbol,
+        },
+        onSubmitOnChain: () => onOpenChange(false),
+        onError: (err) => console.log("[setOperatorApproval]: Failed ", err),
+      });
     } catch (err) {
       console.error("Approve failed:", err);
     } finally {
@@ -220,7 +229,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
 
   const isOperatorValid = !!operatorAddress;
   const isTokenValid = !!tokenAddress && !!tokenDetails && !isLoadingTokenDetails;
-  const canSubmit = isOperatorValid && isTokenValid && maxLockupPeriod && !isSubmitting;
+  const canSubmit = isOperatorValid && isTokenValid && maxLockupPeriod && !isSubmitting && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -469,11 +478,11 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
             Cancel
           </Button>
           <Button onClick={handleApprove} disabled={!canSubmit}>
-            {isSubmitting ? (
+            {isSubmitting || isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...

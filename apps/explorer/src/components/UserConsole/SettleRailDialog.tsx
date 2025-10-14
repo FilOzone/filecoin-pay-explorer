@@ -11,7 +11,9 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { useState } from "react";
 import { useBlockNumber } from "wagmi";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
+import { SETTLEMENT_FEE } from "@/utils/constants";
 import { formatAddress, formatToken } from "@/utils/formatter";
 
 interface SettleRailDialogProps {
@@ -25,33 +27,45 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: blockNumber, isLoading: isLoadingBlockNumber } = useBlockNumber({ watch: true });
 
-  const { synapse } = useSynapse();
+  const { synapse, constants } = useSynapse();
+
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+  });
 
   const isPayer = rail.payer.address.toLowerCase() === userAddress.toLowerCase();
   const expectedSettleAmount = blockNumber
     ? BigInt(rail.paymentRate) * (BigInt(blockNumber) - BigInt(rail.settledUpto))
     : 0n;
 
+  const canSettle = isPayer && !isSubmitting && !isExecuting && !isLoadingBlockNumber;
+
   const handleSettle = async () => {
     if (!synapse) {
       console.log("Synapse not initialized");
       return;
     }
-    setIsSubmitting(true);
-
     try {
-      const tx = await synapse.payments.settle(rail.railId, blockNumber);
-      await tx.wait();
-      setIsSubmitting(false);
-      onOpenChange(false);
+      setIsSubmitting(true);
+      await execute({
+        functionName: "settleRail",
+        args: [rail.railId, blockNumber],
+        value: SETTLEMENT_FEE,
+        metadata: {
+          type: "settleRail",
+          railId: rail.railId.toString(),
+          amount: formatToken(expectedSettleAmount, Number(rail.token.decimals)),
+          token: rail.token.symbol,
+        },
+        onSubmitOnChain: () => onOpenChange(false),
+      });
     } catch (error) {
-      console.error("Error settling rail:", error);
+      console.error("Settle failed:", error);
+    } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleClose = () => {
-    onOpenChange(false);
   };
 
   return (
@@ -152,11 +166,11 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={handleClose} disabled={isSubmitting}>
+          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
             Cancel
           </Button>
-          <Button onClick={handleSettle} disabled={isSubmitting}>
-            {isSubmitting ? "Settling..." : "Settle Rail"}
+          <Button onClick={handleSettle} disabled={!canSettle}>
+            {isSubmitting || isExecuting ? "Settling..." : "Settle Rail"}
           </Button>
         </DialogFooter>
       </DialogContent>

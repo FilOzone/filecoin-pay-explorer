@@ -86,10 +86,10 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
         <div>
           <span className='text-xs text-muted-foreground'>Payment Rate</span>
           <div className='font-medium text-sm'>
-            {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 6)}
+            {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
           </div>
           <div className='text-xs text-muted-foreground mt-1'>
-            Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 2)}
+            Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
           </div>
         </div>
 

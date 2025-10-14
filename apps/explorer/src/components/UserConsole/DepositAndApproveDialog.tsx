@@ -12,8 +12,10 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, maxUint256, parseUnits } from "viem";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
+import { getPermitSignature } from "@/utils/permit";
 
 interface DepositAndApproveDialogProps {
   open: boolean;
@@ -39,7 +41,15 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { address: userAddress } = useAccount();
-  const { synapse } = useSynapse();
+  const { synapse, constants } = useSynapse();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -124,7 +134,15 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
       return;
     }
 
-    setIsSubmitting(true);
+    if (!walletClient || !publicClient) {
+      console.log("Wallet client or public client not available");
+      return;
+    }
+
+    if (!userAddress) {
+      console.log("User address not available");
+      return;
+    }
 
     const tokenDecimals = BigInt(tokenDetails.decimals);
 
@@ -139,18 +157,47 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
         ? BigInt(parseUnits(rateAllowance, Number(tokenDecimals)).toString())
         : 0n;
     const tokenAmountInWei = BigInt(parseUnits(tokenAmount, Number(tokenDecimals)).toString());
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+
+    setIsSubmitting(true);
 
     try {
-      const tx = await synapse?.payments.depositWithPermitAndApproveOperator(
-        tokenAmountInWei,
-        operatorAddress,
-        rateInWei,
-        lockupInWei,
-        BigInt(maxLockupPeriod),
-        validatedTokenAddress,
+      const permitSignature = await getPermitSignature(
+        {
+          tokenAddress: validatedTokenAddress as `0x${string}`,
+          ownerAddress: userAddress,
+          spenderAddress: constants.contracts.payments.address,
+          amount: tokenAmountInWei,
+          deadline,
+          chainId: constants.chain.id,
+        },
+        walletClient,
+        publicClient,
       );
-      await tx?.wait();
-      onOpenChange(false);
+
+      await execute({
+        functionName: "depositWithPermitAndApproveOperator",
+        args: [
+          validatedTokenAddress,
+          userAddress,
+          tokenAmountInWei,
+          permitSignature.deadline,
+          permitSignature.v,
+          permitSignature.r,
+          permitSignature.s,
+          operatorAddress,
+          rateInWei,
+          lockupInWei,
+          BigInt(maxLockupPeriod),
+        ],
+        metadata: {
+          type: "depositAndApprove",
+          amount: tokenAmount,
+          token: tokenDetails.symbol,
+          operator: operatorAddress,
+        },
+        onSubmitOnChain: () => onOpenChange(false),
+      });
     } catch (err) {
       console.error("Deposit and Approve failed:", err);
     } finally {
@@ -167,7 +214,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
 
   const isOperatorValid = !!operatorAddress;
   const isTokenValid = !!validatedTokenAddress && !!tokenDetails && !isLoadingTokenDetails;
-  const canSubmit = isOperatorValid && isTokenValid && maxLockupPeriod && !isSubmitting;
+  const canSubmit = isOperatorValid && isTokenValid && maxLockupPeriod && !isSubmitting && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -391,11 +438,11 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
             Cancel
           </Button>
           <Button onClick={handleDepositAndApprove} disabled={!canSubmit}>
-            {isSubmitting ? (
+            {isSubmitting || isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...

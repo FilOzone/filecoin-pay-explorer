@@ -4,6 +4,7 @@ import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@filecoin-pay/ui/components/tabs";
 import { AlertCircle, ArrowUpCircle, ChevronDown, ChevronRight, Layers, Plus, Shield, Users } from "lucide-react";
 import { useState } from "react";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
@@ -265,25 +266,20 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
         <div className='flex items-center justify-between flex-wrap gap-4'>
           <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
           <div className='flex items-center gap-3'>
-            {/* Group By Toggle */}
-            <div className='flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-card text-sm'>
-              <span className='text-muted-foreground'>Group by:</span>
-              <button
-                onClick={() => setGroupBy("token")}
-                className={`px-2 py-1 rounded transition-colors ${
-                  groupBy === "token" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-              >
-                Token
-              </button>
-              <button
-                onClick={() => setGroupBy("operator")}
-                className={`px-2 py-1 rounded transition-colors ${
-                  groupBy === "operator" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-              >
-                Operator
-              </button>
+            <div className='flex items-center gap-2'>
+              <span className='text-sm text-muted-foreground'>Group by:</span>
+              <Tabs value={groupBy} onValueChange={(value) => setGroupBy(value as GroupBy)} className='w-auto'>
+                <TabsList className='grid w-full grid-cols-2'>
+                  <TabsTrigger value='token' className='gap-1.5'>
+                    <Layers className='h-3.5 w-3.5' />
+                    Token
+                  </TabsTrigger>
+                  <TabsTrigger value='operator' className='gap-1.5'>
+                    <Users className='h-3.5 w-3.5' />
+                    Operator
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
             <Button onClick={() => setApproveDialogOpen(true)} className='gap-2'>

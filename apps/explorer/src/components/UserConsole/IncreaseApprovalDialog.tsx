@@ -14,6 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { maxUint256, parseUnits } from "viem";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
 
@@ -30,7 +31,13 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { synapse } = useSynapse();
+  const { synapse, constants } = useSynapse();
+
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+  });
 
   // Check if current allowances are already unlimited
   const isCurrentLockupUnlimited = isUnlimitedValue(approval.lockupAllowance);
@@ -77,22 +84,31 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
       : BigInt(approval.maxLockupPeriod) + BigInt(maxLockupPeriodIncrease);
 
     try {
-      const tx = await synapse.payments.approveService(
-        approval.operator.address,
-        newRateAllowance,
-        newLockupAllowance,
-        newMaxLockupPeriod,
-      );
-      await tx.wait();
-      setIsSubmitting(false);
-      onOpenChange(false);
+      await execute({
+        functionName: "setOperatorApproval",
+        args: [
+          approval.token.id,
+          approval.operator.address,
+          true,
+          newRateAllowance,
+          newLockupAllowance,
+          newMaxLockupPeriod,
+        ],
+        metadata: {
+          type: "increaseApproval",
+          operator: approval.operator.address,
+          token: approval.token.symbol,
+        },
+        onSubmitOnChain: () => onOpenChange(false),
+      });
     } catch (error) {
-      console.error("Error increasing approval:", error);
+      console.error("Increase approval failed:", error);
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  const canSubmit = (isUnlimited || lockupIncrease || rateIncrease) && !isSubmitting;
+  const canSubmit = !isSubmitting && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -207,11 +223,11 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
             Cancel
           </Button>
           <Button onClick={handleIncrease} disabled={!canSubmit}>
-            {isSubmitting ? (
+            {isSubmitting || isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...

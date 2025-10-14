@@ -14,8 +14,10 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
+import { getPermitSignature } from "@/utils/permit";
 
 interface DepositDialogProps {
   userToken?: UserToken | null;
@@ -37,13 +39,18 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
 
   // Form state
   const [amount, setAmount] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Custom token state
   const [tokenAddress, setTokenAddress] = useState("");
 
-  const { synapse } = useSynapse();
+  const { synapse, constants } = useSynapse();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
 
+  // Use the contract transaction hook
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+  });
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
@@ -143,26 +150,64 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
       return;
     }
 
-    setIsSubmitting(true);
+    if (!walletClient || !publicClient) {
+      console.log("Wallet client or public client not available");
+      return;
+    }
+
+    if (!userAddress) {
+      console.log("User address not available");
+      return;
+    }
 
     try {
-      // Parse amount with correct decimals
       const amountInWei = parseUnits(amount, token.decimals);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
-      const depositResponse = await synapse.payments.deposit(amountInWei, token.address);
-      await depositResponse.wait();
+      console.log("[Deposit] Getting permit signature...");
 
-      // Success - close dialog
-      handleClose();
+      // Get permit signature
+      const permitSignature = await getPermitSignature(
+        {
+          tokenAddress: token.address as `0x${string}`,
+          ownerAddress: userAddress,
+          spenderAddress: constants.contracts.payments.address,
+          amount: amountInWei,
+          deadline,
+          chainId: constants.chain.id,
+        },
+        walletClient,
+        publicClient,
+      );
+
+      console.log("[Deposit] Permit signature obtained, submitting transaction...");
+
+      // Execute transaction with rich metadata
+      await execute({
+        functionName: "depositWithPermit",
+        args: [
+          token.address,
+          userAddress,
+          amountInWei,
+          permitSignature.deadline,
+          permitSignature.v,
+          permitSignature.r,
+          permitSignature.s,
+        ],
+        metadata: {
+          type: "deposit",
+          amount,
+          token: token.symbol,
+        },
+        onSubmitOnChain: () => handleClose(),
+      });
     } catch (err) {
       console.error("Deposit failed:", err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
+    if (!isExecuting) {
       onOpenChange(false);
       // State will be reset by useEffect when open becomes false
     }
@@ -184,7 +229,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
       }
     : tokenDetails;
 
-  const canDeposit = currentToken && amount && !isSubmitting;
+  const canDeposit = currentToken && amount && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -211,7 +256,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   onChange={(e) => {
                     setTokenAddress(e.target.value);
                   }}
-                  disabled={loadingState === "loading" || isSubmitting}
+                  disabled={loadingState === "loading" || isExecuting}
                   className='font-mono text-sm'
                 />
               </div>
@@ -324,7 +369,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   onChange={(e) => setAmount(e.target.value)}
                   min='0'
                   step='any'
-                  disabled={isSubmitting}
+                  disabled={isExecuting}
                   className='text-lg pr-16'
                 />
                 <Button
@@ -333,7 +378,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
-                  disabled={isSubmitting || balance === undefined || isLoadingBalance}
+                  disabled={isExecuting || balance === undefined || isLoadingBalance}
                 >
                   MAX
                 </Button>
@@ -355,11 +400,11 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={handleClose} disabled={isSubmitting}>
+          <Button variant='outline' onClick={handleClose} disabled={isExecuting}>
             Cancel
           </Button>
           <Button onClick={handleDeposit} disabled={!canDeposit}>
-            {isSubmitting ? (
+            {isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...
