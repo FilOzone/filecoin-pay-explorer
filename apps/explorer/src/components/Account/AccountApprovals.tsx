@@ -14,10 +14,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { AllowanceDisplay } from "@/components/shared";
+import { AllowanceDisplay, CopyableText } from "@/components/shared";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
-import { formatAddress, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
 
 interface AccountApprovalsProps {
   account: Account;
@@ -109,9 +108,14 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
             {data.operatorApprovals.map((approval) => (
               <TableRow key={approval.id}>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/operator/${approval.operator.address}`} className='text-primary hover:underline'>
-                    {formatAddress(approval.operator.address)}
-                  </Link>
+                  <CopyableText
+                    value={approval.operator.address}
+                    to={`/operator/${approval.operator.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell className='font-medium'>{approval.token.symbol}</TableCell>
                 <TableCell>

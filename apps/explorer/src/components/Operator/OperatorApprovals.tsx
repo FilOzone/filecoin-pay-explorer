@@ -14,10 +14,10 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { AllowanceDisplay } from "@/components/shared";
 import { useOperatorApprovals } from "@/hooks/useOperatorDetails";
-import { formatAddress, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface OperatorApprovalsProps {
   operator: Operator;
@@ -109,9 +109,14 @@ export const OperatorApprovals: React.FC<OperatorApprovalsProps> = ({ operator }
             {data.operatorApprovals.map((approval) => (
               <TableRow key={approval.id}>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/account/${approval.client.address}`} className='text-primary hover:underline'>
-                    {formatAddress(approval.client.address)}
-                  </Link>
+                  <CopyableText
+                    value={approval.client.address}
+                    to={`/account/${approval.client.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell className='font-medium'>{approval.token.symbol}</TableCell>
                 <TableCell>

@@ -1,8 +1,8 @@
 import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
-import type { Abi, Hex } from "viem";
 import { filecoinCalibration } from "viem/chains";
 import { paymentsAbi } from "@/abi/payments";
 import { supportedChains } from "@/services/wagmi/config";
+import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
 export const SETTLEMENT_FEE = 1300000000000000n;
@@ -11,22 +11,9 @@ export const DEFAULT_THEME = "system";
 export const THEME_STORAGE_KEY = "filecoin-pay-explorer-theme";
 export const DEFAULT_TOAST_POSITION = "top-right";
 
-export interface FaucetProvider {
-  name: string;
-  url: string;
-}
-
-export type ChainConstants = {
-  chain: (typeof supportedChains)[number];
-  label: string;
-  contracts: {
-    usdfc: Hex;
-    payments: {
-      address: Hex;
-      abi: Abi;
-    };
-  };
-  faucets?: FaucetProvider[];
+export const explorerUrls = {
+  mainnet: "https://filfox.info/en",
+  calibration: "https://calibration.filfox.info/en",
 };
 
 export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainConstants> = {

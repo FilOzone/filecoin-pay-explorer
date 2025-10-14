@@ -1,6 +1,6 @@
 import type { Account, Rail } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
+// import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
@@ -12,10 +12,12 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, CheckCircle, FileText, Search } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, FileText, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 import { RailsSearch, type SearchFilterType } from "./RailsSearch";
 import { SettleRailDialog } from "./SettleRailDialog";
 
@@ -46,7 +48,7 @@ interface RailCardProps {
   onSettle: (rail: Rail) => void;
 }
 
-const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
+const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
   const isPayer = rail.payer.address.toLowerCase() === userAddress.toLowerCase();
   const counterparty = isPayer ? rail.payee : rail.payer;
 
@@ -57,7 +59,9 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
         <div>
           <span className='text-xs text-muted-foreground'>Rail ID</span>
           <div className='flex items-center gap-2'>
-            <span className='text-lg font-semibold'>#{rail.railId.toString()}</span>
+            <Link to={`/rail/${rail.railId}`} className='text-lg font-semibold'>
+              #{rail.railId.toString()}
+            </Link>
             <Badge variant={isPayer ? "destructive" : "default"} className='gap-1'>
               {isPayer ? (
                 <>
@@ -78,7 +82,15 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
         {/* Counterparty & Operator */}
         <div>
           <span className='text-xs text-muted-foreground'>Counterparty</span>
-          <div className='font-mono text-sm font-medium'>{formatAddress(counterparty.address)}</div>
+          <CopyableText
+            className='text-sm font-medium'
+            value={counterparty.address}
+            to={`/account/${counterparty.address}`}
+            monospace={true}
+            label='Account'
+            truncate={true}
+            truncateLength={8}
+          />
           <div className='text-xs text-muted-foreground mt-1'>Operator: {formatAddress(rail.operator.address)}</div>
         </div>
 
@@ -116,7 +128,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
       </div>
 
       {/* Actions */}
-      <Button
+      {/* <Button
         size='sm'
         variant='outline'
         onClick={() => onSettle(rail)}
@@ -125,7 +137,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress, onSettle }) => {
       >
         <CheckCircle className='h-4 w-4' />
         Settle
-      </Button>
+      </Button> */}
     </div>
   );
 };

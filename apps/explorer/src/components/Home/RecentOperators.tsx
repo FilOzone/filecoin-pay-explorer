@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import useRecentOperators from "@/hooks/useRecentOperators";
-import { formatAddress, formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 const RecentOperators = () => {
   const { data, isLoading, isError, error, refetch } = useRecentOperators(10);
@@ -52,9 +53,14 @@ const RecentOperators = () => {
             {data.map((operator) => (
               <TableRow key={operator.id}>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/operator/${operator.address}`} className='text-primary hover:underline'>
-                    {formatAddress(operator.address)}
-                  </Link>
+                  <CopyableText
+                    value={operator.address}
+                    to={`/operator/${operator.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell className='text-right'>{formatCompactNumber(operator.totalRails)}</TableCell>
                 <TableCell className='text-right'>{formatCompactNumber(operator.totalTokens)}</TableCell>

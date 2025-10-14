@@ -1,6 +1,8 @@
 import type { Operator } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
+import { explorerUrls } from "@/utils/constants";
 import { formatCompactNumber } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface OperatorOverviewProps {
   operator: Operator;
@@ -26,7 +28,13 @@ export const OperatorOverview: React.FC<OperatorOverviewProps> = ({ operator }) 
       <Card className='p-4 md:col-span-2 lg:col-span-4'>
         <div className='flex flex-col gap-1'>
           <span className='text-sm text-muted-foreground'>Operator Address</span>
-          <div className='font-mono text-sm font-medium break-all'>{operator.address}</div>
+          <CopyableText
+            value={operator.address}
+            to={`${explorerUrls.calibration}/address/${operator.address}`}
+            monospace={true}
+            label='Operator'
+            external={true}
+          />
         </div>
       </Card>
 

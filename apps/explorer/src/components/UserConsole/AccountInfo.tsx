@@ -2,7 +2,8 @@ import type { Account } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { User } from "lucide-react";
-import { formatAddress, formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface AccountInfoProps {
   account: Account;
@@ -55,7 +56,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ account, address }) =>
           </div>
           <div className='flex-1'>
             <h3 className='text-lg font-semibold'>Connected Account</h3>
-            <p className='text-sm text-muted-foreground font-mono'>{formatAddress(address)}</p>
+            <CopyableText value={address} monospace={true} label='Account' truncate={true} truncateLength={8} />
           </div>
         </div>
 

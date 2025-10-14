@@ -9,6 +9,7 @@ import { AlertCircle, ArrowUpCircle, ChevronDown, ChevronRight, Layers, Plus, Sh
 import { useState } from "react";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
 import { formatAddress, formatToken } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 import AllowanceDisplay from "../shared/AllowanceDisplay";
 import { ApproveOperatorDialog } from "./ApproveOperatorDialog";
 import { IncreaseApprovalDialog } from "./IncreaseApprovalDialog";
@@ -46,7 +47,14 @@ const ApprovalCard: React.FC<ApprovalCardProps> = ({ approval, onIncrease }) => 
         {/* Operator Info */}
         <div>
           <span className='text-xs text-muted-foreground'>Operator</span>
-          <div className='font-mono text-sm font-medium'>{formatAddress(approval.operator.address)}</div>
+          <CopyableText
+            to={`/operator/${approval.operator.address}`}
+            value={approval.operator.address}
+            monospace={true}
+            label='Operator'
+            truncate={true}
+            truncateLength={8}
+          />
         </div>
 
         {/* Token Info */}
