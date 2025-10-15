@@ -37,3 +37,5 @@ export type ChainConstants = {
   };
   faucets?: FaucetProvider[];
 };
+
+export type AccountInfo = [bigint, bigint, bigint, bigint];

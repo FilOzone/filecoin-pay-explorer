@@ -152,4 +152,19 @@ export const paymentsAbi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  {
+    type: "function",
+    inputs: [
+      { name: "token", internalType: "address", type: "address" },
+      { name: "owner", internalType: "address", type: "address" },
+    ],
+    name: "getAccountInfoIfSettled",
+    outputs: [
+      { name: "fundedUntilEpoch", internalType: "uint256", type: "uint256" },
+      { name: "currentFunds", internalType: "uint256", type: "uint256" },
+      { name: "availableFunds", internalType: "uint256", type: "uint256" },
+      { name: "currentLockupRate", internalType: "uint256", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
 ] as const;

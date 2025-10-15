@@ -4,11 +4,12 @@ import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle, Plus, Wallet } from "lucide-react";
+import { AlertCircle, Minus, Plus, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { formatToken } from "@/utils/formatter";
 import { DepositDialog } from "./DepositDialog";
+import { WithdrawDialog } from "./WithdrawDialog";
 
 interface FundsSectionProps {
   account: Account;
@@ -32,9 +33,10 @@ export const FundsSectionSkeleton = () => (
 interface TokenRowProps {
   userToken: UserToken;
   onDeposit: (userToken: UserToken) => void;
+  onWithdraw: (userToken: UserToken) => void;
 }
 
-const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit }) => {
+const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw }) => {
   // Calculate available funds (funds - lockupCurrent)
   const availableFunds = BigInt(userToken.funds) - BigInt(userToken.lockupCurrent);
 
@@ -74,14 +76,18 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit }) => {
           <Plus className='h-4 w-4' />
           Deposit
         </Button>
+        <Button size='sm' onClick={() => onWithdraw(userToken)} className='gap-2 ml-2'>
+          <Minus className='h-4 w-4' />
+          Withdraw
+        </Button>
       </TableCell>
     </TableRow>
   );
 };
 
 export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
-  const [depositCustomDialogOpen, setDepositCustomDialogOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
 
   // Fetch all tokens for this account (no pagination for console view)
@@ -90,6 +96,11 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
   const handleDeposit = (userToken: UserToken) => {
     setSelectedToken(userToken);
     setDepositDialogOpen(true);
+  };
+
+  const handleWithdraw = (userToken: UserToken) => {
+    setSelectedToken(userToken);
+    setWithdrawDialogOpen(true);
   };
 
   if (isLoading) {
@@ -101,7 +112,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-semibold'>Funds</h2>
-          <Button onClick={() => setDepositCustomDialogOpen(true)}>Deposit</Button>
+          <Button onClick={() => setDepositDialogOpen(true)}>Deposit</Button>
         </div>
         <Card>
           <div className='py-12'>
@@ -123,7 +134,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-semibold'>Funds</h2>
-          <Button onClick={() => setDepositCustomDialogOpen(true)}>Deposit</Button>
+          <Button onClick={() => setDepositDialogOpen(true)}>Deposit</Button>
         </div>
         <Card>
           <div className='py-12'>
@@ -147,7 +158,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-semibold'>Funds</h2>
-          <Button onClick={() => setDepositCustomDialogOpen(true)}>Deposit</Button>
+          <Button onClick={() => setDepositDialogOpen(true)}>Deposit</Button>
         </div>
 
         <Card>
@@ -163,7 +174,12 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
             </TableHeader>
             <TableBody>
               {data.userTokens.map((userToken) => (
-                <TokenRow key={userToken.id} userToken={userToken} onDeposit={handleDeposit} />
+                <TokenRow
+                  key={userToken.id}
+                  userToken={userToken}
+                  onDeposit={handleDeposit}
+                  onWithdraw={handleWithdraw}
+                />
               ))}
             </TableBody>
           </Table>
@@ -171,9 +187,10 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       </div>
 
       {/* Deposit Dialogs */}
-      <DepositDialog open={depositCustomDialogOpen} onOpenChange={setDepositCustomDialogOpen} />
+      <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
+
       {selectedToken && (
-        <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
+        <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
       )}
     </>
   );
