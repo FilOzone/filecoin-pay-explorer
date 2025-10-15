@@ -1,4 +1,4 @@
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps, useTheme } from "next-themes";
 import type { PropsWithChildren } from "react";
 
 export type AppThemeProviderProps = PropsWithChildren<
@@ -26,3 +26,5 @@ export function ThemeProvider({
     </NextThemesProvider>
   );
 }
+
+export { useTheme };
