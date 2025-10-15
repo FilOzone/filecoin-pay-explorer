@@ -271,16 +271,19 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   const rateChangeQueue = rail.rateChangeQueue.load();
-  if (rateChangeQueue.length === 0 && oldRate.equals(ZERO_BIG_INT)) {
-    rail.settledUpto = event.block.number;
-  } else {
-    if (rateChangeQueue.length === 0) {
-      const isNew = createRateChangeQueue(rail, rail.settledUpto, event.block.number, newRate).isNew;
-      rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
-    } else if (event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)) {
-      const lastRateChange = rateChangeQueue[rateChangeQueue.length - 1];
-      const isNew = createRateChangeQueue(rail, lastRateChange.untilEpoch, event.block.number, newRate).isNew;
-      rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
+  if (oldRate.notEqual(newRate) && rail.settledUpto.notEqual(event.block.number)) {
+    if (oldRate.equals(ZERO_BIG_INT) && rateChangeQueue.length === 0) {
+      rail.settledUpto = event.block.number;
+    } else {
+      if (
+        rateChangeQueue.length === 0 ||
+        event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)
+      ) {
+        const startEpoch =
+          rateChangeQueue.length === 0 ? rail.settledUpto : rateChangeQueue[rateChangeQueue.length - 1].untilEpoch;
+        const isNew = createRateChangeQueue(rail, startEpoch, event.block.number, oldRate).isNew;
+        rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
+      }
     }
   }
 
