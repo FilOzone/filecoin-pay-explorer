@@ -75,3 +75,46 @@ export const isUnlimitedValue = (value: number | string | bigint): boolean => {
     return false;
   }
 };
+
+export const epochToDate = (
+  futureEpoch: bigint | number,
+  currentEpoch: bigint | number,
+  epochDuration: number = 30,
+): Date => {
+  const future = BigInt(futureEpoch);
+  const current = BigInt(currentEpoch);
+  const epochsRemaining = future - current;
+  const secondsRemaining = Number(epochsRemaining) * epochDuration;
+  const futureTimestamp = Date.now() + secondsRemaining * 1000;
+  return new Date(futureTimestamp);
+};
+
+export const formatFutureEpoch = (
+  futureEpoch: bigint | number,
+  currentEpoch: bigint | number,
+  epochDuration: number = 30,
+): string => {
+  const date = epochToDate(futureEpoch, currentEpoch, epochDuration);
+  const now = Date.now();
+  const futureTime = date.getTime();
+
+  if (futureTime - now < 60000) {
+    return "Now";
+  }
+  const diffMs = futureTime - now;
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 1) {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: diffDays > 365 ? "numeric" : undefined,
+    });
+  } else if (diffHours > 1) {
+    return `${diffHours}h ${diffMinutes % 60}m`;
+  } else {
+    return `${diffMinutes}m`;
+  }
+};

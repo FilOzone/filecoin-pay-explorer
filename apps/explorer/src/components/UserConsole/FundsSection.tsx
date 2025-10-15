@@ -6,8 +6,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Minus, Plus, Wallet } from "lucide-react";
 import { useState } from "react";
+import { useBlockNumber } from "wagmi";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
-import { formatToken } from "@/utils/formatter";
+import { formatFutureEpoch, formatToken } from "@/utils/formatter";
 import { DepositDialog } from "./DepositDialog";
 import { WithdrawDialog } from "./WithdrawDialog";
 
@@ -34,11 +35,23 @@ interface TokenRowProps {
   userToken: UserToken;
   onDeposit: (userToken: UserToken) => void;
   onWithdraw: (userToken: UserToken) => void;
+  currentEpoch?: bigint;
 }
 
-const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw }) => {
-  // Calculate available funds (funds - lockupCurrent)
+const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw, currentEpoch }) => {
   const availableFunds = BigInt(userToken.funds) - BigInt(userToken.lockupCurrent);
+
+  const lockupRate = BigInt(userToken.lockupRate);
+  const fundedUntil = availableFunds > 0 && lockupRate > 0 ? availableFunds / lockupRate : 0n;
+  const fundedUntilEpoch = BigInt(userToken.lockupLastSettledAt) + fundedUntil;
+
+  const fundedUntilTime = !currentEpoch
+    ? "..."
+    : lockupRate === 0n
+      ? "Infinity"
+      : fundedUntilEpoch > currentEpoch
+        ? formatFutureEpoch(fundedUntilEpoch, currentEpoch)
+        : "Expired";
 
   return (
     <TableRow>
@@ -55,21 +68,27 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw })
       </TableCell>
       <TableCell className='text-right'>
         <div className='font-medium'>
-          {formatToken(userToken.funds, userToken.token.decimals, userToken.token.symbol, 4)}
+          {formatToken(userToken.funds, userToken.token.decimals, userToken.token.symbol, 8)}
         </div>
         <div className='text-xs text-muted-foreground'>Total Balance</div>
       </TableCell>
       <TableCell className='text-right'>
         <div className='font-medium text-green-600 dark:text-green-400'>
-          {formatToken(availableFunds.toString(), userToken.token.decimals, userToken.token.symbol, 4)}
+          {formatToken(availableFunds.toString(), userToken.token.decimals, userToken.token.symbol, 8)}
         </div>
         <div className='text-xs text-muted-foreground'>Available</div>
       </TableCell>
       <TableCell className='text-right'>
         <div className='font-medium text-orange-600 dark:text-orange-400'>
-          {formatToken(userToken.lockupCurrent, userToken.token.decimals, userToken.token.symbol, 4)}
+          {formatToken(userToken.lockupCurrent, userToken.token.decimals, userToken.token.symbol, 8)}
         </div>
         <div className='text-xs text-muted-foreground'>Locked</div>
+      </TableCell>
+      <TableCell className='text-right'>
+        <div className='font-medium text-blue-600 dark:text-blue-400'>{fundedUntilTime}</div>
+        {fundedUntilTime !== "Infinity" && (
+          <div className='text-xs text-muted-foreground'>Epoch {fundedUntilEpoch.toLocaleString()}</div>
+        )}
       </TableCell>
       <TableCell className='text-right'>
         <Button size='sm' onClick={() => onDeposit(userToken)} className='gap-2'>
@@ -86,6 +105,7 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw })
 };
 
 export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
+  const { data: currentEpoch } = useBlockNumber({ watch: true });
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
@@ -169,6 +189,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
                 <TableHead className='text-right'>Total Funds</TableHead>
                 <TableHead className='text-right'>Available</TableHead>
                 <TableHead className='text-right'>Locked</TableHead>
+                <TableHead className='text-right'>Funded Until</TableHead>
                 <TableHead className='text-right'>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -179,6 +200,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
                   userToken={userToken}
                   onDeposit={handleDeposit}
                   onWithdraw={handleWithdraw}
+                  currentEpoch={currentEpoch}
                 />
               ))}
             </TableBody>
