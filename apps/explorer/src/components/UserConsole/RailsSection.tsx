@@ -2,6 +2,7 @@ import type { Account, Rail } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 // import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
+// import { Spinner } from "@filecoin-pay/ui/components/spinner";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
   Pagination,
@@ -16,6 +17,8 @@ import { AlertCircle, ArrowDownLeft, ArrowUpRight, FileText, Search } from "luci
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAccountRails } from "@/hooks/useAccountDetails";
+import { useContractTransaction } from "@/hooks/useContractTransaction";
+import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
 import { CopyableText } from "../shared";
 import { RailsSearch, type SearchFilterType } from "./RailsSearch";
@@ -46,6 +49,8 @@ interface RailCardProps {
   rail: Rail;
   userAddress: string;
   onSettle: (rail: Rail) => void;
+  onTerminate: (rail: Rail) => void;
+  isTerminating: boolean;
 }
 
 const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
@@ -137,7 +142,19 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
       >
         <CheckCircle className='h-4 w-4' />
         Settle
-      </Button> */}
+      </Button>
+      {(rail.state == "ACTIVE" || rail.state === "ZERORATE") && (
+        <Button
+          size='sm'
+          variant='destructive'
+          onClick={() => onTerminate(rail)}
+          className='gap-2'
+          disabled={isTerminating}
+        >
+          {isTerminating ? <Spinner /> : <X className='h-4 w-4' />}
+          Terminate
+        </Button>
+      )} */}
     </div>
   );
 };
@@ -148,12 +165,37 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
+  const [terminatingRailId, setTerminatingRailId] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useAccountRails(account.id, page);
+
+  const { constants } = useSynapse();
+  const { execute, isExecuting } = useContractTransaction({
+    contractAddress: constants.contracts.payments.address,
+    abi: constants.contracts.payments.abi,
+    explorerUrl: constants.chain.blockExplorers?.default.url,
+    onError: (err) => console.log("[TerminateRail] Failed: ", err),
+  });
 
   const handleSettle = (rail: Rail) => {
     setSelectedRail(rail);
     setSettleDialogOpen(true);
+  };
+
+  const handleTerminate = async (rail: Rail) => {
+    try {
+      setTerminatingRailId(rail.railId.toString());
+      await execute({
+        functionName: "terminateRail",
+        args: [rail.railId],
+        metadata: {
+          type: "terminateRail",
+          railId: rail.railId.toString(),
+        },
+      });
+    } catch (err) {
+      console.log("[TerminateRail] Failed: ", err);
+    }
   };
 
   const handleSearch = (query: string, filterType: SearchFilterType) => {
@@ -263,7 +305,14 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <>
             <div className='space-y-3'>
               {filteredRails.map((rail) => (
-                <RailCard key={rail.id} rail={rail} userAddress={userAddress} onSettle={handleSettle} />
+                <RailCard
+                  key={rail.id}
+                  rail={rail}
+                  userAddress={userAddress}
+                  onSettle={handleSettle}
+                  onTerminate={handleTerminate}
+                  isTerminating={isExecuting && terminatingRailId === rail.railId.toString()}
+                />
               ))}
             </div>
 

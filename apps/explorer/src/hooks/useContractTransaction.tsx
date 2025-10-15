@@ -32,7 +32,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
   >(new Map());
   const [currentTxHash, setCurrentTxHash] = useState<Hex | undefined>();
 
-  const { writeContractAsync } = useWriteContract();
+  const { writeContractAsync, isPending: isWritePending } = useWriteContract();
 
   const {
     data: receipt,
@@ -86,9 +86,16 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
       const content = getToastContent(txData.metadata, "error");
       const txHashShort = `${currentTxHash.slice(0, 6)}...${currentTxHash.slice(-4)}`;
 
+      console.error(`[Transaction Error] ${content.title}:`, {
+        error: error.message,
+        txHash: currentTxHash,
+        metadata: txData.metadata,
+        fullError: error,
+      });
+
       toast.error(content.title, {
         id: txData.toastId,
-        description: error.message || content.description,
+        description: "Request failed. See console logs for more details.",
         action: explorerUrl
           ? {
               label: (
@@ -142,10 +149,14 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
       return txHash;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Transaction failed";
+      console.error("[Transaction Rejected]:", {
+        error: err instanceof Error ? err.message : "Transaction failed",
+        metadata,
+        fullError: err,
+      });
 
       toast.error("Transaction Rejected", {
-        description: errorMessage,
+        description: "Request failed. See console logs for more details.",
         duration: 4000,
       });
 
@@ -156,7 +167,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
   return {
     execute,
-    isExecuting: !!currentTxHash && !isSuccess && !isError,
+    isExecuting: isWritePending || (!!currentTxHash && !isSuccess && !isError),
     currentTxHash,
     hasPendingTransactions: transactions.size > 0,
   };
