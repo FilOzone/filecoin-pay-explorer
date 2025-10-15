@@ -42,6 +42,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
 
   const canSettle = isPayer && !isSubmitting && !isExecuting && !isLoadingBlockNumber;
 
+  // TODO: Fix and test Rail settlement
   const handleSettle = async () => {
     if (!synapse) {
       console.log("Synapse not initialized");

@@ -132,6 +132,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
         </div>
       </div>
 
+      {/* TODO: Uncomment after fixing Rail settlement and termination contract calls */}
       {/* Actions */}
       {/* <Button
         size='sm'
@@ -182,6 +183,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     setSettleDialogOpen(true);
   };
 
+  // TODO: Fix and test Rail termination
   const handleTerminate = async (rail: Rail) => {
     try {
       setTerminatingRailId(rail.railId.toString());
