@@ -21,6 +21,7 @@ import {
   createOrLoadUserToken,
   createRail,
   createRateChangeQueue,
+  getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   updateOperatorLockup,
   updateOperatorRate,
@@ -33,6 +34,7 @@ import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./util
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
   const ownerAddress = event.params.owner;
+  const lockupLastSettledUntilEpoch = event.params.lockupLastSettledAt;
 
   const userTokenId = ownerAddress.concat(tokenAddress);
   const userToken = UserToken.load(userTokenId);
@@ -44,7 +46,12 @@ export function handleAccountLockupSettled(event: AccountLockupSettledEvent): vo
 
   userToken.lockupCurrent = event.params.lockupCurrent;
   userToken.lockupRate = event.params.lockupRate;
-  userToken.lockupLastSettledAt = event.params.lockupLastSettledAt;
+  userToken.lockupLastSettledUntilEpoch = lockupLastSettledUntilEpoch;
+  userToken.lockupLastSettledUntilTimestamp = getLockupLastSettledUntilTimestamp(
+    lockupLastSettledUntilEpoch,
+    event.block.number,
+    event.block.timestamp,
+  );
 
   userToken.save();
 }
@@ -316,7 +323,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
         effectiveLockupPeriod = ZERO_BIG_INT;
       }
     } else if (payerToken) {
-      effectiveLockupPeriod = rail.lockupPeriod.minus(event.block.number.minus(payerToken.lockupLastSettledAt));
+      effectiveLockupPeriod = rail.lockupPeriod.minus(event.block.number.minus(payerToken.lockupLastSettledUntilEpoch));
     }
     if (effectiveLockupPeriod.gt(ZERO_BIG_INT)) {
       const oldLockup = oldRate.times(effectiveLockupPeriod);
