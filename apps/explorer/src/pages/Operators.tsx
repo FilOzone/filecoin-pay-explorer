@@ -14,9 +14,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { CopyableText } from "@/components/shared";
 import useInfiniteOperators, { type OperatorsFilter } from "@/hooks/useInfiniteOperators";
-import { formatAddress, formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber } from "@/utils/formatter";
 import { formatHexForSearch } from "@/utils/hexUtils";
 
 const Operators = () => {
@@ -133,9 +133,14 @@ const Operators = () => {
                 {allOperators.map((operator: Operator) => (
                   <TableRow key={operator.id}>
                     <TableCell className='font-mono text-sm'>
-                      <Link to={`/operator/${operator.address}`} className='text-primary hover:underline'>
-                        {formatAddress(operator.address)}
-                      </Link>
+                      <CopyableText
+                        value={operator.address}
+                        to={`/operator/${operator.address}`}
+                        monospace={true}
+                        label='Account'
+                        truncate={true}
+                        truncateLength={8}
+                      />
                     </TableCell>
                     <TableCell className='text-right'>{formatCompactNumber(operator.totalRails)}</TableCell>
                     <TableCell className='text-right'>{formatCompactNumber(operator.totalTokens)}</TableCell>

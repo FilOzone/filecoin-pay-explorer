@@ -14,9 +14,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { CopyableText } from "@/components/shared";
 import useInfiniteAccounts, { type AccountsFilter } from "@/hooks/useInfiniteAccounts";
-import { formatAddress, formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber } from "@/utils/formatter";
 import { formatHexForSearch } from "@/utils/hexUtils";
 
 const Accounts = () => {
@@ -133,9 +133,14 @@ const Accounts = () => {
                 {allAccounts.map((account: Account) => (
                   <TableRow key={account.id}>
                     <TableCell className='font-mono text-sm'>
-                      <Link to={`/account/${account.address}`} className='text-primary hover:underline'>
-                        {formatAddress(account.address)}
-                      </Link>
+                      <CopyableText
+                        value={account.address}
+                        to={`/account/${account.address}`}
+                        monospace={true}
+                        label='Account'
+                        truncate={true}
+                        truncateLength={8}
+                      />
                     </TableCell>
                     <TableCell className='text-right'>{formatCompactNumber(account.totalRails)}</TableCell>
                     <TableCell className='text-right'>{formatCompactNumber(account.totalTokens)}</TableCell>

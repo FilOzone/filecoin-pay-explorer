@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import useRecentAccounts from "@/hooks/useRecentAccounts";
-import { formatAddress, formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 const RecentAccounts = () => {
   const { data, isLoading, isError, error, refetch } = useRecentAccounts(10);
@@ -52,9 +53,14 @@ const RecentAccounts = () => {
             {data.map((account) => (
               <TableRow key={account.id}>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/account/${account.address}`} className='text-primary hover:underline'>
-                    {formatAddress(account.address)}
-                  </Link>
+                  <CopyableText
+                    value={account.address}
+                    to={`/account/${account.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell className='text-right'>{formatCompactNumber(account.totalRails)}</TableCell>
                 <TableCell className='text-right'>{formatCompactNumber(account.totalTokens)}</TableCell>

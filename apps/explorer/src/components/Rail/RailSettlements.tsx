@@ -104,14 +104,14 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
               <TableRow key={settlement.id}>
                 <TableCell className='font-medium'>Epoch {settlement.settledUpto.toString()}</TableCell>
                 <TableCell className='text-right'>
-                  {formatToken(settlement.totalSettledAmount, rail.token.decimals, rail.token.symbol, 2)}
+                  {formatToken(settlement.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
                 </TableCell>
                 <TableCell className='text-right'>
-                  {formatToken(settlement.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 2)}
+                  {formatToken(settlement.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
                 </TableCell>
                 <TableCell className='text-right'>{formatFIL(settlement.filBurned)}</TableCell>
                 <TableCell className='text-right'>
-                  {formatToken(settlement.operatorCommission, rail.token.decimals, rail.token.symbol, 2)}
+                  {formatToken(settlement.operatorCommission, rail.token.decimals, rail.token.symbol, 8)}
                 </TableCell>
               </TableRow>
             ))}

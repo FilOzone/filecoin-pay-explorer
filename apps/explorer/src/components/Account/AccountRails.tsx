@@ -16,7 +16,8 @@ import { AlertCircle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAccountRails } from "@/hooks/useAccountDetails";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { formatDate, formatToken } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface AccountRailsProps {
   account: Account;
@@ -78,14 +79,24 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
         <RoleIndicator role={isPayer ? "payer" : "payee"} />
       </TableCell>
       <TableCell className='font-mono text-sm'>
-        <Link to={`/account/${counterparty.address}`} className='text-primary hover:underline'>
-          {formatAddress(counterparty.address)}
-        </Link>
+        <CopyableText
+          value={counterparty.address}
+          to={`/account/${counterparty.address}`}
+          monospace={true}
+          label='Account'
+          truncate={true}
+          truncateLength={8}
+        />
       </TableCell>
       <TableCell className='font-mono text-sm'>
-        <Link to={`/operator/${rail.operator.address}`} className='text-primary hover:underline'>
-          {formatAddress(rail.operator.address)}
-        </Link>
+        <CopyableText
+          value={rail.operator.address}
+          to={`/operator/${rail.operator.address}`}
+          monospace={true}
+          label='Account'
+          truncate={true}
+          truncateLength={8}
+        />
       </TableCell>
       <TableCell>
         <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>

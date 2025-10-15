@@ -1,6 +1,7 @@
 import type { Account } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { formatCompactNumber } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface AccountOverviewProps {
   account: Account;
@@ -26,7 +27,7 @@ export const AccountOverview: React.FC<AccountOverviewProps> = ({ account }) => 
       <Card className='p-4 md:col-span-2 lg:col-span-4'>
         <div className='flex flex-col gap-1'>
           <span className='text-sm text-muted-foreground'>Account Address</span>
-          <div className='font-mono text-sm font-medium break-all'>{account.address}</div>
+          <CopyableText value={account.address} monospace={true} label='Account' />
         </div>
       </Card>
 

@@ -17,8 +17,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { CopyableText } from "@/components/shared";
 import useInfiniteRails, { type RailsFilter } from "@/hooks/useInfiniteRails";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { formatDate, formatToken } from "@/utils/formatter";
 import { formatHexForSearch } from "@/utils/hexUtils";
 
 type SearchByOption = "railId" | "payer" | "payee" | "operator" | "state";
@@ -205,19 +206,34 @@ const Rails = () => {
                       </Link>
                     </TableCell>
                     <TableCell className='font-mono text-sm'>
-                      <Link to={`/account/${rail.payer.address}`} className='text-primary hover:underline'>
-                        {formatAddress(rail.payer.address)}
-                      </Link>
+                      <CopyableText
+                        value={rail.payer.address}
+                        to={`/account/${rail.payer.address}`}
+                        monospace={true}
+                        label='Account'
+                        truncate={true}
+                        truncateLength={8}
+                      />
                     </TableCell>
                     <TableCell className='font-mono text-sm'>
-                      <Link to={`/account/${rail.payee.address}`} className='text-primary hover:underline'>
-                        {formatAddress(rail.payee.address)}
-                      </Link>
+                      <CopyableText
+                        value={rail.payee.address}
+                        to={`/account/${rail.payee.address}`}
+                        monospace={true}
+                        label='Account'
+                        truncate={true}
+                        truncateLength={8}
+                      />
                     </TableCell>
                     <TableCell className='font-mono text-sm'>
-                      <Link to={`/operator/${rail.operator.address}`} className='text-primary hover:underline'>
-                        {formatAddress(rail.operator.address)}
-                      </Link>
+                      <CopyableText
+                        value={rail.operator.address}
+                        to={`/operator/${rail.operator.address}`}
+                        monospace={true}
+                        label='Account'
+                        truncate={true}
+                        truncateLength={8}
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>

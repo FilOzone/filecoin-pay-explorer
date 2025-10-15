@@ -16,7 +16,8 @@ import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useOperatorRails } from "@/hooks/useOperatorDetails";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { formatDate, formatToken } from "@/utils/formatter";
+import { CopyableText } from "../shared";
 
 interface OperatorRailsProps {
   operator: Operator;
@@ -127,14 +128,24 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                   </Link>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/account/${rail.payer.address}`} className='text-primary hover:underline'>
-                    {formatAddress(rail.payer.address)}
-                  </Link>
+                  <CopyableText
+                    value={rail.payer.address}
+                    to={`/account/${rail.payer.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
-                  <Link to={`/account/${rail.payee.address}`} className='text-primary hover:underline'>
-                    {formatAddress(rail.payee.address)}
-                  </Link>
+                  <CopyableText
+                    value={rail.payee.address}
+                    to={`/account/${rail.payee.address}`}
+                    monospace={true}
+                    label='Account'
+                    truncate={true}
+                    truncateLength={8}
+                  />
                 </TableCell>
                 <TableCell>
                   <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>

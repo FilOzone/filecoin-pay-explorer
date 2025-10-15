@@ -21,7 +21,7 @@ export const RailOverview: React.FC<RailOverviewProps> = ({ rail }) => {
       <DetailCard label='Token' value={`${rail.token.symbol} (${rail.token.name})`} />
       <DetailCard
         label='Payment Rate'
-        value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 8)}
+        value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
       />
       <DetailCard
         label='Lockup Fixed'
