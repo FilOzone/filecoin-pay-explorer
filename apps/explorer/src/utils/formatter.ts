@@ -13,7 +13,7 @@ export const formatDate = (timestamp: bigint): string =>
 export function formatCompactNumber(value: number | string | bigint, decimals: number = 2) {
   value = Number(value);
   const i = value < 1000 ? 0 : Math.floor(Math.log(value) / Math.log(1000));
-  const sizes = ["", "K", "M", "B", "Qa", "Qi"];
+  const sizes = ["", "K", "M", "B", "T", "Qa", "Qi"];
   return `${(value / 1000 ** i).toFixed(decimals).replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1")} ${sizes[i]}`;
 }
 
@@ -89,22 +89,28 @@ export const epochToDate = (
   return new Date(futureTimestamp);
 };
 
-export const formatFutureEpoch = (
-  futureEpoch: bigint | number,
-  currentEpoch: bigint | number,
-  epochDuration: number = 30,
-): string => {
-  const date = epochToDate(futureEpoch, currentEpoch, epochDuration);
+export const formatFutureTimestamp = (futureTimestamp: bigint | number): string => {
+  const date = new Date(Number(futureTimestamp) * 1_000);
   const now = Date.now();
   const futureTime = date.getTime();
+  const diffMs = futureTime - now;
 
-  if (futureTime - now < 60000) {
+  if (diffMs < 0) {
+    return "Expired";
+  }
+
+  if (diffMs < 60000) {
     return "Now";
   }
-  const diffMs = futureTime - now;
+
   const diffMinutes = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffYears >= 10) {
+    return `~${diffYears} years`;
+  }
 
   if (diffDays > 1) {
     return date.toLocaleDateString("en-US", {

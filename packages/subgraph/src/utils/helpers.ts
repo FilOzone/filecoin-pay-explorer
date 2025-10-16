@@ -13,7 +13,7 @@ import {
   Token,
   UserToken,
 } from "../../generated/schema";
-import { DEFAULT_DECIMALS } from "./constants";
+import { DEFAULT_DECIMALS, EPOCH_DURATION } from "./constants";
 import {
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -136,7 +136,8 @@ export const createOrLoadUserToken = (account: Address, token: Address): UserTok
     userToken.funds = ZERO_BIG_INT;
     userToken.lockupCurrent = ZERO_BIG_INT;
     userToken.lockupRate = ZERO_BIG_INT;
-    userToken.lockupLastSettledAt = ZERO_BIG_INT;
+    userToken.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
+    userToken.lockupLastSettledUntilTimestamp = ZERO_BIG_INT;
     userToken.save();
     return new UserTokenWithIsNew(userToken, true);
   }
@@ -344,4 +345,14 @@ export function updateOperatorTokenRate(operatorToken: OperatorToken | null, old
   if (operatorToken.rateUsage.lt(ZERO_BIG_INT)) {
     operatorToken.rateUsage = ZERO_BIG_INT;
   }
+}
+
+export function getLockupLastSettledUntilTimestamp(
+  lockupLastSettledUntilEpoch: GraphBN,
+  blockNumber: GraphBN,
+  blockTimestamp: GraphBN,
+): GraphBN {
+  if (lockupLastSettledUntilEpoch.equals(blockNumber)) return blockTimestamp;
+
+  return blockTimestamp.minus(blockNumber.minus(lockupLastSettledUntilEpoch).times(EPOCH_DURATION));
 }

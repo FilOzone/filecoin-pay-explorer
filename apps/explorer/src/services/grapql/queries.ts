@@ -327,7 +327,8 @@ export const GET_ACCOUNT_TOKENS = gql`
       funds
       lockupCurrent
       lockupRate
-      lockupLastSettledAt
+      lockupLastSettledUntilEpoch
+      lockupLastSettledUntilTimestamp
       token {
         id
         name

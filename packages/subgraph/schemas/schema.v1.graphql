@@ -3,7 +3,8 @@ type UserToken @entity(immutable: false) {
   funds: BigInt!
   lockupCurrent: BigInt!
   lockupRate: BigInt!
-  lockupLastSettledAt: BigInt!
+  lockupLastSettledUntilEpoch: BigInt!
+  lockupLastSettledUntilTimestamp: BigInt!
   account: Account!
   token: Token!
 }
