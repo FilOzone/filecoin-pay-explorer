@@ -6,9 +6,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Minus, Plus, Wallet } from "lucide-react";
 import { useState } from "react";
-import { useBlockNumber } from "wagmi";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
-import { formatFutureEpoch, formatToken } from "@/utils/formatter";
+import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
+import { formatCompactNumber, formatFutureTimestamp, formatToken } from "@/utils/formatter";
 import { DepositDialog } from "./DepositDialog";
 import { WithdrawDialog } from "./WithdrawDialog";
 
@@ -35,23 +35,31 @@ interface TokenRowProps {
   userToken: UserToken;
   onDeposit: (userToken: UserToken) => void;
   onWithdraw: (userToken: UserToken) => void;
-  currentEpoch?: bigint;
 }
 
-const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw, currentEpoch }) => {
+const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw }) => {
   const availableFunds = BigInt(userToken.funds) - BigInt(userToken.lockupCurrent);
 
   const lockupRate = BigInt(userToken.lockupRate);
   const fundedUntil = availableFunds > 0 && lockupRate > 0 ? availableFunds / lockupRate : 0n;
-  const fundedUntilEpoch = BigInt(userToken.lockupLastSettledAt) + fundedUntil;
+  const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
+  const fundedUntilEpoch = BigInt(userToken.lockupLastSettledUntilEpoch) + fundedUntil;
 
-  const fundedUntilTime = !currentEpoch
-    ? "..."
-    : lockupRate === 0n
-      ? "Infinity"
-      : fundedUntilEpoch > currentEpoch
-        ? formatFutureEpoch(fundedUntilEpoch, currentEpoch)
-        : "Expired";
+  const isInfinity = lockupRate === 0n;
+  const fundedUntilTime = isInfinity ? "Infinity" : formatFutureTimestamp(Number(fundedUntilTimestamp));
+  const isExpired = !isInfinity && fundedUntilTime === "Expired";
+
+  const timeUntilExpiry = Number(fundedUntilTimestamp) - Date.now() / 1000;
+  const isWarning =
+    !isInfinity && !isExpired && timeUntilExpiry > 0 && timeUntilExpiry <= FUNDING_WARNING_THRESHOLD_SECONDS;
+
+  const timeColor = isInfinity
+    ? "text-green-600 dark:text-green-400"
+    : isExpired
+      ? "text-red-600 dark:text-red-400"
+      : isWarning
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-blue-600 dark:text-blue-400";
 
   return (
     <TableRow>
@@ -85,9 +93,15 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw, c
         <div className='text-xs text-muted-foreground'>Locked</div>
       </TableCell>
       <TableCell className='text-right'>
-        <div className='font-medium text-blue-600 dark:text-blue-400'>{fundedUntilTime}</div>
-        {fundedUntilTime !== "Infinity" && (
-          <div className='text-xs text-muted-foreground'>Epoch {fundedUntilEpoch.toLocaleString()}</div>
+        <div className={`font-medium ${timeColor} flex items-center justify-end gap-1`}>
+          {isWarning && <AlertCircle className='h-4 w-4' />}
+          {fundedUntilTime}
+        </div>
+        {!isInfinity && (
+          <div className='text-xs text-muted-foreground'>
+            Epoch{" "}
+            {fundedUntilEpoch > 1_000_000n ? formatCompactNumber(fundedUntilEpoch) : fundedUntilEpoch.toLocaleString()}
+          </div>
         )}
       </TableCell>
       <TableCell className='text-right'>
@@ -105,7 +119,6 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw, c
 };
 
 export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
-  const { data: currentEpoch } = useBlockNumber({ watch: true });
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
@@ -200,7 +213,6 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
                   userToken={userToken}
                   onDeposit={handleDeposit}
                   onWithdraw={handleWithdraw}
-                  currentEpoch={currentEpoch}
                 />
               ))}
             </TableBody>
