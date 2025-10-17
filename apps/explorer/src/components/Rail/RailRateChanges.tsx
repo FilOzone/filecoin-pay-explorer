@@ -103,7 +103,7 @@ export const RailRateChanges: React.FC<RailRateChangesProps> = ({ rail }) => {
                 <TableCell className='font-medium'>Epoch {rateChange.startEpoch.toString()}</TableCell>
                 <TableCell>Epoch {rateChange.untilEpoch.toString()}</TableCell>
                 <TableCell className='text-right'>
-                  {formatToken(rateChange.rate, rail.token.decimals, `${rail.token.symbol}/epoch`, 8)}
+                  {formatToken(rateChange.rate, rail.token.decimals, `${rail.token.symbol}/epoch`, 15)}
                 </TableCell>
               </TableRow>
             ))}
