@@ -1,4 +1,4 @@
-import type { Account, Rail, RailState } from "@filecoin-pay/types";
+import type { Account, Rail } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@filecoin-pay/ui/components/empty";
@@ -14,6 +14,7 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
@@ -21,21 +22,6 @@ import { CopyableText, StyledLink } from "../shared";
 interface AccountRailsProps {
   account: Account;
 }
-
-const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "ACTIVE":
-      return "default";
-    case "ZERORATE":
-      return "secondary";
-    case "TERMINATED":
-      return "destructive";
-    case "FINALIZED":
-      return "outline";
-    default:
-      return "secondary";
-  }
-};
 
 interface RoleIndicatorProps {
   role: "payer" | "payee";
@@ -96,7 +82,7 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
         />
       </TableCell>
       <TableCell>
-        <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>
+        <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
       </TableCell>
       <TableCell className='text-right'>
         {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 8)}

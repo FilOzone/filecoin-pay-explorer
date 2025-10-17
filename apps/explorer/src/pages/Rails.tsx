@@ -17,30 +17,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CopyableText, StyledLink } from "@/components/shared";
+import { getRailStateLabel, getRailStateVariant, RAIL_STATES } from "@/constants/railStates";
 import useInfiniteRails, { type RailsFilter } from "@/hooks/useInfiniteRails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { formatHexForSearch } from "@/utils/hexUtils";
 
 type SearchByOption = "railId" | "payer" | "payee" | "operator" | "state";
 
-const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "ACTIVE":
-      return "default";
-    case "ZERORATE":
-      return "secondary";
-    case "TERMINATED":
-      return "destructive";
-    case "FINALIZED":
-      return "outline";
-    default:
-      return "secondary";
-  }
-};
-
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
   const [searchInput, setSearchInput] = useState("");
+  const [selectedState, setSelectedState] = useState<RailState | "">("");
   const [appliedFilters, setAppliedFilters] = useState<RailsFilter>({});
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, refetch } =
@@ -75,35 +62,54 @@ const Rails = () => {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const handleSearch = () => {
-    const trimmedInput = searchInput.trim();
-    if (!trimmedInput) {
-      setAppliedFilters({});
-      return;
-    }
-
     const newFilters: RailsFilter = {};
 
     switch (searchBy) {
-      case "railId":
+      case "railId": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
         newFilters.railId = trimmedInput;
         break;
+      }
       case "payer": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
         const formattedHex = formatHexForSearch(trimmedInput);
         if (formattedHex) newFilters.payer = formattedHex;
         break;
       }
       case "payee": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
         const formattedHex = formatHexForSearch(trimmedInput);
         if (formattedHex) newFilters.payee = formattedHex;
         break;
       }
       case "operator": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
         const formattedHex = formatHexForSearch(trimmedInput);
         if (formattedHex) newFilters.operator = formattedHex;
         break;
       }
       case "state":
-        newFilters.state = trimmedInput.toUpperCase();
+        if (!selectedState) {
+          setAppliedFilters({});
+          return;
+        }
+        newFilters.state = selectedState;
         break;
     }
 
@@ -112,6 +118,7 @@ const Rails = () => {
 
   const handleClearFilters = () => {
     setSearchInput("");
+    setSelectedState("");
     setAppliedFilters({});
   };
 
@@ -150,19 +157,28 @@ const Rails = () => {
               </SelectContent>
             </Select>
             <div className='flex flex-1 gap-2'>
-              <Input
-                placeholder={
-                  searchBy === "railId"
-                    ? "Enter rail ID..."
-                    : searchBy === "state"
-                      ? "Enter state (ACTIVE, TERMINATED, etc.)..."
-                      : "Enter address (0x...)..."
-                }
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className='flex-1'
-              />
+              {searchBy === "state" ? (
+                <Select value={selectedState} onValueChange={(value) => setSelectedState(value as RailState)}>
+                  <SelectTrigger className='flex-1'>
+                    <SelectValue placeholder='Select rail state...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RAIL_STATES.map((state) => (
+                      <SelectItem key={state.value} value={state.value}>
+                        {state.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder={searchBy === "railId" ? "Enter rail ID..." : "Enter address (0x...)..."}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className='flex-1'
+                />
+              )}
               <Button onClick={handleSearch} size='default'>
                 <Search className='h-4 w-4 mr-2' />
                 Search
@@ -233,7 +249,7 @@ const Rails = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>
+                      <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
                     </TableCell>
                     <TableCell className='text-right'>
                       {formatToken(rail.paymentRate, rail.token.decimals, rail.token.symbol, 8)}

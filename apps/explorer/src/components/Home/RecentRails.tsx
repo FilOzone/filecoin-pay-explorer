@@ -1,4 +1,3 @@
-import type { RailState } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
@@ -13,24 +12,10 @@ import {
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import useRecentRails from "@/hooks/useRecentRails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
-
-const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "ACTIVE":
-      return "default";
-    case "ZERORATE":
-      return "secondary";
-    case "TERMINATED":
-      return "destructive";
-    case "FINALIZED":
-      return "outline";
-    default:
-      return "secondary";
-  }
-};
 
 const RecentRails = () => {
   const { data, isLoading, isError, error, refetch } = useRecentRails(10);
@@ -95,7 +80,7 @@ const RecentRails = () => {
                   />
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>
+                  <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
                 </TableCell>
                 <TableCell className='text-right'>
                   {formatToken(rail.paymentRate, rail.token.decimals, rail.token.symbol, 8)}

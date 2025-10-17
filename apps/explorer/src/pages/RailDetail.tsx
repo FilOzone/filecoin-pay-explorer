@@ -1,4 +1,3 @@
-import type { RailState } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
@@ -10,22 +9,8 @@ import {
   RailRateChanges,
   RailSettlements,
 } from "@/components/Rail";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useRailDetails } from "@/hooks/useRailDetails";
-
-const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "ACTIVE":
-      return "default";
-    case "ZERORATE":
-      return "secondary";
-    case "TERMINATED":
-      return "destructive";
-    case "FINALIZED":
-      return "outline";
-    default:
-      return "secondary";
-  }
-};
 
 const RailDetail = () => {
   const { railId } = useParams<{ railId: string }>();
@@ -54,7 +39,9 @@ const RailDetail = () => {
           </Link>
           <div className='flex items-center gap-3'>
             <h1 className='text-3xl font-bold'>Rail #{rail.railId.toString()}</h1>
-            <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>
+            <Badge variant={getRailStateVariant(rail.state)} className='text-lg px-4 py-1'>
+              {getRailStateLabel(rail.state)}
+            </Badge>
           </div>
         </div>
 

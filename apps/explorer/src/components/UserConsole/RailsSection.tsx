@@ -16,6 +16,7 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, FileText, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
@@ -114,19 +115,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
         <div>
           <span className='text-xs text-muted-foreground'>State</span>
           <div className='mt-1'>
-            <Badge
-              variant={
-                rail.state === "ACTIVE"
-                  ? "default"
-                  : rail.state === "ZERORATE"
-                    ? "secondary"
-                    : rail.state === "TERMINATED"
-                      ? "destructive"
-                      : "outline"
-              }
-            >
-              {rail.state}
-            </Badge>
+            <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
           </div>
           <div className='text-xs text-muted-foreground mt-1'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
         </div>
