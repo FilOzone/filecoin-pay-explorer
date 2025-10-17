@@ -200,11 +200,13 @@ export type UserToken = {
   __typename: "UserToken";
   account: Account;
   funds: Scalars["BigInt"]["output"];
+  fundsCollected: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
   lockupCurrent: Scalars["BigInt"]["output"];
   lockupLastSettledUntilEpoch: Scalars["BigInt"]["output"];
   lockupLastSettledUntilTimestamp: Scalars["BigInt"]["output"];
   lockupRate: Scalars["BigInt"]["output"];
+  payout: Scalars["BigInt"]["output"];
   token: Token;
 };
 

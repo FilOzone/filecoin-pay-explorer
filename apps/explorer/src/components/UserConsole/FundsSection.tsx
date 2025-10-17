@@ -4,7 +4,8 @@ import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle, Minus, Plus, Wallet } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info, Minus, Plus, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
@@ -75,22 +76,32 @@ const TokenRow: React.FC<TokenRowProps> = ({ userToken, onDeposit, onWithdraw })
         </div>
       </TableCell>
       <TableCell className='text-right'>
-        <div className='font-medium'>
-          {formatToken(userToken.funds, userToken.token.decimals, userToken.token.symbol, 8)}
-        </div>
-        <div className='text-xs text-muted-foreground'>Total Balance</div>
-      </TableCell>
-      <TableCell className='text-right'>
         <div className='font-medium text-green-600 dark:text-green-400'>
-          {formatToken(availableFunds.toString(), userToken.token.decimals, userToken.token.symbol, 8)}
+          {formatToken(availableFunds.toString(), userToken.token.decimals, userToken.token.symbol, 5)}
         </div>
         <div className='text-xs text-muted-foreground'>Available</div>
       </TableCell>
       <TableCell className='text-right'>
         <div className='font-medium text-orange-600 dark:text-orange-400'>
-          {formatToken(userToken.lockupCurrent, userToken.token.decimals, userToken.token.symbol, 8)}
+          {formatToken(userToken.lockupCurrent, userToken.token.decimals, userToken.token.symbol, 5)}
         </div>
         <div className='text-xs text-muted-foreground'>Locked</div>
+      </TableCell>
+      <TableCell className='text-right'>
+        <div className='flex items-center justify-end gap-1.5'>
+          <ArrowUpRight className='h-3.5 w-3.5 text-destructive' />
+          <span className='font-medium'>
+            {formatToken(userToken.payout, userToken.token.decimals, userToken.token.symbol, 5)}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell className='text-right'>
+        <div className='flex items-center justify-end gap-1.5'>
+          <ArrowDownLeft className='h-3.5 w-3.5 text-green-600 dark:text-green-500' />
+          <span className='font-medium'>
+            {formatToken(userToken.fundsCollected, userToken.token.decimals, userToken.token.symbol, 5)}
+          </span>
+        </div>
       </TableCell>
       <TableCell className='text-right'>
         <div className={`font-medium ${timeColor} flex items-center justify-end gap-1`}>
@@ -199,9 +210,34 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
             <TableHeader>
               <TableRow>
                 <TableHead>Token</TableHead>
-                <TableHead className='text-right'>Total Funds</TableHead>
                 <TableHead className='text-right'>Available</TableHead>
                 <TableHead className='text-right'>Locked</TableHead>
+                <TableHead className='text-right'>
+                  <div className='flex items-center justify-end gap-1.5'>
+                    Paid Out
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                      </TooltipTrigger>
+                      <TooltipContent side='top' className='max-w-xs'>
+                        Total paid to service providers
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableHead>
+                <TableHead className='text-right'>
+                  <div className='flex items-center justify-end gap-1.5'>
+                    Earned
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                      </TooltipTrigger>
+                      <TooltipContent side='top' className='max-w-xs'>
+                        Total earned from services
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TableHead>
                 <TableHead className='text-right'>Funded Until</TableHead>
                 <TableHead className='text-right'>Actions</TableHead>
               </TableRow>
