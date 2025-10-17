@@ -12,6 +12,7 @@ import { cn } from "@filecoin-pay/ui/lib/utils";
 import { LayoutDashboard, Menu, Network, Shield, Users, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import NetworkIndicator from "./NetworkIndicator";
 
 const navigationLinks = [
   { name: "Console", href: "/console", icon: LayoutDashboard },
@@ -58,6 +59,7 @@ function Header() {
 
         {/* Right Side Actions */}
         <div className='flex items-center gap-3'>
+          <NetworkIndicator />
           <ThemeToggle />
 
           {/* Mobile Menu */}
