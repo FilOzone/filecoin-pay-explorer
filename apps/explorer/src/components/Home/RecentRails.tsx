@@ -64,7 +64,7 @@ const RecentRails = () => {
                     value={rail.payer.address}
                     to={`/account/${rail.payer.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -74,7 +74,7 @@ const RecentRails = () => {
                     value={rail.payee.address}
                     to={`/account/${rail.payee.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />

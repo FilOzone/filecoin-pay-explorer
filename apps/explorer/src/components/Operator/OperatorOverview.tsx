@@ -47,7 +47,7 @@ export const OperatorOverview: React.FC<OperatorOverviewProps> = ({ operator }) 
             value={operator.address}
             to={`${explorerUrls.calibration}/address/${operator.address}`}
             monospace={true}
-            label='Operator'
+            label='Service address'
             external={true}
           />
         </div>

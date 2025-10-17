@@ -1,7 +1,7 @@
-import RecentAccounts from "@/components/Home/RecentAccounts";
-import RecentOperators from "@/components/Home/RecentOperators";
 import RecentRails from "@/components/Home/RecentRails";
 import Stats from "@/components/Home/Stats";
+import TopAccounts from "@/components/Home/TopAccounts";
+import TopOperators from "@/components/Home/TopOperators";
 
 function Home() {
   return (
@@ -10,8 +10,8 @@ function Home() {
         <Stats />
         <RecentRails />
         <div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
-          <RecentAccounts />
-          <RecentOperators />
+          <TopAccounts />
+          <TopOperators />
         </div>
       </div>
     </main>

@@ -66,7 +66,7 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
           value={counterparty.address}
           to={`/account/${counterparty.address}`}
           monospace={true}
-          label='Account'
+          label='Account address'
           truncate={true}
           truncateLength={8}
         />
@@ -76,7 +76,7 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
           value={rail.operator.address}
           to={`/operator/${rail.operator.address}`}
           monospace={true}
-          label='Account'
+          label='Service address'
           truncate={true}
           truncateLength={8}
         />

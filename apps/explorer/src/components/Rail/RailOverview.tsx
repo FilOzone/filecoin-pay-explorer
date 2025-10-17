@@ -12,7 +12,7 @@ export const RailOverview: React.FC<RailOverviewProps> = ({ rail }) => {
       <DetailCard label='Payer' value={rail.payer.address} isAddress linkTo={`/account/${rail.payer.address}`} />
       <DetailCard label='Payee' value={rail.payee.address} isAddress linkTo={`/account/${rail.payee.address}`} />
       <DetailCard
-        label='Operator'
+        label='Operator address'
         value={rail.operator.address}
         isAddress
         linkTo={`/operator/${rail.operator.address}`}

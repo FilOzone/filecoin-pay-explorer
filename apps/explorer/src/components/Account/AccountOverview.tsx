@@ -42,7 +42,7 @@ export const AccountOverview: React.FC<AccountOverviewProps> = ({ account }) => 
       <Card className='p-4 md:col-span-2 lg:col-span-4'>
         <div className='flex flex-col gap-1'>
           <span className='text-sm text-muted-foreground'>Account Address</span>
-          <CopyableText value={account.address} monospace={true} label='Account' />
+          <CopyableText value={account.address} monospace={true} label='Account address' />
         </div>
       </Card>
 

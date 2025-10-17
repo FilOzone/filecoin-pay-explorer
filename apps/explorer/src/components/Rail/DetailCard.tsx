@@ -14,7 +14,7 @@ export const DetailCard: React.FC<DetailCardProps> = ({ label, value, isAddress 
     <div className='flex flex-col gap-1'>
       <span className='text-sm text-muted-foreground'>{label}</span>
       {linkTo ? (
-        <CopyableText value={value} monospace={true} label='Account' truncate={true} truncateLength={8} />
+        <CopyableText value={value} monospace={true} label={`${label} address`} truncate={true} truncateLength={8} />
       ) : (
         <span className={`font-medium break-all ${isAddress ? "font-mono text-sm" : ""}`}>
           {isAddress ? formatAddress(value) : value}

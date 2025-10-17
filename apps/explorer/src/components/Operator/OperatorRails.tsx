@@ -115,7 +115,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                     value={rail.payer.address}
                     to={`/account/${rail.payer.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -125,7 +125,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                     value={rail.payee.address}
                     to={`/account/${rail.payee.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />

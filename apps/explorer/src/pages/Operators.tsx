@@ -150,7 +150,7 @@ const Operators = () => {
                         value={operator.address}
                         to={`/operator/${operator.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Service address'
                         truncate={true}
                         truncateLength={8}
                       />

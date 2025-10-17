@@ -150,7 +150,7 @@ const Accounts = () => {
                         value={account.address}
                         to={`/account/${account.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Account address'
                         truncate={true}
                         truncateLength={8}
                       />

@@ -93,7 +93,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
             value={counterparty.address}
             to={`/account/${counterparty.address}`}
             monospace={true}
-            label='Account'
+            label='Account address'
             truncate={true}
             truncateLength={8}
           />

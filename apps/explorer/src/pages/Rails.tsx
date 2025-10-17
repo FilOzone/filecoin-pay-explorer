@@ -229,7 +229,7 @@ const Rails = () => {
                         value={rail.payer.address}
                         to={`/account/${rail.payer.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Account address'
                         truncate={true}
                         truncateLength={8}
                       />
@@ -239,7 +239,7 @@ const Rails = () => {
                         value={rail.payee.address}
                         to={`/account/${rail.payee.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Account address'
                         truncate={true}
                         truncateLength={8}
                       />
@@ -249,7 +249,7 @@ const Rails = () => {
                         value={rail.operator.address}
                         to={`/operator/${rail.operator.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Service address'
                         truncate={true}
                         truncateLength={8}
                       />

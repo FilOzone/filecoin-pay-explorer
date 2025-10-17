@@ -70,7 +70,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ account, address }) =>
           </div>
           <div className='flex-1'>
             <h3 className='text-lg font-semibold'>Connected Account</h3>
-            <CopyableText value={address} monospace={true} label='Account' truncate={true} truncateLength={8} />
+            <CopyableText value={address} monospace={true} label='Account address' truncate={true} truncateLength={8} />
           </div>
         </div>
 

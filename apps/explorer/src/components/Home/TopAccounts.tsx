@@ -18,7 +18,7 @@ import useAccountsLeaderboard, { type AccountOrderBy } from "@/hooks/useAccounts
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
 
-const AccountsLeaderboard = () => {
+const TopAccounts = () => {
   const [orderBy, setOrderBy] = useState<AccountOrderBy>("totalRails");
   const { data, isLoading, isError, error, refetch } = useAccountsLeaderboard(10, orderBy);
 
@@ -97,7 +97,7 @@ const AccountsLeaderboard = () => {
                     value={account.address}
                     to={`/account/${account.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -175,4 +175,4 @@ const EmptyState = () => (
   </section>
 );
 
-export default AccountsLeaderboard;
+export default TopAccounts;

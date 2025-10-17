@@ -18,7 +18,7 @@ import useOperatorsLeaderboard, { type OperatorOrderBy } from "@/hooks/useOperat
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
 
-const OperatorsLeaderboard = () => {
+const TopOperators = () => {
   const [orderBy, setOrderBy] = useState<OperatorOrderBy>("totalRails");
   const { data, isLoading, isError, error, refetch } = useOperatorsLeaderboard(10, orderBy);
 
@@ -45,7 +45,7 @@ const OperatorsLeaderboard = () => {
       <div className='flex items-center justify-between'>
         <div className='flex items-center gap-2'>
           <Trophy className='h-5 w-5 text-yellow-500' />
-          <h2 className='text-xl font-semibold'>Operators Leaderboard</h2>
+          <h2 className='text-xl font-semibold'>Services Leaderboard</h2>
         </div>
         <div className='flex items-center gap-3'>
           <Select value={orderBy} onValueChange={(value) => setOrderBy(value as OperatorOrderBy)}>
@@ -97,7 +97,7 @@ const OperatorsLeaderboard = () => {
                     value={operator.address}
                     to={`/operator/${operator.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Service address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -175,4 +175,4 @@ const EmptyState = () => (
   </section>
 );
 
-export default OperatorsLeaderboard;
+export default TopOperators;

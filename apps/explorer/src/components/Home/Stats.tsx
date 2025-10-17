@@ -63,7 +63,7 @@ const Stats = () => {
       tooltip: "Ongoing payment streams between users",
     },
     {
-      title: "Total Operators",
+      title: "Total Services",
       value: formatCompactNumber(data?.totalOperators || 0),
       tooltip: "Payment managers that help automate transactions between users",
     },
