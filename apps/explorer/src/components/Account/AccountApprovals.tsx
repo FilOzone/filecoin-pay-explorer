@@ -73,7 +73,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
           <div className='py-12'>
             <Empty>
               <EmptyHeader>
-                <EmptyTitle>No authorized service found</EmptyTitle>
+                <EmptyTitle>No authorized services found</EmptyTitle>
                 <EmptyDescription>This account has not authorized any services yet.</EmptyDescription>
               </EmptyHeader>
             </Empty>

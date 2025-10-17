@@ -48,7 +48,7 @@ const AccountNotFound = () => {
                     </Button>
                   </div>
                   <p className='text-xs text-muted-foreground text-center'>
-                    Start by depositing funds or approving an service to get started
+                    Start by depositing funds or approving a service to get started
                   </p>
                 </div>
               </EmptyContent>
