@@ -122,6 +122,12 @@ const Rails = () => {
     setAppliedFilters({});
   };
 
+  const handleSearchByValueChange = (value: SearchByOption) => {
+    setSearchBy(value);
+    setSearchInput("");
+    setSelectedState("");
+  };
+
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
   if (isLoading) {
@@ -144,7 +150,7 @@ const Rails = () => {
         {/* Search Bar */}
         <Card className='p-4'>
           <div className='flex flex-col sm:flex-row gap-3'>
-            <Select value={searchBy} onValueChange={(value) => setSearchBy(value as SearchByOption)}>
+            <Select value={searchBy} onValueChange={handleSearchByValueChange}>
               <SelectTrigger className='w-full sm:w-[180px]'>
                 <SelectValue />
               </SelectTrigger>
