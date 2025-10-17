@@ -8,16 +8,25 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
-import { AlertCircle, Info } from "lucide-react";
-import useRecentAccounts from "@/hooks/useRecentAccounts";
+import { AlertCircle, Info, Trophy } from "lucide-react";
+import { useState } from "react";
+import useAccountsLeaderboard, { type AccountOrderBy } from "@/hooks/useAccountsLeaderboard";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
 
-const RecentAccounts = () => {
-  const { data, isLoading, isError, error, refetch } = useRecentAccounts(10);
+const AccountsLeaderboard = () => {
+  const [orderBy, setOrderBy] = useState<AccountOrderBy>("totalRails");
+  const { data, isLoading, isError, error, refetch } = useAccountsLeaderboard(10, orderBy);
+
+  const sortOptions = [
+    { value: "totalRails" as AccountOrderBy, label: "Total Rails" },
+    { value: "totalTokens" as AccountOrderBy, label: "Total Tokens" },
+    { value: "totalApprovals" as AccountOrderBy, label: "Total Approvals" },
+  ];
 
   if (isLoading) {
     return <LoadingState />;
@@ -34,15 +43,33 @@ const RecentAccounts = () => {
   return (
     <section className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
-        <h2 className='text-xl font-semibold'>Recent Accounts</h2>
-        <StyledLink to='/accounts' className='text-sm'>
-          View All
-        </StyledLink>
+        <div className='flex items-center gap-2'>
+          <Trophy className='h-5 w-5 text-yellow-500' />
+          <h2 className='text-xl font-semibold'>Accounts Leaderboard</h2>
+        </div>
+        <div className='flex items-center gap-3'>
+          <Select value={orderBy} onValueChange={(value) => setOrderBy(value as AccountOrderBy)}>
+            <SelectTrigger className='w-[180px]'>
+              <SelectValue placeholder='Sort by...' />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <StyledLink to='/accounts' className='text-sm'>
+            View All
+          </StyledLink>
+        </div>
       </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className='w-12'>#</TableHead>
               <TableHead>Address</TableHead>
               <TableHead className='text-right'>Total Rails</TableHead>
               <TableHead className='text-right'>Total Tokens</TableHead>
@@ -62,8 +89,9 @@ const RecentAccounts = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((account) => (
+            {data.map((account, index) => (
               <TableRow key={account.id}>
+                <TableCell className='font-semibold text-muted-foreground'>{index + 1}</TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={account.address}
@@ -111,7 +139,7 @@ const LoadingState = () => (
 
 const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, error }) => (
   <section className='flex flex-col gap-4'>
-    <h2 className='text-xl font-semibold'>Recent Accounts</h2>
+    <h2 className='text-xl font-semibold'>Accounts Leaderboard</h2>
     <Card>
       <div className='py-12'>
         <Empty>
@@ -133,7 +161,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
 
 const EmptyState = () => (
   <section className='flex flex-col gap-4'>
-    <h2 className='text-xl font-semibold'>Recent Accounts</h2>
+    <h2 className='text-xl font-semibold'>Accounts Leaderboard</h2>
     <Card>
       <div className='py-12'>
         <Empty>
@@ -147,4 +175,4 @@ const EmptyState = () => (
   </section>
 );
 
-export default RecentAccounts;
+export default AccountsLeaderboard;

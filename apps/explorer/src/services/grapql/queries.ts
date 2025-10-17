@@ -31,9 +31,33 @@ export const GET_RECENT_ACCOUNTS = gql`
   }
 `;
 
+export const GET_ACCOUNTS_LEADERBOARD = gql`
+  query GetAccountsLeaderboard($first: Int = 10, $orderBy: Account_orderBy = totalRails) {
+    accounts(first: $first, orderBy: $orderBy, orderDirection: desc) {
+      id
+      address
+      totalRails
+      totalTokens
+      totalApprovals
+    }
+  }
+`;
+
 export const GET_RECENT_OPERATORS = gql`
   query GetRecentOperators($first: Int = 10) {
     operators(first: $first, orderBy: id, orderDirection: desc) {
+      id
+      address
+      totalRails
+      totalTokens
+      totalApprovals
+    }
+  }
+`;
+
+export const GET_OPERATORS_LEADERBOARD = gql`
+  query GetOperatorsLeaderboard($first: Int = 10, $orderBy: Operator_orderBy = totalRails) {
+    operators(first: $first, orderBy: $orderBy, orderDirection: desc) {
       id
       address
       totalRails
