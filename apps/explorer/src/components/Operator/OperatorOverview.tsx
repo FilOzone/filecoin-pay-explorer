@@ -1,5 +1,7 @@
 import type { Operator } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { Info } from "lucide-react";
 import { explorerUrls } from "@/utils/constants";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText } from "../shared";
@@ -11,12 +13,25 @@ interface OperatorOverviewProps {
 interface DetailCardProps {
   label: string;
   value: string;
+  tooltip?: string;
 }
 
-const DetailCard: React.FC<DetailCardProps> = ({ label, value }) => (
+const DetailCard: React.FC<DetailCardProps> = ({ label, value, tooltip }) => (
   <Card className='p-4'>
     <div className='flex flex-col gap-1'>
-      <span className='text-sm text-muted-foreground'>{label}</span>
+      <div className='flex items-center gap-1.5'>
+        <span className='text-sm text-muted-foreground'>{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+            </TooltipTrigger>
+            <TooltipContent side='top' className='max-w-xs'>
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       <span className='font-medium break-all'>{value}</span>
     </div>
   </Card>
@@ -40,7 +55,11 @@ export const OperatorOverview: React.FC<OperatorOverviewProps> = ({ operator }) 
 
       <DetailCard label='Total Rails' value={formatCompactNumber(operator.totalRails)} />
       <DetailCard label='Total Tokens' value={formatCompactNumber(operator.totalTokens)} />
-      <DetailCard label='Total Approvals' value={formatCompactNumber(operator.totalApprovals)} />
+      <DetailCard
+        label='Total Approvals'
+        value={formatCompactNumber(operator.totalApprovals)}
+        tooltip='How many accounts have given this payment manager permission to handle their payments'
+      />
     </div>
   );
 };

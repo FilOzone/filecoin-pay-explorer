@@ -10,7 +10,8 @@ import {
 } from "@filecoin-pay/ui/components/empty";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { AlertCircle, Info } from "lucide-react";
 import useRecentAccounts from "@/hooks/useRecentAccounts";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
@@ -45,7 +46,19 @@ const RecentAccounts = () => {
               <TableHead>Address</TableHead>
               <TableHead className='text-right'>Total Rails</TableHead>
               <TableHead className='text-right'>Total Tokens</TableHead>
-              <TableHead className='text-right'>Total Approvals</TableHead>
+              <TableHead className='text-right'>
+                <div className='flex items-center justify-end gap-1.5'>
+                  Total Approvals
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                    </TooltipTrigger>
+                    <TooltipContent side='top' className='max-w-xs'>
+                      How many payment managers this account has given permission to use their tokens
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

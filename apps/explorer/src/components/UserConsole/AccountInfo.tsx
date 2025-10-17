@@ -1,7 +1,8 @@
 import type { Account } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
-import { User } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { Info, User } from "lucide-react";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText } from "../shared";
 
@@ -13,12 +14,25 @@ interface AccountInfoProps {
 interface StatCardProps {
   label: string;
   value: string;
+  tooltip?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, value }) => (
+const StatCard: React.FC<StatCardProps> = ({ label, value, tooltip }) => (
   <Card className='p-4'>
     <div className='flex flex-col gap-1'>
-      <span className='text-sm text-muted-foreground'>{label}</span>
+      <div className='flex items-center gap-1.5'>
+        <span className='text-sm text-muted-foreground'>{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+            </TooltipTrigger>
+            <TooltipContent side='top' className='max-w-xs'>
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       <span className='text-2xl font-bold'>{value}</span>
     </div>
   </Card>
@@ -64,7 +78,11 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ account, address }) =>
         <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
           <StatCard label='Total Rails' value={formatCompactNumber(account.totalRails)} />
           <StatCard label='Total Tokens' value={formatCompactNumber(account.totalTokens)} />
-          <StatCard label='Total Approvals' value={formatCompactNumber(account.totalApprovals)} />
+          <StatCard
+            label='Total Approvals'
+            value={formatCompactNumber(account.totalApprovals)}
+            tooltip='How many payment managers this account has given permission to use their tokens'
+          />
         </div>
       </Card>
     </div>

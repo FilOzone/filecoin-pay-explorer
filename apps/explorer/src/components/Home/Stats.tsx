@@ -60,14 +60,17 @@ const Stats = () => {
     {
       title: "Total Rails",
       value: formatCompactNumber(data?.totalRails || 0),
+      tooltip: "Ongoing payment streams between users",
     },
     {
       title: "Total Operators",
       value: formatCompactNumber(data?.totalOperators || 0),
+      tooltip: "Payment managers that help automate transactions between users",
     },
     {
       title: "Total Tokens",
       value: formatCompactNumber(data?.totalTokens || 0),
+      tooltip: "Different types of tokens being used for payments",
     },
     {
       title: "Unique Payers",
@@ -80,18 +83,22 @@ const Stats = () => {
     {
       title: "Total Fil Burned",
       value: formatFIL(data?.totalFilBurned || 0n),
+      tooltip: "Network fees paid to process payment settlements",
     },
     {
-      title: "Total Zero Rate Rails",
+      title: "Total Idle Rails",
       value: formatCompactNumber(data?.totalZeroRateRails || 0),
+      tooltip: "Paused payment streams that are currently inactive",
     },
     {
       title: "Total Active Rails",
       value: formatCompactNumber(data?.totalActiveRails || 0),
+      tooltip: "Payment streams that are currently running",
     },
     {
       title: "Total Terminated Rails",
       value: formatCompactNumber(data?.totalTerminatedRails || 0),
+      tooltip: "Payment streams that have been permanently stopped",
     },
   ];
 
@@ -107,7 +114,12 @@ const Stats = () => {
     <StatsLayout>
       <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
         {cards.map((card) => (
-          <MetricItem key={card.title} title={card.title} value={card.value?.toString() || "0"} />
+          <MetricItem
+            key={card.title}
+            title={card.title}
+            value={card.value?.toString() || "0"}
+            tooltip={card.tooltip}
+          />
         ))}
       </div>
     </StatsLayout>
