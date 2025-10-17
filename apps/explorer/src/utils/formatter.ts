@@ -8,6 +8,7 @@ export const formatDate = (timestamp: bigint): string =>
   new Date(Number(timestamp) * 1000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
 
 export function formatCompactNumber(value: number | string | bigint, decimals: number = 2) {

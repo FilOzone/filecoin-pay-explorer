@@ -113,7 +113,7 @@ export const AccountTokens: React.FC<AccountTokensProps> = ({ account }) => {
                   {formatToken(userToken.lockupRate, userToken.token.decimals, `${userToken.token.symbol}/epoch`, 8)}
                 </TableCell>
                 <TableCell className='text-right text-muted-foreground'>
-                  {formatDate(userToken.lockupLastSettledUntilEpoch)}
+                  {formatDate(userToken.lockupLastSettledUntilTimestamp)}
                 </TableCell>
               </TableRow>
             ))}
