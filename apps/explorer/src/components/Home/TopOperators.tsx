@@ -8,16 +8,25 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle } from "lucide-react";
-import { Link } from "react-router-dom";
-import useRecentOperators from "@/hooks/useRecentOperators";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { AlertCircle, Info, Trophy } from "lucide-react";
+import { useState } from "react";
+import useOperatorsLeaderboard, { type OperatorOrderBy } from "@/hooks/useOperatorsLeaderboard";
 import { formatCompactNumber } from "@/utils/formatter";
-import { CopyableText } from "../shared";
+import { CopyableText, StyledLink } from "../shared";
 
-const RecentOperators = () => {
-  const { data, isLoading, isError, error, refetch } = useRecentOperators(10);
+const TopOperators = () => {
+  const [orderBy, setOrderBy] = useState<OperatorOrderBy>("totalRails");
+  const { data, isLoading, isError, error, refetch } = useOperatorsLeaderboard(10, orderBy);
+
+  const sortOptions = [
+    { value: "totalRails" as OperatorOrderBy, label: "Total Rails" },
+    { value: "totalTokens" as OperatorOrderBy, label: "Total Tokens" },
+    { value: "totalApprovals" as OperatorOrderBy, label: "Total Approvals" },
+  ];
 
   if (isLoading) {
     return <LoadingState />;
@@ -34,30 +43,61 @@ const RecentOperators = () => {
   return (
     <section className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
-        <h2 className='text-xl font-semibold'>Recent Operators</h2>
-        <Link to='/operators' className='text-sm text-primary hover:underline'>
-          View All
-        </Link>
+        <div className='flex items-center gap-2'>
+          <Trophy className='h-5 w-5 text-yellow-500' />
+          <h2 className='text-xl font-semibold'>Services Leaderboard</h2>
+        </div>
+        <div className='flex items-center gap-3'>
+          <Select value={orderBy} onValueChange={(value) => setOrderBy(value as OperatorOrderBy)}>
+            <SelectTrigger className='w-[180px]'>
+              <SelectValue placeholder='Sort by...' />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <StyledLink to='/operators' className='text-sm'>
+            View All
+          </StyledLink>
+        </div>
       </div>
       <Card>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className='w-12'>#</TableHead>
               <TableHead>Address</TableHead>
               <TableHead className='text-right'>Total Rails</TableHead>
               <TableHead className='text-right'>Total Tokens</TableHead>
-              <TableHead className='text-right'>Total Approvals</TableHead>
+              <TableHead className='text-right'>
+                <div className='flex items-center justify-end gap-1.5'>
+                  Total Approvals
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                    </TooltipTrigger>
+                    <TooltipContent side='top' className='max-w-xs'>
+                      How many accounts have given this payment manager permission to handle their payments
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((operator) => (
+            {data.map((operator, index) => (
               <TableRow key={operator.id}>
+                <TableCell className='font-semibold text-muted-foreground'>{index + 1}</TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={operator.address}
                     to={`/operator/${operator.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Service address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -99,7 +139,7 @@ const LoadingState = () => (
 
 const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, error }) => (
   <section className='flex flex-col gap-4'>
-    <h2 className='text-xl font-semibold'>Recent Operators</h2>
+    <h2 className='text-xl font-semibold'>Operators Leaderboard</h2>
     <Card>
       <div className='py-12'>
         <Empty>
@@ -121,7 +161,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
 
 const EmptyState = () => (
   <section className='flex flex-col gap-4'>
-    <h2 className='text-xl font-semibold'>Recent Operators</h2>
+    <h2 className='text-xl font-semibold'>Operators Leaderboard</h2>
     <Card>
       <div className='py-12'>
         <Empty>
@@ -135,4 +175,4 @@ const EmptyState = () => (
   </section>
 );
 
-export default RecentOperators;
+export default TopOperators;

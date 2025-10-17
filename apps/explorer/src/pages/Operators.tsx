@@ -12,7 +12,8 @@ import {
 import { Input } from "@filecoin-pay/ui/components/input";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle, Loader2, Search } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { AlertCircle, Info, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CopyableText } from "@/components/shared";
 import useInfiniteOperators, { type OperatorsFilter } from "@/hooks/useInfiniteOperators";
@@ -126,7 +127,19 @@ const Operators = () => {
                   <TableHead>Address</TableHead>
                   <TableHead className='text-right'>Total Rails</TableHead>
                   <TableHead className='text-right'>Total Tokens</TableHead>
-                  <TableHead className='text-right'>Total Approvals</TableHead>
+                  <TableHead className='text-right'>
+                    <div className='flex items-center justify-end gap-1.5'>
+                      Total Approvals
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                        </TooltipTrigger>
+                        <TooltipContent side='top' className='max-w-xs'>
+                          How many accounts have given this payment manager permission to handle their payments
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -137,7 +150,7 @@ const Operators = () => {
                         value={operator.address}
                         to={`/operator/${operator.address}`}
                         monospace={true}
-                        label='Account'
+                        label='Service address'
                         truncate={true}
                         truncateLength={8}
                       />

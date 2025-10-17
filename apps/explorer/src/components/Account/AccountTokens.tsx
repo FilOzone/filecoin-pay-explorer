@@ -11,7 +11,8 @@ import {
 } from "@filecoin-pay/ui/components/pagination";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 import { useState } from "react";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
@@ -95,7 +96,32 @@ export const AccountTokens: React.FC<AccountTokensProps> = ({ account }) => {
               <TableHead>Token</TableHead>
               <TableHead className='text-right'>Available Funds</TableHead>
               <TableHead className='text-right'>Lockup Current</TableHead>
-              <TableHead className='text-right'>Lockup Rate</TableHead>
+              <TableHead className='text-right'>
+                <div className='flex items-center justify-end gap-1.5'>
+                  Paid Out
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                    </TooltipTrigger>
+                    <TooltipContent side='top' className='max-w-xs'>
+                      Total amount paid for services
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TableHead>
+              <TableHead className='text-right'>
+                <div className='flex items-center justify-end gap-1.5'>
+                  Earned
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                    </TooltipTrigger>
+                    <TooltipContent side='top' className='max-w-xs'>
+                      Total amount earned from providing services
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TableHead>
               <TableHead className='text-right'>Last Settled</TableHead>
             </TableRow>
           </TableHeader>
@@ -110,10 +136,21 @@ export const AccountTokens: React.FC<AccountTokensProps> = ({ account }) => {
                   {formatToken(userToken.lockupCurrent, userToken.token.decimals, userToken.token.symbol, 5)}
                 </TableCell>
                 <TableCell className='text-right'>
-                  {formatToken(userToken.lockupRate, userToken.token.decimals, `${userToken.token.symbol}/epoch`, 8)}
+                  <div className='flex items-center justify-end gap-1.5'>
+                    <ArrowUpRight className='h-3.5 w-3.5 text-destructive' />
+                    <span>{formatToken(userToken.payout, userToken.token.decimals, userToken.token.symbol, 5)}</span>
+                  </div>
+                </TableCell>
+                <TableCell className='text-right'>
+                  <div className='flex items-center justify-end gap-1.5'>
+                    <ArrowDownLeft className='h-3.5 w-3.5 text-green-600 dark:text-green-500' />
+                    <span>
+                      {formatToken(userToken.fundsCollected, userToken.token.decimals, userToken.token.symbol, 5)}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell className='text-right text-muted-foreground'>
-                  {formatDate(userToken.lockupLastSettledUntilEpoch)}
+                  {formatDate(userToken.lockupLastSettledUntilTimestamp)}
                 </TableCell>
               </TableRow>
             ))}

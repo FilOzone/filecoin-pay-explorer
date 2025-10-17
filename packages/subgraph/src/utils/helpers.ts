@@ -138,6 +138,8 @@ export const createOrLoadUserToken = (account: Address, token: Address): UserTok
     userToken.lockupRate = ZERO_BIG_INT;
     userToken.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
     userToken.lockupLastSettledUntilTimestamp = ZERO_BIG_INT;
+    userToken.payout = ZERO_BIG_INT;
+    userToken.fundsCollected = ZERO_BIG_INT;
     userToken.save();
     return new UserTokenWithIsNew(userToken, true);
   }

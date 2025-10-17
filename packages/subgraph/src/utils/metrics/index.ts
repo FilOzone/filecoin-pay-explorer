@@ -1,5 +1,4 @@
 // Main metrics collection exports
-// Individual collectors (for advanced usage)
 export {
   BaseMetricsCollector,
   MetricsCollectionOrchestrator,

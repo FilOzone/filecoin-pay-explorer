@@ -23,7 +23,7 @@ type GroupBy = "token" | "operator";
 export const OperatorApprovalsSectionSkeleton = () => (
   <div className='flex flex-col gap-4'>
     <div className='flex items-center justify-between'>
-      <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+      <h2 className='text-2xl font-semibold'>Authorized Services</h2>
     </div>
     <Card>
       <div className='p-4 space-y-4'>
@@ -51,7 +51,7 @@ const ApprovalCard: React.FC<ApprovalCardProps> = ({ approval, onIncrease }) => 
             to={`/operator/${approval.operator.address}`}
             value={approval.operator.address}
             monospace={true}
-            label='Operator'
+            label='Operator address'
             truncate={true}
             truncateLength={8}
           />
@@ -151,7 +151,7 @@ const GroupedView: React.FC<GroupedViewProps> = ({ approvals, groupBy, onIncreas
         const firstApproval = groupApprovals[0];
         const groupLabel =
           groupBy === "token"
-            ? `${firstApproval.token.symbol} (${groupApprovals.length} operator${groupApprovals.length > 1 ? "s" : ""})`
+            ? `${firstApproval.token.symbol} (${groupApprovals.length} service${groupApprovals.length > 1 ? "s" : ""})`
             : `${formatAddress(firstApproval.operator.address)} (${groupApprovals.length} token${groupApprovals.length > 1 ? "s" : ""})`;
 
         return (
@@ -219,14 +219,14 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
   if (isError) {
     return (
       <div className='flex flex-col gap-4'>
-        <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+        <h2 className='text-2xl font-semibold'>Authorized Services</h2>
         <Card>
           <div className='py-12'>
             <Empty>
               <EmptyHeader>
                 <AlertCircle className='h-12 w-12 text-muted-foreground' />
-                <EmptyTitle>Failed to load approvals</EmptyTitle>
-                <EmptyDescription>Unable to fetch your operator approvals. Please try again.</EmptyDescription>
+                <EmptyTitle>Failed to load authorized services</EmptyTitle>
+                <EmptyDescription>Unable to fetch your authorized services. Please try again.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </div>
@@ -240,10 +240,10 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
       <>
         <div className='flex flex-col gap-4'>
           <div className='flex items-center justify-between'>
-            <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+            <h2 className='text-2xl font-semibold'>Authorized Services</h2>
             <Button onClick={() => setApproveDialogOpen(true)} className='gap-2'>
               <Plus className='h-4 w-4' />
-              Approve Operator
+              Approve Service
             </Button>
           </div>
 
@@ -252,9 +252,9 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
               <Empty>
                 <EmptyHeader>
                   <Shield className='h-12 w-12 text-muted-foreground' />
-                  <EmptyTitle>No operator approvals</EmptyTitle>
+                  <EmptyTitle>No authorized services</EmptyTitle>
                   <EmptyDescription>
-                    You haven't approved any operators yet. Approve an operator to let them manage payments on your
+                    You haven't authorized any services yet. Approve an service to let them manage payments on your
                     behalf.
                   </EmptyDescription>
                 </EmptyHeader>
@@ -272,7 +272,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     <>
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between flex-wrap gap-4'>
-          <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+          <h2 className='text-2xl font-semibold'>Authorized Services</h2>
           <div className='flex items-center gap-3'>
             <div className='flex items-center gap-2'>
               <span className='text-sm text-muted-foreground'>Group by:</span>
@@ -292,7 +292,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
 
             <Button onClick={() => setApproveDialogOpen(true)} className='gap-2'>
               <Plus className='h-4 w-4' />
-              Approve Operator
+              Approve Service
             </Button>
           </div>
         </div>

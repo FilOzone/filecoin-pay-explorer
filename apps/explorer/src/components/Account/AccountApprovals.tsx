@@ -32,7 +32,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
     return (
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
-          <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+          <h2 className='text-2xl font-semibold'>Authorized Services</h2>
         </div>
         <Card>
           <div className='p-4 space-y-4'>
@@ -48,7 +48,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
   if (isError) {
     return (
       <div className='flex flex-col gap-4'>
-        <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+        <h2 className='text-2xl font-semibold'>Authorized Services</h2>
         <Card>
           <div className='py-12'>
             <Empty>
@@ -56,7 +56,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
                 <EmptyMedia variant='icon'>
                   <AlertCircle />
                 </EmptyMedia>
-                <EmptyTitle>Failed to load approvals</EmptyTitle>
+                <EmptyTitle>Failed to load authorized services</EmptyTitle>
               </EmptyHeader>
             </Empty>
           </div>
@@ -68,13 +68,13 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
   if (!data || data.operatorApprovals.length === 0) {
     return (
       <div className='flex flex-col gap-4'>
-        <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+        <h2 className='text-2xl font-semibold'>Authorized Services</h2>
         <Card>
           <div className='py-12'>
             <Empty>
               <EmptyHeader>
-                <EmptyTitle>No approvals found</EmptyTitle>
-                <EmptyDescription>This account has not approved any operators yet.</EmptyDescription>
+                <EmptyTitle>No authorized services found</EmptyTitle>
+                <EmptyDescription>This account has not authorized any services yet.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </div>
@@ -86,7 +86,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
   return (
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
-        <h2 className='text-2xl font-semibold'>Operator Approvals</h2>
+        <h2 className='text-2xl font-semibold'>Authorized Services</h2>
         <span className='text-sm text-muted-foreground'>{account.totalApprovals.toString()} total</span>
       </div>
 
@@ -112,7 +112,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
                     value={approval.operator.address}
                     to={`/operator/${approval.operator.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Service address'
                     truncate={true}
                     truncateLength={8}
                   />

@@ -11,6 +11,7 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { useState } from "react";
 import { useBlockNumber } from "wagmi";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { SETTLEMENT_FEE } from "@/utils/constants";
@@ -89,19 +90,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
             <div>
               <span className='text-xs text-muted-foreground'>State</span>
               <div>
-                <Badge
-                  variant={
-                    rail.state === "ACTIVE"
-                      ? "default"
-                      : rail.state === "ZERORATE"
-                        ? "secondary"
-                        : rail.state === "TERMINATED"
-                          ? "destructive"
-                          : "outline"
-                  }
-                >
-                  {rail.state}
-                </Badge>
+                <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
               </div>
             </div>
           </div>

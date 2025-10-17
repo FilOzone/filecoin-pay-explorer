@@ -5,6 +5,8 @@ type UserToken @entity(immutable: false) {
   lockupRate: BigInt!
   lockupLastSettledUntilEpoch: BigInt!
   lockupLastSettledUntilTimestamp: BigInt!
+  payout: BigInt!
+  fundsCollected: BigInt!
   account: Account!
   token: Token!
 }

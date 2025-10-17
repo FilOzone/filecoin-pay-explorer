@@ -190,6 +190,7 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
     return;
   }
 
+  const previousRailState = rail.state;
   rail.state = "TERMINATED";
   rail.endEpoch = event.params.endEpoch;
 
@@ -203,7 +204,7 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
 
   // collect rail state change metrics
   MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
-    rail.state,
+    previousRailState,
     "TERMINATED",
     event.block.timestamp,
     event.block.number,
@@ -394,11 +395,13 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
   if (payerToken) {
     payerToken.funds = payerToken.funds.minus(totalSettledAmount);
+    payerToken.payout = payerToken.payout.plus(totalSettledAmount);
     payerToken.save();
   }
 
   if (payeeToken) {
     payeeToken.funds = payeeToken.funds.plus(totalNetPayeeAmount);
+    payeeToken.fundsCollected = payeeToken.fundsCollected.plus(totalNetPayeeAmount);
     payeeToken.save();
   }
 

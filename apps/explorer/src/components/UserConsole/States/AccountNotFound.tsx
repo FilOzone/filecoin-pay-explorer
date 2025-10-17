@@ -40,15 +40,15 @@ const AccountNotFound = () => {
                     </Button>
                     <Button onClick={() => setApproveDialogOpen(true)} variant='outline' className='gap-2' size='lg'>
                       <Shield className='h-5 w-5' />
-                      Approve Operator
+                      Approve Service
                     </Button>
                     <Button onClick={() => setDepositAndApproveDialogOpen(true)} className='gap-2' size='lg'>
                       <ArrowDownCircle className='h-5 w-5' />
-                      Deposit and Approve
+                      Deposit and Approve Service
                     </Button>
                   </div>
                   <p className='text-xs text-muted-foreground text-center'>
-                    Start by depositing funds or approving an operator to get started
+                    Start by depositing funds or approving a service to get started
                   </p>
                 </div>
               </EmptyContent>

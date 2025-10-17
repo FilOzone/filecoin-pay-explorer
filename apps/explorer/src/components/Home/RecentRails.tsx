@@ -1,4 +1,3 @@
-import type { RailState } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
@@ -13,25 +12,10 @@ import {
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import useRecentRails from "@/hooks/useRecentRails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText } from "../shared";
-
-const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "ACTIVE":
-      return "default";
-    case "ZERORATE":
-      return "secondary";
-    case "TERMINATED":
-      return "destructive";
-    case "FINALIZED":
-      return "outline";
-    default:
-      return "secondary";
-  }
-};
+import { CopyableText, StyledLink } from "../shared";
 
 const RecentRails = () => {
   const { data, isLoading, isError, error, refetch } = useRecentRails(10);
@@ -52,9 +36,9 @@ const RecentRails = () => {
     <section className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-xl font-semibold'>Recent Rails</h2>
-        <Link to='/rails' className='text-sm text-primary hover:underline'>
+        <StyledLink to='/rails' className='text-sm'>
           View All
-        </Link>
+        </StyledLink>
       </div>
       <Card>
         <Table>
@@ -73,16 +57,14 @@ const RecentRails = () => {
             {data.map((rail) => (
               <TableRow key={rail.id}>
                 <TableCell className='font-medium'>
-                  <Link to={`/rail/${rail.railId}`} className='text-primary hover:underline'>
-                    {rail.railId.toString()}
-                  </Link>
+                  <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={rail.payer.address}
                     to={`/account/${rail.payer.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />
@@ -92,13 +74,13 @@ const RecentRails = () => {
                     value={rail.payee.address}
                     to={`/account/${rail.payee.address}`}
                     monospace={true}
-                    label='Account'
+                    label='Account address'
                     truncate={true}
                     truncateLength={8}
                   />
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getStatusVariant(rail.state)}>{rail.state}</Badge>
+                  <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
                 </TableCell>
                 <TableCell className='text-right'>
                   {formatToken(rail.paymentRate, rail.token.decimals, rail.token.symbol, 8)}

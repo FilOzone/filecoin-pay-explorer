@@ -36,7 +36,10 @@ const CopyableText = ({
       {to ? (
         <Link
           to={to}
-          className={cn("text-primary hover:underline flex items-center gap-1", linkClassName)}
+          className={cn(
+            "text-link hover:text-link-hover hover:underline flex items-center gap-1 transition-colors font-medium",
+            linkClassName,
+          )}
           title={value}
           target={external ? "_blank" : "_self"}
         >
