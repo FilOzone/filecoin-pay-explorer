@@ -14,10 +14,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useOperatorRails } from "@/hooks/useOperatorDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText } from "../shared";
+import { CopyableText, StyledLink } from "../shared";
 
 interface OperatorRailsProps {
   operator: Operator;
@@ -123,9 +122,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
             {data.rails.map((rail) => (
               <TableRow key={rail.id}>
                 <TableCell className='font-medium'>
-                  <Link to={`/rail/${rail.railId}`} className='text-primary hover:underline'>
-                    {rail.railId.toString()}
-                  </Link>
+                  <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText

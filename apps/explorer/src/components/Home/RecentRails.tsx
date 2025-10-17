@@ -13,10 +13,9 @@ import {
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
-import { Link } from "react-router-dom";
 import useRecentRails from "@/hooks/useRecentRails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText } from "../shared";
+import { CopyableText, StyledLink } from "../shared";
 
 const getStatusVariant = (state: RailState): "default" | "secondary" | "destructive" | "outline" => {
   switch (state) {
@@ -52,9 +51,9 @@ const RecentRails = () => {
     <section className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-xl font-semibold'>Recent Rails</h2>
-        <Link to='/rails' className='text-sm text-primary hover:underline'>
+        <StyledLink to='/rails' className='text-sm'>
           View All
-        </Link>
+        </StyledLink>
       </div>
       <Card>
         <Table>
@@ -73,9 +72,7 @@ const RecentRails = () => {
             {data.map((rail) => (
               <TableRow key={rail.id}>
                 <TableCell className='font-medium'>
-                  <Link to={`/rail/${rail.railId}`} className='text-primary hover:underline'>
-                    {rail.railId.toString()}
-                  </Link>
+                  <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText

@@ -11,10 +11,9 @@ import {
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
-import { Link } from "react-router-dom";
 import useRecentOperators from "@/hooks/useRecentOperators";
 import { formatCompactNumber } from "@/utils/formatter";
-import { CopyableText } from "../shared";
+import { CopyableText, StyledLink } from "../shared";
 
 const RecentOperators = () => {
   const { data, isLoading, isError, error, refetch } = useRecentOperators(10);
@@ -35,9 +34,9 @@ const RecentOperators = () => {
     <section className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-xl font-semibold'>Recent Operators</h2>
-        <Link to='/operators' className='text-sm text-primary hover:underline'>
+        <StyledLink to='/operators' className='text-sm'>
           View All
-        </Link>
+        </StyledLink>
       </div>
       <Card>
         <Table>

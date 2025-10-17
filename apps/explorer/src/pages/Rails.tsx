@@ -16,8 +16,7 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { CopyableText } from "@/components/shared";
+import { CopyableText, StyledLink } from "@/components/shared";
 import useInfiniteRails, { type RailsFilter } from "@/hooks/useInfiniteRails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { formatHexForSearch } from "@/utils/hexUtils";
@@ -201,9 +200,7 @@ const Rails = () => {
                 {allRails.map((rail: Rail) => (
                   <TableRow key={rail.id}>
                     <TableCell className='font-medium'>
-                      <Link to={`/rail/${rail.railId}`} className='text-primary hover:underline'>
-                        {rail.railId.toString()}
-                      </Link>
+                      <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
                     </TableCell>
                     <TableCell className='font-mono text-sm'>
                       <CopyableText

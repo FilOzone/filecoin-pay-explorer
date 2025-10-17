@@ -14,10 +14,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText } from "../shared";
+import { CopyableText, StyledLink } from "../shared";
 
 interface AccountRailsProps {
   account: Account;
@@ -71,9 +70,7 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
   return (
     <TableRow>
       <TableCell className='font-medium'>
-        <Link to={`/rail/${rail.railId}`} className='text-primary hover:underline'>
-          {rail.railId.toString()}
-        </Link>
+        <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
       </TableCell>
       <TableCell>
         <RoleIndicator role={isPayer ? "payer" : "payee"} />

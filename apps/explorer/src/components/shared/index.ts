@@ -6,6 +6,7 @@ import Footer from "./Footer";
 import Header from "./Header";
 import MetricItem from "./MetricItem";
 import NetworkIndicator from "./NetworkIndicator";
+import StyledLink from "./StyledLink";
 
 export {
   AllowanceDisplay,
@@ -16,4 +17,5 @@ export {
   CopyButton,
   CopyableText,
   NetworkIndicator,
+  StyledLink,
 };
