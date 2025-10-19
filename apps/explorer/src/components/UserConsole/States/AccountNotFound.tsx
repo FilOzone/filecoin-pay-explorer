@@ -28,7 +28,7 @@ const AccountNotFound = () => {
                 <Wallet className='h-16 w-16 text-muted-foreground' />
                 <EmptyTitle>Welcome to Filecoin Pay</EmptyTitle>
                 <EmptyDescription>
-                  Your account hasn't been indexed yet. Get started by depositing funds or approving an operator.
+                  Your account hasn't been indexed yet. Get started by depositing funds or approving an service.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
