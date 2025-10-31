@@ -344,14 +344,9 @@ export function handleRailSettled(event: RailSettledEvent): void {
   const totalSettledAmount = event.params.totalSettledAmount;
   const totalNetPayeeAmount = event.params.totalNetPayeeAmount;
   const operatorCommission = event.params.operatorCommission;
+  const networkFee = event.params.networkFee;
   const timestamp = event.block.timestamp;
   const blockNumber = event.block.number;
-
-  const paymentsContractAddress = event.address;
-
-  const paymentsContract = PaymentsContract.bind(paymentsContractAddress);
-
-  const filBurnedResult = paymentsContract.try_NETWORK_FEE();
 
   const rail = Rail.load(getRailEntityId(railId));
 
@@ -376,7 +371,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   settlement.totalSettledAmount = totalSettledAmount;
   settlement.totalNetPayeeAmount = totalNetPayeeAmount;
   settlement.operatorCommission = operatorCommission;
-  settlement.filBurned = filBurnedResult.reverted ? ZERO_BIG_INT : filBurnedResult.value;
+  settlement.filBurned = networkFee;
   settlement.settledUpto = event.params.settledUpTo;
 
   operatorToken.settledAmount = operatorToken.settledAmount.plus(totalSettledAmount);
@@ -415,7 +410,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
     totalSettledAmount,
     totalNetPayeeAmount,
     operatorCommission,
-    filBurnedResult.reverted ? ZERO_BIG_INT : filBurnedResult.value,
+    networkFee,
     timestamp,
     blockNumber,
   );
@@ -507,7 +502,8 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const railId = event.params.railId;
   const netPayeeAmount = event.params.netPayeeAmount;
   const operatorCommission = event.params.operatorCommission;
-  const oneTimePayment = operatorCommission.plus(netPayeeAmount);
+  const networkFee = event.params.networkFee;
+  const oneTimePayment = operatorCommission.plus(netPayeeAmount).plus(networkFee);
 
   const rail = Rail.load(getRailEntityId(railId));
 
@@ -535,6 +531,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   }
   if (payeeToken) {
     payeeToken.funds = payeeToken.funds.plus(netPayeeAmount);
+    payeeToken.fundsCollected = payeeToken.fundsCollected.plus(netPayeeAmount);
     payeeToken.save();
   }
   if (serviceFeeRecipientUserToken) {
@@ -559,6 +556,8 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   operatorToken.volume = operatorToken.volume.plus(oneTimePayment);
   operatorApproval.save();
   operatorToken.save();
+
+  MetricsCollectionOrchestrator.collectOneTimePaymentMetrics(networkFee, event.block.timestamp, event.block.number);
 }
 
 export function handleRailFinalized(event: RailFinalizedEvent): void {

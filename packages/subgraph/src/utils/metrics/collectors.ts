@@ -370,6 +370,25 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
   }
 }
 
+// One Time Payment Collector
+export class OneTimePaymentCollector extends BaseMetricsCollector {
+  private networkFee: GraphBN;
+
+  constructor(networkFee: GraphBN, timestamp: GraphBN, blockNumber: GraphBN) {
+    super(timestamp, blockNumber);
+    this.networkFee = networkFee;
+  }
+
+  collect(): void {
+    this.updateNetworkMetrics();
+  }
+
+  private updateNetworkMetrics(): void {
+    const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
+    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+  }
+}
+
 // Metrics Collection Orchestrator
 export class MetricsCollectionOrchestrator {
   static collectRailCreationMetrics(
@@ -459,6 +478,11 @@ export class MetricsCollectionOrchestrator {
       timestamp,
       blockNumber,
     );
+    collector.collect();
+  }
+
+  static collectOneTimePaymentMetrics(networkFee: GraphBN, timestamp: GraphBN, blockNumber: GraphBN): void {
+    const collector = new OneTimePaymentCollector(networkFee, timestamp, blockNumber);
     collector.collect();
   }
 }
