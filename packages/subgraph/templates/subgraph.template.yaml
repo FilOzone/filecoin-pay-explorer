@@ -45,13 +45,13 @@ dataSources:
           handler: handleRailLockupModified
         - event: RailRateModified(indexed uint256,uint256,uint256)
           handler: handleRailRateModified
-        - event: RailOneTimePaymentProcessed(indexed uint256,uint256,uint256)
+        - event: RailOneTimePaymentProcessed(indexed uint256,uint256,uint256,uint256)
           handler: handleRailOneTimePaymentProcessed
         - event: RailFinalized(indexed uint256)
           handler: handleRailFinalized
-        - event: RailSettled(indexed uint256,uint256,uint256,uint256,uint256)
+        - event: RailSettled(indexed uint256,uint256,uint256,uint256,uint256,uint256)
           handler: handleRailSettled
-        - event: DepositRecorded(indexed address,indexed address,indexed address,uint256,bool)
+        - event: DepositRecorded(indexed address,indexed address,indexed address,uint256)
           handler: handleDepositRecorded
         - event: WithdrawRecorded(indexed address,indexed address,indexed address,uint256)
           handler: handleWithdrawRecorded

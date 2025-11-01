@@ -26,7 +26,7 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
     contracts: {
       usdfc: CONTRACT_ADDRESSES.USDFC.calibration,
       payments: {
-        address: "0x1096025c9D6B29E12E2f04965F6E64d564Ce0750",
+        address: "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
         abi: paymentsAbi,
       },
     },
