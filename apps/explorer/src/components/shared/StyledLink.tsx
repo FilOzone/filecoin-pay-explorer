@@ -1,8 +1,9 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink as ExternalLinkIcon } from "lucide-react";
-import { Link, type LinkProps } from "react-router-dom";
+import type { LinkProps } from "next/link";
+import Link from "next/link";
 
-interface StyledLinkProps extends Omit<LinkProps, "to"> {
+interface StyledLinkProps extends Omit<LinkProps, "href"> {
   to?: string;
   href?: string;
   external?: boolean;
@@ -41,7 +42,7 @@ const StyledLink = ({
 
   if (to) {
     return (
-      <Link to={to} className={combinedClassName} {...props}>
+      <Link href={to} className={combinedClassName} {...props}>
         {children}
       </Link>
     );

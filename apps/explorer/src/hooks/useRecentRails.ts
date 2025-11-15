@@ -11,7 +11,9 @@ const useRecentRails = (first: number = 10) =>
   useQuery({
     queryKey: ["recentRails", first],
     queryFn: async () => {
-      const response = await executeQuery<IRecentRails>(GET_RECENT_RAILS, { first });
+      const response = await executeQuery<IRecentRails>(GET_RECENT_RAILS, {
+        first,
+      });
       return response.rails;
     },
     refetchInterval: 60 * 1000,

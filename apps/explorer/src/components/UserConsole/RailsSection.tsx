@@ -14,8 +14,8 @@ import {
 } from "@filecoin-pay/ui/components/pagination";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, FileText, Search } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
@@ -65,7 +65,7 @@ const RailCard: React.FC<RailCardProps> = ({ rail, userAddress }) => {
         <div>
           <span className='text-xs text-muted-foreground'>Rail ID</span>
           <div className='flex items-center gap-2'>
-            <Link to={`/rail/${rail.railId}`} className='text-lg font-semibold'>
+            <Link href={`/rail/${rail.railId}`} className='text-lg font-semibold'>
               #{rail.railId.toString()}
             </Link>
             <Badge variant={isPayer ? "destructive" : "default"} className='gap-1'>

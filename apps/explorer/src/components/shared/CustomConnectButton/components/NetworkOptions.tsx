@@ -17,7 +17,7 @@ interface NetworkOptionsProps {
 const NetworkOptions = ({ chainId }: NetworkOptionsProps) => {
   const { switchChain } = useSwitchChain();
   return (
-    <Select value={chainId.toString()} onValueChange={(value) => switchChain({ chainId: parseInt(value) })}>
+    <Select value={chainId.toString()} onValueChange={(value) => switchChain({ chainId: parseInt(value, 10) })}>
       <SelectTrigger className='w-[180px]'>
         <SelectValue />
       </SelectTrigger>

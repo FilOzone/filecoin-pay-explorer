@@ -1,7 +1,7 @@
 import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
 import { filecoinCalibration } from "viem/chains";
 import { paymentsAbi } from "@/abi/payments";
-import { supportedChains } from "@/services/wagmi/config";
+import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");

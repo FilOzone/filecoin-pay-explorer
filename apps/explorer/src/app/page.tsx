@@ -1,9 +1,6 @@
-import RecentRails from "@/components/Home/RecentRails";
-import Stats from "@/components/Home/Stats";
-import TopAccounts from "@/components/Home/TopAccounts";
-import TopOperators from "@/components/Home/TopOperators";
+import { RecentRails, Stats, TopAccounts, TopOperators } from "@/components/Home";
 
-function Home() {
+function Page() {
   return (
     <main className='flex-1 px-3 sm:px-6 py-6'>
       <div className='flex flex-col gap-8'>
@@ -18,4 +15,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default Page;

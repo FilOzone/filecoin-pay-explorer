@@ -1,3 +1,4 @@
+"use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";

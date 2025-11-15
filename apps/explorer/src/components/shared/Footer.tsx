@@ -1,45 +1,41 @@
-import { Button } from "@filecoin-pay/ui/components/button";
-import { Separator } from "@filecoin-pay/ui/components/separator";
-import { useTheme } from "@filecoin-pay/ui/components/theme-provider";
+import { Container } from "@filecoin-foundation/ui-filecoin/Container";
+import { LegalSection } from "@filecoin-foundation/ui-filecoin/Footer/LegalSection";
+import { Section } from "@filecoin-foundation/ui-filecoin/Section/Section";
+import { PATHS } from "@/constants/paths";
+import { BASE_DOMAIN, FIL_OZ_URL, FILECOIN_FOUNDATION_URL, FOC_URLS } from "@/constants/site-metadata";
+import FilecoinFoundationLogo from "@/public/filecoin-foundation-logo.svg";
+import FilozLogo from "@/public/filoz-logo.svg";
+
+const legalLinks = [
+  {
+    label: PATHS.PRIVACY_POLICY.label,
+    href: `${FOC_URLS.filecoinCloud}${PATHS.PRIVACY_POLICY.path}`,
+  },
+  { label: PATHS.TERMS_OF_USE.label, href: `${FOC_URLS.filecoinCloud}${PATHS.TERMS_OF_USE.path}` },
+];
 
 function Footer() {
-  const { theme } = useTheme();
-
-  const GitHubIcon = () => (
-    <img src={theme === "dark" ? "/github-mark-white.svg" : "/github-mark.svg"} className='h-4 w-4' />
-  );
-
   return (
-    <footer className='mt-10 border-t'>
-      <div className='max-w-screen-2xl mx-auto px-3 sm:px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground'>
-        <p className='text-center sm:text-left'>Built with ❤️ for the Filecoin ecosystem.</p>
-        <div className='flex items-center gap-2'>
-          <Button asChild variant='ghost' size='sm'>
-            <a
-              href='https://github.com/FilOzone/filecoin-pay'
-              target='_blank'
-              rel='noreferrer'
-              className='inline-flex items-center'
-            >
-              <GitHubIcon />
-              Filecoin Pay Contracts
-            </a>
-          </Button>
-          <Separator orientation='vertical' className='h-4' />
-          <Button asChild variant='ghost' size='sm'>
-            <a
-              href='https://github.com/FilOzone/filecoin-pay-explorer'
-              target='_blank'
-              rel='noreferrer'
-              className='inline-flex items-center'
-            >
-              <GitHubIcon />
-              Explorer
-            </a>
-          </Button>
-        </div>
-      </div>
-    </footer>
+    <Section as='footer' backgroundVariant='dark'>
+      <Container>
+        <LegalSection
+          baseDomain={BASE_DOMAIN}
+          legalItems={legalLinks}
+          creators={[
+            {
+              companyName: "FilOz",
+              websiteUrl: FIL_OZ_URL,
+              LogoComponent: FilozLogo,
+            },
+            {
+              companyName: "Filecoin Foundation",
+              websiteUrl: FILECOIN_FOUNDATION_URL,
+              LogoComponent: FilecoinFoundationLogo,
+            },
+          ]}
+        />
+      </Container>
+    </Section>
   );
 }
 

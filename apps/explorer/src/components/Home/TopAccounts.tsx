@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {

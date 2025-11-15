@@ -16,6 +16,5 @@ pnpm build
 
 ## Tech Stack
 
+- Next.js 15
 - React 19 with TypeScript
-- Vite
-- React Compiler enabled

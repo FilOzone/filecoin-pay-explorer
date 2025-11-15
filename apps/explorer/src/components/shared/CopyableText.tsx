@@ -1,6 +1,6 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
@@ -35,7 +35,7 @@ const CopyableText = ({
     <div className={cn("group flex items-center gap-1", monospace && "font-mono text-sm", className)}>
       {to ? (
         <Link
-          to={to}
+          href={to}
           className={cn(
             "text-link hover:text-link-hover hover:underline flex items-center gap-1 transition-colors font-medium",
             linkClassName,

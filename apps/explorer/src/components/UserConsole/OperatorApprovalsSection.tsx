@@ -158,6 +158,7 @@ const GroupedView: React.FC<GroupedViewProps> = ({ approvals, groupBy, onIncreas
           <div key={key} className='border rounded-lg overflow-hidden'>
             {/* Group Header */}
             <button
+              type='button'
               onClick={() => toggleGroup(key)}
               className='w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors'
             >

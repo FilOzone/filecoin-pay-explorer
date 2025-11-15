@@ -1,5 +1,5 @@
 import type { Abi, Hex } from "viem";
-import { supportedChains } from "@/services/wagmi/config";
+import type { supportedChains } from "@/services/wagmi/config";
 
 export type TransactionType =
   | "deposit"

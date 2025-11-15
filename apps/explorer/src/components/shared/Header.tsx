@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Logo } from "@filecoin-pay/ui/components/logo";
 import {
@@ -10,8 +11,9 @@ import { Sheet, SheetContent, SheetTrigger } from "@filecoin-pay/ui/components/s
 import { ThemeToggle } from "@filecoin-pay/ui/components/theme-toggle";
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { LayoutDashboard, Menu, Network, Shield, Users, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
 import NetworkIndicator from "./NetworkIndicator";
 
 const navigationLinks = [
@@ -23,17 +25,17 @@ const navigationLinks = [
 
 function Header() {
   const [isOpen, setIsOpen] = useState(false);
-  const location = useLocation();
+  const pathname = usePathname();
 
   const isActiveLink = (href: string) => {
-    return location.pathname === href || location.pathname.startsWith(`${href}/`);
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   return (
     <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
       <div className='max-w-screen-2xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8'>
         {/* Logo */}
-        <Link to='/' className='inline-flex items-center gap-2 transition-opacity hover:opacity-80'>
+        <Link href='/' className='inline-flex items-center gap-2 transition-opacity hover:opacity-80'>
           <Logo />
         </Link>
 
@@ -46,7 +48,7 @@ function Header() {
               return (
                 <NavigationMenuItem key={link.href}>
                   <NavigationMenuLink active={isActive} asChild>
-                    <Link to={link.href} className='flex-row items-center gap-2 transition-all duration-200'>
+                    <Link href={link.href} className='flex-row items-center gap-2 transition-all duration-200'>
                       <Icon className='h-4 w-4' />
                       {link.name}
                     </Link>
@@ -77,7 +79,7 @@ function Header() {
                   return (
                     <Link
                       key={link.href}
-                      to={link.href}
+                      href={link.href}
                       onClick={() => setIsOpen(false)}
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200",

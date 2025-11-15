@@ -1,0 +1,54 @@
+import type { Metadata } from "next";
+
+const BASE_DOMAIN = "pay.filecoin.cloud";
+const BASE_URL = `https://${BASE_DOMAIN}`;
+const ORGANIZATION_NAME = "FilOz";
+
+const META_TITLE = "Filecoin Pay";
+const META_DESCRIPTION = "Filecoin Pay is explorer and dashboard for Filecoin Pay.";
+
+const FIL_BEAM_URL = "https://filbeam.com/";
+const FIL_OZ_URL = "https://filoz.org/";
+const FILECOIN_FOUNDATION_URL = "https://fil.org/";
+
+const FOC_URLS = {
+  documentation: "https://docs.filecoin.cloud",
+  filecoinCloud: "https://filecoin.cloud",
+  filecoinPay: "https://pay.filecoin.cloud",
+  proofOfDataPossession: "#todo",
+  social: {
+    telegram: "https://t.me/+Xj6_zTPfcUA4MGQ1",
+    slack: "https://filecoinproject.slack.com/archives/C07CGTXHHT4",
+  },
+};
+
+const METADATA: Metadata = {
+  metadataBase: new URL(BASE_URL),
+  title: META_TITLE,
+  description: META_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    title: META_TITLE,
+    description: META_DESCRIPTION,
+    url: BASE_URL,
+    siteName: META_TITLE,
+    images: [{ url: "/open-graph-image.webp" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: META_TITLE,
+    description: META_DESCRIPTION,
+    images: ["/open-graph-image.webp"],
+  },
+};
+
+export {
+  BASE_DOMAIN,
+  BASE_URL,
+  FIL_BEAM_URL,
+  FIL_OZ_URL,
+  FILECOIN_FOUNDATION_URL,
+  FOC_URLS,
+  METADATA,
+  ORGANIZATION_NAME,
+};

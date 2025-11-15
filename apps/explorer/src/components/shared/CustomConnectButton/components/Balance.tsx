@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@filecoin-pay/ui/components/button";
 import {
   DropdownMenu,
@@ -9,7 +10,7 @@ import {
 } from "@filecoin-pay/ui/components/dropdown-menu";
 import { Check, Copy, ExternalLink, Wallet } from "lucide-react";
 import { useState } from "react";
-import { erc20Abi, formatEther } from "viem";
+import { type Address, erc20Abi, formatEther } from "viem";
 import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
@@ -21,12 +22,15 @@ const Balance = () => {
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
   const [copied, setCopied] = useState(false);
-  const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({ address, query: { enabled: !!address } });
+  const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
+    address,
+    query: { enabled: !!address },
+  });
   const { data: usdfcBalance, isLoading: isLoadingUSDFCBalance } = useReadContract({
     address: constants.contracts.usdfc,
     abi: erc20Abi,
     functionName: "balanceOf",
-    args: [address!],
+    args: [address as Address],
     query: { enabled: !!address },
   });
 

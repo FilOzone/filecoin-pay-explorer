@@ -299,11 +299,11 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                     <Wallet className='h-3 w-3' />
                     <span>
                       Balance:{" "}
-                      {isLoadingBalance && balance === undefined ? (
+                      {isLoadingBalance || balance === undefined ? (
                         <Loader2 className='h-3 w-3 animate-spin inline' />
                       ) : (
                         <span className='font-medium text-foreground'>
-                          {Number(formatUnits(balance!, tokenDetails.decimals)).toLocaleString(undefined, {
+                          {Number(formatUnits(balance, tokenDetails.decimals)).toLocaleString(undefined, {
                             maximumFractionDigits: 6,
                           })}{" "}
                           {tokenDetails.symbol}

@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
@@ -82,7 +83,7 @@ const Stats = () => {
     },
     {
       title: "Total Fil Burned",
-      value: formatFIL(data?.totalFilBurned || 0n),
+      value: formatFIL(data?.totalFilBurned || "0"),
       tooltip: "Network fees paid to process payment settlements",
     },
     {
