@@ -32,14 +32,11 @@ const CopyableText = ({
       : value;
 
   return (
-    <div className={cn("group flex items-center gap-1", monospace && "font-mono text-sm", className)}>
+    <div className={cn("group flex items-center gap-1 font-medium", monospace && "font-mono text-sm", className)}>
       {to ? (
         <Link
           href={to}
-          className={cn(
-            "text-link hover:text-link-hover hover:underline flex items-center gap-1 transition-colors font-medium",
-            linkClassName,
-          )}
+          className={cn("text-link inline-block text-pretty whitespace-nowrap", linkClassName)}
           title={value}
           target={external ? "_blank" : "_self"}
         >
@@ -47,7 +44,9 @@ const CopyableText = ({
           {external && <ExternalLink className='ml-1 h-4 w-4' />}
         </Link>
       ) : (
-        <span title={value}>{displayValue}</span>
+        <span className='whitespace-nowrap' title={value}>
+          {displayValue}
+        </span>
       )}
       <CopyButton
         value={value}
