@@ -4,6 +4,7 @@ import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
 import Footer from "./Footer";
 import Header from "./Header";
+import InfiniteScrollLoader from "./InfiniteScrollLoader";
 import MetricItem from "./MetricItem";
 import Navigation from "./Navigation/Navigation";
 import NetworkIndicator from "./NetworkIndicator";
@@ -19,6 +20,7 @@ export {
   CustomConnectButton,
   CopyButton,
   CopyableText,
+  InfiniteScrollLoader,
   Navigation,
   NetworkIndicator,
   Providers,
