@@ -1,6 +1,6 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText } from "@/components/shared";
 import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";

@@ -1,4 +1,5 @@
 "use client";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
@@ -10,7 +11,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
-import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { AlertCircle } from "lucide-react";
 import usePayMetrics from "@/hooks/usePayMetrics";
 import { formatCompactNumber, formatFIL } from "@/utils/formatter";
@@ -25,36 +25,21 @@ const StatsLayout = ({ children }: { children: React.ReactNode }) => (
   </PageSection>
 );
 
-const NetworkStatsSkeleton: React.FC = () => (
-  <StatsLayout>
-    <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-      {[...Array(10)].map((_, i) => (
-        <div key={i} className='p-4 border rounded-lg bg-card text-card-foreground shadow-sm'>
-          <Skeleton className='h-4 w-3/4 mb-2' />
-          <Skeleton className='h-8 w-1/2' />
-        </div>
-      ))}
-    </div>
-  </StatsLayout>
-);
-
 const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, error }) => (
-  <StatsLayout>
-    <Card>
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant='icon'>
-            <AlertCircle />
-          </EmptyMedia>
-          <EmptyTitle>Something went wrong</EmptyTitle>
-          <EmptyDescription>{error ? error.message : "Failed to fetch data"}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button onClick={refetch}>Retry</Button>
-        </EmptyContent>
-      </Empty>
-    </Card>
-  </StatsLayout>
+  <Card>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant='icon' className='text-brand-error'>
+          <AlertCircle />
+        </EmptyMedia>
+        <EmptyTitle className='text-brand-error'>Something went wrong</EmptyTitle>
+        <EmptyDescription>{error ? error.message : "Failed to fetch data"}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button onClick={refetch}>Retry</Button>
+      </EmptyContent>
+    </Empty>
+  </Card>
 );
 
 const Stats = () => {
@@ -109,27 +94,25 @@ const Stats = () => {
     },
   ];
 
-  if (isLoading) {
-    return <NetworkStatsSkeleton />;
-  }
-
-  if (isError) {
-    return <ErrorState refetch={refetch} error={error} />;
-  }
-
   return (
     <StatsLayout>
-      <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-        {cards.map((card) => (
-          <MetricItem
-            key={card.title}
-            title={card.title}
-            value={card.value?.toString() || "0"}
-            icon={card.icon}
-            tooltip={card.tooltip}
-          />
-        ))}
-      </div>
+      {isLoading && <LoadingStateCard message='Loading Stats...' />}
+
+      {isError && <ErrorState refetch={refetch} error={error} />}
+
+      {!isLoading && !isError && (
+        <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+          {cards.map((card) => (
+            <MetricItem
+              key={card.title}
+              title={card.title}
+              value={card.value?.toString() || "0"}
+              icon={card.icon}
+              tooltip={card.tooltip}
+            />
+          ))}
+        </div>
+      )}
     </StatsLayout>
   );
 };
