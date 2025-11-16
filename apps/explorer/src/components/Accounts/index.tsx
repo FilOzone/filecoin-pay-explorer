@@ -1,4 +1,5 @@
 "use client";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,7 +10,6 @@ import {
   AccountsEmptyInitial,
   AccountsEmptyNoResults,
   AccountsErrorState,
-  AccountsLoadingState,
   AccountsSearchBar,
   AccountsTable,
 } from "./components";
@@ -18,7 +18,7 @@ const Accounts = () => {
   const [searchInput, setSearchInput] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<AccountsFilter>({});
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, refetch } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
     useInfiniteAccounts(appliedFilters);
 
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -75,14 +75,6 @@ const Accounts = () => {
 
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
-  if (isLoading) {
-    return <AccountsLoadingState />;
-  }
-
-  if (isError) {
-    return <AccountsErrorState error={error} onRetry={refetch} />;
-  }
-
   return (
     <PageSection backgroundVariant='light' paddingVariant='medium'>
       <SectionContent title='Filecoin Pay Accounts' description='Browse all accounts on the network'>
@@ -90,17 +82,25 @@ const Accounts = () => {
           <AccountsSearchBar
             searchInput={searchInput}
             hasActiveFilters={hasActiveFilters}
+            isRefetching={isRefetching}
             onSearchInputChange={setSearchInput}
             onSearch={handleSearch}
             onClear={handleClearFilters}
             onRefresh={refetch}
             onKeyDown={handleKeyDown}
           />
-          {allAccounts.length === 0 && !hasActiveFilters ? (
-            <AccountsEmptyInitial />
-          ) : allAccounts.length === 0 && hasActiveFilters ? (
+
+          {isLoading && <LoadingStateCard message='Loading Accounts...' />}
+
+          {isError && <AccountsErrorState error={error} onRetry={refetch} />}
+
+          {!isError && !isLoading && allAccounts.length === 0 && !hasActiveFilters && <AccountsEmptyInitial />}
+
+          {!isError && !isLoading && allAccounts.length === 0 && hasActiveFilters && (
             <AccountsEmptyNoResults onClear={handleClearFilters} />
-          ) : (
+          )}
+
+          {!isError && !isLoading && allAccounts.length > 0 && (
             <AccountsTable
               data={allAccounts}
               observerTarget={observerTarget}

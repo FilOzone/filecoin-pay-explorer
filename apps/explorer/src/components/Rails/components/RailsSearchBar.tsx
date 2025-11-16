@@ -18,6 +18,7 @@ export type RailsSearchBarProps = {
   searchInput: string;
   selectedState: RailState | "";
   hasActiveFilters: boolean;
+  isRefetching: boolean;
   onSearchByChange: (value: SearchByOption) => void;
   onSearchInputChange: (value: string) => void;
   onSelectedStateChange: (value: RailState) => void;
@@ -32,6 +33,7 @@ function RailsSearchBar({
   searchInput,
   selectedState,
   hasActiveFilters,
+  isRefetching,
   onSearchByChange,
   onSearchInputChange,
   onSelectedStateChange,
@@ -134,7 +136,7 @@ function RailsSearchBar({
         </Popover>
 
         {/* Refresh Button */}
-        <RefreshButton baseDomain={BASE_DOMAIN} onClick={onRefresh} />
+        <RefreshButton baseDomain={BASE_DOMAIN} onClick={onRefresh} disabled={isRefetching} />
       </div>
     </div>
   );

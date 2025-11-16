@@ -7,6 +7,7 @@ import { BASE_DOMAIN } from "@/constants/site-metadata";
 export type OperatorsSearchBarProps = {
   searchInput: string;
   hasActiveFilters: boolean;
+  isRefetching: boolean;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onClear: () => void;
@@ -17,6 +18,7 @@ export type OperatorsSearchBarProps = {
 function OperatorsSearchBar({
   searchInput,
   hasActiveFilters,
+  isRefetching,
   onSearchInputChange,
   onClear,
   onRefresh,
@@ -46,7 +48,7 @@ function OperatorsSearchBar({
         )}
 
         {/* Refresh Button */}
-        <RefreshButton baseDomain={BASE_DOMAIN} onClick={onRefresh} />
+        <RefreshButton baseDomain={BASE_DOMAIN} disabled={isRefetching} onClick={onRefresh} />
       </div>
     </div>
   );

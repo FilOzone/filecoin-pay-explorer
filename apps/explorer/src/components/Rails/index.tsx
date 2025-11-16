@@ -1,4 +1,5 @@
 "use client";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import type { RailState } from "@filecoin-pay/types";
@@ -6,14 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { RailsFilter } from "@/hooks/useInfiniteRails";
 import useInfiniteRails from "@/hooks/useInfiniteRails";
 import { formatHexForSearch } from "@/utils/hexUtils";
-import {
-  RailsEmptyInitial,
-  RailsEmptyNoResults,
-  RailsErrorState,
-  RailsLoadingState,
-  RailsSearchBar,
-  RailsTable,
-} from "./components";
+import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
 const Rails = () => {
@@ -22,7 +16,7 @@ const Rails = () => {
   const [selectedState, setSelectedState] = useState<RailState | "">("");
   const [appliedFilters, setAppliedFilters] = useState<RailsFilter>({});
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, refetch } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
     useInfiniteRails(appliedFilters);
 
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -128,14 +122,6 @@ const Rails = () => {
 
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
-  if (isLoading) {
-    return <RailsLoadingState />;
-  }
-
-  if (isError) {
-    return <RailsErrorState error={error} onRetry={refetch} />;
-  }
-
   return (
     <PageSection backgroundVariant='light' paddingVariant='medium'>
       <SectionContent title='Filecoin Pay Rails' description='Browse all payment rails on the network'>
@@ -145,6 +131,7 @@ const Rails = () => {
             searchInput={searchInput}
             selectedState={selectedState}
             hasActiveFilters={hasActiveFilters}
+            isRefetching={isRefetching}
             onSearchByChange={handleSearchByValueChange}
             onSearchInputChange={setSearchInput}
             onSelectedStateChange={(value) => setSelectedState(value as RailState)}
@@ -153,11 +140,18 @@ const Rails = () => {
             onRefresh={refetch}
             onKeyDown={handleKeyDown}
           />
-          {allRails.length === 0 && !hasActiveFilters ? (
-            <RailsEmptyInitial />
-          ) : allRails.length === 0 && hasActiveFilters ? (
+
+          {isLoading && <LoadingStateCard message='Loading Rails...' />}
+
+          {isError && <RailsErrorState error={error} onRetry={refetch} />}
+
+          {!isError && !isLoading && allRails.length === 0 && !hasActiveFilters && <RailsEmptyInitial />}
+
+          {!isError && !isLoading && allRails.length === 0 && hasActiveFilters && (
             <RailsEmptyNoResults onClear={handleClearFilters} />
-          ) : (
+          )}
+
+          {!isError && !isLoading && allRails.length > 0 && (
             <RailsTable
               data={allRails}
               observerTarget={observerTarget}

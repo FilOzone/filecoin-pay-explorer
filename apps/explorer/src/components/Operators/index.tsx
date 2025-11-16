@@ -1,4 +1,5 @@
 "use client";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,7 +10,6 @@ import {
   OperatorsEmptyInitial,
   OperatorsEmptyNoResults,
   OperatorsErrorState,
-  OperatorsLoadingState,
   OperatorsSearchBar,
   OperatorsTable,
 } from "./components";
@@ -18,7 +18,7 @@ const Operators = () => {
   const [searchInput, setSearchInput] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<OperatorsFilter>({});
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, refetch } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
     useInfiniteOperators(appliedFilters);
 
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -75,14 +75,6 @@ const Operators = () => {
 
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
-  if (isLoading) {
-    return <OperatorsLoadingState />;
-  }
-
-  if (isError) {
-    return <OperatorsErrorState error={error} onRetry={refetch} />;
-  }
-
   return (
     <PageSection backgroundVariant='light' paddingVariant='medium'>
       <SectionContent title='Filecoin Pay Operators' description='Browse all operators on the network'>
@@ -90,17 +82,25 @@ const Operators = () => {
           <OperatorsSearchBar
             searchInput={searchInput}
             hasActiveFilters={hasActiveFilters}
+            isRefetching={isRefetching}
             onSearchInputChange={setSearchInput}
             onSearch={handleSearch}
             onClear={handleClearFilters}
             onRefresh={refetch}
             onKeyDown={handleKeyDown}
           />
-          {allOperators.length === 0 && !hasActiveFilters ? (
-            <OperatorsEmptyInitial />
-          ) : allOperators.length === 0 && hasActiveFilters ? (
+
+          {isLoading && <LoadingStateCard message='Loading Operators...' />}
+
+          {isError && <OperatorsErrorState error={error} onRetry={refetch} />}
+
+          {!isError && !isLoading && allOperators.length === 0 && !hasActiveFilters && <OperatorsEmptyInitial />}
+
+          {!isError && !isLoading && allOperators.length === 0 && hasActiveFilters && (
             <OperatorsEmptyNoResults onClear={handleClearFilters} />
-          ) : (
+          )}
+
+          {!isError && !isLoading && allOperators.length > 0 && (
             <OperatorsTable
               data={allOperators}
               observerTarget={observerTarget}
