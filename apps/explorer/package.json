@@ -1,5 +1,5 @@
 {
-  "name": "@filecoin-pay/explorer-next",
+  "name": "@filecoin-pay/explorer",
   "version": "0.1.0",
   "private": true,
   "scripts": {
