@@ -1,8 +1,9 @@
 import { createPathConfig } from "@/utils/createPathConfig";
 
-export type StaticPath = "/" | "/rails" | "/operators" | "/accounts" | "/privacy-policy" | "/terms-of-use";
+export type StaticPath = "/" | "/console" | "/rails" | "/operators" | "/accounts" | "/privacy-policy" | "/terms-of-use";
 
 export const PATHS = {
+  CONSOLE: createPathConfig("/console", "Console"),
   RAILS: createPathConfig("/rails", "Rails"),
   OPERATORS: createPathConfig("/operators", "Operators"),
   ACCOUNTS: createPathConfig("/accounts", "Accounts"),

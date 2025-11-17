@@ -241,10 +241,10 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
             className='py-2'
           >
             {isSubmitting || isExecuting ? (
-              <>
+              <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...
-              </>
+              </span>
             ) : (
               "Increase"
             )}

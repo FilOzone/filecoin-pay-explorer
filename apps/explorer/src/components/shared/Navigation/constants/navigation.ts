@@ -22,6 +22,10 @@ type HeaderNavItem = NavItem | NavigationMenuItem;
 
 export const headerNavigationItems: Array<HeaderNavItem> = [
   {
+    label: PATHS.CONSOLE.label,
+    href: PATHS.CONSOLE.path,
+  },
+  {
     label: PATHS.RAILS.label,
     href: PATHS.RAILS.path,
   },
