@@ -22,16 +22,16 @@ type HeaderNavItem = NavItem | NavigationMenuItem;
 
 export const headerNavigationItems: Array<HeaderNavItem> = [
   {
-    label: "Warm Storage Service",
-    href: `${FOC_URLS.filecoinCloud}${PATHS.WARM_STORAGE_SERVICE.path}`,
+    label: PATHS.RAILS.label,
+    href: PATHS.RAILS.path,
   },
   {
-    label: "Service Providers",
-    href: `${FOC_URLS.filecoinCloud}${PATHS.SERVICE_PROVIDERS.path}`,
+    label: PATHS.OPERATORS.label,
+    href: PATHS.OPERATORS.path,
   },
   {
-    label: "Filecoin Pay",
-    href: "/",
+    label: PATHS.ACCOUNTS.label,
+    href: PATHS.ACCOUNTS.path,
   },
   {
     label: "Documentation",

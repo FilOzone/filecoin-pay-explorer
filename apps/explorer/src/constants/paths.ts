@@ -1,10 +1,11 @@
 import { createPathConfig } from "@/utils/createPathConfig";
 
-export type StaticPath = "/" | "/privacy-policy" | "/service-providers" | "/terms-of-use" | "/warm-storage-service";
+export type StaticPath = "/" | "/rails" | "/operators" | "/accounts" | "/privacy-policy" | "/terms-of-use";
 
 export const PATHS = {
+  RAILS: createPathConfig("/rails", "Rails"),
+  OPERATORS: createPathConfig("/operators", "Operators"),
+  ACCOUNTS: createPathConfig("/accounts", "Accounts"),
   PRIVACY_POLICY: createPathConfig("/privacy-policy", "Privacy Policy"),
-  SERVICE_PROVIDERS: createPathConfig("/service-providers", "Service Providers"),
   TERMS_OF_USE: createPathConfig("/terms-of-use", "Terms of Use"),
-  WARM_STORAGE_SERVICE: createPathConfig("/warm-storage-service", "Warm Storage Service"),
 };

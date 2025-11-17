@@ -17,7 +17,7 @@ const UserConsoleContent = () => {
       <div className='flex flex-col gap-20 -mt-20'>
         <div className='flex justify-between items-center'>
           <h2 className='text-4xl font-medium'>Filecoin Pay Console</h2>
-          <CustomConnectButton />
+          {isConnected && <CustomConnectButton />}
         </div>
 
         {/* Beta Warning */}
