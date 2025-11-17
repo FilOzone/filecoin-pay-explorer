@@ -36,18 +36,8 @@ export const columns = [
 
       return (
         <div className='flex flex-col gap-1 items-start'>
-          <FilecoinBadge variant={isPayer ? "tertiary" : "primary"}>
-            {isPayer ? (
-              <>
-                <ArrowUpRight className='h-3 w-3 text-red-500' />
-                Payer
-              </>
-            ) : (
-              <>
-                <ArrowDownLeft className='h-3 w-3 text-brand-500' />
-                Payee
-              </>
-            )}
+          <FilecoinBadge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
+            {isPayer ? "Payer" : "Payee"}
           </FilecoinBadge>
         </div>
       );
