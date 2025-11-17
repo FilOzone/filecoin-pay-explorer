@@ -1,6 +1,6 @@
+import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { maxUint256, parseUnits } from "viem";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
@@ -223,10 +224,22 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='ghost'
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting || isExecuting}
+            className='py-2'
+          >
             Cancel
-          </Button>
-          <Button onClick={handleIncrease} disabled={!canSubmit}>
+          </FilecoinButton>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            onClick={handleIncrease}
+            disabled={!canSubmit}
+            className='py-2'
+          >
             {isSubmitting || isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -235,7 +248,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
             ) : (
               "Increase"
             )}
-          </Button>
+          </FilecoinButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

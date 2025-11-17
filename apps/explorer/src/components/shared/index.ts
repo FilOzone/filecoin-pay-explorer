@@ -27,3 +27,5 @@ export {
   SiteLayout,
   StyledLink,
 };
+
+export { RailStateBadge } from "./RailStateBadge";

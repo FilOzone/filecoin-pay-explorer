@@ -1,6 +1,6 @@
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Rail } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,12 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { useState } from "react";
 import { useBlockNumber } from "wagmi";
-import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { SETTLEMENT_FEE } from "@/utils/constants";
 import { formatAddress, formatToken } from "@/utils/formatter";
+import { RailStateBadge } from "../shared";
 
 interface SettleRailDialogProps {
   rail: Rail;
@@ -90,7 +91,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
             <div>
               <span className='text-xs text-muted-foreground'>State</span>
               <div>
-                <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
+                <RailStateBadge state={rail.state} />
               </div>
             </div>
           </div>
@@ -156,10 +157,22 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
+          <Button
+            baseDomain={BASE_DOMAIN}
+            variant='ghost'
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting || isExecuting}
+            className='py-2'
+          >
             Cancel
           </Button>
-          <Button onClick={handleSettle} disabled={!canSettle}>
+          <Button
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            onClick={handleSettle}
+            disabled={!canSettle}
+            className='py-2'
+          >
             {isSubmitting || isExecuting ? "Settling..." : "Settle Rail"}
           </Button>
         </DialogFooter>

@@ -28,7 +28,7 @@ function Header() {
   const pathname = usePathname();
 
   const isActiveLink = (href: string) => {
-    return pathname === href || pathname.startsWith(`${href}/`);
+    return pathname === href || pathname?.startsWith(`${href}/`);
   };
 
   return (

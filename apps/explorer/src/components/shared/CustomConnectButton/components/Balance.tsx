@@ -8,7 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
-import { Check, Copy, ExternalLink, Wallet } from "lucide-react";
+import { ArrowUpRightIcon, CopyIcon, SignOutIcon, WalletIcon } from "@phosphor-icons/react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 import { type Address, erc20Abi, formatEther } from "viem";
 import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
@@ -72,6 +73,7 @@ const Balance = () => {
       <DropdownMenuTrigger asChild>
         <Button variant='outline'>
           <div className='flex items-center gap-2'>
+            <WalletIcon color='var(--color-zinc-400)' size={20} className='w-5 h-5' />
             {isLoading ? (
               "Loading..."
             ) : (
@@ -80,55 +82,50 @@ const Balance = () => {
                 <USDFCLogo className='w-4 h-4' />
               </>
             )}{" "}
-            <Wallet className='w-4 h-4' />
           </div>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className='w-56' align='start'>
-        <DropdownMenuLabel>Wallet</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={copyToClipboard} className='cursor-pointer'>
-          <div className='flex items-center justify-between w-full'>
-            <span className='text-sm'>{address && formatAddress(address)}</span>
-            {copied ? <Check className='w-4 h-4 text-green-500' /> : <Copy className='w-4 h-4' />}
+      <DropdownMenuContent className='w-64' align='start'>
+        <DropdownMenuLabel className='text-zinc-600 text-sm py-2'>Wallet</DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          onClick={copyToClipboard}
+          className='cursor-pointer py-2'
+        >
+          <div className='flex items-center w-full gap-2'>
+            <div className='flex items-center gap-2'>
+              <WalletIcon color='var(--color-zinc-400)' size={20} />
+              <span className='text-base text-zinc-950'>{address && formatAddress(address)}</span>
+            </div>
+            {copied ? (
+              <Check className='w-4 h-4 text-green-500' />
+            ) : (
+              <CopyIcon color='var(--color-zinc-400)' size={16} />
+            )}
           </div>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <div className='flex items-center justify-between w-full'>
-            <span className='text-sm'>{tFilBalanceFormatted} FIL</span>
-            <FilecoinLogo className='w-4 h-4' />
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <div className='flex items-center justify-between w-full'>
-            <span className='text-sm'>{usdfcBalanceFormatted} USDFC</span>
-            <USDFCLogo className='w-4 h-4' />
-          </div>
+        <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer py-2'>
+          <SignOutIcon className='w-5 h-5' />
+          <span className='text-base text-zinc-950'>Disconnect</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Tools</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuLabel className='text-zinc-600 text-sm py-2'>Tools</DropdownMenuLabel>
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
-          <span className='text-sm'>Add USDFC Token</span>
+          <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
         {constants.faucets?.map((faucet) => (
-          <DropdownMenuItem asChild key={faucet.name}>
+          <DropdownMenuItem asChild key={faucet.name} className='py-2'>
             <a
               href={faucet.url}
               target='_blank'
               rel='noopener noreferrer'
-              className='flex items-center justify-between w-full cursor-pointer'
+              className='flex items-center w-full gap-2 cursor-pointer'
             >
-              <span className='text-sm'>{faucet.name}</span>
-              <ExternalLink className='w-4 h-4' />
+              <span className='text-base text-zinc-950'>{faucet.name}</span>
+              <ArrowUpRightIcon color='var(--color-zinc-400)' size={16} />
             </a>
           </DropdownMenuItem>
         ))}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer'>
-          <span className='text-sm'>Disconnect</span>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,3 +1,4 @@
+import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
 import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, maxUint256, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -438,10 +440,22 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='ghost'
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting || isExecuting}
+            className='py-2'
+          >
             Cancel
-          </Button>
-          <Button onClick={handleDepositAndApprove} disabled={!canSubmit}>
+          </FilecoinButton>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            onClick={handleDepositAndApprove}
+            disabled={!canSubmit}
+            className='py-2'
+          >
             {isSubmitting || isExecuting ? (
               <>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -450,7 +464,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
             ) : (
               "Deposit & Approve Operator"
             )}
-          </Button>
+          </FilecoinButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

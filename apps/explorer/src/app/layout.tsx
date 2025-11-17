@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
+import "@rainbow-me/rainbowkit/styles.css";
 
 import type { ReactNode } from "react";
 
