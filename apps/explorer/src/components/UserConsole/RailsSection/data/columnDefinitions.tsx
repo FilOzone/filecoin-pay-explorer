@@ -3,7 +3,6 @@ import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import Link from "next/link";
 import { CopyableText, RailStateBadge } from "@/components/shared";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
 
@@ -17,13 +16,8 @@ export const columns = [
     cell: (info) => {
       const railId = info.getValue();
       return (
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-2'>
-            <Link href={`/rail/${railId}`}>
-              <ID number={Number(railId)} />
-            </Link>
-          </div>
-        </div>
+        // TODO: add styled link when per rail page is ready
+        <ID number={Number(railId)} />
       );
     },
   }),

@@ -1,7 +1,7 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, RailStateBadge, StyledLink } from "@/components/shared";
+import { CopyableText, RailStateBadge } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Rail>();
@@ -10,9 +10,10 @@ export const columns = [
   columnHelper.accessor("railId", {
     header: "Rail ID",
     cell: (info) => (
-      <StyledLink to={`/rail/${info.getValue()}`}>
-        <ID number={Number(info.getValue())} />
-      </StyledLink>
+      // TODO: enable link when per rail page is ready
+      // <StyledLink to={`/rail/${info.getValue()}`}>
+      <ID number={Number(info.getValue())} />
+      // </StyledLink>
     ),
   }),
   columnHelper.accessor("payer", {
