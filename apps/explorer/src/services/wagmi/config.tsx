@@ -1,12 +1,12 @@
 import { http } from "viem";
-import { filecoinCalibration } from "viem/chains";
 import { createConfig } from "wagmi";
+import { calibration } from "@/constants/chains";
 
-export const supportedChains = [filecoinCalibration] as const;
+export const supportedChains = [calibration] as const;
 
 export const config = createConfig({
   chains: supportedChains,
   transports: {
-    [filecoinCalibration.id]: http(),
+    [calibration.id]: http(),
   },
 });
