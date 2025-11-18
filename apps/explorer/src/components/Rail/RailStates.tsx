@@ -10,7 +10,7 @@ import {
 } from "@filecoin-pay/ui/components/empty";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { AlertCircle, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 
 export const RailLoadingState = () => (
   <main className='flex-1 px-3 sm:px-6 py-6'>
@@ -45,7 +45,7 @@ interface ErrorStateProps {
 export const RailErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
   <main className='flex-1 px-3 sm:px-6 py-6'>
     <div className='flex flex-col gap-6'>
-      <Link to='/rails' className='flex items-center gap-2 text-muted-foreground hover:text-foreground w-fit'>
+      <Link href='/rails' className='flex items-center gap-2 text-muted-foreground hover:text-foreground w-fit'>
         <ArrowLeft className='h-4 w-4' />
         <span className='text-sm'>Back to Rails</span>
       </Link>
@@ -76,7 +76,7 @@ interface NotFoundStateProps {
 export const RailNotFoundState: React.FC<NotFoundStateProps> = ({ railId }) => (
   <main className='flex-1 px-3 sm:px-6 py-6'>
     <div className='flex flex-col gap-6'>
-      <Link to='/rails' className='flex items-center gap-2 text-muted-foreground hover:text-foreground w-fit'>
+      <Link href='/rails' className='flex items-center gap-2 text-muted-foreground hover:text-foreground w-fit'>
         <ArrowLeft className='h-4 w-4' />
         <span className='text-sm'>Back to Rails</span>
       </Link>
@@ -88,7 +88,7 @@ export const RailNotFoundState: React.FC<NotFoundStateProps> = ({ railId }) => (
               <EmptyDescription>Rail with ID "{railId}" does not exist or has not been indexed yet.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Link to='/rails'>
+              <Link href='/rails'>
                 <Button variant='outline'>Browse All Rails</Button>
               </Link>
             </EmptyContent>

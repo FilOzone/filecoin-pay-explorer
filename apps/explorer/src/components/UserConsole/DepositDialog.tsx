@@ -1,3 +1,4 @@
+import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
 import type { UserToken } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Button } from "@filecoin-pay/ui/components/button";
@@ -15,6 +16,7 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -346,11 +348,11 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                     <Wallet className='h-3 w-3' />
                     <span>
                       Balance:{" "}
-                      {isLoadingBalance && balance === undefined ? (
+                      {isLoadingBalance || balance === undefined ? (
                         <Loader2 className='h-3 w-3 animate-spin inline' />
                       ) : (
                         <span className='font-medium text-foreground'>
-                          {Number(formatUnits(balance!, currentToken.decimals)).toLocaleString(undefined, {
+                          {Number(formatUnits(balance, currentToken.decimals)).toLocaleString(undefined, {
                             maximumFractionDigits: 6,
                           })}{" "}
                           {currentToken.symbol}
@@ -400,19 +402,31 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={handleClose} disabled={isExecuting}>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='ghost'
+            onClick={handleClose}
+            disabled={isExecuting}
+            className='py-2'
+          >
             Cancel
-          </Button>
-          <Button onClick={handleDeposit} disabled={!canDeposit}>
+          </FilecoinButton>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            onClick={handleDeposit}
+            disabled={!canDeposit}
+            className='py-2'
+          >
             {isExecuting ? (
-              <>
+              <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...
-              </>
+              </span>
             ) : (
               "Deposit"
             )}
-          </Button>
+          </FilecoinButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

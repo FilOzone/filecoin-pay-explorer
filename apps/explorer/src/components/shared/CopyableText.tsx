@@ -1,6 +1,6 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+// import { ExternalLink } from "lucide-react";
+// import Link from "next/link";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
@@ -20,10 +20,10 @@ const CopyableText = ({
   to,
   label = "Text",
   truncate = false,
-  external = false,
+  // external = false,
   truncateLength = 8,
   className,
-  linkClassName,
+  // linkClassName,
   monospace = true,
 }: CopyableTextProps) => {
   const displayValue =
@@ -32,22 +32,25 @@ const CopyableText = ({
       : value;
 
   return (
-    <div className={cn("group flex items-center gap-1", monospace && "font-mono text-sm", className)}>
+    <div
+      className={cn("group flex items-center gap-1 font-medium text-base", monospace && "font-mono text-sm", className)}
+    >
       {to ? (
-        <Link
-          to={to}
-          className={cn(
-            "text-link hover:text-link-hover hover:underline flex items-center gap-1 transition-colors font-medium",
-            linkClassName,
-          )}
-          title={value}
-          target={external ? "_blank" : "_self"}
-        >
-          {displayValue}
-          {external && <ExternalLink className='ml-1 h-4 w-4' />}
-        </Link>
+        // TODO: enable link when per rail, operator and account page are ready
+        // <Link
+        //   href={to}
+        //   className={cn("text-link inline-block text-pretty whitespace-nowrap", linkClassName)}
+        //   title={value}
+        //   target={external ? "_blank" : "_self"}
+        // >
+        //   {displayValue}
+        //   {external && <ExternalLink className='ml-1 h-4 w-4' />}
+        // </Link>
+        <span>{displayValue}</span>
       ) : (
-        <span title={value}>{displayValue}</span>
+        <span className='whitespace-nowrap' title={value}>
+          {displayValue}
+        </span>
       )}
       <CopyButton
         value={value}

@@ -1,1 +1,5 @@
-export { default } from "@filecoin-pay/ui/postcss.config";
+const config = {
+  plugins: ["@tailwindcss/postcss"],
+};
+
+export default config;

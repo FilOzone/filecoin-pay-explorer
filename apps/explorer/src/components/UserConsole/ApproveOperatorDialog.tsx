@@ -1,3 +1,4 @@
+import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Operator, Token } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Button } from "@filecoin-pay/ui/components/button";
@@ -15,6 +16,7 @@ import { AlertCircle, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, isAddress, maxUint256, parseUnits } from "viem";
 import { useReadContracts } from "wagmi";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -478,19 +480,31 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={isSubmitting || isExecuting}>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='ghost'
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting || isExecuting}
+            className='py-2'
+          >
             Cancel
-          </Button>
-          <Button onClick={handleApprove} disabled={!canSubmit}>
+          </FilecoinButton>
+          <FilecoinButton
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            onClick={handleApprove}
+            disabled={!canSubmit}
+            className='py-2'
+          >
             {isSubmitting || isExecuting ? (
-              <>
+              <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...
-              </>
+              </span>
             ) : (
               "Approve Operator"
             )}
-          </Button>
+          </FilecoinButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,39 +1,43 @@
 {
   "name": "@filecoin-pay/explorer",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start",
     "lint": "biome check --write",
-    "preview": "vite preview",
-    "type-check": "tsc --noEmit"
+    "format": "biome format --write"
   },
   "dependencies": {
+    "@filecoin-foundation/ui-filecoin": "^0.1.12",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
     "@filoz/synapse-sdk": "^0.31.1",
+    "@phosphor-icons/react": "^2.1.10",
     "@rainbow-me/rainbowkit": "^2.2.8",
     "@tanstack/react-query": "^5.83.0",
+    "@tanstack/react-table": "^8.21.3",
+    "clsx": "^2.1.1",
     "ethers": "^6.15.0",
     "graphql-request": "^7.2.0",
     "lucide-react": "^0.545.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.4",
+    "next": "^15.5.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "sonner": "^2.0.7",
     "viem": "^2.38.0",
     "wagmi": "^2.18.0"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
-    "@types/node": "^24.6.0",
-    "@types/react": "^19.1.16",
-    "@types/react-dom": "^19.1.9",
-    "@vitejs/plugin-react": "^5.0.4",
-    "babel-plugin-react-compiler": "^19.1.0-rc.3",
-    "typescript": "~5.9.3",
-    "vite": "^7.1.7"
+    "@svgr/webpack": "^8.1.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "frontmatter-markdown-loader": "^3.7.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

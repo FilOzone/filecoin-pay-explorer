@@ -1,4 +1,4 @@
 {
   "root": false,
-  "extends": ["@filecoin-pay/configs/biome/react"]
+  "extends": ["@filecoin-pay/configs/biome/next"]
 }

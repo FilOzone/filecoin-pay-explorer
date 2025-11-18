@@ -1,7 +1,7 @@
 import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
-import { filecoinCalibration } from "viem/chains";
 import { paymentsAbi } from "@/abi/payments";
-import { supportedChains } from "@/services/wagmi/config";
+import { calibration } from "@/constants/chains";
+import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
@@ -20,8 +20,8 @@ export const explorerUrls = {
 };
 
 export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainConstants> = {
-  [filecoinCalibration.id]: {
-    chain: filecoinCalibration,
+  [calibration.id]: {
+    chain: calibration,
     label: "Calibration",
     contracts: {
       usdfc: CONTRACT_ADDRESSES.USDFC.calibration,

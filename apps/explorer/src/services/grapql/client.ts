@@ -1,6 +1,6 @@
 import { GraphQLClient } from "graphql-request";
 
-export const graphqlClient = new GraphQLClient(import.meta.env.VITE_GRAPHQL_ENDPOINT);
+export const graphqlClient = new GraphQLClient(process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT as string);
 
 export const executeQuery = async <T>(
   query: string,

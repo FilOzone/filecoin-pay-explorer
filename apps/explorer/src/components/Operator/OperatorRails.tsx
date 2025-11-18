@@ -1,5 +1,4 @@
 import type { Operator } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
@@ -14,10 +13,9 @@ import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useOperatorRails } from "@/hooks/useOperatorDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText, StyledLink } from "../shared";
+import { CopyableText, RailStateBadge, StyledLink } from "../shared";
 
 interface OperatorRailsProps {
   operator: Operator;
@@ -131,7 +129,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                   />
                 </TableCell>
                 <TableCell>
-                  <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
+                  <RailStateBadge state={rail.state} />
                 </TableCell>
                 <TableCell className='text-right'>
                   {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}

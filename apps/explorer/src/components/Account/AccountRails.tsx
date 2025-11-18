@@ -1,5 +1,5 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import type { Account, Rail } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
