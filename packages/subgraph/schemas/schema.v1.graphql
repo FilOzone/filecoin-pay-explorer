@@ -143,6 +143,7 @@ type PaymentsMetric @entity(immutable: false) {
   totalTokens: BigInt!
   totalAccounts: BigInt!
   totalFilBurned: BigInt!
+  totalRailSettlements: BigInt!
   totalZeroRateRails: BigInt!
   totalActiveRails: BigInt!
   totalTerminatedRails: BigInt!
