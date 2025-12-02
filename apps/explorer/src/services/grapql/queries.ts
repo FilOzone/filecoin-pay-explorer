@@ -9,6 +9,7 @@ export const GET_PAYMENTS_METRICS = gql`
       totalTokens
       totalAccounts
       totalFilBurned
+      totalRailSettlements
       totalZeroRateRails
       totalActiveRails
       totalTerminatedRails
