@@ -63,7 +63,7 @@ const Stats = () => {
     },
     {
       title: "Total USDFC",
-      value: formatFIL(usdfcData?.userFunds || 0n),
+      value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : "0 USDFC",
       icon: "/stats/usdfc-supply.svg",
     },
     {
@@ -73,7 +73,7 @@ const Stats = () => {
       tooltip: "Ongoing payment streams between users",
     },
     {
-      title: "Total Services",
+      title: "Services",
       value: formatCompactNumber(data?.totalOperators || 0),
       icon: "/stats/total-services.svg",
       tooltip: "Payment managers that help automate transactions between users",
@@ -85,24 +85,29 @@ const Stats = () => {
       tooltip: "Network fees paid to process payment settlements",
     },
     {
-      title: "Total USDFC Settled",
-      value: usdfcData ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC") : "0 USDFC",
+      title: "USDFC Settled",
+      value: usdfcData ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC", 5) : "0 USDFC",
       icon: "/stats/usdfc-settled.svg",
     },
     {
-      title: "Total Idle Rails",
+      title: "Rail Settlements",
+      value: formatCompactNumber(data?.totalRailSettlements || 0),
+      icon: "/stats/rail-settlements.svg",
+    },
+    {
+      title: "Idle Rails",
       value: formatCompactNumber(data?.totalZeroRateRails || 0),
       icon: "/stats/idle-rails.svg",
       tooltip: "Paused payment streams that are currently inactive",
     },
     {
-      title: "Total Active Rails",
+      title: "Active Rails",
       value: formatCompactNumber(data?.totalActiveRails || 0),
       icon: "/stats/active-rails.svg",
       tooltip: "Payment streams that are currently running",
     },
     {
-      title: "Total Terminated Rails",
+      title: "Terminated Rails",
       value: formatCompactNumber(data?.totalTerminatedRails || 0),
       icon: "/stats/terminated-rails.svg",
       tooltip: "Payment streams that have been permanently stopped",

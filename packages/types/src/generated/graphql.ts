@@ -123,6 +123,7 @@ export type PaymentsMetric = {
   totalFilBurned: Scalars["BigInt"]["output"];
   totalFinalizedRails: Scalars["BigInt"]["output"];
   totalOperators: Scalars["BigInt"]["output"];
+  totalRailSettlements: Scalars["BigInt"]["output"];
   totalRails: Scalars["BigInt"]["output"];
   totalTerminatedRails: Scalars["BigInt"]["output"];
   totalTokens: Scalars["BigInt"]["output"];
