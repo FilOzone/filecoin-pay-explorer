@@ -432,3 +432,19 @@ export const GET_ACCOUNT_APPROVALS = gql`
     }
   }
 `;
+
+// Token Details Queries
+
+export const GET_TOKEN_DETAILS = gql`
+  query GetTokenDetails($id: Bytes!) {
+    token(id: $id) {
+      id
+      name
+      symbol
+      decimals
+      totalSettledAmount
+      userFunds
+      totalUsers
+    }
+  }
+`;

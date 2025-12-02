@@ -12,8 +12,10 @@ import {
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
 import { AlertCircle } from "lucide-react";
+import { getChain } from "@/constants/chains";
 import usePayMetrics from "@/hooks/usePayMetrics";
-import { formatCompactNumber, formatFIL } from "@/utils/formatter";
+import { useTokenDetails } from "@/hooks/useTokenDetails";
+import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 const StatsLayout = ({ children }: { children: React.ReactNode }) => (
@@ -44,6 +46,9 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
 
 const Stats = () => {
   const { data, isLoading, isError, error, refetch } = usePayMetrics();
+  // TODO: Make this dynamic based on chain
+  const chain = getChain("calibration");
+  const { data: usdfcData } = useTokenDetails(chain.contracts.usdfc.address);
 
   const cards = [
     {
@@ -55,6 +60,11 @@ const Stats = () => {
       title: "Unique Payees",
       value: formatCompactNumber(data?.uniquePayees || 0),
       icon: "/stats/unique-payees.svg",
+    },
+    {
+      title: "Total USDFC",
+      value: formatFIL(usdfcData?.userFunds || 0n),
+      icon: "/stats/usdfc-supply.svg",
     },
     {
       title: "Total Rails",
@@ -73,6 +83,11 @@ const Stats = () => {
       value: formatFIL(data?.totalFilBurned || "0"),
       icon: "/stats/total-fil-burned.svg",
       tooltip: "Network fees paid to process payment settlements",
+    },
+    {
+      title: "Total USDFC Settled",
+      value: usdfcData ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC") : "0 USDFC",
+      icon: "/stats/usdfc-settled.svg",
     },
     {
       title: "Total Idle Rails",
