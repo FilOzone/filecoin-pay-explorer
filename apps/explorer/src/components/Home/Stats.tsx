@@ -11,6 +11,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
+import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { getChain } from "@/constants/chains";
 import usePayMetrics from "@/hooks/usePayMetrics";
@@ -64,7 +65,7 @@ const Stats = () => {
     {
       title: "Total USDFC",
       value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : "0 USDFC",
-      icon: "/stats/usdfc-supply.svg",
+      icon: CurrencyCircleDollarIcon,
     },
     {
       title: "Total Rails",
@@ -87,12 +88,12 @@ const Stats = () => {
     {
       title: "USDFC Settled",
       value: usdfcData ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC", 5) : "0 USDFC",
-      icon: "/stats/usdfc-settled.svg",
+      icon: CoinsIcon,
     },
     {
       title: "Rail Settlements",
       value: formatCompactNumber(data?.totalRailSettlements || 0),
-      icon: "/stats/rail-settlements.svg",
+      icon: CoinVerticalIcon,
     },
     {
       title: "Idle Rails",
@@ -121,13 +122,13 @@ const Stats = () => {
       {isError && <ErrorState refetch={refetch} error={error} />}
 
       {!isLoading && !isError && (
-        <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
           {cards.map((card) => (
             <MetricItem
               key={card.title}
               title={card.title}
               value={card.value?.toString() || "0"}
-              icon={card.icon}
+              Icon={card.icon}
               tooltip={card.tooltip}
             />
           ))}
