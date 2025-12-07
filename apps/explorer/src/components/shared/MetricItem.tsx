@@ -1,5 +1,7 @@
+"use client";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
-import type { IconProps } from "@phosphor-icons/react";
+import { type IconProps, SpinnerIcon } from "@phosphor-icons/react";
 import { Info } from "lucide-react";
 import Image from "next/image";
 
@@ -8,9 +10,10 @@ interface MetricItemProps {
   value: React.ReactNode;
   Icon?: string | React.ComponentType<IconProps>;
   tooltip?: string;
+  isLoading?: boolean;
 }
 
-const MetricItem: React.FC<MetricItemProps> = ({ title, value, Icon, tooltip }) => (
+const MetricItem: React.FC<MetricItemProps> = ({ title, value, Icon, tooltip, isLoading = false }) => (
   <div className='flex gap-5 rounded-2xl border border-(--color-border-base) p-6'>
     {Icon &&
       (typeof Icon === "string" ? (
@@ -32,7 +35,11 @@ const MetricItem: React.FC<MetricItemProps> = ({ title, value, Icon, tooltip }) 
           </Tooltip>
         )}
       </div>
-      <span className='text-2xl font-bold text-(--color-text-base)'>{value}</span>
+      {isLoading ? (
+        <SpinnerIcon className='animate-spin h-8 w-8 text-(--color-text-base)' />
+      ) : (
+        <span className='text-2xl font-bold text-(--color-text-base)'>{value}</span>
+      )}
     </div>
   </div>
 );
