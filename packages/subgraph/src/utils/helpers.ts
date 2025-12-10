@@ -272,25 +272,6 @@ export const createRateChangeQueue = (
   return new RateChangeQueueWithIsNew(rateChangeQueue, isNew);
 };
 
-// Payments entity functions
-export const createOrLoadPayments = (): PaymentsMetric => {
-  const id = Bytes.fromUTF8("payments_network_stats");
-  let payments = PaymentsMetric.load(id);
-
-  if (payments) {
-    return payments;
-  }
-
-  payments = new PaymentsMetric(id);
-  payments.totalRails = ZERO_BIG_INT;
-  payments.totalOperators = ZERO_BIG_INT;
-  payments.totalAccounts = ZERO_BIG_INT;
-  payments.totalTokens = ZERO_BIG_INT;
-  payments.save();
-
-  return payments;
-};
-
 export function updateOperatorLockup(
   operatorApproval: OperatorApproval | null,
   oldLockup: GraphBN,

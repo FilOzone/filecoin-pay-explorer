@@ -122,6 +122,7 @@ export class MetricsEntityManager {
       metric.totalTokens = ZERO_BIG_INT;
       metric.totalAccounts = ZERO_BIG_INT;
       metric.totalFilBurned = ZERO_BIG_INT;
+      metric.totalRailSettlements = ZERO_BIG_INT;
       metric.totalZeroRateRails = ZERO_BIG_INT;
       metric.totalActiveRails = ZERO_BIG_INT;
       metric.totalTerminatedRails = ZERO_BIG_INT;

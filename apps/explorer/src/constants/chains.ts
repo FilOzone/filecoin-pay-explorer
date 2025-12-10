@@ -1,4 +1,4 @@
-import type { Address, Chain as ViemChain } from "viem";
+import { type Address, erc20Abi, type Chain as ViemChain } from "viem";
 
 import { paymentsAbi } from "../abi/payments";
 
@@ -28,6 +28,10 @@ export interface Chain extends ViemChain {
     payments: {
       address: Address;
       abi: typeof paymentsAbi;
+    };
+    usdfc: {
+      address: Address;
+      abi: typeof erc20Abi;
     };
   };
 }
@@ -70,6 +74,10 @@ const mainnet: Chain = {
       address: "0x0000000000000000000000000000000000000000",
       abi: paymentsAbi,
     },
+    usdfc: {
+      address: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+      abi: erc20Abi,
+    },
   },
 };
 
@@ -110,6 +118,10 @@ export const calibration: Chain = {
     payments: {
       address: "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
       abi: paymentsAbi,
+    },
+    usdfc: {
+      address: "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0",
+      abi: erc20Abi,
     },
   },
 };
