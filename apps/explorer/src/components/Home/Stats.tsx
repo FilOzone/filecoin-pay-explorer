@@ -69,10 +69,11 @@ const Stats = () => {
       tooltip: "Payment managers that help automate transactions between users",
     },
     {
-      title: "Total Fil Burned",
+      title: "Network Revenue",
       value: formatFIL(data?.totalFilBurned || "0"),
       icon: "/stats/total-fil-burned.svg",
-      tooltip: "Network fees paid to process payment settlements",
+      tooltip:
+        "Network fees from all payment settlements (FIL rails burned immediately, USDFC rails via auction system)",
     },
     {
       title: "Total Idle Rails",
