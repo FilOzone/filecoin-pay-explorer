@@ -80,7 +80,7 @@ export const HeroStats: React.FC = () => {
             transition={{ duration: 0.6, delay: 0.8 }}
             className='text-xl text-gray-300 mb-2'
           >
-            Total Value Burned
+            Network Revenue
           </motion.p>
 
           <motion.p
@@ -89,7 +89,7 @@ export const HeroStats: React.FC = () => {
             transition={{ duration: 0.6, delay: 1 }}
             className='text-gray-400'
           >
-            Powering the decentralized economy with secure, efficient payments
+            Network fees from all payment settlements (FIL rails burned immediately, USDFC rails via auction)
           </motion.p>
         </div>
 
