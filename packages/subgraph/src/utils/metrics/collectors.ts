@@ -197,6 +197,7 @@ export class SettlementCollector extends BaseMetricsCollector {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
 
     networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.filBurned);
+    networkMetric.totalRailSettlements = networkMetric.totalRailSettlements.plus(ONE_BIG_INT);
 
     networkMetric.save();
   }

@@ -3,7 +3,6 @@ import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
   OperatorApprovalUpdated as OperatorApprovalUpdatedEvent,
-  Payments as PaymentsContract,
   RailCreated as RailCreatedEvent,
   RailFinalized as RailFinalizedEvent,
   RailLockupModified as RailLockupModifiedEvent,
