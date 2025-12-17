@@ -18,33 +18,113 @@ Monorepo for the Filecoin Pay ecosystem: subgraph, shared types/configs, UI libr
 - Node >= 22
 - pnpm >= 9
 
-## Install
+## Getting Started
+
+Follow these steps to set up and run the applications:
+
+### 1. Install Dependencies
+
+Install all dependencies for the monorepo:
 
 ```sh
 pnpm install
 ```
 
-## Quick start
+### 2. Configure Environment Variables
 
-- Run all apps:
+Set up environment variables for the apps you want to run:
+
+**For Explorer app:**
+
+```sh
+cd apps/explorer
+cp .env.example .env
+```
+
+Edit `apps/explorer/.env` and configure:
+
+```bash
+NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
+```
+
+**For Metrics app:**
+
+```sh
+cd apps/metrics
+cp .env.example .env
+```
+
+Edit `apps/metrics/.env` and configure:
+
+```bash
+VITE_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
+```
+
+### 3. Build Shared Packages
+
+**⚠️ Important:** Both Explorer and Metrics apps depend on `@filecoin-pay/types` and `@filecoin-pay/ui` packages. You must build these packages before running any app:
+
+```sh
+pnpm build --filter @filecoin-pay/types --filter @filecoin-pay/ui
+```
+
+This step is **required for both development and production** environments.
+
+### 4. Run the Applications
+
+#### Development Mode
+
+**Run all apps:**
+
 ```sh
 pnpm dev
 ```
-- Explorer only:
+
+**Run Explorer only:**
+
 ```sh
 pnpm dev --filter @filecoin-pay/explorer
 ```
-- Metrics only:
+
+**Run Metrics only:**
+
 ```sh
 pnpm dev --filter @filecoin-pay/metrics
 ```
 
-## Common scripts
+#### Production Mode
 
-- Build: `pnpm build`
-- Lint: `pnpm lint`
-- Type check: `pnpm type-check`
-- Test: `pnpm test`
+**1. Build the application(s):**
+
+```sh
+# Build everything (recommended)
+pnpm build
+
+# Or build specific apps
+pnpm build --filter @filecoin-pay/explorer
+pnpm build --filter @filecoin-pay/metrics
+```
+
+**2. Start the production server(s):**
+
+```sh
+# Start Explorer (runs on http://localhost:3000)
+pnpm start --filter @filecoin-pay/explorer
+
+# Start Metrics (runs on http://localhost:4173)
+cd apps/metrics
+pnpm preview
+```
+
+## Common Scripts
+
+- **Build all:** `pnpm build`
+- **Build specific app:** `pnpm build --filter @filecoin-pay/explorer` or `pnpm build --filter @filecoin-pay/metrics`
+- **Lint:** `pnpm lint`
+- **Format:** `pnpm format`
+- **Type check:** `pnpm type-check`
+- **Test:** `pnpm test`
+- **Clean:** `pnpm clean` (removes build artifacts and node_modules)
 
 ## Contributing
 
