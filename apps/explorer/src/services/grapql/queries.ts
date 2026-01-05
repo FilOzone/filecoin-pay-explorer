@@ -9,6 +9,7 @@ export const GET_PAYMENTS_METRICS = gql`
       totalTokens
       totalAccounts
       totalFilBurned
+      totalRailSettlements
       totalZeroRateRails
       totalActiveRails
       totalTerminatedRails
@@ -429,6 +430,22 @@ export const GET_ACCOUNT_APPROVALS = gql`
         symbol
         decimals
       }
+    }
+  }
+`;
+
+// Token Details Queries
+
+export const GET_TOKEN_DETAILS = gql`
+  query GetTokenDetails($id: Bytes!) {
+    token(id: $id) {
+      id
+      name
+      symbol
+      decimals
+      totalSettledAmount
+      userFunds
+      totalUsers
     }
   }
 `;

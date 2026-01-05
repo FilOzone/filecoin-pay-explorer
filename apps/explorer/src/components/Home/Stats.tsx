@@ -1,4 +1,5 @@
 "use client";
+
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { Button } from "@filecoin-pay/ui/components/button";
@@ -11,12 +12,21 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
+import type { IconProps } from "@phosphor-icons/react";
+import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { getChain } from "@/constants/chains";
 import usePayMetrics from "@/hooks/usePayMetrics";
-import { formatCompactNumber, formatFIL } from "@/utils/formatter";
+import { useTokenDetails } from "@/hooks/useTokenDetails";
+import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
-const StatsLayout = ({ children }: { children: React.ReactNode }) => (
+interface StatsLayoutProps {
+  children: React.ReactNode;
+}
+
+const StatsLayout: React.FC<StatsLayoutProps> = ({ children }) => (
   <PageSection backgroundVariant='light' paddingVariant='medium'>
     <div className='flex flex-col gap-6 -mt-15'>
       <h3 className='text-2xl font-medium'>Filecoin Pay Stats</h3>
@@ -25,7 +35,12 @@ const StatsLayout = ({ children }: { children: React.ReactNode }) => (
   </PageSection>
 );
 
-const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, error }) => (
+interface ErrorStateProps {
+  refetch: () => void;
+  error: Error | null;
+}
+
+const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
   <Card>
     <Empty>
       <EmptyHeader>
@@ -33,7 +48,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
           <AlertCircle />
         </EmptyMedia>
         <EmptyTitle className='text-brand-error'>Something went wrong</EmptyTitle>
-        <EmptyDescription>{error ? error.message : "Failed to fetch data"}</EmptyDescription>
+        <EmptyDescription>{error?.message || "Failed to fetch data"}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button onClick={refetch}>Retry</Button>
@@ -42,58 +57,104 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
   </Card>
 );
 
-const Stats = () => {
+interface MetricCard {
+  title: string;
+  value: string;
+  icon: string | React.ComponentType<IconProps>;
+  tooltip?: string;
+  isLoading?: boolean;
+}
+
+const DEFAULT_USDFC_VALUE = "0 USDFC";
+
+const Stats: React.FC = () => {
   const { data, isLoading, isError, error, refetch } = usePayMetrics();
 
-  const cards = [
-    {
-      title: "Unique Payers",
-      value: formatCompactNumber(data?.uniquePayers || 0),
-      icon: "/stats/unique-payers.svg",
-    },
-    {
-      title: "Unique Payees",
-      value: formatCompactNumber(data?.uniquePayees || 0),
-      icon: "/stats/unique-payees.svg",
-    },
-    {
-      title: "Total Rails",
-      value: formatCompactNumber(data?.totalRails || 0),
-      icon: "/stats/total-rails.svg",
-      tooltip: "Ongoing payment streams between users",
-    },
-    {
-      title: "Total Services",
-      value: formatCompactNumber(data?.totalOperators || 0),
-      icon: "/stats/total-services.svg",
-      tooltip: "Payment managers that help automate transactions between users",
-    },
-    {
-      title: "Network Revenue",
-      value: formatFIL(data?.totalFilBurned || "0"),
-      icon: "/stats/total-fil-burned.svg",
-      tooltip:
-        "Network fees from all payment settlements (FIL rails burned immediately, USDFC rails via auction system)",
-    },
-    {
-      title: "Total Idle Rails",
-      value: formatCompactNumber(data?.totalZeroRateRails || 0),
-      icon: "/stats/idle-rails.svg",
-      tooltip: "Paused payment streams that are currently inactive",
-    },
-    {
-      title: "Total Active Rails",
-      value: formatCompactNumber(data?.totalActiveRails || 0),
-      icon: "/stats/active-rails.svg",
-      tooltip: "Payment streams that are currently running",
-    },
-    {
-      title: "Total Terminated Rails",
-      value: formatCompactNumber(data?.totalTerminatedRails || 0),
-      icon: "/stats/terminated-rails.svg",
-      tooltip: "Payment streams that have been permanently stopped",
-    },
-  ];
+  // TODO: Make this dynamic based on chain
+  const chain = getChain("calibration");
+  const {
+    data: usdfcData,
+    isLoading: isUsdfcLoading,
+    isError: isUsdfcError,
+    error: usdfcError,
+  } = useTokenDetails(chain.contracts.usdfc.address);
+
+  useEffect(() => {
+    if (isUsdfcError && usdfcError) {
+      console.error("Error fetching USDFC Token Details:", usdfcError);
+    }
+  }, [isUsdfcError, usdfcError]);
+
+  const cards = useMemo<MetricCard[]>(
+    () => [
+      {
+        title: "Unique Payers",
+        value: formatCompactNumber(data?.uniquePayers || 0),
+        icon: "/stats/unique-payers.svg",
+      },
+      {
+        title: "Unique Payees",
+        value: formatCompactNumber(data?.uniquePayees || 0),
+        icon: "/stats/unique-payees.svg",
+      },
+      {
+        title: "Total USDFC",
+        value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
+        icon: CurrencyCircleDollarIcon,
+        isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Total Rails",
+        value: formatCompactNumber(data?.totalRails || 0),
+        icon: "/stats/total-rails.svg",
+        tooltip: "Ongoing payment streams between users",
+      },
+      {
+        title: "Services",
+        value: formatCompactNumber(data?.totalOperators || 0),
+        icon: "/stats/total-services.svg",
+        tooltip: "Payment managers that help automate transactions between users",
+      },
+      {
+        title: "Network Revenue",
+        value: formatFIL(data?.totalFilBurned || "0"),
+        icon: "/stats/total-fil-burned.svg",
+        tooltip: "Network fees paid to process payment settlements",
+      },
+      {
+        title: "USDFC Settled",
+        value: usdfcData
+          ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC", 5)
+          : DEFAULT_USDFC_VALUE,
+        icon: CoinsIcon,
+        isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Rail Settlements",
+        value: formatCompactNumber(data?.totalRailSettlements || 0),
+        icon: CoinVerticalIcon,
+      },
+      {
+        title: "Idle Rails",
+        value: formatCompactNumber(data?.totalZeroRateRails || 0),
+        icon: "/stats/idle-rails.svg",
+        tooltip: "Paused payment streams that are currently inactive",
+      },
+      {
+        title: "Active Rails",
+        value: formatCompactNumber(data?.totalActiveRails || 0),
+        icon: "/stats/active-rails.svg",
+        tooltip: "Payment streams that are currently running",
+      },
+      {
+        title: "Terminated Rails",
+        value: formatCompactNumber(data?.totalTerminatedRails || 0),
+        icon: "/stats/terminated-rails.svg",
+        tooltip: "Payment streams that have been permanently stopped",
+      },
+    ],
+    [data, usdfcData, isUsdfcLoading],
+  );
 
   return (
     <StatsLayout>
@@ -102,14 +163,15 @@ const Stats = () => {
       {isError && <ErrorState refetch={refetch} error={error} />}
 
       {!isLoading && !isError && (
-        <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
           {cards.map((card) => (
             <MetricItem
               key={card.title}
               title={card.title}
-              value={card.value?.toString() || "0"}
-              icon={card.icon}
+              value={card.value}
+              Icon={card.icon}
               tooltip={card.tooltip}
+              isLoading={card.isLoading}
             />
           ))}
         </div>
@@ -117,5 +179,7 @@ const Stats = () => {
     </StatsLayout>
   );
 };
+
+Stats.displayName = "Stats";
 
 export default Stats;
