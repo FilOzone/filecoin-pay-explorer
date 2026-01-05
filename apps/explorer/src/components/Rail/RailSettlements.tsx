@@ -95,7 +95,7 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
               <TableHead>Settled Upto</TableHead>
               <TableHead className='text-right'>Total Settled</TableHead>
               <TableHead className='text-right'>Net Payee Amount</TableHead>
-              <TableHead className='text-right'>Network Fee</TableHead>
+              <TableHead className='text-right'>Network Revenue</TableHead>
               <TableHead className='text-right'>Operator Commission</TableHead>
             </TableRow>
           </TableHeader>
