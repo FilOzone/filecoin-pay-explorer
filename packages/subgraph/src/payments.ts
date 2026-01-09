@@ -420,12 +420,6 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const accountAddress = event.params.from;
   const amount = event.params.amount;
 
-  log.debug("[handleDepositRecorded] Deposit recorded for token: {}, account: {}, amount: {}", [
-    tokenAddress.toHexString(),
-    accountAddress.toHexString(),
-    amount.toString(),
-  ]);
-
   const tokenWithIsNew = getTokenDetails(tokenAddress);
   const token = tokenWithIsNew.token;
   const isNewToken = tokenWithIsNew.isNew;
