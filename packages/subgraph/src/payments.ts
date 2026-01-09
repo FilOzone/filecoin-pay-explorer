@@ -372,6 +372,8 @@ export function handleRailSettled(event: RailSettledEvent): void {
   settlement.operatorCommission = operatorCommission;
   settlement.filBurned = networkFee;
   settlement.settledUpto = event.params.settledUpTo;
+  settlement.blockNumber = blockNumber;
+  settlement.createdAt = timestamp;
 
   operatorToken.settledAmount = operatorToken.settledAmount.plus(totalSettledAmount);
   operatorToken.volume = operatorToken.volume.plus(totalSettledAmount);
