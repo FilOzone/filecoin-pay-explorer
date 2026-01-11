@@ -78,7 +78,7 @@ export const TrendChart: React.FC = () => {
               <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color as string }} />
               <span className='text-white text-sm'>
                 {entry.name}:{" "}
-                {entry.name === "FIL Burned" ? formatFIL(BigInt(entry.value)) : entry.value.toLocaleString()}
+                {entry.name === "Network Revenue" ? formatFIL(BigInt(entry.value)) : entry.value.toLocaleString()}
               </span>
             </div>
           ))}
@@ -135,11 +135,11 @@ export const TrendChart: React.FC = () => {
       </div>
 
       <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-        {/* FIL Burned Trend */}
+        {/* Network Revenue Trend */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
             <Flame className='w-4 h-4 text-orange-400' />
-            FIL Burned
+            Network Revenue
           </h4>
 
           <div className='h-64'>
@@ -161,7 +161,7 @@ export const TrendChart: React.FC = () => {
                   stroke='#F59E0B'
                   strokeWidth={2}
                   fill='url(#filGradient)'
-                  name='FIL Burned'
+                  name='Network Revenue'
                 />
               </AreaChart>
             </ResponsiveContainer>
