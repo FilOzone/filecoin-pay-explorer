@@ -1,5 +1,5 @@
 /* eslint-disable no-underscore-dangle, @typescript-eslint/no-unnecessary-type-assertion */
-import { Address, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { afterEach, assert, beforeAll, clearStore, describe, test } from "matchstick-as";
 
 import { Account, Operator, OperatorApproval, Rail, Token, UserToken } from "../../generated/schema";
