@@ -8,9 +8,7 @@
     "access": "public"
   },
   "scripts": {
-    "check": "biome check --write",
-    "format": "biome format --write",
-    "lint": "biome lint --write",
+    "lint": "biome check --write",
     "precodegen": "rm -rf ./generated && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
     "generate:yaml": "mustache ./config/${NETWORK:-network}.json ./templates/subgraph.template.yaml > subgraph.yaml",
