@@ -7,7 +7,6 @@ import {
   handleAccountLockupSettled,
   handleDepositRecorded,
   handleOperatorApprovalUpdated,
-  handleRailCreated,
   handleRailFinalized,
   handleRailLockupModified,
   handleRailOneTimePaymentProcessed,
@@ -50,14 +49,6 @@ import {
   TEST_ALLOWANCES,
   TEST_AMOUNTS,
 } from "./fixtures";
-
-export {
-  handleDepositRecorded,
-  handleWithdrawRecorded,
-  handleRailCreated,
-  handleOperatorApprovalUpdated,
-  handleAccountLockupSettled,
-};
 
 describe("Payments", () => {
   beforeAll(() => {
