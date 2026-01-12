@@ -41,6 +41,8 @@ import {
   assertOperatorLockupCleared,
   assertRailState,
   assertUserTokenFunds,
+  calculateNetworkFee,
+  calculateOperatorCommission,
   setupCompleteRail,
   setupDeposit,
   setupOperatorApproval,
@@ -338,10 +340,6 @@ describe("Payments", () => {
   });
 
   test("should handle one time payment properly", () => {
-    const NETWORK_FEE_NUMERATOR = GraphBN.fromI64(1);
-    const NETWORK_FEE_DENOMINATOR = GraphBN.fromI64(200);
-    const COMMISSION_MAX_BPS = GraphBN.fromI64(10_000);
-
     const depositAmount = TEST_AMOUNTS.SMALL_DEPOSIT;
     const rateAllowance = GraphBN.fromI64(1_000_000);
     const lockupAllowance = GraphBN.fromI64(1_000_000_000_000_000);
@@ -385,11 +383,8 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
     const totalAmount = GraphBN.fromI64(1_000_000_000_000); // 10^12 = 0.000001 fil
-    const networkFee = totalAmount
-      .times(NETWORK_FEE_NUMERATOR)
-      .plus(NETWORK_FEE_DENOMINATOR.minus(ONE_BIG_INT))
-      .div(NETWORK_FEE_DENOMINATOR);
-    const operatorCommission = totalAmount.times(commissionRateBps).div(COMMISSION_MAX_BPS);
+    const networkFee = calculateNetworkFee(totalAmount);
+    const operatorCommission = calculateOperatorCommission(totalAmount, commissionRateBps);
     const netPayeeAmount = totalAmount.minus(networkFee).minus(operatorCommission);
 
     const railOneTimePaymentProcessedEvent = createRailOneTimePaymentProcessedEvent(
@@ -443,9 +438,9 @@ describe("Payments", () => {
     const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
     handleRailRateModified(railRateModifiedEvent);
 
-    const totalSettledAmount = GraphBN.fromI64(1_000_000_000_000_000); // 0.001 FIL
-    const networkFee = GraphBN.fromI64(5_000_000_000_000); // 0.000005 FIL
-    const operatorCommission = totalSettledAmount.times(commissionRateBps).div(GraphBN.fromI64(10_000));
+    const totalSettledAmount = TEST_AMOUNTS.SMALL_DEPOSIT; // 0.001 FIL
+    const networkFee = calculateNetworkFee(totalSettledAmount);
+    const operatorCommission = calculateOperatorCommission(totalSettledAmount, commissionRateBps);
     const totalNetPayeeAmount = totalSettledAmount.minus(networkFee).minus(operatorCommission);
     const settledUpto = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(10000));
 

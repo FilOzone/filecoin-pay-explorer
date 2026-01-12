@@ -2,6 +2,7 @@ import { Address, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { assert } from "matchstick-as";
 
 import { handleDepositRecorded, handleOperatorApprovalUpdated, handleRailCreated } from "../../src/payments";
+import { ONE_BIG_INT } from "../../src/utils/constants";
 import {
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -10,6 +11,17 @@ import {
 } from "../../src/utils/keys";
 
 import { createDepositRecordedEvent, createOperatorApprovalUpdatedEvent, createRailCreatedEvent } from "./events";
+
+export function calculateNetworkFee(amount: GraphBN): GraphBN {
+  return amount
+    .times(PAYMENT_CONSTANTS.NETWORK_FEE_NUMERATOR)
+    .plus(PAYMENT_CONSTANTS.NETWORK_FEE_DENOMINATOR.minus(ONE_BIG_INT))
+    .div(PAYMENT_CONSTANTS.NETWORK_FEE_DENOMINATOR);
+}
+
+export function calculateOperatorCommission(amount: GraphBN, commissionRateBps: GraphBN): GraphBN {
+  return amount.times(commissionRateBps).div(PAYMENT_CONSTANTS.COMMISSION_MAX_BPS);
+}
 
 // Test Fixtures and Constants
 export class TEST_AMOUNTS {
@@ -37,6 +49,12 @@ export class TEST_ALLOWANCES {
   static RATE: GraphBN = GraphBN.fromI64(1_000_000_000);
   static LOCKUP: GraphBN = GraphBN.fromI64(100_000_000_000_000_000);
   static MAX_LOCKUP_PERIOD: GraphBN = GraphBN.fromI64(86400);
+}
+
+export class PAYMENT_CONSTANTS {
+  static NETWORK_FEE_NUMERATOR: GraphBN = GraphBN.fromI64(1);
+  static NETWORK_FEE_DENOMINATOR: GraphBN = GraphBN.fromI64(200);
+  static COMMISSION_MAX_BPS: GraphBN = GraphBN.fromI64(10_000);
 }
 
 // Setup Helper Functions
