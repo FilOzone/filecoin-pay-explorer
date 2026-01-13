@@ -32,7 +32,7 @@ pnpm install
 
 ### 2. Configure Environment Variables
 
-Set up environment variables for the apps you want to run:
+Set up environment variables for the apps you want to run. You'll need the GraphQL endpoint URL for your **Filecoin Payments Subgraph**.
 
 **For Explorer app:**
 
@@ -47,6 +47,10 @@ Edit `apps/explorer/.env` and configure:
 NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
 ```
 
+Replace the placeholder URL with your actual **Filecoin Payments Subgraph** endpoint.
+
+**⚠️ Note:** `NEXT_PUBLIC_GRAPHQL_ENDPOINT` is required for the Explorer app to function.
+
 **For Metrics app:**
 
 ```sh
@@ -60,12 +64,37 @@ Edit `apps/metrics/.env` and configure:
 VITE_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
 ```
 
+Replace the placeholder URL with your actual **Filecoin Payments Subgraph** endpoint.
+
+**Note:** `VITE_GRAPHQL_ENDPOINT` has a default fallback (`http://localhost:8000/subgraphs/name/filecoin-payments`) but should be configured for production use.
+
+**Return to root directory:**
+
+```sh
+cd ../..
+```
+
 ### 3. Build Shared Packages
 
-**⚠️ Important:** Both Explorer and Metrics apps depend on `@filecoin-pay/types` and `@filecoin-pay/ui` packages. You must build these packages before running any app:
+**⚠️ Important:** You must build the required shared packages before running any app:
+
+- **Explorer app** depends on: `@filecoin-pay/types` and `@filecoin-pay/ui`
+- **Metrics app** depends on: `@filecoin-pay/types`
+
+Build all shared packages (recommended):
 
 ```sh
 pnpm build --filter @filecoin-pay/types --filter @filecoin-pay/ui
+```
+
+Or build only what you need:
+
+```sh
+# For Explorer only
+pnpm build --filter @filecoin-pay/types --filter @filecoin-pay/ui
+
+# For Metrics only
+pnpm build --filter @filecoin-pay/types
 ```
 
 This step is **required for both development and production** environments.
@@ -114,6 +143,7 @@ pnpm start --filter @filecoin-pay/explorer
 # Start Metrics (runs on http://localhost:4173)
 cd apps/metrics
 pnpm preview
+cd ../..
 ```
 
 ## Common Scripts
