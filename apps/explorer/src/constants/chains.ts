@@ -24,6 +24,7 @@ export type Contracts = {
  */
 export interface Chain extends ViemChain {
   label: string;
+  slug: Network;
   contracts: {
     payments: {
       address: Address;
@@ -36,9 +37,10 @@ export interface Chain extends ViemChain {
   };
 }
 
-const mainnet: Chain = {
+export const mainnet: Chain = {
   id: 314,
   label: "Mainnet",
+  slug: "mainnet",
   name: "Filecoin - Mainnet",
   nativeCurrency: {
     name: "Filecoin",
@@ -84,6 +86,7 @@ const mainnet: Chain = {
 export const calibration: Chain = {
   id: 314_159,
   label: "Calibration",
+  slug: "calibration",
   name: "Filecoin - Calibration testnet",
   nativeCurrency: {
     name: "Filecoin",
