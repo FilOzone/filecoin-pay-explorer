@@ -421,7 +421,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
 export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const tokenAddress = event.params.token;
-  const accountAddress = event.params.from;
+  const accountAddress = event.params.to;
   const amount = event.params.amount;
 
   log.debug("[handleDepositRecorded] Deposit recorded for token: {}, account: {}, amount: {}", [
