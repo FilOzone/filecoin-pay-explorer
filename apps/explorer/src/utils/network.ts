@@ -1,5 +1,6 @@
 import { supportedChains } from "@/services/wagmi/config";
 import type { Network } from "@/types";
+import { DEFAULT_NETWORK } from "@/utils/constants";
 
 export function isSupportedChainId(chainId: number | undefined): boolean {
   if (!chainId) return false;
@@ -7,10 +8,10 @@ export function isSupportedChainId(chainId: number | undefined): boolean {
 }
 
 export function getNetworkFromChainId(chainId: number | undefined): Network {
-  if (!chainId) return "mainnet";
+  if (!chainId) return DEFAULT_NETWORK;
 
   const chain = supportedChains.find((c) => c.id === chainId);
-  return chain?.slug || "mainnet";
+  return chain?.slug || DEFAULT_NETWORK;
 }
 
 export function getSubgraphUrl(network: Network): string {

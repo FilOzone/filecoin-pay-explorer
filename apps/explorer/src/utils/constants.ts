@@ -13,6 +13,7 @@ export const FUNDING_WARNING_THRESHOLD_SECONDS = 7 * 24 * 60 * 60;
 export const DEFAULT_THEME = "system";
 export const THEME_STORAGE_KEY = "filecoin-pay-explorer-theme";
 export const DEFAULT_TOAST_POSITION = "top-right";
+export const DEFAULT_NETWORK = "mainnet";
 
 export const explorerUrls = {
   mainnet: "https://filfox.info/en",

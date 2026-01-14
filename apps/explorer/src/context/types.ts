@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import type { ChainConstants, Network } from "@/types";
 
 export interface IConstants {
-  network: "calibration" | "mainnet";
+  network: Network;
   usdfcAddress: Hex;
 }
 

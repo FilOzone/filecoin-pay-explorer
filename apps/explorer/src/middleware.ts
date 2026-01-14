@@ -1,10 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { supportedChains } from "./services/wagmi/config";
-import type { Network } from "./types";
+import { supportedChains } from "@/services/wagmi/config";
+import { DEFAULT_NETWORK } from "@/utils/constants";
 
 const VALID_NETWORKS = supportedChains.map((chain) => chain.slug);
-const DEFAULT_NETWORK: Network = "mainnet";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
