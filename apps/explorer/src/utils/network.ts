@@ -14,15 +14,16 @@ export function getNetworkFromChainId(chainId: number | undefined): Network {
 }
 
 export function getSubgraphUrl(network: Network): string {
-  const projectId = process.env.NEXT_PUBLIC_GOLDSKY_PROJECT_ID;
-  const subgraphNames = {
-    mainnet: process.env.NEXT_PUBLIC_GOLDSKY_MAINNET_SUBGRAPH_NAME,
-    calibration: process.env.NEXT_PUBLIC_GOLDSKY_CALIBRATION_SUBGRAPH_NAME,
-  };
-  const subgraphVersions = {
-    mainnet: process.env.NEXT_PUBLIC_GOLDSKY_MAINNET_SUBGRAPH_VERSION,
-    calibration: process.env.NEXT_PUBLIC_GOLDSKY_CALIBRATION_SUBGRAPH_VERSION,
+  const urls = {
+    mainnet: process.env.NEXT_PUBLIC_SUBGRAPH_URL_MAINNET,
+    calibration: process.env.NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION,
   };
 
-  return `https://api.goldsky.com/api/public/${projectId}/subgraphs/${subgraphNames[network]}/${subgraphVersions[network]}/gn`;
+  const url = urls[network];
+
+  if (!url) {
+    throw new Error(`Missing environment variable: NEXT_PUBLIC_SUBGRAPH_URL_${network.toUpperCase()}`);
+  }
+
+  return url;
 }
