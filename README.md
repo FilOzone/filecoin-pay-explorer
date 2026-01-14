@@ -32,7 +32,7 @@ pnpm install
 
 ### 2. Configure Environment Variables
 
-Set up environment variables for the apps you want to run. You'll need the GraphQL endpoint URL for your **Filecoin Payments Subgraph**. If you need to deploy your own subgraph, see the [subgraph deployment guide](packages/subgraph/README.md).
+Set up environment variables for the apps you want to run. You'll need the subgraph URLs for your **Filecoin Payments Subgraph**. If you need to deploy your own subgraph, see the [subgraph deployment guide](packages/subgraph/README.md).
 
 **For Explorer app:**
 
@@ -44,12 +44,13 @@ cp .env.example .env
 Edit `apps/explorer/.env` and configure:
 
 ```bash
-NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
+NEXT_PUBLIC_SUBGRAPH_URL_MAINNET=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-mainnet/version/gn
+NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-calibration/version/gn
 ```
 
 Replace the placeholder URL with your actual **Filecoin Payments Subgraph** endpoint.
 
-**⚠️ Note:** `NEXT_PUBLIC_GRAPHQL_ENDPOINT` is required for the Explorer app to function.
+**⚠️ Note:** Both `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET` and `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` are required for the Explorer app to function.
 
 **For Metrics app:**
 

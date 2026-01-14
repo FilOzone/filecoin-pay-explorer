@@ -1,7 +1,7 @@
 import type { Operator } from "@filecoin-pay/types";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_OPERATORS_PAGINATED } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface OperatorsFilter {
   address?: string;
@@ -14,8 +14,10 @@ interface GetOperatorsResponse {
 const PAGE_SIZE = 20;
 
 const useInfiniteOperators = (filters: OperatorsFilter = {}) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useInfiniteQuery({
-    queryKey: ["operators", "infinite", filters],
+    queryKey: ["operators", "infinite", filters, network],
     queryFn: async ({ pageParam = 0 }) => {
       const where: Record<string, unknown> = {};
 

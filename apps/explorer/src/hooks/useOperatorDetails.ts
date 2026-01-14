@@ -1,12 +1,12 @@
 import type { Operator, OperatorApproval, OperatorToken, Rail } from "@filecoin-pay/types";
 import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import {
   GET_OPERATOR_APPROVALS,
   GET_OPERATOR_DETAILS,
   GET_OPERATOR_RAILS,
   GET_OPERATOR_TOKENS,
 } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
 interface GetOperatorDetailsResponse {
   operators: Operator[];
@@ -27,8 +27,10 @@ interface GetOperatorApprovalsResponse {
 const PAGE_SIZE = 10;
 
 export const useOperatorDetails = (address: string) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useQuery({
-    queryKey: ["operator", address],
+    queryKey: ["operator", address, network],
     queryFn: async () => {
       const response = await executeQuery<GetOperatorDetailsResponse>(GET_OPERATOR_DETAILS, {
         address: address,
@@ -40,8 +42,10 @@ export const useOperatorDetails = (address: string) => {
 };
 
 export const useOperatorTokens = (operatorId: string, page: number = 1) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useQuery({
-    queryKey: ["operator", operatorId, "tokens", page],
+    queryKey: ["operator", operatorId, "tokens", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetOperatorTokensResponse>(GET_OPERATOR_TOKENS, {
         operatorId: operatorId,
@@ -58,8 +62,10 @@ export const useOperatorTokens = (operatorId: string, page: number = 1) => {
 };
 
 export const useOperatorRails = (operatorId: string, page: number = 1) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useQuery({
-    queryKey: ["operator", operatorId, "rails", page],
+    queryKey: ["operator", operatorId, "rails", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetOperatorRailsResponse>(GET_OPERATOR_RAILS, {
         operatorId: operatorId,
@@ -76,8 +82,10 @@ export const useOperatorRails = (operatorId: string, page: number = 1) => {
 };
 
 export const useOperatorApprovals = (operatorId: string, page: number = 1) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useQuery({
-    queryKey: ["operator", operatorId, "approvals", page],
+    queryKey: ["operator", operatorId, "approvals", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetOperatorApprovalsResponse>(GET_OPERATOR_APPROVALS, {
         operatorId: operatorId,

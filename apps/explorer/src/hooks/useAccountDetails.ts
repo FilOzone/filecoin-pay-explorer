@@ -1,12 +1,12 @@
 import type { Account, OperatorApproval, Rail, UserToken } from "@filecoin-pay/types";
 import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import {
   GET_ACCOUNT_APPROVALS,
   GET_ACCOUNT_DETAILS,
   GET_ACCOUNT_RAILS,
   GET_ACCOUNT_TOKENS,
 } from "@/services/grapql/queries";
+import { type UseGraphQLQueryOptions, useGraphQLQuery } from "./useGraphQLQuery";
 
 interface GetAccountDetailsResponse {
   accounts: Account[];
@@ -26,9 +26,11 @@ interface GetAccountApprovalsResponse {
 
 const PAGE_SIZE = 10;
 
-export const useAccountDetails = (address: string) => {
+export const useAccountDetails = (address: string, options?: UseGraphQLQueryOptions) => {
+  const { executeQuery, network } = useGraphQLQuery(options);
+
   return useQuery({
-    queryKey: ["account", address],
+    queryKey: ["account", address, network],
     queryFn: async () => {
       const response = await executeQuery<GetAccountDetailsResponse>(GET_ACCOUNT_DETAILS, {
         address: address,
@@ -39,9 +41,11 @@ export const useAccountDetails = (address: string) => {
   });
 };
 
-export const useAccountTokens = (accountId: string, page: number = 1) => {
+export const useAccountTokens = (accountId: string, page: number = 1, options?: UseGraphQLQueryOptions) => {
+  const { executeQuery, network } = useGraphQLQuery(options);
+
   return useQuery({
-    queryKey: ["account", accountId, "tokens", page],
+    queryKey: ["account", accountId, "tokens", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetAccountTokensResponse>(GET_ACCOUNT_TOKENS, {
         accountId: accountId,
@@ -57,9 +61,11 @@ export const useAccountTokens = (accountId: string, page: number = 1) => {
   });
 };
 
-export const useAccountRails = (accountId: string, page: number = 1) => {
+export const useAccountRails = (accountId: string, page: number = 1, options?: UseGraphQLQueryOptions) => {
+  const { executeQuery, network } = useGraphQLQuery(options);
+
   return useQuery({
-    queryKey: ["account", accountId, "rails", page],
+    queryKey: ["account", accountId, "rails", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetAccountRailsResponse>(GET_ACCOUNT_RAILS, {
         accountId: accountId,
@@ -75,9 +81,11 @@ export const useAccountRails = (accountId: string, page: number = 1) => {
   });
 };
 
-export const useAccountApprovals = (accountId: string, page: number = 1) => {
+export const useAccountApprovals = (accountId: string, page: number = 1, options?: UseGraphQLQueryOptions) => {
+  const { executeQuery, network } = useGraphQLQuery(options);
+
   return useQuery({
-    queryKey: ["account", accountId, "approvals", page],
+    queryKey: ["account", accountId, "approvals", page, network],
     queryFn: async () => {
       const response = await executeQuery<GetAccountApprovalsResponse>(GET_ACCOUNT_APPROVALS, {
         accountId: accountId,

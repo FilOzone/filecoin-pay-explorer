@@ -10,6 +10,8 @@ export type TransactionType =
   | "settleRail"
   | "terminateRail";
 
+export type Network = "calibration" | "mainnet";
+
 export interface TransactionMetadata {
   type: TransactionType;
   amount?: string;

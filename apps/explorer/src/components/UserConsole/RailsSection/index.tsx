@@ -8,7 +8,9 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { useMemo, useState } from "react";
+import { useAccount } from "wagmi";
 import { useAccountRails } from "@/hooks/useAccountDetails";
+import { getNetworkFromChainId } from "@/utils/network";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
@@ -25,7 +27,10 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
 
-  const { data, isLoading, isError } = useAccountRails(account.id, page);
+  const { chainId } = useAccount();
+  const walletNetwork = getNetworkFromChainId(chainId);
+
+  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
 
   const _handleSettle = (rail: Rail) => {
     setSelectedRail(rail);

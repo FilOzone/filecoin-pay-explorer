@@ -1,14 +1,4 @@
-import { RecentRails, Stats, TopAccounts, TopOperators } from "@/components/Home";
-
-function Page() {
-  return (
-    <>
-      <Stats />
-      <RecentRails />
-      <TopAccounts />
-      <TopOperators />
-    </>
-  );
+// Middleware redirects "/" to "/mainnet" before this renders
+export default function RootPage() {
+  return null;
 }
-
-export default Page;

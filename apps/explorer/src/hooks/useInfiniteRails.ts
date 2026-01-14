@@ -1,7 +1,7 @@
 import type { Rail } from "@filecoin-pay/types";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_RAILS_PAGINATED } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface RailsFilter {
   railId?: string;
@@ -18,8 +18,10 @@ interface GetRailsResponse {
 const PAGE_SIZE = 20;
 
 const useInfiniteRails = (filters: RailsFilter = {}) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useInfiniteQuery({
-    queryKey: ["rails", "infinite", filters],
+    queryKey: ["rails", "infinite", filters, network],
     queryFn: async ({ pageParam = 0 }) => {
       const where: Record<string, unknown> = {};
 

@@ -6,7 +6,7 @@ import { NavigationMenu as SharedNavigationMenu } from "@filecoin-foundation/ui-
 import { NavigationMenuPanel } from "@filecoin-foundation/ui-filecoin/Navigation/NavigationMenuPanel";
 import clsx from "clsx";
 import { BASE_DOMAIN } from "@/constants/site-metadata";
-import type { NavigationMenuItem } from "../constants/navigation";
+import type { NavigationMenuItem } from "@/types/navigation";
 import { NavigationMenuLink } from "./NavigationMenuLink";
 
 export function NavigationMenu({ label, items }: NavigationMenuItem) {

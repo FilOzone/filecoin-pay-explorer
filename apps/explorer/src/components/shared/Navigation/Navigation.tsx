@@ -1,10 +1,11 @@
+"use client";
+
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { MobileNavigation } from "@filecoin-foundation/ui-filecoin/Navigation/MobileNavigation";
 import { NavigationMainLink } from "@filecoin-foundation/ui-filecoin/Navigation/NavigationMainLink";
 import { Section, type SectionProps } from "@filecoin-foundation/ui-filecoin/Section/Section";
-
+import { useNavigationItems } from "@/hooks/useNavigationItems";
 import { HomeLogoIconLink } from "./components/HomeLogoIconLink";
-import { mobileNavigationItems } from "./constants/navigation";
 import { DesktopNavigation } from "./DesktopNavigation";
 
 type NavigationProps = {
@@ -12,6 +13,8 @@ type NavigationProps = {
 };
 
 function Navigation({ backgroundVariant }: NavigationProps) {
+  const { mobileNavigationItems } = useNavigationItems();
+
   return (
     <Section as='header' backgroundVariant={backgroundVariant}>
       <Container>
