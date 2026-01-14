@@ -372,6 +372,8 @@ export function handleRailSettled(event: RailSettledEvent): void {
   settlement.operatorCommission = operatorCommission;
   settlement.filBurned = networkFee;
   settlement.settledUpto = event.params.settledUpTo;
+  settlement.blockNumber = blockNumber;
+  settlement.createdAt = timestamp;
 
   operatorToken.settledAmount = operatorToken.settledAmount.plus(totalSettledAmount);
   operatorToken.volume = operatorToken.volume.plus(totalSettledAmount);
@@ -419,12 +421,6 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const tokenAddress = event.params.token;
   const accountAddress = event.params.from;
   const amount = event.params.amount;
-
-  log.debug("[handleDepositRecorded] Deposit recorded for token: {}, account: {}, amount: {}", [
-    tokenAddress.toHexString(),
-    accountAddress.toHexString(),
-    amount.toString(),
-  ]);
 
   const tokenWithIsNew = getTokenDetails(tokenAddress);
   const token = tokenWithIsNew.token;

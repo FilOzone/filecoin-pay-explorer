@@ -132,6 +132,9 @@ type Settlement @entity(immutable: true) {
   filBurned: BigInt!
   operatorCommission: BigInt!
   settledUpto: BigInt!
+
+  blockNumber: BigInt!
+  createdAt: BigInt!
 }
 
 # Metrics
