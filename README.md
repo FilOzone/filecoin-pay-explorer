@@ -32,7 +32,7 @@ pnpm install
 
 ### 2. Configure Environment Variables
 
-Set up environment variables for the apps you want to run. You'll need the GraphQL endpoint URL for your **Filecoin Payments Subgraph**.
+Set up environment variables for the apps you want to run. You'll need the GraphQL endpoint URL for your **Filecoin Payments Subgraph**. If you need to deploy your own subgraph, see the [subgraph deployment guide](packages/subgraph/README.md).
 
 **For Explorer app:**
 
