@@ -14,6 +14,6 @@ export interface SynapseContextType {
 
 export interface NetworkContextType {
   network: Network;
-  setNetwork: (network: Network) => void;
+  setNetwork: React.Dispatch<React.SetStateAction<Network>>;
   subgraphUrl: string;
 }
