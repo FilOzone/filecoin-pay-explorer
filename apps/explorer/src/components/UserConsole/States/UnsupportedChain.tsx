@@ -16,7 +16,7 @@ const UnsupportedChain = () => {
     >
       <div className='flex flex-col gap-3 w-full max-w-xs'>
         <Button baseDomain={BASE_DOMAIN} variant='primary' onClick={openChainModal}>
-          Wrong Network
+          Switch Network
         </Button>
       </div>
     </EmptyStateCard>

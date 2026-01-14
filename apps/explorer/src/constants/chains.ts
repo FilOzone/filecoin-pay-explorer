@@ -1,6 +1,7 @@
 import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
 import { type Address, erc20Abi, type Chain as ViemChain } from "viem";
 
+import type { Network } from "@/types";
 import { paymentsAbi } from "../abi/payments";
 
 export type Contract = {
@@ -129,8 +130,6 @@ export const calibration: Chain = {
     },
   },
 };
-
-export type Network = "calibration" | "mainnet";
 
 /**
  * Get a chain by network name

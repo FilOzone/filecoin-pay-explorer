@@ -31,7 +31,7 @@ const NetworkOptions = () => {
     }
 
     const pathWithoutNetwork = pathParts.slice(1);
-    const newPath = pathWithoutNetwork.length > 0 ? `/${newNetwork}/${pathWithoutNetwork.join("/")}` : `/${newNetwork}`;
+    const newPath = `/${[newNetwork, ...pathWithoutNetwork].join("/")}`;
 
     router.push(newPath);
   };

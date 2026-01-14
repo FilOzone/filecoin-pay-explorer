@@ -13,7 +13,7 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 const UserConsoleContent = () => {
   const { address, isConnected, chainId } = useAccount();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
-  const isUnsupportedChain = isConnected && !isSupportedChainId(chainId);
+  const isUnsupportedChain = isConnected && chainId && !isSupportedChainId(chainId);
 
   const {
     data: account,
