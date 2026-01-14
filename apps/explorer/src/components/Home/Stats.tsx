@@ -116,7 +116,7 @@ const Stats: React.FC = () => {
         tooltip: "Payment managers that help automate transactions between users",
       },
       {
-        title: "Total Fil Burned",
+        title: "Network Revenue",
         value: formatFIL(data?.totalFilBurned || "0"),
         icon: "/stats/total-fil-burned.svg",
         tooltip: "Network fees paid to process payment settlements",

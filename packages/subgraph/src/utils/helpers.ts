@@ -94,21 +94,9 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     const tokenSymbolResult = erc20Contract.try_symbol();
     const tokenDecimalsResult = erc20Contract.try_decimals();
 
-    token.name = tokenNameResult.value;
-    token.symbol = tokenSymbolResult.value;
-    token.decimals = GraphBN.fromI32(tokenDecimalsResult.value);
-
-    if (tokenNameResult.reverted) {
-      token.name = "Unknown";
-    }
-
-    if (tokenSymbolResult.reverted) {
-      token.symbol = "UNKNOWN";
-    }
-
-    if (tokenDecimalsResult.reverted) {
-      token.decimals = DEFAULT_DECIMALS;
-    }
+    token.name = tokenNameResult.reverted ? "Unknown" : tokenNameResult.value;
+    token.symbol = tokenSymbolResult.reverted ? "UNKNOWN" : tokenSymbolResult.value;
+    token.decimals = tokenDecimalsResult.reverted ? DEFAULT_DECIMALS : GraphBN.fromI32(tokenDecimalsResult.value);
 
     token.volume = ZERO_BIG_INT;
     token.totalDeposits = ZERO_BIG_INT;
