@@ -288,6 +288,7 @@ export class TokenActivityCollector extends BaseMetricsCollector {
     this.updateTokenMetrics();
     this.updateNetworkMetrics();
     this.updateDailyMetrics();
+    this.updateWeeklyMetrics();
   }
 
   private updateDailyMetrics(): void {
@@ -296,6 +297,14 @@ export class TokenActivityCollector extends BaseMetricsCollector {
       ? dailyMetric.uniqueAccounts.plus(ONE_BIG_INT)
       : dailyMetric.uniqueAccounts;
     dailyMetric.save();
+  }
+
+  private updateWeeklyMetrics(): void {
+    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
+    weeklyMetric.uniqueAccounts = this.isNewAccount
+      ? weeklyMetric.uniqueAccounts.plus(ONE_BIG_INT)
+      : weeklyMetric.uniqueAccounts;
+    weeklyMetric.save();
   }
 
   private updateTokenMetrics(): void {
