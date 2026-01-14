@@ -1,6 +1,6 @@
 import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
 import { paymentsAbi } from "@/abi/payments";
-import { calibration } from "@/constants/chains";
+import { calibration, mainnet } from "@/constants/chains";
 import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
 
@@ -40,5 +40,16 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
         url: "https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc",
       },
     ],
+  },
+  [mainnet.id]: {
+    chain: mainnet,
+    label: "Mainnet",
+    contracts: {
+      usdfc: CONTRACT_ADDRESSES.USDFC.mainnet,
+      payments: {
+        address: "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+        abi: paymentsAbi,
+      },
+    },
   },
 } as const;

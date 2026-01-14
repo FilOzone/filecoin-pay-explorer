@@ -17,6 +17,7 @@ import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor
 import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { getChain } from "@/constants/chains";
+import useNetwork from "@/hooks/useNetwork";
 import usePayMetrics from "@/hooks/usePayMetrics";
 import { useTokenDetails } from "@/hooks/useTokenDetails";
 import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
@@ -69,9 +70,9 @@ const DEFAULT_USDFC_VALUE = "0 USDFC";
 
 const Stats: React.FC = () => {
   const { data, isLoading, isError, error, refetch } = usePayMetrics();
+  const { network } = useNetwork();
 
-  // TODO: Make this dynamic based on chain
-  const chain = getChain("calibration");
+  const chain = getChain(network);
   const {
     data: usdfcData,
     isLoading: isUsdfcLoading,

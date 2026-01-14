@@ -1,7 +1,7 @@
 import type { Account } from "@filecoin-pay/types";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_ACCOUNTS_PAGINATED } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface AccountsFilter {
   address?: string;
@@ -14,8 +14,10 @@ interface GetAccountsResponse {
 const PAGE_SIZE = 20;
 
 const useInfiniteAccounts = (filters: AccountsFilter = {}) => {
+  const { executeQuery, network } = useGraphQLQuery();
+
   return useInfiniteQuery({
-    queryKey: ["accounts", "infinite", filters],
+    queryKey: ["accounts", "infinite", filters, network],
     queryFn: async ({ pageParam = 0 }) => {
       const where: Record<string, unknown> = {};
 
