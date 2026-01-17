@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supportedChains } from "@/services/wagmi/config";
 import { DEFAULT_NETWORK } from "@/utils/constants";
 
-const VALID_NETWORKS = supportedChains.map((chain) => chain.slug);
+const VALID_NETWORKS: readonly string[] = supportedChains.map((chain) => chain.slug);
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -21,7 +21,7 @@ export function middleware(request: NextRequest) {
   if (networkMatch) {
     const network = networkMatch[1];
 
-    if (!(VALID_NETWORKS as readonly string[]).includes(network)) {
+    if (!VALID_NETWORKS.includes(network)) {
       const pathAfterNetwork = pathname.slice(network.length + 1);
       const newPath = `/${DEFAULT_NETWORK}${pathAfterNetwork}`;
       return NextResponse.redirect(new URL(newPath, request.url));
