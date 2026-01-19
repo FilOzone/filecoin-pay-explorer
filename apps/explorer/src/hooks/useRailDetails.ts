@@ -1,73 +1,58 @@
 import type { Rail, RateChangeQueue, Settlement } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
 import { GET_RAIL_DETAILS, GET_RAIL_RATE_CHANGES, GET_RAIL_SETTLEMENTS } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
-interface GetRailDetailsResponse {
+interface RailDetailsResponse {
   rails: Rail[];
 }
 
-interface GetSettlementsResponse {
+interface SettlementsResponse {
   settlements: Settlement[];
 }
 
-interface GetRateChangesResponse {
+interface RateChangesResponse {
   rateChangeQueues: RateChangeQueue[];
 }
 
 const PAGE_SIZE = 10;
 
-export const useRailDetails = (railId: string) => {
-  const { executeQuery, network } = useGraphQLQuery();
-
-  return useQuery({
-    queryKey: ["rail", railId, network],
-    queryFn: async () => {
-      const response = await executeQuery<GetRailDetailsResponse>(GET_RAIL_DETAILS, {
-        railId: railId,
-      });
-      return response.rails[0] || null;
-    },
+export const useRailDetails = (railId: string) =>
+  useGraphQLQuery<RailDetailsResponse, Rail | null>({
+    queryKey: ["rail", railId],
+    query: GET_RAIL_DETAILS,
+    variables: { railId },
+    select: (data) => data.rails[0] || null,
     enabled: !!railId,
   });
-};
 
-export const useRailSettlements = (railId: string, page: number = 1) => {
-  const { executeQuery, network } = useGraphQLQuery();
-
-  return useQuery({
-    queryKey: ["rail", railId, "settlements", page, network],
-    queryFn: async () => {
-      const response = await executeQuery<GetSettlementsResponse>(GET_RAIL_SETTLEMENTS, {
-        railId: railId,
-        first: PAGE_SIZE,
-        skip: (page - 1) * PAGE_SIZE,
-      });
-      return {
-        settlements: response.settlements,
-        hasMore: response.settlements.length === PAGE_SIZE,
-      };
+export const useRailSettlements = (railId: string, page: number = 1) =>
+  useGraphQLQuery<SettlementsResponse, { settlements: Settlement[]; hasMore: boolean }>({
+    queryKey: ["rail", railId, "settlements", page],
+    query: GET_RAIL_SETTLEMENTS,
+    variables: {
+      railId,
+      first: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
     },
+    select: (data) => ({
+      settlements: data.settlements,
+      hasMore: data.settlements.length === PAGE_SIZE,
+    }),
     enabled: !!railId,
   });
-};
 
-export const useRailRateChanges = (railId: string, page: number = 1) => {
-  const { executeQuery, network } = useGraphQLQuery();
-
-  return useQuery({
-    queryKey: ["rail", railId, "rateChanges", page, network],
-    queryFn: async () => {
-      const response = await executeQuery<GetRateChangesResponse>(GET_RAIL_RATE_CHANGES, {
-        railId: railId,
-        first: PAGE_SIZE,
-        skip: (page - 1) * PAGE_SIZE,
-      });
-      return {
-        rateChanges: response.rateChangeQueues,
-        hasMore: response.rateChangeQueues.length === PAGE_SIZE,
-      };
+export const useRailRateChanges = (railId: string, page: number = 1) =>
+  useGraphQLQuery<RateChangesResponse, { rateChanges: RateChangeQueue[]; hasMore: boolean }>({
+    queryKey: ["rail", railId, "rateChanges", page],
+    query: GET_RAIL_RATE_CHANGES,
+    variables: {
+      railId,
+      first: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
     },
+    select: (data) => ({
+      rateChanges: data.rateChangeQueues,
+      hasMore: data.rateChangeQueues.length === PAGE_SIZE,
+    }),
     enabled: !!railId,
   });
-};

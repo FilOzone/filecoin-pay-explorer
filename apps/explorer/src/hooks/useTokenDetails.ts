@@ -1,25 +1,17 @@
 import type { Token } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
 import type { Hex } from "viem";
 import { GET_TOKEN_DETAILS } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
-interface GetTokenDetailsResponse {
+interface TokenDetailsResponse {
   token: Token;
 }
 
-export const useTokenDetails = (tokenAddress: Hex) => {
-  const { executeQuery, network } = useGraphQLQuery();
-
-  return useQuery({
-    queryKey: ["token", tokenAddress, network],
-    queryFn: async () => {
-      const response = await executeQuery<GetTokenDetailsResponse>(GET_TOKEN_DETAILS, {
-        id: tokenAddress,
-      });
-
-      return response.token || null;
-    },
+export const useTokenDetails = (tokenAddress: Hex) =>
+  useGraphQLQuery<TokenDetailsResponse, Token | null>({
+    queryKey: ["token", tokenAddress],
+    query: GET_TOKEN_DETAILS,
+    variables: { id: tokenAddress },
+    select: (data) => data.token || null,
     enabled: !!tokenAddress,
   });
-};
