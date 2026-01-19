@@ -154,7 +154,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     operatorAddress,
     tokenAddress,
     arbiter,
-    ZERO_BIG_INT,
+    event.block.number,
     commissionRateBps,
     serviceFeeRecipient,
     event.block.timestamp,
