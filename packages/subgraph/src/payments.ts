@@ -1,4 +1,4 @@
-import { Bytes, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -27,7 +27,7 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getRailEntityId } from "./utils/keys";
+import { getRailEntityId, getSettlementEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
@@ -154,7 +154,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     operatorAddress,
     tokenAddress,
     arbiter,
-    ZERO_BIG_INT,
+    event.block.number,
     commissionRateBps,
     serviceFeeRecipient,
     event.block.timestamp,
@@ -264,7 +264,6 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     return;
   }
 
-  rail.paymentRate = event.params.newRate;
   if (oldRate.equals(ZERO_BIG_INT) && newRate.gt(ZERO_BIG_INT) && rail.state !== "Active") {
     rail.state = "ACTIVE";
 
@@ -313,6 +312,11 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   if (!isTerminated) {
     updateOperatorRate(operatorApproval, oldRate, newRate);
     updateOperatorTokenRate(operatorToken, oldRate, newRate);
+
+    if (payerToken) {
+      payerToken.lockupRate = payerToken.lockupRate.minus(oldRate).plus(newRate);
+      payerToken.save();
+    }
   }
 
   if (oldRate.notEqual(newRate)) {
@@ -362,7 +366,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   rail.settledUpto = event.params.settledUpTo;
 
   // Create a new Settlement entity
-  const settlementId = event.transaction.hash.concatI32(event.logIndex.toI32());
+  const settlementId = getSettlementEntityId(event.transaction.hash, event.logIndex);
   const settlement = new Settlement(settlementId);
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
 
@@ -381,7 +385,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
   // update funds for payer and payee
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
-  const payeeToken = UserToken.load(rail.payee.concat(rail.token));
+  const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(operatorCommission);
@@ -419,7 +423,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
 export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const tokenAddress = event.params.token;
-  const accountAddress = event.params.from;
+  const accountAddress = event.params.to;
   const amount = event.params.amount;
 
   const tokenWithIsNew = getTokenDetails(tokenAddress);
@@ -513,11 +517,14 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   rail.save();
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
-  const payeeToken = UserToken.load(rail.payee.concat(rail.token));
-  const serviceFeeRecipientUserToken = UserToken.load(rail.serviceFeeRecipient.concat(rail.token));
+  const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;
+  const serviceFeeRecipientUserToken = createOrLoadUserToken(
+    Address.fromBytes(rail.serviceFeeRecipient),
+    Address.fromBytes(rail.token),
+  ).userToken;
   const token = Token.load(rail.token);
   if (token) {
-    token.userFunds = token.userFunds.minus(operatorCommission);
+    token.userFunds = token.userFunds.minus(networkFee);
     token.save();
   }
   if (payerToken) {
