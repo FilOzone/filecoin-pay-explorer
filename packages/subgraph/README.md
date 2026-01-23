@@ -25,7 +25,7 @@ Follow these steps to build and deploy the subgraph:
     Open your terminal and change to the `subgraph` directory within the project:
 
     ```bash
-    cd path/to/pdp-explorer/subgraph
+    cd path/to/filecoin-pay-explorer/subgraph
     ```
 
 2.  **Install Dependencies:**

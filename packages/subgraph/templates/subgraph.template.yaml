@@ -1,6 +1,6 @@
 specVersion: 1.2.0
-description: Subgraph Indexer for MACI contract
-repository: https://github.com/privacy-scaling-explorations/maci
+description: Subgraph Indexer for Filecoin payments contract
+repository: https://github.com/FilOzone/filecoin-pay-explorer
 indexerHints:
   prune: auto
 schema:
