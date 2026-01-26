@@ -448,6 +448,7 @@ describe("Payments", () => {
 
     // Assert: Operator usage updated
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "volume", totalAmount.toString());
+    assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "settledAmount", totalAmount.toString());
     assert.fieldEquals(
       "OperatorApproval",
       operatorApprovalEntityIdStr,
