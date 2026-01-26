@@ -531,6 +531,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   }
   if (payerToken) {
     payerToken.funds = payerToken.funds.minus(oneTimePayment);
+    payerToken.payout = payerToken.payout.plus(oneTimePayment);
     payerToken.save();
   }
   if (payeeToken) {
