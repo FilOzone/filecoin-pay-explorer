@@ -443,6 +443,7 @@ describe("Payments", () => {
 
     // Assert: Rail state updated (lockupFixed reduced, payment tracked)
     assert.fieldEquals("Rail", railEntityIdStr, "lockupFixed", lockupFixed.minus(netPayeeAmount).toString());
+    assert.fieldEquals("Rail", railEntityIdStr, "totalSettledAmount", totalAmount.toString());
     assert.fieldEquals("Rail", railEntityIdStr, "totalNetPayeeAmount", netPayeeAmount.toString());
     assert.fieldEquals("Rail", railEntityIdStr, "totalCommission", operatorCommission.toString());
 

@@ -512,6 +512,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   }
 
   rail.lockupFixed = rail.lockupFixed.minus(netPayeeAmount);
+  rail.totalSettledAmount = rail.totalSettledAmount.plus(oneTimePayment);
   rail.totalNetPayeeAmount = rail.totalNetPayeeAmount.plus(netPayeeAmount);
   rail.totalCommission = rail.totalCommission.plus(operatorCommission);
   rail.save();
