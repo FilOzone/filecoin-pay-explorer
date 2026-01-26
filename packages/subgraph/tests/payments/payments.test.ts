@@ -439,6 +439,7 @@ describe("Payments", () => {
     // Assert: Token-level state (network fee burned)
     const expectedTokenUserFunds = depositAmount.minus(networkFee);
     assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "userFunds", expectedTokenUserFunds.toString());
+    assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "totalSettledAmount", totalAmount.toString());
 
     // Assert: Rail state updated (lockupFixed reduced, payment tracked)
     assert.fieldEquals("Rail", railEntityIdStr, "lockupFixed", lockupFixed.minus(netPayeeAmount).toString());
@@ -457,7 +458,9 @@ describe("Payments", () => {
     // Assert: Fund transfers - payer debited, payee and serviceFeeRecipient credited
     const remainingPayerFunds = depositAmount.minus(totalAmount);
     assert.fieldEquals("UserToken", payerTokenEntityIdStr, "funds", remainingPayerFunds.toString());
+    assert.fieldEquals("UserToken", payerTokenEntityIdStr, "payout", totalAmount.toString());
     assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "funds", netPayeeAmount.toString());
+    assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "fundsCollected", netPayeeAmount.toString());
     assert.fieldEquals("UserToken", serviceFeeRecipientTokenIdStr, "funds", operatorCommission.toString());
   });
 
