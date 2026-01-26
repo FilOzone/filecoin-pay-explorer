@@ -525,6 +525,8 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
+    // consider total one time payment as settled amount ( operator commission + net payee amount + network fee )
+    token.totalSettledAmount = token.totalSettledAmount.plus(oneTimePayment);
     token.save();
   }
   if (payerToken) {
