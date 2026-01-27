@@ -37,12 +37,3 @@ Only comment to explain **why**, not **what**. Prefer self-documenting code with
 - **Preserve existing tests** — Only modify if requirements changed
 
 Use `expect.any()` for non-deterministic values (dates, IDs).
-
-## Pre-Commit Checklist
-
-- [ ] Code is simple and readable
-- [ ] Functions/components are small and focused
-- [ ] Tests cover new functionality with complete value assertions
-- [ ] Errors handled with clear messages
-- [ ] Proper TypeScript types used
-- [ ] `pnpm lint && pnpm format && pnpm test` passes
