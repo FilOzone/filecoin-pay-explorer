@@ -2,52 +2,101 @@
 
 This file provides guidance to coding agents when working with code in this repository.
 
-## Project Overview
+## Quick Reference
 
-See @README for project overview and @package.json for available npm commands for this project.
+- **Project setup and commands**: See [README.md](README.md)
+- **Tech stack**: React 19, Next.js 15, Vite, Tailwind CSS v4, @tanstack/react-query, wagmi, The Graph
+- **Package manager**: pnpm >= 9
+- **Linting/Formatting**: Biome (not ESLint or Prettier)
 
-## Architecture
+## Essential Workflow
 
-### Data Flow
-1. Filecoin Payments smart contract emits events
-2. Subgraph indexes events into GraphQL entities (Rail, Account, Operator, Token)
-3. `@filecoin-pay/types` package generates TypeScript types from subgraph schema via graphql-codegen
-4. Frontend apps query subgraph via graphql-request with type-safe queries
+### 1. Build Dependencies
 
-### Build Dependencies
-- Explorer and Metrics apps depend on `@filecoin-pay/types` and `@filecoin-pay/ui`
-- Types package depends on subgraph schema (`packages/subgraph/schemas/schema.v1.graphql`)
-- Always build types before ui, and both before running apps
+Before running apps, build the types package:
 
-### Environment Variables
-- Explorer: `NEXT_PUBLIC_GRAPHQL_ENDPOINT` - subgraph GraphQL endpoint
-- Metrics: `VITE_GRAPHQL_ENDPOINT` - subgraph GraphQL endpoint
-
-### Tech Stack
-- **Runtime**: Node.js >= 22, pnpm >= 9
-- **Monorepo**: Turbo for task orchestration
-- **Linting/Formatting**: Biome (not ESLint)
-- **Frontend**: React 19, Tailwind CSS v4, @tanstack/react-query
-- **Web3**: wagmi, viem, ethers, rainbowkit
-- **Subgraph**: The Graph Protocol, AssemblyScript, Matchstick for testing
-
-### Subgraph Structure
-- `schemas/` - GraphQL schema definitions (versioned)
-- `config/` - Network-specific configurations (mainnet, localhost)
-- `templates/` - Mustache templates for subgraph.yaml generation
-- `src/` - AssemblyScript event handlers
-- `tests/` - Matchstick test files
-
-## Code Quality
-
-Pre-commit hooks run Biome automatically via lint-staged. Manual commands:
 ```bash
-biome check --write .     # Lint and fix
-biome format --write .    # Format only
+pnpm build --filter @filecoin-pay/types
 ```
 
-## Additional Instructions
+**Note:** `@filecoin-pay/ui` exports source directly (no build needed).
 
-- Project structure and organization @docs/project-structure.md
-- Component development and testing guidelines @docs/component-guidelines.md
-- Git workflow @docs/git-instructions.md
+See [development-workflow.md](docs/development-workflow.md) for details.
+
+### 2. After Making Changes
+
+**CRITICAL:** Always run these commands after code changes:
+
+```bash
+pnpm lint      # Auto-fix linting issues
+pnpm format    # Format code with Biome
+pnpm test      # Run test suite
+```
+
+Pre-commit hooks enforce this, but run manually during development.
+
+### 3. Before Committing
+
+Ensure all checks pass:
+
+```bash
+pnpm build && pnpm test && pnpm type-check && pnpm lint && pnpm format
+```
+
+## Documentation
+
+- **Architecture & build process**: [docs/development-workflow.md](docs/development-workflow.md)
+- **Project structure**: [docs/project-structure.md](docs/project-structure.md)
+- **Component development**: [docs/component-guidelines.md](docs/component-guidelines.md)
+- **Git workflow**: [docs/git-instructions.md](docs/git-instructions.md)
+
+## Key Conventions
+
+### UI Development
+
+- **Primary UI library**: `@filecoin-foundation/ui-filecoin`
+- **Build complex components** from library primitives
+- **Framework**: Follow Next.js App Router best practices for explorer and metrics apps
+- **Testing**: Always add tests for new components
+
+### Code Quality
+
+- Use Biome (configured via `biome.json`)
+- No ESLint or Prettier
+- Pre-commit hooks run automatically via husky + lint-staged
+
+### Subgraph
+
+- **Location**: `packages/subgraph/`
+- **Schema**: `schemas/schema.v1.graphql`
+- **Testing**: Matchstick framework
+- **After schema changes**: Rebuild `@filecoin-pay/types` package
+
+## Common Commands
+
+```bash
+# Development
+pnpm dev                                    # Run all apps
+pnpm dev --filter @filecoin-pay/explorer   # Run specific app
+
+# Building
+pnpm build                                  # Build everything
+
+# Code quality (run after changes)
+pnpm lint                                   # Lint and fix
+pnpm format                                 # Format code
+pnpm test                                   # Run tests
+pnpm type-check                             # TypeScript check
+
+# Cleanup
+pnpm clean                                  # Remove build artifacts
+```
+
+## Important Notes
+
+- **Data flow**: Smart contract → Subgraph → Frontend (via GraphQL)
+- **Types package**: Auto-generated from subgraph schema via graphql-codegen
+- **Environment variables**: See [README.md](README.md#2-configure-environment-variables)
+- **Monorepo**: Uses Turbo for task orchestration
+
+For detailed information, refer to the documentation files linked above.

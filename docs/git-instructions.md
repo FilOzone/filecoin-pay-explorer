@@ -1,5 +1,5 @@
-Auto-publishing enabled. `feat:` → minor bump, `fix:`/`chore:`/`docs:`/`test:` → patch bump. AVOID `!` or `BREAKING CHANGE` (pre-v1).
+# Git Instructions
 
-Format: `<type>(<scope>): <description>`
-
-Only commit when explicitly asked. Draft messages for user review.
+- Use `feat:`/ `fix:`/`chore:`/`docs:`/`test:` prefixes for commit messages and branch names.
+- Commit message format : `<type>(<scope>): <description>`
+- Only commit when explicitly asked. Draft messages for user review.
