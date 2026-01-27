@@ -34,4 +34,4 @@ Co-locate tests: `Component.tsx` → `Component.test.tsx`. Test user behavior, n
 - Use `@tanstack/react-query` for all data fetching
 - Extract complex logic into custom hooks
 - Use `React.lazy` + `Suspense` for code splitting
-- Use `memo` sparingly — measure before optimizing
+- Use `memo` to cache the result of an expensive calculations
