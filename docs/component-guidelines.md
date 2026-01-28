@@ -16,8 +16,8 @@ Co-locate tests: `Component.tsx` → `Component.test.tsx`. Test user behavior, n
 ## Explorer App (Next.js 15)
 
 **Server vs Client Components:**
-- Default to Server Components
-- Use `'use client'` only for: interactive state, browser APIs, event handlers
+- Default to use of Client Components
+- Use Server Components only if explicitly stated
 
 **Data Fetching:**
 - Server Components: Fetch directly with native `fetch`
