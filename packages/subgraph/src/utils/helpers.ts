@@ -7,13 +7,18 @@ import {
   Operator,
   OperatorApproval,
   OperatorToken,
-  PaymentsMetric,
   Rail,
   RateChangeQueue,
   Token,
   UserToken,
 } from "../../generated/schema";
-import { DEFAULT_DECIMALS, EPOCH_DURATION } from "./constants";
+import {
+  DEFAULT_DECIMALS,
+  EPOCH_DURATION,
+  NATIVE_TOKEN_DECIMALS,
+  NATIVE_TOKEN_NAME,
+  NATIVE_TOKEN_SYMBOL,
+} from "./constants";
 import {
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -89,14 +94,22 @@ export const getTokenDetails = (address: Address): TokenDetails => {
   if (!token) {
     token = new Token(address);
 
-    const erc20Contract = erc20.bind(address);
-    const tokenNameResult = erc20Contract.try_name();
-    const tokenSymbolResult = erc20Contract.try_symbol();
-    const tokenDecimalsResult = erc20Contract.try_decimals();
+    const isNativeToken = address.equals(Address.zero());
 
-    token.name = tokenNameResult.reverted ? "Unknown" : tokenNameResult.value;
-    token.symbol = tokenSymbolResult.reverted ? "UNKNOWN" : tokenSymbolResult.value;
-    token.decimals = tokenDecimalsResult.reverted ? DEFAULT_DECIMALS : GraphBN.fromI32(tokenDecimalsResult.value);
+    if (isNativeToken) {
+      token.name = NATIVE_TOKEN_NAME;
+      token.symbol = NATIVE_TOKEN_SYMBOL;
+      token.decimals = NATIVE_TOKEN_DECIMALS;
+    } else {
+      const erc20Contract = erc20.bind(address);
+      const tokenNameResult = erc20Contract.try_name();
+      const tokenSymbolResult = erc20Contract.try_symbol();
+      const tokenDecimalsResult = erc20Contract.try_decimals();
+
+      token.name = tokenNameResult.reverted ? "Unknown" : tokenNameResult.value;
+      token.symbol = tokenSymbolResult.reverted ? "UNKNOWN" : tokenSymbolResult.value;
+      token.decimals = tokenDecimalsResult.reverted ? DEFAULT_DECIMALS : GraphBN.fromI32(tokenDecimalsResult.value);
+    }
 
     token.volume = ZERO_BIG_INT;
     token.totalDeposits = ZERO_BIG_INT;
