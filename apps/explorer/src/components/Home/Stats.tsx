@@ -19,7 +19,7 @@ import { useEffect, useMemo } from "react";
 import { getChain } from "@/constants/chains";
 import usePayMetrics from "@/hooks/usePayMetrics";
 import { useTokenDetails } from "@/hooks/useTokenDetails";
-import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -115,12 +115,14 @@ const Stats: React.FC = () => {
         icon: "/stats/total-services.svg",
         tooltip: "Payment managers that help automate transactions between users",
       },
-      {
-        title: "Network Revenue",
-        value: formatFIL(data?.totalFilBurned || "0"),
-        icon: "/stats/total-fil-burned.svg",
-        tooltip: "Network fees paid to process payment settlements",
-      },
+      // TODO: Add this back when network revenue calculation is fixed
+      // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
+      // {
+      //   title: "Network Revenue",
+      //   value: formatFIL(data?.totalFilBurned || "0"),
+      //   icon: "/stats/total-fil-burned.svg",
+      //   tooltip: "Network fees paid to process payment settlements",
+      // },
       {
         title: "USDFC Settled",
         value: usdfcData
