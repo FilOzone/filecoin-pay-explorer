@@ -172,6 +172,8 @@ export type RateChangeQueue = {
 
 export type Settlement = {
   __typename: "Settlement";
+  blockNumber: Scalars["BigInt"]["output"];
+  createdAt: Scalars["BigInt"]["output"];
   filBurned: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
