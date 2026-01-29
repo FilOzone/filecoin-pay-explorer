@@ -29,7 +29,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: blockNumber, isLoading: isLoadingBlockNumber } = useBlockNumber({ watch: true });
 
-  const { synapse, constants } = useSynapse();
+  const { constants } = useSynapse();
 
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: constants.contracts.payments.address,
@@ -46,8 +46,8 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
 
   // TODO: Fix and test Rail settlement
   const handleSettle = async () => {
-    if (!synapse) {
-      console.log("Synapse not initialized");
+    if (!blockNumber) {
+      console.log("Failed to Fetch current chain head");
       return;
     }
     try {

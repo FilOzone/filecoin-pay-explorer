@@ -32,7 +32,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
 
   const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
 
-  const _handleSettle = (rail: Rail) => {
+  const handleSettle = (rail: Rail) => {
     setSelectedRail(rail);
     setSettleDialogOpen(true);
   };
@@ -103,7 +103,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <RailsEmptyNoResults searchFilter={searchFilter} />
         ) : (
           <>
-            <RailsTable data={tableData} />
+            <RailsTable data={tableData} onSettle={handleSettle} />
 
             {/* Pagination - only show if not searching */}
             {!searchQuery && totalPages > 1 && (

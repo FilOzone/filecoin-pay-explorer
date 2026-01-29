@@ -1,15 +1,17 @@
 import { Badge as FilecoinBadge } from "@filecoin-foundation/ui-filecoin/Badge";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { CopyableText, RailStateBadge } from "@/components/shared";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
 
 // Create column helper
 const columnHelper = createColumnHelper<Rail & { userAddress: string }>();
 
-export const columns = [
+export const createColumns = (onSettle: (rail: Rail) => void) => [
   columnHelper.accessor("railId", {
     id: "railId",
     header: "Rail ID",
@@ -91,6 +93,20 @@ export const columns = [
         <div className='flex flex-col gap-1'>
           <RailStateBadge state={rail.state} />
           <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
+        </div>
+      );
+    },
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: "Actions",
+    cell: (info) => {
+      const rail = info.row.original;
+      return (
+        <div className='flex justify-center'>
+          <Button baseDomain={BASE_DOMAIN} variant='primary' className='py-2 my-4' onClick={() => onSettle(rail)}>
+            Settle
+          </Button>
         </div>
       );
     },
