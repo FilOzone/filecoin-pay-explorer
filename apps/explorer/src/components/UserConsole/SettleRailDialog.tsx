@@ -43,7 +43,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
     isLoadingBlockNumber,
   } = useRailSettlementCalculations(rail, userAddress);
 
-  const canSettle = isPayer && !isSettling && !isLoadingBlockNumber && epochsSinceLastSettlement > 0n;
+  const canSettle = !isSettling && !isLoadingBlockNumber && epochsSinceLastSettlement > 0n;
 
   const handleSettle = async () => {
     if (isLoadingBlockNumber || currentEpoch === 0n) {
@@ -137,7 +137,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
           </div>
 
           {/* Warning */}
-          {isPayer && epochsSinceLastSettlement === 0n && (
+          {epochsSinceLastSettlement === 0n && (
             <div className='flex gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20'>
               <AlertCircle className='h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5' />
               <p className='text-xs text-orange-600 dark:text-orange-400'>
