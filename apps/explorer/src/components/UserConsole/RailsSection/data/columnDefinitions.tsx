@@ -102,9 +102,18 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
     header: "Actions",
     cell: (info) => {
       const rail = info.row.original;
+
+      const disableSettleButton = rail.state === "FINALIZED";
+
       return (
         <div className='flex justify-center'>
-          <Button baseDomain={BASE_DOMAIN} variant='primary' className='py-2 my-4' onClick={() => onSettle(rail)}>
+          <Button
+            baseDomain={BASE_DOMAIN}
+            variant='primary'
+            className='py-2 my-4'
+            onClick={() => onSettle(rail)}
+            disabled={disableSettleButton}
+          >
             Settle
           </Button>
         </div>

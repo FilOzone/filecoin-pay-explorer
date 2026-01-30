@@ -1,6 +1,6 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Rail } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -9,12 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { useState } from "react";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useBlockNumber } from "wagmi";
 import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
-import { SETTLEMENT_FEE } from "@/utils/constants";
 import { formatAddress, formatToken } from "@/utils/formatter";
 import { RailStateBadge } from "../shared";
 
@@ -26,7 +25,6 @@ interface SettleRailDialogProps {
 }
 
 export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAddress, open, onOpenChange }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: blockNumber, isLoading: isLoadingBlockNumber } = useBlockNumber({ watch: true });
 
   const { constants } = useSynapse();
@@ -42,20 +40,17 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
     ? BigInt(rail.paymentRate) * (BigInt(blockNumber) - BigInt(rail.settledUpto))
     : 0n;
 
-  const canSettle = isPayer && !isSubmitting && !isExecuting && !isLoadingBlockNumber;
+  const canSettle = isPayer && !isExecuting && !isLoadingBlockNumber;
 
-  // TODO: Fix and test Rail settlement
   const handleSettle = async () => {
     if (!blockNumber) {
       console.log("Failed to Fetch current chain head");
       return;
     }
     try {
-      setIsSubmitting(true);
       await execute({
         functionName: "settleRail",
         args: [rail.railId, blockNumber],
-        value: SETTLEMENT_FEE,
         metadata: {
           type: "settleRail",
           railId: rail.railId.toString(),
@@ -66,8 +61,6 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
       });
     } catch (error) {
       console.error("Settle failed:", error);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -82,13 +75,15 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
         <div className='grid gap-4 py-4'>
           {/* Rail Info */}
           <div className='grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50'>
-            <div>
+            <div className='flex flex-col gap-2'>
               <span className='text-xs text-muted-foreground'>Your Role</span>
-              <div>
-                <Badge variant={isPayer ? "destructive" : "default"}>{isPayer ? "Payer" : "Payee"}</Badge>
+              <div className='flex flex-start'>
+                <Badge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
+                  {isPayer ? "Payer" : "Payee"}
+                </Badge>
               </div>
             </div>
-            <div>
+            <div className='flex flex-col gap-2'>
               <span className='text-xs text-muted-foreground'>State</span>
               <div>
                 <RailStateBadge state={rail.state} />
@@ -157,13 +152,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
         </div>
 
         <DialogFooter>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isExecuting}
-            className='py-2'
-          >
+          <Button baseDomain={BASE_DOMAIN} variant='ghost' onClick={() => onOpenChange(false)} className='py-2'>
             Cancel
           </Button>
           <Button
@@ -173,7 +162,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
             disabled={!canSettle}
             className='py-2'
           >
-            {isSubmitting || isExecuting ? "Settling..." : "Settle Rail"}
+            {isExecuting ? "Settling..." : "Settle Rail"}
           </Button>
         </DialogFooter>
       </DialogContent>
