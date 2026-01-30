@@ -1,21 +1,19 @@
 import type { Account } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_ACCOUNTS_LEADERBOARD } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
-export interface IAccountsLeaderboard {
+interface AccountsLeaderboardResponse {
   accounts: Account[];
 }
 
 export type AccountOrderBy = "totalRails" | "totalTokens" | "totalApprovals";
 
 const useAccountsLeaderboard = (first: number = 10, orderBy: AccountOrderBy = "totalRails") =>
-  useQuery({
+  useGraphQLQuery<AccountsLeaderboardResponse, Account[]>({
     queryKey: ["accountsLeaderboard", first, orderBy],
-    queryFn: async () => {
-      const response = await executeQuery<IAccountsLeaderboard>(GET_ACCOUNTS_LEADERBOARD, { first, orderBy });
-      return response.accounts;
-    },
+    query: GET_ACCOUNTS_LEADERBOARD,
+    variables: { first, orderBy },
+    select: (data) => data.accounts,
     refetchInterval: 60 * 1000,
   });
 

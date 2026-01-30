@@ -8,11 +8,12 @@ Web application for exploring Filecoin pay Rails, Accounts, Operators and their 
 
 ### Environment Variables
 
-This app requires the following environment variable:
+This app requires the following environment variables:
 
-| Variable                       | Description                                         | Required |
-| ------------------------------ | --------------------------------------------------- | -------- |
-| `NEXT_PUBLIC_GRAPHQL_ENDPOINT` | GraphQL endpoint for the Filecoin Payments subgraph | Yes      |
+| Variable                               | Description                                   | Required |
+| -------------------------------------- | --------------------------------------------- | -------- |
+| `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET`     | Subgraph URL for Filecoin Mainnet (chain 314) | Yes      |
+| `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` | Subgraph URL for Calibration testnet (314159) | Yes      |
 
 **Setup:**
 
@@ -22,9 +23,11 @@ This app requires the following environment variable:
    cp .env.example .env
    ```
 
-2. Edit `.env` and set your subgraph endpoint:
+2. Edit `.env` and set your subgraph URLs:
+
    ```bash
-   NEXT_PUBLIC_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
+   NEXT_PUBLIC_SUBGRAPH_URL_MAINNET=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-mainnet/version/gn
+   NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-calibration/version/gn
    ```
 
 ## Running Locally

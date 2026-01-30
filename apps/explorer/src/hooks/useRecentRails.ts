@@ -1,21 +1,17 @@
 import type { Rail } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_RECENT_RAILS } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
-export interface IRecentRails {
+interface RecentRailsResponse {
   rails: Rail[];
 }
 
 const useRecentRails = (first: number = 10) =>
-  useQuery({
+  useGraphQLQuery<RecentRailsResponse, Rail[]>({
     queryKey: ["recentRails", first],
-    queryFn: async () => {
-      const response = await executeQuery<IRecentRails>(GET_RECENT_RAILS, {
-        first,
-      });
-      return response.rails;
-    },
+    query: GET_RECENT_RAILS,
+    variables: { first },
+    select: (data) => data.rails,
     refetchInterval: 60 * 1000,
   });
 
