@@ -1,17 +1,16 @@
 import { Badge as FilecoinBadge } from "@filecoin-foundation/ui-filecoin/Badge";
-import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
-import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { CopyableText, RailStateBadge } from "@/components/shared";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { RailActions } from "../components";
+import type { RailExtended } from "../types";
 
 // Create column helper
-const columnHelper = createColumnHelper<Rail & { userAddress: string }>();
+const columnHelper = createColumnHelper<RailExtended>();
 
-export const createColumns = (onSettle: (rail: Rail) => void) => [
+export const createColumns = (onSettle: (rail: RailExtended) => void) => [
   columnHelper.accessor("railId", {
     id: "railId",
     header: "Rail ID",
@@ -27,8 +26,7 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
     id: "type",
     header: "Type",
     cell: (info) => {
-      const rail = info.row.original;
-      const isPayer = rail.payer.address.toLowerCase() === rail.userAddress.toLowerCase();
+      const { isPayer } = info.row.original;
 
       return (
         <div className='flex flex-col gap-1 items-start'>
@@ -47,9 +45,8 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
     id: "counterparty",
     header: "Counterparty",
     cell: (info) => {
-      const rail = info.row.original;
-      const isPayer = rail.payer.address.toLowerCase() === rail.userAddress.toLowerCase();
-      const counterparty = isPayer ? rail.payee : rail.payer;
+      const { isPayer, payee, payer, operator } = info.row.original;
+      const counterparty = isPayer ? payee : payer;
 
       return (
         <div className='flex flex-col gap-1'>
@@ -62,7 +59,7 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
             truncate={true}
             truncateLength={8}
           />
-          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(rail.operator.address)}</div>
+          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(operator.address)}</div>
         </div>
       );
     },
@@ -78,7 +75,7 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
             {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
           </div>
           <div className='text-xs text-muted-foreground'>
-            Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
+            Settled: ${formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
           </div>
         </div>
       );
@@ -91,7 +88,9 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
       const rail = info.row.original;
       return (
         <div className='flex flex-col gap-1'>
-          <RailStateBadge state={rail.state} />
+          <div className='flex items-center gap-2'>
+            <RailStateBadge state={rail.state} />
+          </div>
           <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
         </div>
       );
@@ -100,24 +99,6 @@ export const createColumns = (onSettle: (rail: Rail) => void) => [
   columnHelper.display({
     id: "actions",
     header: "Actions",
-    cell: (info) => {
-      const rail = info.row.original;
-
-      const disableSettleButton = rail.state === "FINALIZED";
-
-      return (
-        <div className='flex justify-center'>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            variant='primary'
-            className='py-2 my-4'
-            onClick={() => onSettle(rail)}
-            disabled={disableSettleButton}
-          >
-            Settle
-          </Button>
-        </div>
-      );
-    },
+    cell: (info) => <RailActions rail={info.row.original} onSettle={onSettle} />,
   }),
 ];
