@@ -1,3 +1,4 @@
+import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
@@ -68,13 +69,12 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
 
         toast.success(content.title, {
           id: settlement.toastId,
-          description: content.description,
-          action: explorerUrl
-            ? {
-                label: `View ${txHashShort}`,
-                onClick: () => window.open(`${explorerUrl}/tx/${txHash}`, "_blank"),
-              }
-            : undefined,
+          description: undefined, // setting 'undefined' to remove the description
+          action: explorerUrl ? (
+            <ExternalTextLink className='flex items-center' href={`${explorerUrl}/tx/${txHash}`}>
+              View {txHashShort}
+            </ExternalTextLink>
+          ) : null,
         });
 
         onSettlementSuccess?.(settlement.railId, receiptData);
