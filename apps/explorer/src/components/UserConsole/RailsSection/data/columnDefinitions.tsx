@@ -5,12 +5,12 @@ import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { CopyableText, RailStateBadge } from "@/components/shared";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
-import type { RailExtended } from "../types";
+import type { RailTableRow } from "../types";
 
 // Create column helper
-const columnHelper = createColumnHelper<RailExtended>();
+const columnHelper = createColumnHelper<RailTableRow>();
 
-export const createColumns = (onSettle: (rail: RailExtended) => void) => [
+export const createColumns = (onSettle: (rail: RailTableRow) => void) => [
   columnHelper.accessor("railId", {
     id: "railId",
     header: "Rail ID",

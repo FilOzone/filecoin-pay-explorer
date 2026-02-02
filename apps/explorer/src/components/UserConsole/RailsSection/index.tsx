@@ -16,7 +16,7 @@ import { getNetworkFromChainId } from "@/utils/network";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
-import type { RailExtended } from "./types";
+import type { RailTableRow } from "./types";
 
 interface RailsSectionProps {
   account: Account;
@@ -84,7 +84,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   }, [data, searchQuery, searchFilter]);
 
   // Prepare table data with userAddress, settlement state, and isPayer calculation
-  const tableData = useMemo<RailExtended[]>(
+  const tableData = useMemo<RailTableRow[]>(
     () =>
       filteredRails.map((rail) => ({
         ...rail,

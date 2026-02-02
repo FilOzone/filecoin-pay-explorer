@@ -2,11 +2,11 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { InlineTextLoader } from "@/components/shared";
 import { BASE_DOMAIN } from "@/constants/site-metadata";
-import type { RailExtended } from "../types";
+import type { RailTableRow } from "../types";
 
 type RailActionsProps = {
-  rail: RailExtended;
-  onSettle: (rail: RailExtended) => void;
+  rail: RailTableRow;
+  onSettle: (rail: RailTableRow) => void;
 };
 
 const RailActions = ({ rail, onSettle }: RailActionsProps) => {

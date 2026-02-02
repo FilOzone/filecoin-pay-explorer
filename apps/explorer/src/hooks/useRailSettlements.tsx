@@ -174,6 +174,13 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
               txHash,
             });
           }
+          console.warn(
+            `[Settlement Warning] Settlement state not found for rail ${railIdStr} when updating with txHash. This shouldn't happen.`,
+            {
+              railId: railIdStr,
+              txHash,
+            },
+          );
           return prev;
         });
 

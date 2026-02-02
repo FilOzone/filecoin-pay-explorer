@@ -1,10 +1,10 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import type { Rail } from "@filecoin-pay/types";
 import { createColumns } from "../data/columnDefinitions";
-import type { RailExtended } from "../types";
+import type { RailTableRow } from "../types";
 
 export type RailsTableProps = {
-  data: Array<RailExtended>;
+  data: Array<RailTableRow>;
   onSettle: (rail: Rail) => void;
 };
 
