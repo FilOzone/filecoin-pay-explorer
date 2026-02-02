@@ -31,5 +31,6 @@ export const useStatsDashboard = (usdfcAddress: Hex, filAddress: Hex) =>
         filToken: response.filToken,
       } as StatsDashboardData;
     },
-    refetchInterval: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
