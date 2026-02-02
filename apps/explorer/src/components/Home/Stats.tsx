@@ -112,14 +112,24 @@ const Stats: React.FC = () => {
       {
         title: "USDFC Settled",
         value: data?.usdfcToken
-          ? formatToken(data.usdfcToken.totalSettledAmount, data.usdfcToken.decimals, "USDFC", 5)
+          ? formatToken(
+              data.usdfcToken.totalSettledAmount + data.usdfcToken.totalOneTimePayment,
+              data.usdfcToken.decimals,
+              "USDFC",
+              5,
+            )
           : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: CoinsIcon,
       },
       {
         title: "FIL Settled",
         value: data?.filToken
-          ? formatToken(data.filToken.totalSettledAmount, data.filToken.decimals, "FIL", 5)
+          ? formatToken(
+              data.filToken.totalSettledAmount + data.filToken.totalOneTimePayment,
+              data.filToken.decimals,
+              "FIL",
+              5,
+            )
           : `${DEFAULT_TOKEN_VALUE} FIL`,
         icon: CoinsIcon,
       },

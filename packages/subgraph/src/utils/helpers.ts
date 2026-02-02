@@ -1,9 +1,10 @@
 /* eslint-disable no-underscore-dangle */
 import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { erc20 } from "../../generated/Payments/erc20";
-
+import { RailOneTimePaymentProcessed } from "../../generated/Payments/Payments";
 import {
   Account,
+  OneTimePayment,
   Operator,
   OperatorApproval,
   OperatorToken,
@@ -20,6 +21,7 @@ import {
   NATIVE_TOKEN_SYMBOL,
 } from "./constants";
 import {
+  getIdFromTxHashAndLogIndex,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
   getRailEntityId,
@@ -114,6 +116,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.volume = ZERO_BIG_INT;
     token.totalDeposits = ZERO_BIG_INT;
     token.totalWithdrawals = ZERO_BIG_INT;
+    token.totalOneTimePayment = ZERO_BIG_INT;
     token.totalSettledAmount = ZERO_BIG_INT;
     token.userFunds = ZERO_BIG_INT;
     token.operatorCommission = ZERO_BIG_INT;
@@ -240,14 +243,38 @@ export const createRail = (
   rail.endEpoch = ZERO_BIG_INT;
   rail.arbiter = arbiter;
   rail.totalSettledAmount = ZERO_BIG_INT;
-  rail.totalNetPayeeAmount = ZERO_BIG_INT;
-  rail.totalCommission = ZERO_BIG_INT;
+  rail.totalOneTimePaymentAmount = ZERO_BIG_INT;
+  rail.totalOneTimePayments = ZERO_BIG_INT;
   rail.totalSettlements = ZERO_BIG_INT;
   rail.totalRateChanges = ZERO_BIG_INT;
   rail.createdAt = timestamp;
   rail.save();
 
   return rail;
+};
+
+export const createOneTimePayment = (
+  event: RailOneTimePaymentProcessed,
+  railId: Bytes,
+  totalAmount: GraphBN,
+  networkFee: GraphBN,
+  operatorCommission: GraphBN,
+  netPayeeAmount: GraphBN,
+): OneTimePayment => {
+  const entityId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+
+  const oneTimePayment = new OneTimePayment(entityId);
+  oneTimePayment.rail = railId;
+  oneTimePayment.totalAmount = totalAmount;
+  oneTimePayment.networkFee = networkFee;
+  oneTimePayment.operatorCommission = operatorCommission;
+  oneTimePayment.netPayeeAmount = netPayeeAmount;
+  oneTimePayment.txHash = event.transaction.hash;
+  oneTimePayment.blockNumber = event.block.number;
+  oneTimePayment.createdAt = event.block.timestamp;
+  oneTimePayment.save();
+
+  return oneTimePayment;
 };
 
 // RateChangeQueue entity functions

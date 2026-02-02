@@ -62,10 +62,10 @@ export type DailyOperatorMetric = {
 export type DailyTokenMetric = {
   __typename: "DailyTokenMetric";
   activeRailsCount: Scalars["BigInt"]["output"];
-  commissionPaid: Scalars["BigInt"]["output"];
   date: Scalars["String"]["output"];
   deposit: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
+  oneTimePaymentAmount: Scalars["BigInt"]["output"];
   settledAmount: Scalars["BigInt"]["output"];
   timestamp: Scalars["BigInt"]["output"];
   token: Token;
@@ -73,6 +73,19 @@ export type DailyTokenMetric = {
   uniqueHolders: Scalars["BigInt"]["output"];
   volume: Scalars["BigInt"]["output"];
   withdrawal: Scalars["BigInt"]["output"];
+};
+
+export type OneTimePayment = {
+  __typename: "OneTimePayment";
+  blockNumber: Scalars["BigInt"]["output"];
+  createdAt: Scalars["BigInt"]["output"];
+  id: Scalars["Bytes"]["output"];
+  netPayeeAmount: Scalars["BigInt"]["output"];
+  networkFee: Scalars["BigInt"]["output"];
+  operatorCommission: Scalars["BigInt"]["output"];
+  rail: Rail;
+  totalAmount: Scalars["BigInt"]["output"];
+  txHash: Scalars["Bytes"]["output"];
 };
 
 export type Operator = {
@@ -141,6 +154,7 @@ export type Rail = {
   id: Scalars["Bytes"]["output"];
   lockupFixed: Scalars["BigInt"]["output"];
   lockupPeriod: Scalars["BigInt"]["output"];
+  oneTimePayments: Array<OneTimePayment>;
   operator: Operator;
   payee: Account;
   payer: Account;
@@ -152,8 +166,8 @@ export type Rail = {
   settlements: Array<Settlement>;
   state: RailState;
   token: Token;
-  totalCommission: Scalars["BigInt"]["output"];
-  totalNetPayeeAmount: Scalars["BigInt"]["output"];
+  totalOneTimePaymentAmount: Scalars["BigInt"]["output"];
+  totalOneTimePayments: Scalars["BigInt"]["output"];
   totalRateChanges: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   totalSettlements: Scalars["BigInt"]["output"];
@@ -174,13 +188,14 @@ export type Settlement = {
   __typename: "Settlement";
   blockNumber: Scalars["BigInt"]["output"];
   createdAt: Scalars["BigInt"]["output"];
-  filBurned: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
+  networkFee: Scalars["BigInt"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
   rail: Rail;
   settledUpto: Scalars["BigInt"]["output"];
   totalNetPayeeAmount: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
+  txHash: Scalars["Bytes"]["output"];
 };
 
 export type Token = {
@@ -191,6 +206,7 @@ export type Token = {
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];
   totalDeposits: Scalars["BigInt"]["output"];
+  totalOneTimePayment: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   totalUsers: Scalars["BigInt"]["output"];
   totalWithdrawals: Scalars["BigInt"]["output"];

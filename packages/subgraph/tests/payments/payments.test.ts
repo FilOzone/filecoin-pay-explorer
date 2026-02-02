@@ -17,6 +17,7 @@ import {
 } from "../../src/payments";
 import { ONE_BIG_INT } from "../../src/utils/constants";
 import {
+  getIdFromTxHashAndLogIndex,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
   getRailEntityId,
@@ -234,9 +235,9 @@ describe("Payments", () => {
       railSetup.serviceFeeRecipient,
       commissionRateBps,
       "0", // totalSettledAmount
-      "0", // totalNetPayeeAmount
-      "0", // totalCommission
+      "0", // totalOneTimePaymentAmount
       "0", // totalSettlements
+      "0", // totalOneTimePayments
     );
   });
 
@@ -436,16 +437,49 @@ describe("Payments", () => {
     );
     handleRailOneTimePaymentProcessed(railOneTimePaymentProcessedEvent);
 
+    // Assert: One time payment processed
+    const oneTimePaymentEntityIdStr = getIdFromTxHashAndLogIndex(
+      railOneTimePaymentProcessedEvent.transaction.hash,
+      railOneTimePaymentProcessedEvent.logIndex,
+    ).toHex();
+    assert.entityCount("OneTimePayment", 1);
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "totalAmount", totalAmount.toString());
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "networkFee", networkFee.toString());
+    assert.fieldEquals(
+      "OneTimePayment",
+      oneTimePaymentEntityIdStr,
+      "operatorCommission",
+      operatorCommission.toString(),
+    );
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "netPayeeAmount", netPayeeAmount.toString());
+    assert.fieldEquals(
+      "OneTimePayment",
+      oneTimePaymentEntityIdStr,
+      "txHash",
+      railOneTimePaymentProcessedEvent.transaction.hash.toHex(),
+    );
+    assert.fieldEquals(
+      "OneTimePayment",
+      oneTimePaymentEntityIdStr,
+      "blockNumber",
+      railOneTimePaymentProcessedEvent.block.number.toString(),
+    );
+    assert.fieldEquals(
+      "OneTimePayment",
+      oneTimePaymentEntityIdStr,
+      "createdAt",
+      railOneTimePaymentProcessedEvent.block.timestamp.toString(),
+    );
+
     // Assert: Token-level state (network fee burned)
     const expectedTokenUserFunds = depositAmount.minus(networkFee);
     assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "userFunds", expectedTokenUserFunds.toString());
-    assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "totalSettledAmount", totalAmount.toString());
+    assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "totalOneTimePayment", totalAmount.toString());
 
     // Assert: Rail state updated (lockupFixed reduced, payment tracked)
-    assert.fieldEquals("Rail", railEntityIdStr, "totalSettledAmount", totalAmount.toString());
+    assert.fieldEquals("Rail", railEntityIdStr, "totalSettledAmount", "0");
+    assert.fieldEquals("Rail", railEntityIdStr, "totalOneTimePaymentAmount", totalAmount.toString());
     assert.fieldEquals("Rail", railEntityIdStr, "lockupFixed", lockupFixed.minus(totalAmount).toString());
-    assert.fieldEquals("Rail", railEntityIdStr, "totalNetPayeeAmount", netPayeeAmount.toString());
-    assert.fieldEquals("Rail", railEntityIdStr, "totalCommission", operatorCommission.toString());
 
     // Assert: Operator usage updated
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "volume", totalAmount.toString());
@@ -505,8 +539,7 @@ describe("Payments", () => {
     // Assert: Rail state updated with settlement totals
     assert.fieldEquals("Rail", railEntityId, "settledUpto", settledUpto.toString());
     assert.fieldEquals("Rail", railEntityId, "totalSettledAmount", totalSettledAmount.toString());
-    assert.fieldEquals("Rail", railEntityId, "totalNetPayeeAmount", totalNetPayeeAmount.toString());
-    assert.fieldEquals("Rail", railEntityId, "totalCommission", operatorCommission.toString());
+    assert.fieldEquals("Rail", railEntityId, "totalOneTimePaymentAmount", "0");
     assert.fieldEquals("Rail", railEntityId, "totalSettlements", "1");
 
     // Assert: Settlement entity created with correct values
@@ -514,7 +547,7 @@ describe("Payments", () => {
     assert.fieldEquals("Settlement", settlementIdStr, "totalSettledAmount", totalSettledAmount.toString());
     assert.fieldEquals("Settlement", settlementIdStr, "totalNetPayeeAmount", totalNetPayeeAmount.toString());
     assert.fieldEquals("Settlement", settlementIdStr, "operatorCommission", operatorCommission.toString());
-    assert.fieldEquals("Settlement", settlementIdStr, "filBurned", networkFee.toString());
+    assert.fieldEquals("Settlement", settlementIdStr, "networkFee", networkFee.toString());
     assert.fieldEquals("Settlement", settlementIdStr, "settledUpto", settledUpto.toString());
 
     // Assert: Payer funds debited
@@ -527,7 +560,7 @@ describe("Payments", () => {
     assert.fieldEquals("UserToken", payeeTokenIdStr, "fundsCollected", totalNetPayeeAmount.toString());
 
     // Assert: Token-level accounting (network fee burned from userFunds)
-    const expectedTokenFunds = depositAmount.minus(operatorCommission);
+    const expectedTokenFunds = depositAmount.minus(networkFee);
     assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHex(), "userFunds", expectedTokenFunds.toString());
     assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHex(), "totalSettledAmount", totalSettledAmount.toString());
 

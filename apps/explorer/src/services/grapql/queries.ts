@@ -470,11 +470,13 @@ export const GET_STATS_DASHBOARD = gql`
     usdfcToken: token(id: $usdfcAddress) {
       decimals
       totalSettledAmount
+      totalOneTimePaymentAmount
       userFunds
     }
     filToken: token(id: $filAddress) {
       decimals
       totalSettledAmount
+      totalOneTimePaymentAmount
       userFunds
     }
   }

@@ -109,7 +109,7 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
                 <TableCell className='text-right'>
                   {formatToken(settlement.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
                 </TableCell>
-                <TableCell className='text-right'>{formatFIL(settlement.filBurned)}</TableCell>
+                <TableCell className='text-right'>{formatFIL(settlement.networkFee)}</TableCell>
                 <TableCell className='text-right'>
                   {formatToken(settlement.operatorCommission, rail.token.decimals, rail.token.symbol, 8)}
                 </TableCell>

@@ -1,4 +1,5 @@
 import type { Rail } from "@filecoin-pay/types";
+import { useMemo } from "react";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { DetailCard } from "./DetailCard";
 
@@ -7,6 +8,14 @@ interface RailOverviewProps {
 }
 
 export const RailOverview: React.FC<RailOverviewProps> = ({ rail }) => {
+  const { totalNetPayeeAmount, totalCommission } = useMemo(() => {
+    const totalTransactedAmount = rail.totalOneTimePaymentAmount + rail.totalSettledAmount;
+    const totalNetworkFees = (totalTransactedAmount * 5n) / 1000n;
+    const totalCommission = (totalTransactedAmount * 995n * rail.commissionRateBps) / 10000000n;
+    const totalNetPayeeAmount = totalTransactedAmount - totalNetworkFees - totalCommission;
+    return { totalNetPayeeAmount, totalCommission };
+  }, [rail.totalOneTimePaymentAmount, rail.totalSettledAmount, rail.commissionRateBps]);
+
   return (
     <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
       <DetailCard label='Payer' value={rail.payer.address} isAddress linkTo={`/account/${rail.payer.address}`} />
@@ -37,11 +46,11 @@ export const RailOverview: React.FC<RailOverviewProps> = ({ rail }) => {
       />
       <DetailCard
         label='Total Net Payee Amount'
-        value={formatToken(rail.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
+        value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
       />
       <DetailCard
         label='Total Commission'
-        value={formatToken(rail.totalCommission, rail.token.decimals, rail.token.symbol, 8)}
+        value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
       />
 
       <DetailCard label='Commission Rate' value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`} />
