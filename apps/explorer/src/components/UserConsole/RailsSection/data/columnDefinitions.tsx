@@ -75,7 +75,7 @@ export const createColumns = (onSettle: (rail: RailExtended) => void) => [
             {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
           </div>
           <div className='text-xs text-muted-foreground'>
-            Settled: ${formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
+            Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
           </div>
         </div>
       );

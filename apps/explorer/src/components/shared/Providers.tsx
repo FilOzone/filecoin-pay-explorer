@@ -24,9 +24,6 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
                 "--normal-border": "var(--color-border-base)",
                 "--border-radius": "var(--radius)",
               } as React.CSSProperties,
-              classNames: {
-                actionButton: "!bg-(--color-card-background-hover)",
-              },
             }}
           />
         </TooltipProvider>
