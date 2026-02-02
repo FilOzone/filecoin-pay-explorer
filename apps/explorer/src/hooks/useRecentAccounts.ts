@@ -1,19 +1,17 @@
 import type { Account } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_RECENT_ACCOUNTS } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
-export interface IRecentAccounts {
+interface RecentAccountsResponse {
   accounts: Account[];
 }
 
 const useRecentAccounts = (first: number = 10) =>
-  useQuery({
+  useGraphQLQuery<RecentAccountsResponse, Account[]>({
     queryKey: ["recentAccounts", first],
-    queryFn: async () => {
-      const response = await executeQuery<IRecentAccounts>(GET_RECENT_ACCOUNTS, { first });
-      return response.accounts;
-    },
+    query: GET_RECENT_ACCOUNTS,
+    variables: { first },
+    select: (data) => data.accounts,
     refetchInterval: 60 * 1000,
   });
 

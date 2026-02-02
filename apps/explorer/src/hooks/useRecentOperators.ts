@@ -1,19 +1,17 @@
 import type { Operator } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_RECENT_OPERATORS } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
-export interface IRecentOperators {
+interface RecentOperatorsResponse {
   operators: Operator[];
 }
 
 const useRecentOperators = (first: number = 10) =>
-  useQuery({
+  useGraphQLQuery<RecentOperatorsResponse, Operator[]>({
     queryKey: ["recentOperators", first],
-    queryFn: async () => {
-      const response = await executeQuery<IRecentOperators>(GET_RECENT_OPERATORS, { first });
-      return response.operators;
-    },
+    query: GET_RECENT_OPERATORS,
+    variables: { first },
+    select: (data) => data.operators,
     refetchInterval: 60 * 1000,
   });
 

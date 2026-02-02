@@ -2,7 +2,7 @@ import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
 import { Button } from "@filecoin-pay/ui/components/button";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { BASE_DOMAIN } from "@/constants/site-metadata";
-import { Balance } from "./components";
+import { Balance, NetworkOptions } from "./components";
 
 const CustomConnectButton = () => {
   return (
@@ -31,7 +31,7 @@ const CustomConnectButton = () => {
               }
               if (chain.unsupported) {
                 return (
-                  <Button onClick={openChainModal} type='button'>
+                  <Button variant='destructive' onClick={openChainModal} type='button'>
                     Wrong network
                   </Button>
                 );
@@ -39,6 +39,7 @@ const CustomConnectButton = () => {
               return (
                 <div style={{ display: "flex", gap: 12 }}>
                   <Balance />
+                  <NetworkOptions chainId={chain.id} />
                 </div>
               );
             })()}

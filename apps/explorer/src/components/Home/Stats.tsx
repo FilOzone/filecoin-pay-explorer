@@ -18,8 +18,9 @@ import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
+import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
-import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -68,8 +69,9 @@ interface MetricCard {
 const DEFAULT_TOKEN_VALUE = "0";
 
 const Stats: React.FC = () => {
-  // TODO: Make this dynamic based on chain
-  const chain = getChain("calibration");
+  const { network } = useNetwork();
+
+  const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
 
   const cards = useMemo<MetricCard[]>(
@@ -103,12 +105,14 @@ const Stats: React.FC = () => {
         icon: "/stats/total-services.svg",
         tooltip: "Payment managers that help automate transactions between users",
       },
-      {
-        title: "Network Revenue",
-        value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
-        icon: "/stats/total-fil-burned.svg",
-        tooltip: "Network fees paid to process payment settlements",
-      },
+      // TODO: Add this back when network revenue calculation is fixed
+      // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
+      // {
+      //   title: "Network Revenue",
+      //   value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
+      //   icon: "/stats/total-fil-burned.svg",
+      //   tooltip: "Network fees paid to process payment settlements",
+      // },
       {
         title: "USDFC Settled",
         value: data?.usdfcToken
