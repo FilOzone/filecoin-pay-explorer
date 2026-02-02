@@ -10,7 +10,7 @@ import type { RailTableRow } from "../types";
 // Create column helper
 const columnHelper = createColumnHelper<RailTableRow>();
 
-export const createColumns = (onSettle: (rail: RailTableRow) => void) => [
+export const columns = [
   columnHelper.accessor("railId", {
     id: "railId",
     header: "Rail ID",
@@ -99,6 +99,6 @@ export const createColumns = (onSettle: (rail: RailTableRow) => void) => [
   columnHelper.display({
     id: "actions",
     header: "Actions",
-    cell: (info) => <RailActions rail={info.row.original} onSettle={onSettle} />,
+    cell: (info) => <RailActions rail={info.row.original} />,
   }),
 ];

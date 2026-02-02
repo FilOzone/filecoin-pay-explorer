@@ -16,6 +16,7 @@ import { getNetworkFromChainId } from "@/utils/network";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
+import { SettleRailProvider } from "./context/SettleRailContext";
 import type { RailTableRow } from "./types";
 
 interface RailsSectionProps {
@@ -124,7 +125,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <RailsEmptyNoResults searchFilter={searchFilter} />
         ) : (
           <>
-            <RailsTable data={tableData} onSettle={handleSettle} />
+            <SettleRailProvider onSettle={handleSettle}>
+              <RailsTable data={tableData} />
+            </SettleRailProvider>
 
             {/* Pagination - only show if not searching */}
             {!searchQuery && totalPages > 1 && (

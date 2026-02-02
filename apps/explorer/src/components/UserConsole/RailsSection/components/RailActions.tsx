@@ -2,14 +2,15 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { InlineTextLoader } from "@/components/shared";
 import { BASE_DOMAIN } from "@/constants/site-metadata";
+import { useSettleRail } from "../context/SettleRailContext";
 import type { RailTableRow } from "../types";
 
 type RailActionsProps = {
   rail: RailTableRow;
-  onSettle: (rail: RailTableRow) => void;
 };
 
-const RailActions = ({ rail, onSettle }: RailActionsProps) => {
+const RailActions = ({ rail }: RailActionsProps) => {
+  const { openSettleDialog } = useSettleRail();
   const isFinalized = rail.state === "FINALIZED";
   const isDisabled = isFinalized || rail.isSettling;
 
@@ -25,7 +26,7 @@ const RailActions = ({ rail, onSettle }: RailActionsProps) => {
       baseDomain={BASE_DOMAIN}
       variant='primary'
       className='px-4 py-2 my-4'
-      onClick={() => onSettle(rail)}
+      onClick={() => openSettleDialog(rail)}
       disabled={isDisabled}
     >
       {rail.isSettling ? <InlineTextLoader text='Settling' /> : "Settle"}
