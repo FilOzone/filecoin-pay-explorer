@@ -39,7 +39,12 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
   const { data: blockNumber } = useBlockNumber({ watch: true });
   const { writeContractAsync } = useWriteContract();
 
-  // Watch for any pending transaction
+  // Watches for a pending transaction receipt.
+  // Currently processes transactions sequentially: once a transaction
+  // completes, it is removed from `pendingTxHashes` in `handleTransactionComplete`,
+  // allowing the next pending transaction to be processed.
+  // NOTE: This is a temporary approach and may need a more robust solution
+  // for handling multiple concurrent pending transactions.
   const currentPendingTx = Array.from(pendingTxHashes)[0];
   const {
     data: receipt,
@@ -96,18 +101,16 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
       }
 
       // Cleanup
-      setTimeout(() => {
-        setSettlements((prev) => {
-          const next = new Map(prev);
-          next.delete(settlement.railId);
-          return next;
-        });
-        setPendingTxHashes((prev) => {
-          const next = new Set(prev);
-          next.delete(txHash);
-          return next;
-        });
-      }, 3000);
+      setSettlements((prev) => {
+        const next = new Map(prev);
+        next.delete(settlement.railId);
+        return next;
+      });
+      setPendingTxHashes((prev) => {
+        const next = new Set(prev);
+        next.delete(txHash);
+        return next;
+      });
     },
     [explorerUrl, onSettlementSuccess, onSettlementError],
   );
@@ -185,12 +188,11 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         });
 
         // Get the settlement to access toastId
-        const settlement = settlements.get(railIdStr);
+        const settlement = settlementsRef.current.get(railIdStr);
 
         // Dismiss the loading toast and show error
         toast.dismiss(settlement?.toastId);
         toast.error("Settlement Rejected", {
-          id: settlement?.toastId,
           description: "Transaction was rejected. Please try again.",
           duration: 4000,
         });
@@ -205,7 +207,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         throw err;
       }
     },
-    [blockNumber, contractAddress, abi, writeContractAsync, settlements],
+    [blockNumber, contractAddress, abi, writeContractAsync],
   );
 
   const isSettling = useCallback(
