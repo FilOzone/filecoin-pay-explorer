@@ -1,8 +1,7 @@
 import type { PaymentsMetric, Token } from "@filecoin-pay/types";
-import { useQuery } from "@tanstack/react-query";
 import type { Hex } from "viem";
-import { executeQuery } from "@/services/grapql/client";
 import { GET_STATS_DASHBOARD } from "@/services/grapql/queries";
+import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface StatsDashboardData {
   paymentsMetrics: PaymentsMetric;
@@ -17,20 +16,18 @@ interface GetStatsDashboardResponse {
 }
 
 export const useStatsDashboard = (usdfcAddress: Hex, filAddress: Hex) =>
-  useQuery({
+  useGraphQLQuery<GetStatsDashboardResponse, StatsDashboardData>({
     queryKey: ["statsDashboard", usdfcAddress, filAddress],
-    queryFn: async () => {
-      const response = await executeQuery<GetStatsDashboardResponse>(GET_STATS_DASHBOARD, {
-        usdfcAddress,
-        filAddress,
-      });
-
-      return {
-        paymentsMetrics: response.paymentsMetrics[0],
-        usdfcToken: response.usdfcToken,
-        filToken: response.filToken,
-      } as StatsDashboardData;
+    query: GET_STATS_DASHBOARD,
+    variables: {
+      usdfcAddress,
+      filAddress,
     },
+    select: (data) => ({
+      paymentsMetrics: data.paymentsMetrics[0],
+      usdfcToken: data.usdfcToken,
+      filToken: data.filToken,
+    }),
+    enabled: !!usdfcAddress && !!filAddress,
     refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
   });
