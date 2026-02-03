@@ -62,6 +62,7 @@ export type DailyOperatorMetric = {
 export type DailyTokenMetric = {
   __typename: "DailyTokenMetric";
   activeRailsCount: Scalars["BigInt"]["output"];
+  commissionPaid: Scalars["BigInt"]["output"];
   date: Scalars["String"]["output"];
   deposit: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
@@ -120,6 +121,7 @@ export type OperatorToken = {
   id: Scalars["Bytes"]["output"];
   lockupAllowance: Scalars["BigInt"]["output"];
   lockupUsage: Scalars["BigInt"]["output"];
+  oneTimePaymentAmount: Scalars["BigInt"]["output"];
   operator: Operator;
   rateAllowance: Scalars["BigInt"]["output"];
   rateUsage: Scalars["BigInt"]["output"];
