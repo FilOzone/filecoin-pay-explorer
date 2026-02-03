@@ -572,7 +572,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
 
   operatorApproval.lockupAllowance = operatorApproval.lockupAllowance.minus(totalAmount);
   operatorApproval.lockupUsage = operatorApproval.lockupUsage.minus(totalAmount);
-  operatorToken.settledAmount = operatorToken.settledAmount.plus(totalAmount);
+  operatorToken.oneTimePaymentAmount = operatorToken.oneTimePaymentAmount.plus(totalAmount);
   operatorToken.lockupAllowance = operatorToken.lockupAllowance.minus(totalAmount);
   operatorToken.lockupUsage = operatorToken.lockupUsage.minus(totalAmount);
   operatorToken.commissionEarned = operatorToken.commissionEarned.plus(operatorCommission);

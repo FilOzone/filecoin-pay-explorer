@@ -205,6 +205,7 @@ export const createOrLoadOperatorToken = (operator: Bytes, token: Bytes): Operat
     operatorToken.lockupUsage = ZERO_BIG_INT;
     operatorToken.rateUsage = ZERO_BIG_INT;
     operatorToken.settledAmount = ZERO_BIG_INT;
+    operatorToken.oneTimePaymentAmount = ZERO_BIG_INT;
 
     operatorToken.save();
 

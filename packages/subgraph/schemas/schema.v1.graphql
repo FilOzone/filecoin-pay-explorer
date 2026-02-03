@@ -63,6 +63,7 @@ type OperatorToken @entity(immutable: false) {
   lockupUsage: BigInt!
   rateUsage: BigInt!
   settledAmount: BigInt!
+  oneTimePaymentAmount: BigInt!
 
   operator: Operator!
   token: Token!
