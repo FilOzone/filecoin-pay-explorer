@@ -13,6 +13,7 @@ const FILECOIN_FOUNDATION_URL = "https://fil.org/";
 
 const FOC_URLS = {
   documentation: "https://docs.filecoin.cloud",
+  github: "https://github.com/FilOzone/filecoin-pay-explorer",
   filecoinCloud: "https://filecoin.cloud",
   filecoinPay: "https://pay.filecoin.cloud",
   proofOfDataPossession: "#todo",
