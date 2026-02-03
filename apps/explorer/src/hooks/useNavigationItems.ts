@@ -33,6 +33,10 @@ export function useNavigationItems() {
         label: "Documentation",
         href: FOC_URLS.documentation,
       },
+      {
+        label: "GitHub",
+        href: FOC_URLS.github,
+      },
     ],
     [network],
   );
