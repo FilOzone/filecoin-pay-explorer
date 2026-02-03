@@ -446,6 +446,7 @@ export const GET_TOKEN_DETAILS = gql`
       totalSettledAmount
       userFunds
       totalUsers
+      totalLocked
     }
   }
 `;

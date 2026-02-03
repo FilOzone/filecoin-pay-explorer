@@ -14,6 +14,7 @@ export const DEFAULT_THEME = "system";
 export const THEME_STORAGE_KEY = "filecoin-pay-explorer-theme";
 export const DEFAULT_TOAST_POSITION = "top-right";
 export const DEFAULT_NETWORK = "mainnet";
+export const FIL_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const explorerUrls = {
   mainnet: "https://filfox.info/en",

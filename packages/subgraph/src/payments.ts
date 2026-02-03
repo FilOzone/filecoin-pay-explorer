@@ -236,6 +236,14 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
   }
   rail.save();
 
+  // Update token totalLocked
+  const lockupFixedDelta = newLockupFixed.minus(oldLockupFixed);
+  const token = Token.load(rail.token);
+  if (token) {
+    token.totalLocked = token.totalLocked.plus(lockupFixedDelta);
+    token.save();
+  }
+
   if (!payerToken) {
     return;
   }
@@ -525,6 +533,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
+    token.totalLocked = token.totalLocked.minus(oneTimePayment);
     token.save();
   }
   if (payerToken) {
@@ -578,6 +587,13 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
   const oldLockup = rail.lockupFixed.plus(rail.lockupPeriod.times(rail.paymentRate));
   updateOperatorLockup(operatorApproval, oldLockup, ZERO_BIG_INT);
   updateOperatorTokenLockup(operatorToken, oldLockup, ZERO_BIG_INT);
+
+  // Reduce token totalLocked by rail's lockupFixed
+  const token = Token.load(rail.token);
+  if (token) {
+    token.totalLocked = token.totalLocked.minus(rail.lockupFixed);
+    token.save();
+  }
 
   rail.state = "FINALIZED";
   rail.save();

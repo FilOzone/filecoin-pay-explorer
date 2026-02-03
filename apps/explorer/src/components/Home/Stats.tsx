@@ -13,14 +13,15 @@ import {
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
+import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
 import usePayMetrics from "@/hooks/usePayMetrics";
 import { useTokenDetails } from "@/hooks/useTokenDetails";
-import { formatCompactNumber, formatToken } from "@/utils/formatter";
+import { FIL_ADDRESS } from "@/utils/constants";
+import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -73,18 +74,9 @@ const Stats: React.FC = () => {
   const { network } = useNetwork();
 
   const chain = getChain(network);
-  const {
-    data: usdfcData,
-    isLoading: isUsdfcLoading,
-    isError: isUsdfcError,
-    error: usdfcError,
-  } = useTokenDetails(chain.contracts.usdfc.address);
+  const { data: usdfcData, isLoading: isUsdfcLoading } = useTokenDetails(chain.contracts.usdfc.address);
 
-  useEffect(() => {
-    if (isUsdfcError && usdfcError) {
-      console.error("Error fetching USDFC Token Details:", usdfcError);
-    }
-  }, [isUsdfcError, usdfcError]);
+  const { data: filData, isLoading: isFilLoading } = useTokenDetails(FIL_ADDRESS);
 
   const cards = useMemo<MetricCard[]>(
     () => [
@@ -103,6 +95,18 @@ const Stats: React.FC = () => {
         value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
         icon: CurrencyCircleDollarIcon,
         isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Total USDFC Locked",
+        value: usdfcData ? formatToken(usdfcData.totalLocked, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
+        icon: LockIcon,
+        isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Total FIL Locked",
+        value: formatFIL(filData?.totalLocked || "0"),
+        icon: LockIcon,
+        isLoading: isFilLoading,
       },
       {
         title: "Total Rails",
@@ -156,7 +160,7 @@ const Stats: React.FC = () => {
         tooltip: "Payment streams that have been permanently stopped",
       },
     ],
-    [data, usdfcData, isUsdfcLoading],
+    [data, usdfcData, isUsdfcLoading, filData, isFilLoading],
   );
 
   return (

@@ -47,6 +47,7 @@ import {
   assertRailParams,
   assertRailRateParams,
   assertTokenState,
+  assertTokenTotalLocked,
   assertUserTokenState,
   calculateNetworkFee,
   calculateOperatorCommission,
@@ -357,6 +358,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
+    // Assert 1: Verify token totalLocked is updated
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+
     // Act 2: Modify lockup to new values (lockupPeriod -> newLockupPeriod, lockupFixed -> newLockupFixed)
     const newLockupPeriod = GraphBN.fromI32(5740);
     const newLockupFixed = GraphBN.fromI32(1_000_000);
@@ -373,6 +377,9 @@ describe("Payments", () => {
     assertRailLockupParams(railId, newLockupPeriod, newLockupFixed);
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", newLockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", newLockupFixed.toString());
+
+    // Assert 2: Verify token totalLocked is updated to new value
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, newLockupFixed);
   });
 
   test("should handle one time payment properly", () => {
@@ -421,6 +428,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
+    // Verify: Token totalLocked is set before payment
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+
     // Act: Process one-time payment
     // Payment breakdown: totalAmount = netPayeeAmount + operatorCommission + networkFee
     const totalAmount = GraphBN.fromI64(1_000_000_000_000); // 10^12 = 0.000001 FIL
@@ -459,6 +469,9 @@ describe("Payments", () => {
     assert.fieldEquals("UserToken", payerTokenEntityIdStr, "funds", remainingPayerFunds.toString());
     assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "funds", netPayeeAmount.toString());
     assert.fieldEquals("UserToken", serviceFeeRecipientTokenIdStr, "funds", operatorCommission.toString());
+
+    // Assert: Token totalLocked reduced by one-time payment amount
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed.minus(totalAmount));
   });
 
   test("should handle rail settled properly", () => {
@@ -589,6 +602,9 @@ describe("Payments", () => {
     assertRailRateParams(railId, "ACTIVE", paymentRate, railRateModifiedEvent.block.number.toString());
     assertRailLockupParams(railId, lockupPeriod, lockupFixed);
 
+    // Verify: Token totalLocked equals lockupFixed
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+
     // Verify: Operator usage reflects lockupFixed + (paymentRate * lockupPeriod)
     const expectedLockupUsage = lockupFixed.plus(paymentRate.times(lockupPeriod));
     assertOperatorApprovalState(
@@ -620,5 +636,8 @@ describe("Payments", () => {
 
     // Assert: Operator lockup usage is cleared
     assertOperatorLockupCleared(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN);
+
+    // Assert: Token totalLocked is reduced by rail's lockupFixed (back to 0)
+    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
   });
 });
