@@ -137,6 +137,7 @@ type RateChangeQueue @entity(immutable: false) {
 type Settlement @entity(immutable: true) {
   id: Bytes! # txHash + logIndex
   rail: Rail!
+  token: Token! # rail.token
   totalSettledAmount: BigInt!
   totalNetPayeeAmount: BigInt!
   networkFee: BigInt!
@@ -151,6 +152,7 @@ type Settlement @entity(immutable: true) {
 type OneTimePayment @entity(immutable: true) {
   id: Bytes! # txHash + logIndex
   rail: Rail!
+  token: Token! # rail.token
   totalAmount: BigInt! # totalAmount = netPayeeAmount + operatorCommission + networkFee
   networkFee: BigInt! # networkFee = 0.5% of totalAmount
   operatorCommission: BigInt! # operatorCommission = (totalAmount - networkFee) * rail.commissionRateBps / 10000

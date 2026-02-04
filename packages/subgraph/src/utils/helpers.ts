@@ -257,6 +257,7 @@ export const createRail = (
 export const createOneTimePayment = (
   event: RailOneTimePaymentProcessed,
   railId: Bytes,
+  token: Bytes,
   totalAmount: GraphBN,
   networkFee: GraphBN,
   operatorCommission: GraphBN,
@@ -266,6 +267,7 @@ export const createOneTimePayment = (
 
   const oneTimePayment = new OneTimePayment(entityId);
   oneTimePayment.rail = railId;
+  oneTimePayment.token = token;
   oneTimePayment.totalAmount = totalAmount;
   oneTimePayment.networkFee = networkFee;
   oneTimePayment.operatorCommission = operatorCommission;

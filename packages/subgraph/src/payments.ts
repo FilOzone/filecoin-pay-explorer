@@ -370,6 +370,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
 
   settlement.rail = rail.id;
+  settlement.token = rail.token;
   settlement.totalSettledAmount = totalSettledAmount;
   settlement.totalNetPayeeAmount = totalNetPayeeAmount;
   settlement.operatorCommission = operatorCommission;
@@ -532,7 +533,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   rail.save();
 
   // create one time payment entity
-  createOneTimePayment(event, rail.id, totalAmount, networkFee, operatorCommission, netPayeeAmount);
+  createOneTimePayment(event, rail.id, rail.token, totalAmount, networkFee, operatorCommission, netPayeeAmount);
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;

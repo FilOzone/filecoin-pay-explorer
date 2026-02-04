@@ -21,7 +21,6 @@ import {
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
   getRailEntityId,
-  getSettlementEntityId,
   getUserTokenEntityId,
 } from "../../src/utils/keys";
 import { ZERO_BIG_INT } from "../../src/utils/metrics";
@@ -402,7 +401,8 @@ describe("Payments", () => {
     handleRailLockupModified(railLockupModifiedEvent);
 
     // Pre-compute entity IDs for assertions
-    const railEntityIdStr = getRailEntityId(railId).toHex();
+    const railEntityId = getRailEntityId(railId);
+    const railEntityIdStr = railEntityId.toHex();
     const operatorTokenEntityIdStr = getOperatorTokenEntityId(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN).toHex();
     const operatorApprovalEntityIdStr = getOperatorApprovalEntityId(
       TEST_ADDRESSES.ACCOUNT,
@@ -442,8 +442,12 @@ describe("Payments", () => {
       railOneTimePaymentProcessedEvent.transaction.hash,
       railOneTimePaymentProcessedEvent.logIndex,
     ).toHex();
+    const rail = Rail.load(railEntityId);
+    assert.assertNotNull(rail); // Safe to use non-null assertion below
     assert.entityCount("OneTimePayment", 1);
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "totalAmount", totalAmount.toString());
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "rail", rail!.id.toHex());
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "token", rail!.token.toHex());
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "networkFee", networkFee.toString());
     assert.fieldEquals(
       "OneTimePayment",
@@ -514,7 +518,8 @@ describe("Payments", () => {
     handleRailRateModified(railRateModifiedEvent);
 
     // Pre-compute entity IDs for assertions
-    const railEntityId = getRailEntityId(railId).toHex();
+    const railEntityId = getRailEntityId(railId);
+    const railEntityIdStr = railEntityId.toHex();
     const payerTokenIdStr = getUserTokenEntityId(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.TOKEN).toHexString();
     const payeeTokenIdStr = getUserTokenEntityId(TEST_ADDRESSES.PAYEE, TEST_ADDRESSES.TOKEN).toHexString();
     const operatorTokenIdStr = getOperatorTokenEntityId(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN).toHexString();
@@ -538,14 +543,21 @@ describe("Payments", () => {
     handleRailSettled(railSettledEvent);
 
     // Assert: Rail state updated with settlement totals
-    assert.fieldEquals("Rail", railEntityId, "settledUpto", settledUpto.toString());
-    assert.fieldEquals("Rail", railEntityId, "totalSettledAmount", totalSettledAmount.toString());
-    assert.fieldEquals("Rail", railEntityId, "totalOneTimePaymentAmount", "0");
-    assert.fieldEquals("Rail", railEntityId, "totalSettlements", "1");
+    assert.fieldEquals("Rail", railEntityIdStr, "settledUpto", settledUpto.toString());
+    assert.fieldEquals("Rail", railEntityIdStr, "totalSettledAmount", totalSettledAmount.toString());
+    assert.fieldEquals("Rail", railEntityIdStr, "totalOneTimePaymentAmount", "0");
+    assert.fieldEquals("Rail", railEntityIdStr, "totalSettlements", "1");
 
     // Assert: Settlement entity created with correct values
-    const settlementIdStr = getSettlementEntityId(railSettledEvent.transaction.hash, railSettledEvent.logIndex).toHex();
+    const settlementIdStr = getIdFromTxHashAndLogIndex(
+      railSettledEvent.transaction.hash,
+      railSettledEvent.logIndex,
+    ).toHex();
+    const rail = Rail.load(railEntityId);
+    assert.assertNotNull(rail); // Safe to use non-null assertion below
     assert.fieldEquals("Settlement", settlementIdStr, "totalSettledAmount", totalSettledAmount.toString());
+    assert.fieldEquals("Settlement", settlementIdStr, "rail", rail!.id.toHex());
+    assert.fieldEquals("Settlement", settlementIdStr, "token", rail!.token.toHex());
     assert.fieldEquals("Settlement", settlementIdStr, "totalNetPayeeAmount", totalNetPayeeAmount.toString());
     assert.fieldEquals("Settlement", settlementIdStr, "operatorCommission", operatorCommission.toString());
     assert.fieldEquals("Settlement", settlementIdStr, "networkFee", networkFee.toString());
