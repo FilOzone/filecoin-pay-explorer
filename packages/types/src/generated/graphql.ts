@@ -172,6 +172,8 @@ export type RateChangeQueue = {
 
 export type Settlement = {
   __typename: "Settlement";
+  blockNumber: Scalars["BigInt"]["output"];
+  createdAt: Scalars["BigInt"]["output"];
   filBurned: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
@@ -189,7 +191,9 @@ export type Token = {
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];
   totalDeposits: Scalars["BigInt"]["output"];
+  totalFixedLockup: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
+  totalStreamingLockup: Scalars["BigInt"]["output"];
   totalUsers: Scalars["BigInt"]["output"];
   totalWithdrawals: Scalars["BigInt"]["output"];
   userFunds: Scalars["BigInt"]["output"];

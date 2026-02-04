@@ -47,7 +47,8 @@ import {
   assertRailParams,
   assertRailRateParams,
   assertTokenState,
-  assertTokenTotalLocked,
+  assertTokenTotalFixedLockup,
+  assertTokenTotalStreamingLockup,
   assertUserTokenState,
   calculateNetworkFee,
   calculateOperatorCommission,
@@ -358,8 +359,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
-    // Assert 1: Verify token totalLocked is updated
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+    // Assert 1: Verify token lockup is updated (no streaming since paymentRate = 0)
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
 
     // Act 2: Modify lockup to new values (lockupPeriod -> newLockupPeriod, lockupFixed -> newLockupFixed)
     const newLockupPeriod = GraphBN.fromI32(5740);
@@ -378,8 +380,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", newLockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", newLockupFixed.toString());
 
-    // Assert 2: Verify token totalLocked is updated to new value
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, newLockupFixed);
+    // Assert 2: Verify token lockup is updated to new value (no streaming since paymentRate = 0)
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, newLockupFixed);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
   });
 
   test("should handle one time payment properly", () => {
@@ -428,8 +431,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
-    // Verify: Token totalLocked is set before payment
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+    // Verify: Token lockup is set before payment (no streaming since paymentRate = 0)
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
 
     // Act: Process one-time payment
     // Payment breakdown: totalAmount = netPayeeAmount + operatorCommission + networkFee
@@ -470,8 +474,9 @@ describe("Payments", () => {
     assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "funds", netPayeeAmount.toString());
     assert.fieldEquals("UserToken", serviceFeeRecipientTokenIdStr, "funds", operatorCommission.toString());
 
-    // Assert: Token totalLocked reduced by one-time payment amount
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed.minus(totalAmount));
+    // Assert: Token fixed lockup reduced by one-time payment amount
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed.minus(totalAmount));
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
   });
 
   test("should handle rail settled properly", () => {
@@ -602,8 +607,10 @@ describe("Payments", () => {
     assertRailRateParams(railId, "ACTIVE", paymentRate, railRateModifiedEvent.block.number.toString());
     assertRailLockupParams(railId, lockupPeriod, lockupFixed);
 
-    // Verify: Token totalLocked equals lockupFixed
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, lockupFixed);
+    // Verify: Token lockup includes both fixed and streaming
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+    const expectedStreamingLockup = paymentRate.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup);
 
     // Verify: Operator usage reflects lockupFixed + (paymentRate * lockupPeriod)
     const expectedLockupUsage = lockupFixed.plus(paymentRate.times(lockupPeriod));
@@ -637,7 +644,8 @@ describe("Payments", () => {
     // Assert: Operator lockup usage is cleared
     assertOperatorLockupCleared(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN);
 
-    // Assert: Token totalLocked is reduced by rail's lockupFixed (back to 0)
-    assertTokenTotalLocked(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+    // Assert: Token lockup is cleared (both fixed and streaming back to 0)
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
   });
 });

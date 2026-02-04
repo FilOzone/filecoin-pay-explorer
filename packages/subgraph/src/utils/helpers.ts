@@ -104,7 +104,8 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.totalSettledAmount = ZERO_BIG_INT;
     token.userFunds = ZERO_BIG_INT;
     token.operatorCommission = ZERO_BIG_INT;
-    token.totalLocked = ZERO_BIG_INT;
+    token.totalFixedLockup = ZERO_BIG_INT;
+    token.totalStreamingLockup = ZERO_BIG_INT;
     token.totalUsers = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);

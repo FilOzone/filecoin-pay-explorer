@@ -199,6 +199,14 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
     payerToken.save();
   }
 
+  // Remove streaming lockup for terminated rail
+  const token = Token.load(rail.token);
+  if (token) {
+    const streamingLockup = rail.paymentRate.times(rail.lockupPeriod);
+    token.totalStreamingLockup = token.totalStreamingLockup.minus(streamingLockup);
+    token.save();
+  }
+
   rail.save();
 
   // collect rail state change metrics
@@ -236,11 +244,20 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
   }
   rail.save();
 
-  // Update token totalLocked
-  const lockupFixedDelta = newLockupFixed.minus(oldLockupFixed);
+  // Update token lockup metrics
   const token = Token.load(rail.token);
   if (token) {
-    token.totalLocked = token.totalLocked.plus(lockupFixedDelta);
+    // Fixed lockup delta
+    const fixedDelta = newLockupFixed.minus(oldLockupFixed);
+    token.totalFixedLockup = token.totalFixedLockup.plus(fixedDelta);
+
+    // Streaming lockup delta (only if not terminated)
+    if (!isTerminated) {
+      const oldStreaming = rail.paymentRate.times(oldLockupPeriod);
+      const newStreaming = rail.paymentRate.times(newLockupPeriod);
+      const streamingDelta = newStreaming.minus(oldStreaming);
+      token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
+    }
     token.save();
   }
 
@@ -343,6 +360,16 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       // update operator lockup usage and save
       updateOperatorLockup(operatorApproval, oldLockup, newLockup);
       updateOperatorTokenLockup(operatorToken, oldLockup, newLockup);
+
+      // Update token streaming lockup
+      if (!isTerminated) {
+        const token = Token.load(rail.token);
+        if (token) {
+          const streamingDelta = newLockup.minus(oldLockup);
+          token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
+          token.save();
+        }
+      }
       return;
     }
   }
@@ -533,7 +560,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
-    token.totalLocked = token.totalLocked.minus(oneTimePayment);
+    token.totalFixedLockup = token.totalFixedLockup.minus(oneTimePayment);
     token.save();
   }
   if (payerToken) {
@@ -588,10 +615,12 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
   updateOperatorLockup(operatorApproval, oldLockup, ZERO_BIG_INT);
   updateOperatorTokenLockup(operatorToken, oldLockup, ZERO_BIG_INT);
 
-  // Reduce token totalLocked by rail's lockupFixed
+  // Reduce token lockup metrics by rail's fixed and streaming lockup
   const token = Token.load(rail.token);
   if (token) {
-    token.totalLocked = token.totalLocked.minus(rail.lockupFixed);
+    token.totalFixedLockup = token.totalFixedLockup.minus(rail.lockupFixed);
+    const streamingLockup = rail.lockupPeriod.times(rail.paymentRate);
+    token.totalStreamingLockup = token.totalStreamingLockup.minus(streamingLockup);
     token.save();
   }
 

@@ -98,13 +98,21 @@ const Stats: React.FC = () => {
       },
       {
         title: "Total USDFC Locked",
-        value: usdfcData ? formatToken(usdfcData.totalLocked, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
+        value: usdfcData
+          ? formatToken(
+              (BigInt(usdfcData.totalFixedLockup) + BigInt(usdfcData.totalStreamingLockup)).toString(),
+              usdfcData.decimals,
+              "USDFC",
+            )
+          : DEFAULT_USDFC_VALUE,
         icon: LockIcon,
         isLoading: isUsdfcLoading,
       },
       {
         title: "Total FIL Locked",
-        value: formatFIL(filData?.totalLocked || "0"),
+        value: formatFIL(
+          (BigInt(filData?.totalFixedLockup || "0") + BigInt(filData?.totalStreamingLockup || "0")).toString(),
+        ),
         icon: LockIcon,
         isLoading: isFilLoading,
       },

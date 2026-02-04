@@ -23,7 +23,8 @@ type Token @entity(immutable: false) {
   totalUsers: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
   operatorCommission: BigInt!
-  totalLocked: BigInt! # sum of all lockupFixed for Rails with this token
+  totalFixedLockup: BigInt! # sum of all lockupFixed for Rails with this token
+  totalStreamingLockup: BigInt! # sum of all (paymentRate × lockupPeriod) for active Rails
   userTokens: [UserToken!]! @derivedFrom(field: "token")
 }
 
