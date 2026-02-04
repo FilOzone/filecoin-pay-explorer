@@ -85,6 +85,7 @@ export type OneTimePayment = {
   networkFee: Scalars["BigInt"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
   rail: Rail;
+  token: Token;
   totalAmount: Scalars["BigInt"]["output"];
   txHash: Scalars["Bytes"]["output"];
 };
@@ -195,6 +196,7 @@ export type Settlement = {
   operatorCommission: Scalars["BigInt"]["output"];
   rail: Rail;
   settledUpto: Scalars["BigInt"]["output"];
+  token: Token;
   totalNetPayeeAmount: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   txHash: Scalars["Bytes"]["output"];
