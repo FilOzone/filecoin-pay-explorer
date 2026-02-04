@@ -9,9 +9,9 @@ interface RailOverviewProps {
 
 export const RailOverview: React.FC<RailOverviewProps> = ({ rail }) => {
   const { totalNetPayeeAmount, totalCommission } = useMemo(() => {
-    const totalTransactedAmount = rail.totalOneTimePaymentAmount + rail.totalSettledAmount;
+    const totalTransactedAmount = BigInt(rail.totalOneTimePaymentAmount) + BigInt(rail.totalSettledAmount);
     const totalNetworkFees = (totalTransactedAmount * 5n) / 1000n;
-    const totalCommission = (totalTransactedAmount * 995n * rail.commissionRateBps) / 10000000n;
+    const totalCommission = (totalTransactedAmount * 995n * BigInt(rail.commissionRateBps)) / 10000000n;
     const totalNetPayeeAmount = totalTransactedAmount - totalNetworkFees - totalCommission;
     return { totalNetPayeeAmount, totalCommission };
   }, [rail.totalOneTimePaymentAmount, rail.totalSettledAmount, rail.commissionRateBps]);
