@@ -117,7 +117,7 @@ const Stats: React.FC = () => {
         title: "Total USDFC Settled",
         value: data?.usdfcToken
           ? formatToken(
-              data.usdfcToken.totalSettledAmount + data.usdfcToken.totalOneTimePayment,
+              BigInt(data.usdfcToken.totalSettledAmount) + BigInt(data.usdfcToken.totalOneTimePayment),
               data.usdfcToken.decimals,
               "USDFC",
               5,
@@ -129,7 +129,7 @@ const Stats: React.FC = () => {
         title: "Total FIL Settled",
         value: data?.filToken
           ? formatToken(
-              data.filToken.totalSettledAmount + data.filToken.totalOneTimePayment,
+              BigInt(data.filToken.totalSettledAmount) + BigInt(data.filToken.totalOneTimePayment),
               data.filToken.decimals,
               "FIL",
               5,
