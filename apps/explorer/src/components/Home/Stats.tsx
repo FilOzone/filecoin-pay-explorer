@@ -16,12 +16,11 @@ import type { IconProps } from "@phosphor-icons/react";
 import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
+import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
-import usePayMetrics from "@/hooks/usePayMetrics";
-import { useTokenDetails } from "@/hooks/useTokenDetails";
-import { FIL_ADDRESS } from "@/utils/constants";
-import { formatCompactNumber, formatFIL, formatToken } from "@/utils/formatter";
+import { useStatsDashboard } from "@/hooks/useStatsDashboard";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -67,64 +66,66 @@ interface MetricCard {
   isLoading?: boolean;
 }
 
-const DEFAULT_USDFC_VALUE = "0 USDFC";
+const DEFAULT_TOKEN_VALUE = "0";
 
 const Stats: React.FC = () => {
-  const { data, isLoading, isError, error, refetch } = usePayMetrics();
   const { network } = useNetwork();
 
   const chain = getChain(network);
-  const { data: usdfcData, isLoading: isUsdfcLoading } = useTokenDetails(chain.contracts.usdfc.address);
-
-  const { data: filData, isLoading: isFilLoading } = useTokenDetails(FIL_ADDRESS);
+  const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
 
   const cards = useMemo<MetricCard[]>(
     () => [
       {
         title: "Unique Payers",
-        value: formatCompactNumber(data?.uniquePayers || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayers || 0),
         icon: "/stats/unique-payers.svg",
       },
       {
         title: "Unique Payees",
-        value: formatCompactNumber(data?.uniquePayees || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayees || 0),
         icon: "/stats/unique-payees.svg",
       },
       {
         title: "Total USDFC",
-        value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
+        value: data?.usdfcToken
+          ? formatToken(data.usdfcToken.userFunds, data.usdfcToken.decimals, "USDFC")
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: CurrencyCircleDollarIcon,
-        isLoading: isUsdfcLoading,
       },
       {
         title: "Total USDFC Locked",
-        value: usdfcData
+        value: data?.usdfcToken
           ? formatToken(
-              (BigInt(usdfcData.totalFixedLockup) + BigInt(usdfcData.totalStreamingLockup)).toString(),
-              usdfcData.decimals,
+              (BigInt(data.usdfcToken.totalFixedLockup) + BigInt(data.usdfcToken.totalStreamingLockup)).toString(),
+              data.usdfcToken.decimals,
               "USDFC",
             )
-          : DEFAULT_USDFC_VALUE,
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: LockIcon,
-        isLoading: isUsdfcLoading,
       },
       {
         title: "Total FIL Locked",
-        value: formatFIL(
-          (BigInt(filData?.totalFixedLockup || "0") + BigInt(filData?.totalStreamingLockup || "0")).toString(),
-        ),
+        value: data?.filToken
+          ? formatToken(
+              (
+                BigInt(data.filToken.totalFixedLockup || "0") + BigInt(data.filToken.totalStreamingLockup || "0")
+              ).toString(),
+              data.filToken.decimals,
+              "FIL",
+            )
+          : `${DEFAULT_TOKEN_VALUE} FIL`,
         icon: LockIcon,
-        isLoading: isFilLoading,
       },
       {
         title: "Total Rails",
-        value: formatCompactNumber(data?.totalRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalRails || 0),
         icon: "/stats/total-rails.svg",
         tooltip: "Ongoing payment streams between users",
       },
       {
         title: "Services",
-        value: formatCompactNumber(data?.totalOperators || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalOperators || 0),
         icon: "/stats/total-services.svg",
         tooltip: "Payment managers that help automate transactions between users",
       },
@@ -132,43 +133,59 @@ const Stats: React.FC = () => {
       // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
       // {
       //   title: "Network Revenue",
-      //   value: formatFIL(data?.totalFilBurned || "0"),
+      //   value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
       //   icon: "/stats/total-fil-burned.svg",
       //   tooltip: "Network fees paid to process payment settlements",
       // },
       {
-        title: "USDFC Settled",
-        value: usdfcData
-          ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC", 5)
-          : DEFAULT_USDFC_VALUE,
+        title: "Total USDFC Transacted",
+        value: data?.usdfcToken
+          ? formatToken(
+              BigInt(data.usdfcToken.totalSettledAmount) + BigInt(data.usdfcToken.totalOneTimePayment),
+              data.usdfcToken.decimals,
+              "USDFC",
+              5,
+            )
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: CoinsIcon,
-        isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Total FIL Transacted",
+        value: data?.filToken
+          ? formatToken(
+              BigInt(data.filToken.totalSettledAmount) + BigInt(data.filToken.totalOneTimePayment),
+              data.filToken.decimals,
+              "FIL",
+              5,
+            )
+          : `${DEFAULT_TOKEN_VALUE} FIL`,
+        icon: CoinsIcon,
       },
       {
         title: "Rail Settlements",
-        value: formatCompactNumber(data?.totalRailSettlements || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalRailSettlements || 0),
         icon: CoinVerticalIcon,
       },
       {
         title: "Idle Rails",
-        value: formatCompactNumber(data?.totalZeroRateRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalZeroRateRails || 0),
         icon: "/stats/idle-rails.svg",
         tooltip: "Paused payment streams that are currently inactive",
       },
       {
         title: "Active Rails",
-        value: formatCompactNumber(data?.totalActiveRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalActiveRails || 0),
         icon: "/stats/active-rails.svg",
         tooltip: "Payment streams that are currently running",
       },
       {
         title: "Terminated Rails",
-        value: formatCompactNumber(data?.totalTerminatedRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalTerminatedRails || 0),
         icon: "/stats/terminated-rails.svg",
         tooltip: "Payment streams that have been permanently stopped",
       },
     ],
-    [data, usdfcData, isUsdfcLoading, filData, isFilLoading],
+    [data],
   );
 
   return (

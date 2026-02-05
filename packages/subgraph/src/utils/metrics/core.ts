@@ -81,6 +81,7 @@ export class MetricsEntityManager {
       metric.deposit = ZERO_BIG_INT;
       metric.withdrawal = ZERO_BIG_INT;
       metric.settledAmount = ZERO_BIG_INT;
+      metric.oneTimePaymentAmount = ZERO_BIG_INT;
       metric.commissionPaid = ZERO_BIG_INT;
       metric.activeRailsCount = ZERO_BIG_INT;
       metric.uniqueHolders = ZERO_BIG_INT;

@@ -1,20 +1,27 @@
 /* eslint-disable no-underscore-dangle */
 import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { erc20 } from "../../generated/Payments/erc20";
-
+import { RailOneTimePaymentProcessed } from "../../generated/Payments/Payments";
 import {
   Account,
+  OneTimePayment,
   Operator,
   OperatorApproval,
   OperatorToken,
-  PaymentsMetric,
   Rail,
   RateChangeQueue,
   Token,
   UserToken,
 } from "../../generated/schema";
-import { DEFAULT_DECIMALS, EPOCH_DURATION } from "./constants";
 import {
+  DEFAULT_DECIMALS,
+  EPOCH_DURATION,
+  NATIVE_TOKEN_DECIMALS,
+  NATIVE_TOKEN_NAME,
+  NATIVE_TOKEN_SYMBOL,
+} from "./constants";
+import {
+  getIdFromTxHashAndLogIndex,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
   getRailEntityId,
@@ -89,18 +96,27 @@ export const getTokenDetails = (address: Address): TokenDetails => {
   if (!token) {
     token = new Token(address);
 
-    const erc20Contract = erc20.bind(address);
-    const tokenNameResult = erc20Contract.try_name();
-    const tokenSymbolResult = erc20Contract.try_symbol();
-    const tokenDecimalsResult = erc20Contract.try_decimals();
+    const isNativeToken = address.equals(Address.zero());
 
-    token.name = tokenNameResult.reverted ? "Unknown" : tokenNameResult.value;
-    token.symbol = tokenSymbolResult.reverted ? "UNKNOWN" : tokenSymbolResult.value;
-    token.decimals = tokenDecimalsResult.reverted ? DEFAULT_DECIMALS : GraphBN.fromI32(tokenDecimalsResult.value);
+    if (isNativeToken) {
+      token.name = NATIVE_TOKEN_NAME;
+      token.symbol = NATIVE_TOKEN_SYMBOL;
+      token.decimals = NATIVE_TOKEN_DECIMALS;
+    } else {
+      const erc20Contract = erc20.bind(address);
+      const tokenNameResult = erc20Contract.try_name();
+      const tokenSymbolResult = erc20Contract.try_symbol();
+      const tokenDecimalsResult = erc20Contract.try_decimals();
+
+      token.name = tokenNameResult.reverted ? "Unknown" : tokenNameResult.value;
+      token.symbol = tokenSymbolResult.reverted ? "UNKNOWN" : tokenSymbolResult.value;
+      token.decimals = tokenDecimalsResult.reverted ? DEFAULT_DECIMALS : GraphBN.fromI32(tokenDecimalsResult.value);
+    }
 
     token.volume = ZERO_BIG_INT;
     token.totalDeposits = ZERO_BIG_INT;
     token.totalWithdrawals = ZERO_BIG_INT;
+    token.totalOneTimePayment = ZERO_BIG_INT;
     token.totalSettledAmount = ZERO_BIG_INT;
     token.userFunds = ZERO_BIG_INT;
     token.operatorCommission = ZERO_BIG_INT;
@@ -191,6 +207,7 @@ export const createOrLoadOperatorToken = (operator: Bytes, token: Bytes): Operat
     operatorToken.lockupUsage = ZERO_BIG_INT;
     operatorToken.rateUsage = ZERO_BIG_INT;
     operatorToken.settledAmount = ZERO_BIG_INT;
+    operatorToken.oneTimePaymentAmount = ZERO_BIG_INT;
 
     operatorToken.save();
 
@@ -229,14 +246,40 @@ export const createRail = (
   rail.endEpoch = ZERO_BIG_INT;
   rail.arbiter = arbiter;
   rail.totalSettledAmount = ZERO_BIG_INT;
-  rail.totalNetPayeeAmount = ZERO_BIG_INT;
-  rail.totalCommission = ZERO_BIG_INT;
+  rail.totalOneTimePaymentAmount = ZERO_BIG_INT;
+  rail.totalOneTimePayments = ZERO_BIG_INT;
   rail.totalSettlements = ZERO_BIG_INT;
   rail.totalRateChanges = ZERO_BIG_INT;
   rail.createdAt = timestamp;
   rail.save();
 
   return rail;
+};
+
+export const createOneTimePayment = (
+  event: RailOneTimePaymentProcessed,
+  railId: Bytes,
+  token: Bytes,
+  totalAmount: GraphBN,
+  networkFee: GraphBN,
+  operatorCommission: GraphBN,
+  netPayeeAmount: GraphBN,
+): OneTimePayment => {
+  const entityId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+
+  const oneTimePayment = new OneTimePayment(entityId);
+  oneTimePayment.rail = railId;
+  oneTimePayment.token = token;
+  oneTimePayment.totalAmount = totalAmount;
+  oneTimePayment.networkFee = networkFee;
+  oneTimePayment.operatorCommission = operatorCommission;
+  oneTimePayment.netPayeeAmount = netPayeeAmount;
+  oneTimePayment.txHash = event.transaction.hash;
+  oneTimePayment.blockNumber = event.block.number;
+  oneTimePayment.createdAt = event.block.timestamp;
+  oneTimePayment.save();
+
+  return oneTimePayment;
 };
 
 // RateChangeQueue entity functions

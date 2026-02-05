@@ -220,9 +220,9 @@ export function assertRailParams(
   serviceFeeRecipient: Address,
   commissionRateBps: GraphBN,
   totalSettledAmount: string,
-  totalNetPayeeAmount: string,
-  totalCommission: string,
+  totalOneTimePaymentAmount: string,
   totalSettlements: string,
+  totalOneTimePayments: string,
 ): void {
   const railEntityId = getRailEntityId(railId).toHex();
   assert.fieldEquals("Rail", railEntityId, "state", state);
@@ -231,10 +231,10 @@ export function assertRailParams(
   assert.fieldEquals("Rail", railEntityId, "arbiter", arbiter.toHex());
   assert.fieldEquals("Rail", railEntityId, "serviceFeeRecipient", serviceFeeRecipient.toHex());
   assert.fieldEquals("Rail", railEntityId, "commissionRateBps", commissionRateBps.toString());
+  assert.fieldEquals("Rail", railEntityId, "totalOneTimePaymentAmount", totalOneTimePaymentAmount);
   assert.fieldEquals("Rail", railEntityId, "totalSettledAmount", totalSettledAmount);
-  assert.fieldEquals("Rail", railEntityId, "totalNetPayeeAmount", totalNetPayeeAmount);
-  assert.fieldEquals("Rail", railEntityId, "totalCommission", totalCommission);
   assert.fieldEquals("Rail", railEntityId, "totalSettlements", totalSettlements);
+  assert.fieldEquals("Rail", railEntityId, "totalOneTimePayments", totalOneTimePayments);
 }
 
 export function assertRailRateParams(railId: GraphBN, state: string, paymentRate: GraphBN, settledUpto: string): void {

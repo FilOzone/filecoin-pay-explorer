@@ -19,6 +19,7 @@ type Token @entity(immutable: false) {
   volume: BigInt!
   totalDeposits: BigInt!
   totalWithdrawals: BigInt!
+  totalOneTimePayment: BigInt!
   totalSettledAmount: BigInt!
   totalUsers: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
@@ -64,6 +65,7 @@ type OperatorToken @entity(immutable: false) {
   lockupUsage: BigInt!
   rateUsage: BigInt!
   settledAmount: BigInt!
+  oneTimePaymentAmount: BigInt!
 
   operator: Operator!
   token: Token!
@@ -101,9 +103,16 @@ type Rail @entity(immutable: false) {
   commissionRateBps: BigInt!
   serviceFeeRecipient: Bytes!
 
+  totalOneTimePaymentAmount: BigInt!
   totalSettledAmount: BigInt!
-  totalNetPayeeAmount: BigInt!
-  totalCommission: BigInt!
+  # Fields that can be derived for a rail
+  # 1. totalTransactedAmount = totalOneTimePaymentAmount + totalSettledAmount
+  # 2. totalNetworkFees ( burned or auction ) = 0.5% of totalTransactedAmount
+  # 3. totalCommissionEarned = commissionRateBps * (totalTransactedAmount - totalNetworkFees) / 10000
+  # 4. totalNetPayeeAmount = totalTransactedAmount - totalNetworkFees - totalCommissionEarned
+  # Similarly, networkFees, commissionEarned and netPayeeAmount can be calculated for oneTimePayments and rail settlements
+
+  totalOneTimePayments: BigInt!
   totalSettlements: BigInt!
   totalRateChanges: BigInt!
 
@@ -114,6 +123,7 @@ type Rail @entity(immutable: false) {
   operator: Operator!
   token: Token!
 
+  oneTimePayments: [OneTimePayment!]! @derivedFrom(field: "rail")
   settlements: [Settlement!]! @derivedFrom(field: "rail")
   rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
 }
@@ -127,14 +137,29 @@ type RateChangeQueue @entity(immutable: false) {
 }
 
 type Settlement @entity(immutable: true) {
-  id: Bytes! # railId,settledUpto
+  id: Bytes! # txHash + logIndex
   rail: Rail!
+  token: Token! # rail.token
   totalSettledAmount: BigInt!
   totalNetPayeeAmount: BigInt!
-  filBurned: BigInt!
+  networkFee: BigInt!
   operatorCommission: BigInt!
   settledUpto: BigInt!
 
+  txHash: Bytes!
+  blockNumber: BigInt!
+  createdAt: BigInt!
+}
+
+type OneTimePayment @entity(immutable: true) {
+  id: Bytes! # txHash + logIndex
+  rail: Rail!
+  token: Token! # rail.token
+  totalAmount: BigInt! # totalAmount = netPayeeAmount + operatorCommission + networkFee
+  networkFee: BigInt! # networkFee = 0.5% of totalAmount
+  operatorCommission: BigInt! # operatorCommission = (totalAmount - networkFee) * rail.commissionRateBps / 10000
+  netPayeeAmount: BigInt! # netPayeeAmount = totalAmount - operatorCommission - networkFee
+  txHash: Bytes!
   blockNumber: BigInt!
   createdAt: BigInt!
 }
@@ -212,6 +237,7 @@ type DailyTokenMetric @entity(immutable: false) {
   volume: BigInt!
   deposit: BigInt!
   withdrawal: BigInt!
+  oneTimePaymentAmount: BigInt!
   settledAmount: BigInt!
   commissionPaid: BigInt!
 
