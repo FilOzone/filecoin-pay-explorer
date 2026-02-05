@@ -15,11 +15,11 @@ import {
 import type { IconProps } from "@phosphor-icons/react";
 import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
-import usePayMetrics from "@/hooks/usePayMetrics";
-import { useTokenDetails } from "@/hooks/useTokenDetails";
+import { useStatsDashboard } from "@/hooks/useStatsDashboard";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
@@ -66,53 +66,42 @@ interface MetricCard {
   isLoading?: boolean;
 }
 
-const DEFAULT_USDFC_VALUE = "0 USDFC";
+const DEFAULT_TOKEN_VALUE = "0";
 
 const Stats: React.FC = () => {
-  const { data, isLoading, isError, error, refetch } = usePayMetrics();
   const { network } = useNetwork();
 
   const chain = getChain(network);
-  const {
-    data: usdfcData,
-    isLoading: isUsdfcLoading,
-    isError: isUsdfcError,
-    error: usdfcError,
-  } = useTokenDetails(chain.contracts.usdfc.address);
-
-  useEffect(() => {
-    if (isUsdfcError && usdfcError) {
-      console.error("Error fetching USDFC Token Details:", usdfcError);
-    }
-  }, [isUsdfcError, usdfcError]);
+  const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
 
   const cards = useMemo<MetricCard[]>(
     () => [
       {
         title: "Unique Payers",
-        value: formatCompactNumber(data?.uniquePayers || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayers || 0),
         icon: "/stats/unique-payers.svg",
       },
       {
         title: "Unique Payees",
-        value: formatCompactNumber(data?.uniquePayees || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayees || 0),
         icon: "/stats/unique-payees.svg",
       },
       {
         title: "Total USDFC",
-        value: usdfcData ? formatToken(usdfcData.userFunds, usdfcData.decimals, "USDFC") : DEFAULT_USDFC_VALUE,
+        value: data?.usdfcToken
+          ? formatToken(data.usdfcToken.userFunds, data.usdfcToken.decimals, "USDFC")
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: CurrencyCircleDollarIcon,
-        isLoading: isUsdfcLoading,
       },
       {
         title: "Total Rails",
-        value: formatCompactNumber(data?.totalRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalRails || 0),
         icon: "/stats/total-rails.svg",
         tooltip: "Ongoing payment streams between users",
       },
       {
         title: "Services",
-        value: formatCompactNumber(data?.totalOperators || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalOperators || 0),
         icon: "/stats/total-services.svg",
         tooltip: "Payment managers that help automate transactions between users",
       },
@@ -120,43 +109,59 @@ const Stats: React.FC = () => {
       // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
       // {
       //   title: "Network Revenue",
-      //   value: formatFIL(data?.totalFilBurned || "0"),
+      //   value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
       //   icon: "/stats/total-fil-burned.svg",
       //   tooltip: "Network fees paid to process payment settlements",
       // },
       {
-        title: "USDFC Settled",
-        value: usdfcData
-          ? formatToken(usdfcData.totalSettledAmount, usdfcData.decimals, "USDFC", 5)
-          : DEFAULT_USDFC_VALUE,
+        title: "Total USDFC Settled",
+        value: data?.usdfcToken
+          ? formatToken(
+              BigInt(data.usdfcToken.totalSettledAmount) + BigInt(data.usdfcToken.totalOneTimePayment),
+              data.usdfcToken.decimals,
+              "USDFC",
+              5,
+            )
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: CoinsIcon,
-        isLoading: isUsdfcLoading,
+      },
+      {
+        title: "Total FIL Settled",
+        value: data?.filToken
+          ? formatToken(
+              BigInt(data.filToken.totalSettledAmount) + BigInt(data.filToken.totalOneTimePayment),
+              data.filToken.decimals,
+              "FIL",
+              5,
+            )
+          : `${DEFAULT_TOKEN_VALUE} FIL`,
+        icon: CoinsIcon,
       },
       {
         title: "Rail Settlements",
-        value: formatCompactNumber(data?.totalRailSettlements || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalRailSettlements || 0),
         icon: CoinVerticalIcon,
       },
       {
         title: "Idle Rails",
-        value: formatCompactNumber(data?.totalZeroRateRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalZeroRateRails || 0),
         icon: "/stats/idle-rails.svg",
         tooltip: "Paused payment streams that are currently inactive",
       },
       {
         title: "Active Rails",
-        value: formatCompactNumber(data?.totalActiveRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalActiveRails || 0),
         icon: "/stats/active-rails.svg",
         tooltip: "Payment streams that are currently running",
       },
       {
         title: "Terminated Rails",
-        value: formatCompactNumber(data?.totalTerminatedRails || 0),
+        value: formatCompactNumber(data?.paymentsMetrics?.totalTerminatedRails || 0),
         icon: "/stats/terminated-rails.svg",
         tooltip: "Payment streams that have been permanently stopped",
       },
     ],
-    [data, usdfcData, isUsdfcLoading],
+    [data],
   );
 
   return (

@@ -14,6 +14,7 @@ import {
 } from "../generated/Payments/Payments";
 import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
 import {
+  createOneTimePayment,
   createOrLoadAccountByAddress,
   createOrLoadOperator,
   createOrLoadOperatorToken,
@@ -27,7 +28,7 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getRailEntityId, getSettlementEntityId } from "./utils/keys";
+import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
@@ -360,22 +361,22 @@ export function handleRailSettled(event: RailSettledEvent): void {
 
   // Update rail aggregate data
   rail.totalSettledAmount = rail.totalSettledAmount.plus(totalSettledAmount);
-  rail.totalNetPayeeAmount = rail.totalNetPayeeAmount.plus(totalNetPayeeAmount);
-  rail.totalCommission = rail.totalCommission.plus(operatorCommission);
   rail.totalSettlements = rail.totalSettlements.plus(ONE_BIG_INT);
   rail.settledUpto = event.params.settledUpTo;
 
   // Create a new Settlement entity
-  const settlementId = getSettlementEntityId(event.transaction.hash, event.logIndex);
+  const settlementId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
   const settlement = new Settlement(settlementId);
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
 
   settlement.rail = rail.id;
+  settlement.token = rail.token;
   settlement.totalSettledAmount = totalSettledAmount;
   settlement.totalNetPayeeAmount = totalNetPayeeAmount;
   settlement.operatorCommission = operatorCommission;
-  settlement.filBurned = networkFee;
+  settlement.networkFee = networkFee;
   settlement.settledUpto = event.params.settledUpTo;
+  settlement.txHash = event.transaction.hash;
   settlement.blockNumber = blockNumber;
   settlement.createdAt = timestamp;
 
@@ -386,9 +387,20 @@ export function handleRailSettled(event: RailSettledEvent): void {
   // update funds for payer and payee
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;
+  const serviceFeeRecipientUserToken = createOrLoadUserToken(
+    Address.fromBytes(rail.serviceFeeRecipient),
+    Address.fromBytes(rail.token),
+  ).userToken;
   const token = Token.load(rail.token);
   if (token) {
-    token.userFunds = token.userFunds.minus(operatorCommission);
+    // Subtract the network fee from user funds since it is not retained by the user.
+    // The fee is either burned or deposited into the Filecoin-pay contract account.
+    //
+    // NOTE: When the auction system is integrated, the network fee will be
+    // deposited into the Filecoin-pay contract. At that point, we should stop
+    // subtracting the network fee here, as `token.userFunds` can be derived
+    // by summing all `userTokens.funds`.
+    token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
     token.save();
   }
@@ -405,6 +417,11 @@ export function handleRailSettled(event: RailSettledEvent): void {
     payeeToken.save();
   }
 
+  if (serviceFeeRecipientUserToken) {
+    serviceFeeRecipientUserToken.funds = serviceFeeRecipientUserToken.funds.plus(operatorCommission);
+    serviceFeeRecipientUserToken.save();
+  }
+
   rail.save();
   settlement.save();
   operatorToken.save();
@@ -413,7 +430,6 @@ export function handleRailSettled(event: RailSettledEvent): void {
   MetricsCollectionOrchestrator.collectSettlementMetrics(
     rail,
     totalSettledAmount,
-    totalNetPayeeAmount,
     operatorCommission,
     networkFee,
     timestamp,
@@ -502,7 +518,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const netPayeeAmount = event.params.netPayeeAmount;
   const operatorCommission = event.params.operatorCommission;
   const networkFee = event.params.networkFee;
-  const oneTimePayment = operatorCommission.plus(netPayeeAmount).plus(networkFee);
+  const totalAmount = operatorCommission.plus(netPayeeAmount).plus(networkFee);
 
   const rail = Rail.load(getRailEntityId(railId));
 
@@ -511,10 +527,13 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     return;
   }
 
-  rail.lockupFixed = rail.lockupFixed.minus(oneTimePayment);
-  rail.totalNetPayeeAmount = rail.totalNetPayeeAmount.plus(netPayeeAmount);
-  rail.totalCommission = rail.totalCommission.plus(operatorCommission);
+  rail.lockupFixed = rail.lockupFixed.minus(totalAmount);
+  rail.totalOneTimePayments = rail.totalOneTimePayments.plus(ONE_BIG_INT);
+  rail.totalOneTimePaymentAmount = rail.totalOneTimePaymentAmount.plus(totalAmount);
   rail.save();
+
+  // create one time payment entity
+  createOneTimePayment(event, rail.id, rail.token, totalAmount, networkFee, operatorCommission, netPayeeAmount);
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;
@@ -525,10 +544,12 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
+    token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
     token.save();
   }
   if (payerToken) {
-    payerToken.funds = payerToken.funds.minus(oneTimePayment);
+    payerToken.funds = payerToken.funds.minus(totalAmount);
+    payerToken.payout = payerToken.payout.plus(totalAmount);
     payerToken.save();
   }
   if (payeeToken) {
@@ -550,16 +571,25 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     return;
   }
 
-  operatorApproval.lockupAllowance = operatorApproval.lockupAllowance.minus(oneTimePayment);
-  operatorApproval.lockupUsage = operatorApproval.lockupUsage.minus(oneTimePayment);
-  operatorToken.lockupAllowance = operatorToken.lockupAllowance.minus(oneTimePayment);
-  operatorToken.lockupUsage = operatorToken.lockupUsage.minus(oneTimePayment);
+  operatorApproval.lockupAllowance = operatorApproval.lockupAllowance.minus(totalAmount);
+  operatorApproval.lockupUsage = operatorApproval.lockupUsage.minus(totalAmount);
+  operatorToken.oneTimePaymentAmount = operatorToken.oneTimePaymentAmount.plus(totalAmount);
+  operatorToken.lockupAllowance = operatorToken.lockupAllowance.minus(totalAmount);
+  operatorToken.lockupUsage = operatorToken.lockupUsage.minus(totalAmount);
   operatorToken.commissionEarned = operatorToken.commissionEarned.plus(operatorCommission);
-  operatorToken.volume = operatorToken.volume.plus(oneTimePayment);
+  operatorToken.volume = operatorToken.volume.plus(totalAmount);
+
+  // save entities
   operatorApproval.save();
   operatorToken.save();
 
-  MetricsCollectionOrchestrator.collectOneTimePaymentMetrics(networkFee, event.block.timestamp, event.block.number);
+  MetricsCollectionOrchestrator.collectOneTimePaymentMetrics(
+    totalAmount,
+    networkFee,
+    rail.token,
+    event.block.timestamp,
+    event.block.number,
+  );
 }
 
 export function handleRailFinalized(event: RailFinalizedEvent): void {

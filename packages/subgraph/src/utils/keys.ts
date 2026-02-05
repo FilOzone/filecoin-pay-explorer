@@ -21,6 +21,13 @@ export function getRateChangeQueueEntityId(railId: BigInt, startEpoch: BigInt): 
   return getRailEntityId(railId).concat(Bytes.fromByteArray(Bytes.fromBigInt(startEpoch)));
 }
 
+export function getIdFromTxHashAndLogIndex(txHash: Bytes, logIndex: BigInt): Bytes {
+  return txHash.concatI32(logIndex.toI32());
+}
+
+/**
+ * @deprecated - use getIdFromTxHashAndLogIndex instead
+ */
 export function getSettlementEntityId(txHash: Bytes, logIndex: BigInt): Bytes {
   return txHash.concatI32(logIndex.toI32());
 }

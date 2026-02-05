@@ -1,4 +1,4 @@
-import { Address, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { Rail } from "../../../generated/schema";
 import { ONE_BIG_INT, ZERO_BIG_INT } from "./constants";
 import { MetricsEntityManager } from "./core";
@@ -127,25 +127,22 @@ export class RailCreationCollector extends BaseMetricsCollector {
 export class SettlementCollector extends BaseMetricsCollector {
   private rail: Rail;
   private totalSettledAmount: GraphBN;
-  private totalNetPayeeAmount: GraphBN;
   private operatorCommission: GraphBN;
-  private filBurned: GraphBN;
+  private networkFee: GraphBN;
 
   constructor(
     rail: Rail,
     totalSettledAmount: GraphBN,
-    totalNetPayeeAmount: GraphBN,
     operatorCommission: GraphBN,
-    filBurned: GraphBN,
+    networkFee: GraphBN,
     timestamp: GraphBN,
     blockNumber: GraphBN,
   ) {
     super(timestamp, blockNumber);
     this.rail = rail;
     this.totalSettledAmount = totalSettledAmount;
-    this.totalNetPayeeAmount = totalNetPayeeAmount;
     this.operatorCommission = operatorCommission;
-    this.filBurned = filBurned;
+    this.networkFee = networkFee;
   }
 
   collect(): void {
@@ -159,13 +156,13 @@ export class SettlementCollector extends BaseMetricsCollector {
     // Daily metrics
     const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
     dailyMetric.totalRailSettlements = dailyMetric.totalRailSettlements.plus(ONE_BIG_INT);
-    dailyMetric.filBurned = dailyMetric.filBurned.plus(this.filBurned);
+    dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
     dailyMetric.save();
 
     // Weekly metrics
     const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
     weeklyMetric.totalRailSettlements = weeklyMetric.totalRailSettlements.plus(ONE_BIG_INT);
-    weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.filBurned);
+    weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
     weeklyMetric.save();
   }
 
@@ -187,7 +184,7 @@ export class SettlementCollector extends BaseMetricsCollector {
     );
 
     tokenMetric.volume = tokenMetric.volume.plus(this.totalSettledAmount);
-    tokenMetric.settledAmount = tokenMetric.settledAmount.plus(this.totalNetPayeeAmount);
+    tokenMetric.settledAmount = tokenMetric.settledAmount.plus(this.totalSettledAmount);
     tokenMetric.commissionPaid = tokenMetric.commissionPaid.plus(this.operatorCommission);
 
     tokenMetric.save();
@@ -196,7 +193,7 @@ export class SettlementCollector extends BaseMetricsCollector {
   private updateNetworkMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
 
-    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.filBurned);
+    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
     networkMetric.totalRailSettlements = networkMetric.totalRailSettlements.plus(ONE_BIG_INT);
 
     networkMetric.save();
@@ -382,20 +379,34 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
 
 // One Time Payment Collector
 export class OneTimePaymentCollector extends BaseMetricsCollector {
+  private totalAmount: GraphBN;
   private networkFee: GraphBN;
+  private token: Bytes;
 
-  constructor(networkFee: GraphBN, timestamp: GraphBN, blockNumber: GraphBN) {
+  constructor(totalAmount: GraphBN, networkFee: GraphBN, token: Bytes, timestamp: GraphBN, blockNumber: GraphBN) {
     super(timestamp, blockNumber);
+    this.totalAmount = totalAmount;
     this.networkFee = networkFee;
+    this.token = token;
   }
 
   collect(): void {
     this.updateNetworkMetrics();
+    this.updateTokenMetrics();
   }
 
   private updateNetworkMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
     networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+  }
+
+  private updateTokenMetrics(): void {
+    const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(Address.fromBytes(this.token), this.timestamp);
+
+    tokenMetric.volume = tokenMetric.volume.plus(this.totalAmount);
+    tokenMetric.oneTimePaymentAmount = tokenMetric.oneTimePaymentAmount.plus(this.totalAmount);
+
+    tokenMetric.save();
   }
 }
 
@@ -425,7 +436,6 @@ export class MetricsCollectionOrchestrator {
   static collectSettlementMetrics(
     rail: Rail,
     totalSettledAmount: GraphBN,
-    totalNetPayeeAmount: GraphBN,
     operatorCommission: GraphBN,
     paymentFees: GraphBN,
     timestamp: GraphBN,
@@ -434,7 +444,6 @@ export class MetricsCollectionOrchestrator {
     const collector = new SettlementCollector(
       rail,
       totalSettledAmount,
-      totalNetPayeeAmount,
       operatorCommission,
       paymentFees,
       timestamp,
@@ -491,8 +500,14 @@ export class MetricsCollectionOrchestrator {
     collector.collect();
   }
 
-  static collectOneTimePaymentMetrics(networkFee: GraphBN, timestamp: GraphBN, blockNumber: GraphBN): void {
-    const collector = new OneTimePaymentCollector(networkFee, timestamp, blockNumber);
+  static collectOneTimePaymentMetrics(
+    totalAmount: GraphBN,
+    networkFee: GraphBN,
+    token: Bytes,
+    timestamp: GraphBN,
+    blockNumber: GraphBN,
+  ): void {
+    const collector = new OneTimePaymentCollector(totalAmount, networkFee, token, timestamp, blockNumber);
     collector.collect();
   }
 }

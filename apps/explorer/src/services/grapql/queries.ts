@@ -106,6 +106,7 @@ export const GET_RAILS_PAGINATED = gql`
       railId
       state
       paymentRate
+      totalOneTimePaymentAmount
       totalSettledAmount
       totalSettlements
       createdAt
@@ -446,6 +447,38 @@ export const GET_TOKEN_DETAILS = gql`
       totalSettledAmount
       userFunds
       totalUsers
+    }
+  }
+`;
+
+export const GET_STATS_DASHBOARD = gql`
+  query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
+    paymentsMetrics(first: 1) {
+      id
+      totalRails
+      totalOperators
+      totalTokens
+      totalAccounts
+      totalFilBurned
+      totalRailSettlements
+      totalZeroRateRails
+      totalActiveRails
+      totalTerminatedRails
+      totalFinalizedRails
+      uniquePayers
+      uniquePayees
+    }
+    usdfcToken: token(id: $usdfcAddress) {
+      decimals
+      totalSettledAmount
+      totalOneTimePayment
+      userFunds
+    }
+    filToken: token(id: $filAddress) {
+      decimals
+      totalSettledAmount
+      totalOneTimePayment
+      userFunds
     }
   }
 `;
