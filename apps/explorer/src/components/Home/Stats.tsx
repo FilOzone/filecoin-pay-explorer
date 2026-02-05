@@ -114,7 +114,7 @@ const Stats: React.FC = () => {
       //   tooltip: "Network fees paid to process payment settlements",
       // },
       {
-        title: "Total USDFC Settled",
+        title: "Total USDFC Transacted",
         value: data?.usdfcToken
           ? formatToken(
               BigInt(data.usdfcToken.totalSettledAmount) + BigInt(data.usdfcToken.totalOneTimePayment),
@@ -126,7 +126,7 @@ const Stats: React.FC = () => {
         icon: CoinsIcon,
       },
       {
-        title: "Total FIL Settled",
+        title: "Total FIL Transacted",
         value: data?.filToken
           ? formatToken(
               BigInt(data.filToken.totalSettledAmount) + BigInt(data.filToken.totalOneTimePayment),
