@@ -199,14 +199,6 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
     payerToken.save();
   }
 
-  // Remove streaming lockup for terminated rail
-  const token = Token.load(rail.token);
-  if (token) {
-    const streamingLockup = rail.paymentRate.times(rail.lockupPeriod);
-    token.totalStreamingLockup = token.totalStreamingLockup.minus(streamingLockup);
-    token.save();
-  }
-
   rail.save();
 
   // collect rail state change metrics
