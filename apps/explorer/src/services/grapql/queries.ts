@@ -106,6 +106,7 @@ export const GET_RAILS_PAGINATED = gql`
       railId
       state
       paymentRate
+      totalOneTimePaymentAmount
       totalSettledAmount
       totalSettlements
       createdAt

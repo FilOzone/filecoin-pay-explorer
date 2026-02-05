@@ -85,14 +85,17 @@ export const columns = [
   columnHelper.accessor(
     (row) => ({
       totalSettledAmount: row.totalSettledAmount,
+      totalOneTimePaymentAmount: row.totalOneTimePaymentAmount,
       token: row.token,
     }),
     {
-      id: "settledAmount",
-      header: "Settled Amount",
+      id: "transactedAmount",
+      header: "Transacted Amount",
       cell: (info) => {
-        const { totalSettledAmount, token } = info.getValue();
-        return formatToken(totalSettledAmount, token.decimals, token.symbol, 2);
+        const { totalSettledAmount, totalOneTimePaymentAmount, token } = info.getValue();
+        const totalTransactedAmount = BigInt(totalSettledAmount) + BigInt(totalOneTimePaymentAmount);
+
+        return formatToken(totalTransactedAmount, token.decimals, token.symbol, 5);
       },
     },
   ),
