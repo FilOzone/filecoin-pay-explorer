@@ -566,7 +566,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
-    token.totalFixedLockup = token.totalFixedLockup.minus(oneTimePayment);
+    token.totalFixedLockup = token.totalFixedLockup.minus(totalAmount);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
     token.save();
   }
