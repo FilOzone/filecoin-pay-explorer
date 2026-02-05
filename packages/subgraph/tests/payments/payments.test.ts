@@ -699,4 +699,66 @@ describe("Payments", () => {
     assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
     assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
   });
+
+  test("should update streaming lockup when rate modified on terminated rail", () => {
+    // Arrange: Create an active rail with payment rate and lockup params
+    const depositAmount = TEST_AMOUNTS.XLARGE_DEPOSIT;
+    const railId = GraphBN.fromI64(500);
+    const commissionRateBps = GraphBN.fromI32(300);
+    setupCompleteRail(depositAmount, railId, commissionRateBps);
+
+    // Set payment rate (0 -> paymentRate)
+    const paymentRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
+    handleRailRateModified(railRateModifiedEvent);
+
+    // Set lockup params
+    const lockupPeriod = GraphBN.fromI64(1000);
+    const lockupFixed = TEST_AMOUNTS.LOCKUP_FIXED_SMALL;
+    const railLockupModifiedEvent = createRailLockupModifiedEvent(
+      railId,
+      ZERO_BIG_INT,
+      lockupPeriod,
+      ZERO_BIG_INT,
+      lockupFixed,
+    );
+    handleRailLockupModified(railLockupModifiedEvent);
+
+    // Verify: Rail is ACTIVE with streaming lockup = rate * lockupPeriod
+    const initialStreamingLockup = paymentRate.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, initialStreamingLockup);
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+
+    // Act 1: Terminate the rail
+    const endEpoch = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(5000));
+    const railTerminatedEvent = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, endEpoch);
+    railTerminatedEvent.block.number = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(100));
+    handleRailTerminated(railTerminatedEvent);
+
+    // Assert 1: Streaming lockup should remain unchanged after termination
+    const railEntityId = getRailEntityId(railId).toHex();
+    assert.fieldEquals("Rail", railEntityId, "state", "TERMINATED");
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, initialStreamingLockup);
+
+    // Act 2: Modify rate on terminated rail (reduce rate by half)
+    const newRate = paymentRate.div(GraphBN.fromI32(2));
+    const railRateModifiedEvent2 = createRailRateModifiedEvent(railId, paymentRate, newRate);
+    railRateModifiedEvent2.block.number = railTerminatedEvent.block.number.plus(GraphBN.fromI64(10));
+    handleRailRateModified(railRateModifiedEvent2);
+
+    // Assert 2: Streaming lockup should be updated to new rate * lockupPeriod
+    const newStreamingLockup = newRate.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, newStreamingLockup);
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+
+    // Act 3: Finalize the rail
+    const railFinalizedEvent = createRailFinalizedEvent(railId);
+    railFinalizedEvent.block.number = railRateModifiedEvent2.block.number.plus(GraphBN.fromI64(100));
+    handleRailFinalized(railFinalizedEvent);
+
+    // Assert 3: Both lockups should be 0 after finalization (correctly balanced)
+    assert.fieldEquals("Rail", railEntityId, "state", "FINALIZED");
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+  });
 });

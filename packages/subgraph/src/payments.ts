@@ -348,16 +348,20 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       // update operator lockup usage and save
       updateOperatorLockup(operatorApproval, oldLockup, newLockup);
       updateOperatorTokenLockup(operatorToken, oldLockup, newLockup);
+    }
 
-      // Update token streaming lockup
-      if (!isTerminated) {
-        const token = Token.load(rail.token);
-        if (token) {
-          const streamingDelta = newLockup.minus(oldLockup);
-          token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
-          token.save();
-        }
-      }
+    // Update token streaming lockup (for all rails including terminated)
+    // Uses lockupPeriod for consistency with handleRailFinalized
+    const token = Token.load(rail.token);
+    if (token) {
+      const oldStreaming = oldRate.times(rail.lockupPeriod);
+      const newStreaming = newRate.times(rail.lockupPeriod);
+      const streamingDelta = newStreaming.minus(oldStreaming);
+      token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
+      token.save();
+    }
+
+    if (effectiveLockupPeriod.gt(ZERO_BIG_INT)) {
       return;
     }
   }
