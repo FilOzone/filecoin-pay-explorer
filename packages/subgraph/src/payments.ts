@@ -225,7 +225,6 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
   }
 
   const isTerminated = rail.state === "TERMINATED";
-  const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const operatorApprovalId = rail.payer.concat(rail.operator).concat(rail.token);
   const operatorApproval = OperatorApproval.load(operatorApprovalId);
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
@@ -251,10 +250,6 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
       token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
     }
     token.save();
-  }
-
-  if (!payerToken) {
-    return;
   }
 
   let oldLockup = oldLockupFixed;
