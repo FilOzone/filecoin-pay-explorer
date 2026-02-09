@@ -649,7 +649,7 @@ export function handleBurnForFees(call: BurnForFeesCall): void {
   }
 
   // Create FeeAuctionPurchase entity
-  const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index.toI32());
+  const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index);
   const purchase = new FeeAuctionPurchase(purchaseId);
   purchase.token = tokenAddress;
   purchase.recipient = recipient;
