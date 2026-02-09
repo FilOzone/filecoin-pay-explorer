@@ -2,6 +2,10 @@
 
 This document defines the hero metrics displayed in the Filecoin Pay Console dashboard.
 
+## Status
+
+* 2026-02-09 - Initial GA metric set definitions.
+
 ---
 
 ## 1. Total Locked (USDFC & FIL)
@@ -9,11 +13,11 @@ This document defines the hero metrics displayed in the Filecoin Pay Console das
 - **Definition:** Total amount of USDFC and FIL currently locked across all payment rails
 - **Display:** FIL and USDFC displayed separately (no conversion)
 - **Purpose:** Represents funds deposited and locked in active payment rails
-- **Source:** `UserToken` entities from Goldsky subgraph, grouped by `Token`
+- **Source:** `Token` entities from Goldsky subgraph
 - **Formula:**
   ```
   For each token (USDFC, FIL):
-    totalLocked = Σ(userToken.lockupCurrent) where userToken.token == tokenAddress
+    totalLocked = (token.totalFixedLockup + token.totalStreamingLockup) where token == tokenAddress
   ```
 - **Conversion:** Divide by 10^18 (TOKEN_DECIMALS) for human-readable values
 
@@ -46,20 +50,3 @@ This document defines the hero metrics displayed in the Filecoin Pay Console das
   totalFilBurned = paymentsMetric.totalFilBurned
   ```
 - **Conversion:** Divide by 10^18 for human-readable FIL values
-
----
-
-## Data Sources
-
-### Filecoin Pay Subgraph (Goldsky)
-- **Endpoint:** `https://api.goldsky.com/api/public/project_cmj7soo5uf4no01xw0tij21a1/subgraphs/filecoin-pay-mainnet/1.1.0/gn`
-- **Entities Used:** Token, UserToken, PaymentsMetric, Settlement, OneTimePayment
-- **Purpose:** Payment rails, settlements, account balances, burn tracking
-
----
-
-## Constants
-
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `TOKEN_DECIMALS` | 18 | Decimal places for USDFC and FIL |
