@@ -15,7 +15,17 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
         <TooltipProvider>
           <ProgressBar />
           {children}
-          <Toaster position={DEFAULT_TOAST_POSITION} />
+          <Toaster
+            position={DEFAULT_TOAST_POSITION}
+            toastOptions={{
+              style: {
+                "--normal-bg": "var(--color-card-background-hover)",
+                "--normal-text": "var(--color-text-base)",
+                "--normal-border": "var(--color-border-base)",
+                "--border-radius": "var(--radius)",
+              } as React.CSSProperties,
+            }}
+          />
         </TooltipProvider>
       </QueryClientProvider>
     </NetworkProvider>

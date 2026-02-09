@@ -1,13 +1,14 @@
 import { Badge as FilecoinBadge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
-import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { CopyableText, RailStateBadge } from "@/components/shared";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { RailActions } from "../components";
+import type { RailTableRow } from "../types";
 
 // Create column helper
-const columnHelper = createColumnHelper<Rail & { userAddress: string }>();
+const columnHelper = createColumnHelper<RailTableRow>();
 
 export const columns = [
   columnHelper.accessor("railId", {
@@ -25,8 +26,7 @@ export const columns = [
     id: "type",
     header: "Type",
     cell: (info) => {
-      const rail = info.row.original;
-      const isPayer = rail.payer.address.toLowerCase() === rail.userAddress.toLowerCase();
+      const { isPayer } = info.row.original;
 
       return (
         <div className='flex flex-col gap-1 items-start'>
@@ -45,9 +45,8 @@ export const columns = [
     id: "counterparty",
     header: "Counterparty",
     cell: (info) => {
-      const rail = info.row.original;
-      const isPayer = rail.payer.address.toLowerCase() === rail.userAddress.toLowerCase();
-      const counterparty = isPayer ? rail.payee : rail.payer;
+      const { isPayer, payee, payer, operator } = info.row.original;
+      const counterparty = isPayer ? payee : payer;
 
       return (
         <div className='flex flex-col gap-1'>
@@ -60,7 +59,7 @@ export const columns = [
             truncate={true}
             truncateLength={8}
           />
-          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(rail.operator.address)}</div>
+          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(operator.address)}</div>
         </div>
       );
     },
@@ -89,10 +88,17 @@ export const columns = [
       const rail = info.row.original;
       return (
         <div className='flex flex-col gap-1'>
-          <RailStateBadge state={rail.state} />
+          <div className='flex items-center gap-2'>
+            <RailStateBadge state={rail.state} />
+          </div>
           <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
         </div>
       );
     },
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: "Actions",
+    cell: (info) => <RailActions rail={info.row.original} />,
   }),
 ];

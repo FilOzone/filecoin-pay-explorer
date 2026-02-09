@@ -5,7 +5,6 @@ import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
-export const SETTLEMENT_FEE = 1300000000000000n;
 export const EPOCH_DURATION = 30;
 
 export const FUNDING_WARNING_THRESHOLD_SECONDS = 7 * 24 * 60 * 60;
