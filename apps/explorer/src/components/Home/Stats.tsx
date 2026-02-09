@@ -97,7 +97,9 @@ const Stats: React.FC = () => {
         title: "Total USDFC Locked",
         value: data?.usdfcToken
           ? formatToken(
-              (BigInt(data.usdfcToken.totalFixedLockup) + BigInt(data.usdfcToken.totalStreamingLockup)).toString(),
+              (
+                BigInt(data.usdfcToken.totalFixedLockup || "0") + BigInt(data.usdfcToken.totalStreamingLockup || "0")
+              ).toString(),
               data.usdfcToken.decimals,
               "USDFC",
             )
