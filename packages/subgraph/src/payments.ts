@@ -1,6 +1,7 @@
 import { Address, Bytes, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
+  BurnForFeesCall,
   DepositRecorded as DepositRecordedEvent,
   OperatorApprovalUpdated as OperatorApprovalUpdatedEvent,
   RailCreated as RailCreatedEvent,
@@ -12,7 +13,7 @@ import {
   RailTerminated as RailTerminatedEvent,
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
-import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
 import {
   createOneTimePayment,
   createOrLoadAccountByAddress,
@@ -23,13 +24,19 @@ import {
   createRateChangeQueue,
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
+  isNativeToken,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import {
+  getFeeAuctionPurchaseEntityId,
+  getIdFromTxHashAndLogIndex,
+  getRailEntityId,
+  getSettlementEntityId,
+} from "./utils/keys";
+import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -394,14 +401,14 @@ export function handleRailSettled(event: RailSettledEvent): void {
   const token = Token.load(rail.token);
   if (token) {
     // Subtract the network fee from user funds since it is not retained by the user.
-    // The fee is either burned or deposited into the Filecoin-pay contract account.
-    //
-    // NOTE: When the auction system is integrated, the network fee will be
-    // deposited into the Filecoin-pay contract. At that point, we should stop
-    // subtracting the network fee here, as `token.userFunds` can be derived
-    // by summing all `userTokens.funds`.
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
+
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     token.save();
   }
 
@@ -545,6 +552,12 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
+
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     token.save();
   }
   if (payerToken) {
@@ -619,4 +632,51 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
     event.block.timestamp,
     event.block.number,
   );
+}
+
+// ==================== Call Handlers ====================
+
+export function handleBurnForFees(call: BurnForFeesCall): void {
+  const tokenAddress = call.inputs.token;
+  const recipient = call.inputs.recipient;
+  const requested = call.inputs.requested;
+  const filBurned = call.transaction.value;
+
+  const token = Token.load(tokenAddress);
+  if (!token) {
+    log.warning("[handleBurnForFees] Token not found: {}", [tokenAddress.toHexString()]);
+    return;
+  }
+
+  // Create FeeAuctionPurchase entity
+  const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index.toI32());
+  const purchase = new FeeAuctionPurchase(purchaseId);
+  purchase.token = tokenAddress;
+  purchase.recipient = recipient;
+  purchase.amountPurchased = requested;
+  purchase.filBurned = filBurned;
+  purchase.blockNumber = call.block.number;
+  purchase.blockTimestamp = call.block.timestamp;
+  purchase.transactionHash = call.transaction.hash;
+  purchase.save();
+
+  // Update token metrics - reduce accumulated fees and track FIL burned for this token's fees
+  token.accumulatedFees = token.accumulatedFees.minus(requested);
+  token.totalFilBurnedForFees = token.totalFilBurnedForFees.plus(filBurned);
+  token.save();
+
+  // Update global filBurned metrics
+  const timestamp = call.block.timestamp;
+
+  const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(timestamp);
+  dailyMetric.filBurned = dailyMetric.filBurned.plus(filBurned);
+  dailyMetric.save();
+
+  const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(timestamp);
+  weeklyMetric.filBurned = weeklyMetric.filBurned.plus(filBurned);
+  weeklyMetric.save();
+
+  const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
+  networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(filBurned);
+  networkMetric.save();
 }
