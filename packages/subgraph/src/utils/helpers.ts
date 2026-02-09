@@ -372,3 +372,11 @@ export function getLockupLastSettledUntilTimestamp(
 
   return blockTimestamp.minus(blockNumber.minus(lockupLastSettledUntilEpoch).times(EPOCH_DURATION));
 }
+
+export function remainingEpochsForTerminatedRail(rail: Rail, blockNumber: GraphBN): GraphBN {
+  if (blockNumber.gt(rail.endEpoch)) {
+    return ZERO_BIG_INT;
+  }
+
+  return rail.endEpoch.minus(blockNumber);
+}

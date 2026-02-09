@@ -23,6 +23,7 @@ import {
   createRateChangeQueue,
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
+  remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
@@ -333,15 +334,11 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   if (oldRate.notEqual(newRate)) {
-    let effectiveLockupPeriod = ZERO_BIG_INT;
+    let effectiveLockupPeriod = rail.lockupPeriod;
     if (isTerminated) {
-      effectiveLockupPeriod = rail.endEpoch.minus(event.block.number);
-      if (effectiveLockupPeriod.lt(ZERO_BIG_INT)) {
-        effectiveLockupPeriod = ZERO_BIG_INT;
-      }
-    } else if (payerToken) {
-      effectiveLockupPeriod = rail.lockupPeriod.minus(event.block.number.minus(payerToken.lockupLastSettledUntilEpoch));
+      effectiveLockupPeriod = remainingEpochsForTerminatedRail(rail, event.block.number);
     }
+
     if (effectiveLockupPeriod.gt(ZERO_BIG_INT)) {
       const oldLockup = oldRate.times(effectiveLockupPeriod);
       const newLockup = newRate.times(effectiveLockupPeriod);
@@ -354,8 +351,8 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     // Uses lockupPeriod for consistency with handleRailFinalized
     const token = Token.load(rail.token);
     if (token) {
-      const oldStreaming = oldRate.times(rail.lockupPeriod);
-      const newStreaming = newRate.times(rail.lockupPeriod);
+      const oldStreaming = oldRate.times(effectiveLockupPeriod);
+      const newStreaming = newRate.times(effectiveLockupPeriod);
       const streamingDelta = newStreaming.minus(oldStreaming);
       token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
       token.save();
@@ -384,6 +381,9 @@ export function handleRailSettled(event: RailSettledEvent): void {
     log.warning("[handleSettlementCompleted] Rail not found for railId: {}", [railId.toString()]);
     return;
   }
+
+  // Capture previous settledUpto before updating (needed for lockup calculation)
+  const previousSettledUpto = rail.settledUpto;
 
   // Update rail aggregate data
   rail.totalSettledAmount = rail.totalSettledAmount.plus(totalSettledAmount);
@@ -428,6 +428,9 @@ export function handleRailSettled(event: RailSettledEvent): void {
     // by summing all `userTokens.funds`.
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
+    // Reduce streaming lockup by rate × actualSettledDuration (https://github.com/FilOzone/filecoin-pay/blob/c916dc5cd059c48ca5d7588416af9e6025fa1fc6/src/FilecoinPayV1.sol#L1471-L1472)
+    const actualSettledDuration = event.params.settledUpTo.minus(previousSettledUpto);
+    token.totalStreamingLockup = token.totalStreamingLockup.minus(rail.paymentRate.times(actualSettledDuration));
     token.save();
   }
 

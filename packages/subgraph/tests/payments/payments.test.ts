@@ -328,6 +328,73 @@ describe("Payments", () => {
     assert.equals(ethereum.Value.fromI32(1), ethereum.Value.fromI32(rateChangeQueueAgain.length));
   });
 
+  test("should update streaming lockup when rate modified on active rail with lockup period", () => {
+    // Arrange: Create an active rail
+    const railId = GraphBN.fromI32(1250);
+    const commissionRateBps = GraphBN.fromI32(100);
+    setupCompleteRail(TEST_AMOUNTS.LARGE_DEPOSIT, railId, commissionRateBps);
+
+    // Set lockup period first (before setting rate)
+    const lockupPeriod = GraphBN.fromI64(1000);
+    const lockupFixed = TEST_AMOUNTS.LOCKUP_FIXED_SMALL;
+    const railLockupModifiedEvent = createRailLockupModifiedEvent(
+      railId,
+      ZERO_BIG_INT,
+      lockupPeriod,
+      ZERO_BIG_INT,
+      lockupFixed,
+    );
+    handleRailLockupModified(railLockupModifiedEvent);
+
+    // Verify: No streaming lockup yet (rate is 0)
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+
+    // ACT 1: Set rate from 0 -> rate1 (should add streaming lockup)
+    const rate1 = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    const railRateModifiedEvent1 = createRailRateModifiedEvent(railId, ZERO_BIG_INT, rate1);
+    handleRailRateModified(railRateModifiedEvent1);
+
+    // ASSERT 1: Streaming lockup = rate1 × lockupPeriod
+    const expectedStreamingLockup1 = rate1.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup1);
+
+    // ACT 2: Increase rate from rate1 -> rate2 (should increase streaming lockup)
+    const rate2 = TEST_AMOUNTS.PAYMENT_RATE_HIGH; // 2x rate1
+    const railRateModifiedEvent2 = createRailRateModifiedEvent(railId, rate1, rate2);
+    railRateModifiedEvent2.block.number = railRateModifiedEvent1.block.number.plus(ONE_BIG_INT);
+    handleRailRateModified(railRateModifiedEvent2);
+
+    // ASSERT 2: Streaming lockup = rate2 × lockupPeriod
+    const expectedStreamingLockup2 = rate2.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup2);
+
+    // Verify the delta was applied correctly: (rate2 - rate1) × lockupPeriod
+    const expectedDelta = rate2.minus(rate1).times(lockupPeriod);
+    assert.assertTrue(expectedStreamingLockup2.equals(expectedStreamingLockup1.plus(expectedDelta)));
+
+    // ACT 3: Decrease rate from rate2 -> rate3 (should decrease streaming lockup)
+    const rate3 = TEST_AMOUNTS.PAYMENT_RATE_LOW; // lower than rate1
+    const railRateModifiedEvent3 = createRailRateModifiedEvent(railId, rate2, rate3);
+    railRateModifiedEvent3.block.number = railRateModifiedEvent2.block.number.plus(ONE_BIG_INT);
+    handleRailRateModified(railRateModifiedEvent3);
+
+    // ASSERT 3: Streaming lockup = rate3 × lockupPeriod
+    const expectedStreamingLockup3 = rate3.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup3);
+
+    // ACT 4: Set rate to 0 (should clear streaming lockup)
+    const railRateModifiedEvent4 = createRailRateModifiedEvent(railId, rate3, ZERO_BIG_INT);
+    railRateModifiedEvent4.block.number = railRateModifiedEvent3.block.number.plus(ONE_BIG_INT);
+    handleRailRateModified(railRateModifiedEvent4);
+
+    // ASSERT 4: Streaming lockup should be 0
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, ZERO_BIG_INT);
+
+    // Fixed lockup should remain unchanged throughout
+    assertTokenTotalFixedLockup(TEST_ADDRESSES.TOKEN, lockupFixed);
+  });
+
   test("should handle rail lockup modified properly", () => {
     // Arrange: Create a rail with zero lockup params
     const railId = GraphBN.fromI32(1200);
@@ -599,6 +666,95 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenIdStr, "settledAmount", totalSettledAmount.toString());
     assert.fieldEquals("OperatorToken", operatorTokenIdStr, "commissionEarned", operatorCommission.toString());
     assert.fieldEquals("OperatorToken", operatorTokenIdStr, "volume", totalSettledAmount.toString());
+  });
+
+  test("should reduce streaming lockup by rate × actualSettledDuration on settlement", () => {
+    // Arrange: Create an active rail with payment rate and lockup period
+    const depositAmount = TEST_AMOUNTS.XLARGE_DEPOSIT;
+    const railId = GraphBN.fromI64(250);
+    const commissionRateBps = GraphBN.fromI32(300); // 3%
+    setupCompleteRail(depositAmount, railId, commissionRateBps);
+
+    // Set payment rate (0 -> paymentRate)
+    const paymentRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
+    handleRailRateModified(railRateModifiedEvent);
+
+    // Set lockup period (this creates streaming lockup = rate × lockupPeriod)
+    const lockupPeriod = GraphBN.fromI64(1000);
+    const lockupFixed = TEST_AMOUNTS.LOCKUP_FIXED_SMALL;
+    const railLockupModifiedEvent = createRailLockupModifiedEvent(
+      railId,
+      ZERO_BIG_INT,
+      lockupPeriod,
+      ZERO_BIG_INT,
+      lockupFixed,
+    );
+    handleRailLockupModified(railLockupModifiedEvent);
+
+    // Verify: Initial streaming lockup = rate × lockupPeriod
+    const initialStreamingLockup = paymentRate.times(lockupPeriod);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, initialStreamingLockup);
+
+    // The rail's settledUpto is set to the block number when rate was modified
+    const initialSettledUpto = railRateModifiedEvent.block.number;
+
+    // Act: Settle the rail
+    // The actualSettledDuration should be: settledUpTo - previousSettledUpto
+    const actualSettledDuration = GraphBN.fromI64(500); // Settle 500 epochs
+    const settledUpTo = initialSettledUpto.plus(actualSettledDuration);
+
+    // Calculate settlement amounts
+    const totalSettledAmount = paymentRate.times(actualSettledDuration); // rate × duration
+    const networkFee = calculateNetworkFee(totalSettledAmount);
+    const operatorCommission = calculateOperatorCommission(totalSettledAmount, commissionRateBps);
+    const totalNetPayeeAmount = totalSettledAmount.minus(networkFee).minus(operatorCommission);
+
+    const railSettledEvent = createRailSettledEvent(
+      railId,
+      totalSettledAmount,
+      totalNetPayeeAmount,
+      operatorCommission,
+      networkFee,
+      settledUpTo,
+    );
+    handleRailSettled(railSettledEvent);
+
+    // Assert: Streaming lockup should be reduced by rate × actualSettledDuration
+    // (NOT by rate × totalSettledAmount, which would be incorrect)
+    const expectedLockupReduction = paymentRate.times(actualSettledDuration);
+    const expectedStreamingLockup = initialStreamingLockup.minus(expectedLockupReduction);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup);
+
+    // Act 2: Settle again with another duration
+    const actualSettledDuration2 = GraphBN.fromI64(300); // Settle another 300 epochs
+    const settledUpTo2 = settledUpTo.plus(actualSettledDuration2);
+
+    const totalSettledAmount2 = paymentRate.times(actualSettledDuration2);
+    const networkFee2 = calculateNetworkFee(totalSettledAmount2);
+    const operatorCommission2 = calculateOperatorCommission(totalSettledAmount2, commissionRateBps);
+    const totalNetPayeeAmount2 = totalSettledAmount2.minus(networkFee2).minus(operatorCommission2);
+
+    const railSettledEvent2 = createRailSettledEvent(
+      railId,
+      totalSettledAmount2,
+      totalNetPayeeAmount2,
+      operatorCommission2,
+      networkFee2,
+      settledUpTo2,
+    );
+    handleRailSettled(railSettledEvent2);
+
+    // Assert 2: Streaming lockup reduced by another rate × actualSettledDuration2
+    const expectedLockupReduction2 = paymentRate.times(actualSettledDuration2);
+    const expectedStreamingLockup2 = expectedStreamingLockup.minus(expectedLockupReduction2);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, expectedStreamingLockup2);
+
+    // Verify total reduction: rate × (500 + 300) = rate × 800
+    const totalDurationSettled = actualSettledDuration.plus(actualSettledDuration2);
+    const totalExpectedReduction = paymentRate.times(totalDurationSettled);
+    const finalExpectedStreamingLockup = initialStreamingLockup.minus(totalExpectedReduction);
+    assertTokenTotalStreamingLockup(TEST_ADDRESSES.TOKEN, finalExpectedStreamingLockup);
   });
 
   test("should handle rail terminated properly", () => {
