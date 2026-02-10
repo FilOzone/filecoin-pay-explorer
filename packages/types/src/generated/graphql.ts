@@ -206,14 +206,15 @@ export type Token = {
   __typename: "Token";
   decimals: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
+  lockupCurrent: Scalars["BigInt"]["output"];
+  lockupLastSettledUntilEpoch: Scalars["BigInt"]["output"];
+  lockupRate: Scalars["BigInt"]["output"];
   name: Scalars["String"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];
   totalDeposits: Scalars["BigInt"]["output"];
-  totalFixedLockup: Scalars["BigInt"]["output"];
   totalOneTimePayment: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
-  totalStreamingLockup: Scalars["BigInt"]["output"];
   totalUsers: Scalars["BigInt"]["output"];
   totalWithdrawals: Scalars["BigInt"]["output"];
   userFunds: Scalars["BigInt"]["output"];
