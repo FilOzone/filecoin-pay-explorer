@@ -12,19 +12,19 @@
  * @example
  * ```ts
  * const totalLockup = calculateTotalLockup(
- *   1000n,
- *   10n,
- *   100n,
+ *   "1000",
+ *   "10",
+ *   "100",
  *   150n
  * );
  * // Returns: "1500" (1000 + 10 * (150 - 100))
  * ```
  */
 export function calculateTotalLockup(
-  lockupCurrent: bigint | undefined,
-  lockupRate: bigint | undefined,
-  lockupLastSettledUntilEpoch: bigint | undefined,
-  blockNumber: bigint | undefined,
+  lockupCurrent: bigint | string | undefined,
+  lockupRate: bigint | string | undefined,
+  lockupLastSettledUntilEpoch: bigint | string | undefined,
+  blockNumber: bigint | string | undefined,
 ): string {
   // Handle missing data
   if (
@@ -37,6 +37,11 @@ export function calculateTotalLockup(
   }
 
   try {
+    lockupCurrent = BigInt(lockupCurrent);
+    lockupRate = BigInt(lockupRate);
+    lockupLastSettledUntilEpoch = BigInt(lockupLastSettledUntilEpoch);
+    blockNumber = BigInt(blockNumber);
+
     // If no streaming lockup (rate is 0), return only fixed lockup
     if (lockupRate === 0n) {
       return lockupCurrent.toString();
