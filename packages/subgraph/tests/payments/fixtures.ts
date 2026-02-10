@@ -250,12 +250,14 @@ export function assertRailLockupParams(railId: GraphBN, lockupPeriod: GraphBN, l
   assert.fieldEquals("Rail", railEntityId, "lockupFixed", lockupFixed.toString());
 }
 
-export function assertTokenTotalFixedLockup(tokenAddress: Address, totalFixedLockup: GraphBN): void {
+export function assertTokenTotalLockup(
+  tokenAddress: Address,
+  lockupCurrent: GraphBN,
+  lockupRate: GraphBN,
+  lastSettledUntilEpoch: GraphBN,
+): void {
   const tokenId = tokenAddress.toHexString();
-  assert.fieldEquals("Token", tokenId, "totalFixedLockup", totalFixedLockup.toString());
-}
-
-export function assertTokenTotalStreamingLockup(tokenAddress: Address, totalStreamingLockup: GraphBN): void {
-  const tokenId = tokenAddress.toHexString();
-  assert.fieldEquals("Token", tokenId, "totalStreamingLockup", totalStreamingLockup.toString());
+  assert.fieldEquals("Token", tokenId, "lockupCurrent", lockupCurrent.toString());
+  assert.fieldEquals("Token", tokenId, "lockupRate", lockupRate.toString());
+  assert.fieldEquals("Token", tokenId, "lockupLastSettledUntilEpoch", lastSettledUntilEpoch.toString());
 }

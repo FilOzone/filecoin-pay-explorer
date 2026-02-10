@@ -24,8 +24,9 @@ type Token @entity(immutable: false) {
   totalUsers: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
   operatorCommission: BigInt!
-  totalFixedLockup: BigInt! # sum of all lockupFixed for Rails with this token
-  totalStreamingLockup: BigInt! # sum of all (paymentRate × lockupPeriod) for active Rails
+  lockupCurrent: BigInt!
+  lockupRate: BigInt!
+  lockupLastSettledUntilEpoch: BigInt!
   userTokens: [UserToken!]! @derivedFrom(field: "token")
 }
 
@@ -130,8 +131,8 @@ type Rail @entity(immutable: false) {
 
 type RateChangeQueue @entity(immutable: false) {
   id: Bytes! # railId,startEpoch
-  startEpoch: BigInt!
-  untilEpoch: BigInt!
+  startEpoch: BigInt! # exclusive: rate applies starting at `startEpoch + 1`
+  untilEpoch: BigInt! # inclusive: rate applies through `untilEpoch`
   rate: BigInt!
   rail: Rail!
 }

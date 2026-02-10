@@ -21,9 +21,11 @@ import {
   createOrLoadUserToken,
   createRail,
   createRateChangeQueue,
+  epochsRateChangeApplicable,
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   remainingEpochsForTerminatedRail,
+  settleTokenLockup,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
@@ -203,6 +205,14 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
 
   rail.save();
 
+  const token = Token.load(rail.token);
+  if (token) {
+    // settle token lockup before updating lockup rate
+    settleTokenLockup(token, event.block.number);
+    token.lockupRate = token.lockupRate.minus(rail.paymentRate);
+    token.save();
+  }
+
   // collect rail state change metrics
   MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
     previousRailState,
@@ -226,31 +236,33 @@ export function handleRailLockupModified(event: RailLockupModifiedEvent): void {
     return;
   }
 
-  const isTerminated = rail.state === "TERMINATED";
+  const isTerminated = rail.state == "TERMINATED";
   const operatorApprovalId = rail.payer.concat(rail.operator).concat(rail.token);
   const operatorApproval = OperatorApproval.load(operatorApprovalId);
   const operatorToken = createOrLoadOperatorToken(rail.operator, rail.token).operatorToken;
 
-  rail.lockupFixed = event.params.newLockupFixed;
+  rail.lockupFixed = newLockupFixed;
   if (!isTerminated) {
-    rail.lockupPeriod = event.params.newLockupPeriod;
+    rail.lockupPeriod = newLockupPeriod;
   }
   rail.save();
 
   // Update token lockup metrics
   const token = Token.load(rail.token);
   if (token) {
+    // No need to settle token lockup here because lockupRate is unchanged; deltas are independent of elapsed time.
     // Fixed lockup delta
     const fixedDelta = newLockupFixed.minus(oldLockupFixed);
-    token.totalFixedLockup = token.totalFixedLockup.plus(fixedDelta);
+    token.lockupCurrent = token.lockupCurrent.plus(fixedDelta);
 
     // Streaming lockup delta (only if not terminated)
     if (!isTerminated) {
       const oldStreaming = rail.paymentRate.times(oldLockupPeriod);
       const newStreaming = rail.paymentRate.times(newLockupPeriod);
       const streamingDelta = newStreaming.minus(oldStreaming);
-      token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
+      token.lockupCurrent = token.lockupCurrent.plus(streamingDelta);
     }
+
     token.save();
   }
 
@@ -278,7 +290,8 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     return;
   }
 
-  if (oldRate.equals(ZERO_BIG_INT) && newRate.gt(ZERO_BIG_INT) && rail.state !== "Active") {
+  // Only transition from ZERORATE to ACTIVE, not from TERMINATED or FINALIZED
+  if (oldRate.equals(ZERO_BIG_INT) && newRate.gt(ZERO_BIG_INT) && rail.state == "ZERORATE") {
     rail.state = "ACTIVE";
 
     // Collect rail State change metrics
@@ -322,7 +335,8 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     return;
   }
 
-  const isTerminated = rail.state === "TERMINATED";
+  // Not using strict equality because it evaluates to false for "TERMINATED" state in tests
+  const isTerminated = rail.state == "TERMINATED";
   if (!isTerminated) {
     updateOperatorRate(operatorApproval, oldRate, newRate);
     updateOperatorTokenRate(operatorToken, oldRate, newRate);
@@ -351,10 +365,18 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     // Uses lockupPeriod for consistency with handleRailFinalized
     const token = Token.load(rail.token);
     if (token) {
+      // settle token lockup untile current epoch
+      settleTokenLockup(token, event.block.number);
+
       const oldStreaming = oldRate.times(effectiveLockupPeriod);
       const newStreaming = newRate.times(effectiveLockupPeriod);
       const streamingDelta = newStreaming.minus(oldStreaming);
-      token.totalStreamingLockup = token.totalStreamingLockup.plus(streamingDelta);
+      token.lockupCurrent = token.lockupCurrent.plus(streamingDelta);
+
+      // update lockup rate only if the rail is not terminated
+      // for terminated rails, the lockup rate is already updated during rail termination
+      if (!isTerminated) token.lockupRate = token.lockupRate.minus(oldRate).plus(newRate);
+
       token.save();
     }
 
@@ -419,6 +441,8 @@ export function handleRailSettled(event: RailSettledEvent): void {
   ).userToken;
   const token = Token.load(rail.token);
   if (token) {
+    // settle token lockup just to make sure we don't end up with negative lockup current (still not necessary to call)
+    settleTokenLockup(token, event.block.number);
     // Subtract the network fee from user funds since it is not retained by the user.
     // The fee is either burned or deposited into the Filecoin-pay contract account.
     //
@@ -428,9 +452,33 @@ export function handleRailSettled(event: RailSettledEvent): void {
     // by summing all `userTokens.funds`.
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
-    // Reduce streaming lockup by rate × actualSettledDuration (https://github.com/FilOzone/filecoin-pay/blob/c916dc5cd059c48ca5d7588416af9e6025fa1fc6/src/FilecoinPayV1.sol#L1471-L1472)
-    const actualSettledDuration = event.params.settledUpTo.minus(previousSettledUpto);
-    token.totalStreamingLockup = token.totalStreamingLockup.minus(rail.paymentRate.times(actualSettledDuration));
+
+    // Reduce streaming lockup by rate × actualSettledDuration.
+    // Settlement window is (previousSettledUpto, settledUpTo].
+    // RateChangeQueue applies for (startEpoch, untilEpoch], i.e., startEpoch is exclusive.
+    // https://github.com/FilOzone/filecoin-pay/blob/c916dc5cd059c48ca5d7588416af9e6025fa1fc6/src/FilecoinPayV1.sol#L1471-L1472
+    const rateChanges = rail.rateChangeQueue.load();
+    const rateChangeCount = rateChanges.length;
+    let lockupReduction = ZERO_BIG_INT;
+
+    // Calculate lockup reduction from historical rate changes
+    for (let i = 0; i < rateChangeCount; i++) {
+      const rateChange = rateChanges[i];
+      const duration = epochsRateChangeApplicable(rateChange, previousSettledUpto, event.params.settledUpTo);
+      lockupReduction = lockupReduction.plus(rateChange.rate.times(duration));
+    }
+
+    // Calculate lockup reduction from current rate (for epochs not covered by rate change queue)
+    // Start from the later of: last queue entry's untilEpoch OR previousSettledUpto
+    // This handles cases where the rail was already settled beyond the last rate change
+    const lastQueueEpoch = rateChangeCount > 0 ? rateChanges[rateChangeCount - 1].untilEpoch : previousSettledUpto;
+    const currentRateStartEpoch = lastQueueEpoch.gt(previousSettledUpto) ? lastQueueEpoch : previousSettledUpto;
+    if (currentRateStartEpoch.lt(event.params.settledUpTo)) {
+      const currentRateDuration = event.params.settledUpTo.minus(currentRateStartEpoch);
+      lockupReduction = lockupReduction.plus(rail.paymentRate.times(currentRateDuration));
+    }
+
+    token.lockupCurrent = token.lockupCurrent.minus(lockupReduction);
     token.save();
   }
 
@@ -573,7 +621,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   const token = Token.load(rail.token);
   if (token) {
     token.userFunds = token.userFunds.minus(networkFee);
-    token.totalFixedLockup = token.totalFixedLockup.minus(totalAmount);
+    token.lockupCurrent = token.lockupCurrent.minus(totalAmount);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
     token.save();
   }
@@ -639,12 +687,10 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
   updateOperatorLockup(operatorApproval, oldLockup, ZERO_BIG_INT);
   updateOperatorTokenLockup(operatorToken, oldLockup, ZERO_BIG_INT);
 
-  // Reduce token lockup metrics by rail's fixed and streaming lockup
+  // Reduce token lockup metrics by rail's fixed lockup
   const token = Token.load(rail.token);
   if (token) {
-    token.totalFixedLockup = token.totalFixedLockup.minus(rail.lockupFixed);
-    const streamingLockup = rail.lockupPeriod.times(rail.paymentRate);
-    token.totalStreamingLockup = token.totalStreamingLockup.minus(streamingLockup);
+    token.lockupCurrent = token.lockupCurrent.minus(rail.lockupFixed);
     token.save();
   }
 
