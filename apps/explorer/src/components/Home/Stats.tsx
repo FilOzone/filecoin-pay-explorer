@@ -75,7 +75,7 @@ const Stats: React.FC = () => {
 
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
-  const { data: blockNumber } = useBlockNumber();
+  const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
 
   const cards = useMemo<MetricCard[]>(
     () => [
@@ -111,6 +111,7 @@ const Stats: React.FC = () => {
             )
           : `${DEFAULT_TOKEN_VALUE} USDFC`,
         icon: LockIcon,
+        isLoading: loadingBlockNumber,
       },
       {
         title: "Total FIL Locked",
@@ -127,6 +128,7 @@ const Stats: React.FC = () => {
             )
           : `${DEFAULT_TOKEN_VALUE} FIL`,
         icon: LockIcon,
+        isLoading: loadingBlockNumber,
       },
       {
         title: "Total Rails",
@@ -196,7 +198,7 @@ const Stats: React.FC = () => {
         tooltip: "Payment streams that have been permanently stopped",
       },
     ],
-    [data, blockNumber],
+    [data, blockNumber, loadingBlockNumber],
   );
 
   return (
