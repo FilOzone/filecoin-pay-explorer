@@ -457,16 +457,18 @@ export const GET_STATS_DASHBOARD = gql`
       totalSettledAmount
       totalOneTimePayment
       userFunds
-      totalFixedLockup
-      totalStreamingLockup
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
     filToken: token(id: $filAddress) {
       decimals
       totalSettledAmount
       totalOneTimePayment
       userFunds
-      totalFixedLockup
-      totalStreamingLockup
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
   }
 `;

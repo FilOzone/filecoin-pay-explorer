@@ -18,9 +18,11 @@ import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
+import { useBlockNumber } from "@/hooks/useBlockNumber";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
+import { calculateTotalLockup } from "@/utils/lockup";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -73,6 +75,7 @@ const Stats: React.FC = () => {
 
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
+  const { data: blockNumber } = useBlockNumber();
 
   const cards = useMemo<MetricCard[]>(
     () => [
@@ -97,9 +100,12 @@ const Stats: React.FC = () => {
         title: "Total USDFC Locked",
         value: data?.usdfcToken
           ? formatToken(
-              (
-                BigInt(data.usdfcToken.totalFixedLockup || "0") + BigInt(data.usdfcToken.totalStreamingLockup || "0")
-              ).toString(),
+              calculateTotalLockup(
+                data.usdfcToken.lockupCurrent,
+                data.usdfcToken.lockupRate,
+                data.usdfcToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
               data.usdfcToken.decimals,
               "USDFC",
             )
@@ -110,9 +116,12 @@ const Stats: React.FC = () => {
         title: "Total FIL Locked",
         value: data?.filToken
           ? formatToken(
-              (
-                BigInt(data.filToken.totalFixedLockup || "0") + BigInt(data.filToken.totalStreamingLockup || "0")
-              ).toString(),
+              calculateTotalLockup(
+                data.filToken.lockupCurrent,
+                data.filToken.lockupRate,
+                data.filToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
               data.filToken.decimals,
               "FIL",
             )
@@ -187,7 +196,7 @@ const Stats: React.FC = () => {
         tooltip: "Payment streams that have been permanently stopped",
       },
     ],
-    [data],
+    [data, blockNumber],
   );
 
   return (
