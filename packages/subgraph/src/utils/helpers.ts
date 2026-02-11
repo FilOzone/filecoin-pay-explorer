@@ -383,20 +383,14 @@ export function remainingEpochsForTerminatedRail(rail: Rail, blockNumber: GraphB
 }
 
 /**
- * Settles the token's lockup fields until the given epoch.
- *
- * NOTE: This function does not save the token. The caller is responsible for saving the token.
- *
- * @param {Token} token The token to settle
- * @param {GraphBN} untilEpoch The epoch until which to settle the token's lockup fields
- * @returns {Token} The settled token
+ * Computes the settled amount of tokens that should be locked up until the given epoch
+ * @param token the token to compute the settled amount for
+ * @param untilEpoch the epoch until which the settled amount should be computed
+ * @returns the settled amount of tokens that should be locked up until the given epoch
  */
-export function settleTokenLockup(token: Token, untilEpoch: GraphBN): Token {
+export function computeSettledLockup(token: Token, untilEpoch: GraphBN): GraphBN {
   const duration = untilEpoch.minus(token.lockupLastSettledUntilEpoch);
-  token.lockupCurrent = token.lockupCurrent.plus(token.lockupRate.times(duration));
-  token.lockupLastSettledUntilEpoch = untilEpoch;
-
-  return token;
+  return token.lockupCurrent.plus(token.lockupRate.times(duration));
 }
 
 /**

@@ -14,6 +14,7 @@ import {
 } from "../generated/Payments/Payments";
 import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
 import {
+  computeSettledLockup,
   createOneTimePayment,
   createOrLoadAccountByAddress,
   createOrLoadOperator,
@@ -25,7 +26,6 @@ import {
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   remainingEpochsForTerminatedRail,
-  settleTokenLockup,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
@@ -208,7 +208,9 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
   const token = Token.load(rail.token);
   if (token) {
     // settle token lockup before updating lockup rate
-    settleTokenLockup(token, event.block.number);
+    token.lockupCurrent = computeSettledLockup(token, event.block.number);
+    token.lockupLastSettledUntilEpoch = event.block.number;
+
     token.lockupRate = token.lockupRate.minus(rail.paymentRate);
     token.save();
   }
@@ -366,7 +368,8 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     const token = Token.load(rail.token);
     if (token) {
       // settle token lockup untile current epoch
-      settleTokenLockup(token, event.block.number);
+      token.lockupCurrent = computeSettledLockup(token, event.block.number);
+      token.lockupLastSettledUntilEpoch = event.block.number;
 
       const oldStreaming = oldRate.times(effectiveLockupPeriod);
       const newStreaming = newRate.times(effectiveLockupPeriod);
@@ -442,7 +445,9 @@ export function handleRailSettled(event: RailSettledEvent): void {
   const token = Token.load(rail.token);
   if (token) {
     // settle token lockup just to make sure we don't end up with negative lockup current (still not necessary to call)
-    settleTokenLockup(token, event.block.number);
+    token.lockupCurrent = computeSettledLockup(token, event.block.number);
+    token.lockupLastSettledUntilEpoch = event.block.number;
+
     // Subtract the network fee from user funds since it is not retained by the user.
     // The fee is either burned or deposited into the Filecoin-pay contract account.
     //
