@@ -1,5 +1,5 @@
 import { BigInt as GraphBN } from "@graphprotocol/graph-ts";
-import { afterEach, beforeAll, clearStore, describe, test } from "matchstick-as";
+import { afterEach, assert, beforeAll, clearStore, describe, test } from "matchstick-as";
 import {
   handleRailFinalized,
   handleRailLockupModified,
@@ -278,5 +278,13 @@ describe("Token Lockup Tracking", () => {
     lockupCurrent = lockupCurrent.minus(lockupFixed2);
     lockupLastSettledUntilEpoch = railSettledEvent3.block.number;
     assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupCurrent, lockupRate, lockupLastSettledUntilEpoch);
+
+    // After complete rail lifecycle, lockupCurrent and lockupRate should be zero
+    // Settlements drain accumulated streaming lockup from lockupCurrent
+    // oneTimePayments and rail finalization are responsible for draining fixed lockup from lockupCurrent
+    // Rail terminations reduce lockupRate to zero by moving each rail's rate
+    assert.bigIntEquals(lockupCurrent, ZERO_BIG_INT);
+    assert.bigIntEquals(lockupRate, ZERO_BIG_INT);
+    assert.bigIntEquals(lockupLastSettledUntilEpoch, blockNumber);
   });
 });
