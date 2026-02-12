@@ -453,21 +453,6 @@ export const GET_TOKEN_DETAILS = gql`
 
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
-    paymentsMetrics(first: 1) {
-      id
-      totalRails
-      totalOperators
-      totalTokens
-      totalAccounts
-      totalFilBurned
-      totalRailSettlements
-      totalZeroRateRails
-      totalActiveRails
-      totalTerminatedRails
-      totalFinalizedRails
-      uniquePayers
-      uniquePayees
-    }
     usdfcToken: token(id: $usdfcAddress) {
       decimals
       totalSettledAmount

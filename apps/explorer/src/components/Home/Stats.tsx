@@ -13,14 +13,14 @@ import {
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
+import { CoinsIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
-import { formatCompactNumber, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -76,35 +76,6 @@ const Stats: React.FC = () => {
 
   const cards = useMemo<MetricCard[]>(
     () => [
-      {
-        title: "Unique Payers",
-        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayers || 0),
-        icon: "/stats/unique-payers.svg",
-      },
-      {
-        title: "Unique Payees",
-        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayees || 0),
-        icon: "/stats/unique-payees.svg",
-      },
-      {
-        title: "Total USDFC",
-        value: data?.usdfcToken
-          ? formatToken(data.usdfcToken.userFunds, data.usdfcToken.decimals, "USDFC")
-          : `${DEFAULT_TOKEN_VALUE} USDFC`,
-        icon: CurrencyCircleDollarIcon,
-      },
-      {
-        title: "Total Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalRails || 0),
-        icon: "/stats/total-rails.svg",
-        tooltip: "Ongoing payment streams between users",
-      },
-      {
-        title: "Services",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalOperators || 0),
-        icon: "/stats/total-services.svg",
-        tooltip: "Payment managers that help automate transactions between users",
-      },
       // TODO: Add this back when network revenue calculation is fixed
       // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
       // {
@@ -136,29 +107,6 @@ const Stats: React.FC = () => {
             )
           : `${DEFAULT_TOKEN_VALUE} FIL`,
         icon: CoinsIcon,
-      },
-      {
-        title: "Rail Settlements",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalRailSettlements || 0),
-        icon: CoinVerticalIcon,
-      },
-      {
-        title: "Idle Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalZeroRateRails || 0),
-        icon: "/stats/idle-rails.svg",
-        tooltip: "Paused payment streams that are currently inactive",
-      },
-      {
-        title: "Active Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalActiveRails || 0),
-        icon: "/stats/active-rails.svg",
-        tooltip: "Payment streams that are currently running",
-      },
-      {
-        title: "Terminated Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalTerminatedRails || 0),
-        icon: "/stats/terminated-rails.svg",
-        tooltip: "Payment streams that have been permanently stopped",
       },
     ],
     [data],
