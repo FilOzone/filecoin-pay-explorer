@@ -1,5 +1,16 @@
 [
   {
+    "type": "function",
+    "name": "burnForFees",
+    "inputs": [
+      { "name": "token", "type": "address", "internalType": "contract IERC20" },
+      { "name": "recipient", "type": "address", "internalType": "address" },
+      { "name": "requested", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
     "type": "event",
     "name": "AccountLockupSettled",
     "inputs": [
