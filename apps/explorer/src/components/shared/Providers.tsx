@@ -1,10 +1,19 @@
 "use client";
+
+import { setUIConfig } from "@filecoin-foundation/ui-filecoin/config/ui-config";
 import { ProgressBar } from "@filecoin-pay/ui/components/progress-bar";
 import { Toaster } from "@filecoin-pay/ui/components/sonner";
 import { TooltipProvider } from "@filecoin-pay/ui/components/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Link from "next/link";
+import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { NetworkProvider } from "@/context/Network";
 import { DEFAULT_TOAST_POSITION } from "@/utils/constants";
+
+setUIConfig({
+  baseDomain: BASE_DOMAIN,
+  Link,
+});
 
 const queryClient = new QueryClient();
 

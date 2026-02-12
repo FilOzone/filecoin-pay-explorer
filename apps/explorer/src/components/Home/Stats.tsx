@@ -28,7 +28,7 @@ interface StatsLayoutProps {
 }
 
 const StatsLayout: React.FC<StatsLayoutProps> = ({ children }) => (
-  <PageSection backgroundVariant='light' paddingVariant='medium'>
+  <PageSection backgroundVariant='light' paddingVariant='default'>
     <div className='flex flex-col gap-6 -mt-15'>
       <h3 className='text-2xl font-medium'>Filecoin Pay Stats</h3>
       {children}
