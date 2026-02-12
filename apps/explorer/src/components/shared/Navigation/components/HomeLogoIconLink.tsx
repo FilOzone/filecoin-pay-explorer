@@ -8,9 +8,9 @@ import LogoLight from "@/public/foc-logo-light.svg";
 
 export function HomeLogoIconLink() {
   const { network } = useNetwork();
-  const backgroundVariant = useBackground();
+  const { theme } = useBackground();
 
-  const Logo = backgroundVariant.theme === "light" ? LogoDark : LogoLight;
+  const Logo = theme === "light" ? LogoDark : LogoLight;
   return (
     <Link href={`/${network}`} className='focus:brand-outline inline-block' aria-label='Go to homepage'>
       <Logo height={40} />
