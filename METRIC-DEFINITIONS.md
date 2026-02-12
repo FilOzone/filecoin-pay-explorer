@@ -17,7 +17,7 @@ This document defines the hero metrics displayed in the Filecoin Pay Console das
 - **Formula:**
   ```
   For each token (USDFC, FIL):
-    totalLocked = (token.totalFixedLockup + token.totalStreamingLockup) where token == tokenAddress
+    totalLocked = token.lockupCurrent + token.lockupRate * (blockNumber - token.lockupLastSettledUntilEpoch) where token == tokenAddress
   ```
 - **Conversion:** Divide by 10^18 (TOKEN_DECIMALS) for human-readable values
 
@@ -42,7 +42,7 @@ This document defines the hero metrics displayed in the Filecoin Pay Console das
 
 - **Definition:** Cumulative sum of FIL burned across all payment rails since inception
 - **Sources:**
-  1. **Direct burn from FIL settlement:** When a payment rail settles in FIL, a portion is burned
+  1. **Direct burn from FIL transfers:** When a payment rail settles in FIL or when a one-time payment occures, a portion of transffered FIL is burned
   2. **Auction burn (`burnForFIL`):** FIL burned via Filecoin Pay Auction mechanism
 - **Source Entity:** `PaymentsMetric` from Goldsky subgraph
 - **Formula:**
