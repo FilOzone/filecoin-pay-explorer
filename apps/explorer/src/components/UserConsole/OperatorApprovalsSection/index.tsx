@@ -5,7 +5,6 @@ import { useCallback, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { ApproveOperatorDialog } from "@/components/UserConsole/ApproveOperatorDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId } from "@/utils/network";
 import { ApprovalsEmptyState, ApprovalsErrorState, ApprovalsLoadingState, ApprovalsTable } from "./components";
@@ -61,7 +60,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Authorized Services</h3>
-          <Button baseDomain={BASE_DOMAIN} variant='primary' onClick={handleOpenApprove} className='py-2'>
+          <Button variant='primary' onClick={handleOpenApprove} className='py-2'>
             <span className='flex items-center gap-2'>
               <Plus className='h-4 w-4' />
               Approve Service

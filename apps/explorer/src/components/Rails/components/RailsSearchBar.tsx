@@ -9,7 +9,6 @@ import { FunnelSimpleIcon } from "@phosphor-icons/react";
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { RAIL_STATES } from "@/constants/railStates";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 
 export type SearchByOption = "railId" | "payer" | "payee" | "operator" | "state";
 
@@ -117,16 +116,11 @@ function RailsSearchBar({
               </div>
 
               <div className='flex gap-2 pt-2'>
-                <NewButton
-                  baseDomain={BASE_DOMAIN}
-                  variant='primary'
-                  onClick={handleApplyFilters}
-                  className='flex-1 py-2'
-                >
+                <NewButton variant='primary' onClick={handleApplyFilters} className='flex-1 py-2'>
                   Apply
                 </NewButton>
                 {hasActiveFilters && (
-                  <NewButton baseDomain={BASE_DOMAIN} variant='ghost' onClick={handleClearFilters}>
+                  <NewButton variant='ghost' onClick={handleClearFilters}>
                     Clear
                   </NewButton>
                 )}
@@ -136,7 +130,7 @@ function RailsSearchBar({
         </Popover>
 
         {/* Refresh Button */}
-        <RefreshButton baseDomain={BASE_DOMAIN} onClick={onRefresh} disabled={isRefetching} />
+        <RefreshButton onClick={onRefresh} disabled={isRefetching} />
       </div>
     </div>
   );

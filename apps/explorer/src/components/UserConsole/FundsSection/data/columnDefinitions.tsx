@@ -5,7 +5,6 @@ import { ArrowDownLeftIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AlertCircle, Info } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
 import { formatCompactNumber, formatFutureTimestamp, formatToken } from "@/utils/formatter";
 
@@ -176,10 +175,10 @@ export const columns = [
       const userToken = info.row.original;
       return (
         <div className='flex items-center gap-2 py-4'>
-          <Button baseDomain={BASE_DOMAIN} variant='primary' onClick={() => userToken.onDeposit(userToken)}>
+          <Button variant='primary' onClick={() => userToken.onDeposit(userToken)}>
             Deposit
           </Button>
-          <Button baseDomain={BASE_DOMAIN} variant='ghost' onClick={() => userToken.onWithdraw(userToken)}>
+          <Button variant='ghost' onClick={() => userToken.onWithdraw(userToken)}>
             Withdraw
           </Button>
         </div>

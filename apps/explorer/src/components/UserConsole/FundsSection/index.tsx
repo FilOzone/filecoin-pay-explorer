@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId } from "@/utils/network";
 import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsTable } from "./components";
@@ -66,7 +65,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Funds</h3>
-          <Button baseDomain={BASE_DOMAIN} className='py-2' variant='primary' onClick={handleOpenDeposit}>
+          <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
             Deposit
           </Button>
         </div>

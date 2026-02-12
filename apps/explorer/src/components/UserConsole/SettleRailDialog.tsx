@@ -11,7 +11,6 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 import type { Hex } from "viem";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
 import type { SettleRailParams } from "@/hooks/useRailSettlements";
 import { formatAddress, formatToken } from "@/utils/formatter";
@@ -148,16 +147,10 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
         </div>
 
         <DialogFooter className='flex-col sm:flex-row gap-2'>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            className='w-full sm:w-auto'
-          >
+          <Button variant='ghost' onClick={() => onOpenChange(false)} className='w-full sm:w-auto'>
             Cancel
           </Button>
           <Button
-            baseDomain={BASE_DOMAIN}
             variant='primary'
             onClick={handleSettle}
             disabled={!canSettle || isSettling}

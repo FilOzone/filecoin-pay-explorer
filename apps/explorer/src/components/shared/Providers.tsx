@@ -1,4 +1,6 @@
 "use client";
+
+import "@/app/config-initializer";
 import { ProgressBar } from "@filecoin-pay/ui/components/progress-bar";
 import { Toaster } from "@filecoin-pay/ui/components/sonner";
 import { TooltipProvider } from "@filecoin-pay/ui/components/tooltip";

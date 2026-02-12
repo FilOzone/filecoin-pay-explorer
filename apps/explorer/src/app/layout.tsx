@@ -1,3 +1,4 @@
+import "@/app/config-initializer";
 import type { Metadata } from "next";
 import "@/styles/globals.css";
 import "@rainbow-me/rainbowkit/styles.css";

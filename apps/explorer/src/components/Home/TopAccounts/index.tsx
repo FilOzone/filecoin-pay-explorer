@@ -21,7 +21,7 @@ const TopAccounts = () => {
   const { data, isLoading, isError, error, isRefetching, refetch } = useAccountsLeaderboard(10, "totalRails");
 
   return (
-    <PageSection backgroundVariant='light' paddingVariant='medium'>
+    <PageSection backgroundVariant='light' paddingVariant='default'>
       <div className='flex flex-col gap-6 -mt-20'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-medium'>Accounts Leaderboard</h2>

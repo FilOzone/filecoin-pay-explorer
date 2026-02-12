@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "biome check --write",
     "format": "biome format --write"
   },
   "dependencies": {
-    "@filecoin-foundation/ui-filecoin": "^0.1.12",
+    "@filecoin-foundation/ui-filecoin": "^0.7.5",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
     "@filoz/synapse-sdk": "^0.31.1",

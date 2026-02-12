@@ -1,7 +1,7 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 
 import type { Account } from "@filecoin-pay/types";
-
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { columns } from "../data/column-definitions";
 
 export type TopAccountsTableProps = {
@@ -9,7 +9,14 @@ export type TopAccountsTableProps = {
 };
 
 function TopAccountsTable({ data }: TopAccountsTableProps) {
-  return <TanstackTable data={data} columns={columns} />;
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    enableSorting: false,
+  });
+
+  return <TanstackTable table={table} />;
 }
 
 export default TopAccountsTable;
