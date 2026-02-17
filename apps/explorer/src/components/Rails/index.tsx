@@ -123,7 +123,7 @@ const Rails = () => {
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
   return (
-    <PageSection backgroundVariant='light' paddingVariant='default'>
+    <PageSection backgroundVariant='light'>
       <SectionContent headingTag='h1' title='Filecoin Pay Rails' description='Browse all payment rails on the network'>
         <div className='space-y-6'>
           <RailsSearchBar

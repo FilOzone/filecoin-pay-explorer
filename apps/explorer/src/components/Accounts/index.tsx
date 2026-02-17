@@ -76,7 +76,7 @@ const Accounts = () => {
   const hasActiveFilters = Object.keys(appliedFilters).length > 0;
 
   return (
-    <PageSection backgroundVariant='light' paddingVariant='default'>
+    <PageSection backgroundVariant='light'>
       <SectionContent headingTag='h1' title='Filecoin Pay Accounts' description='Browse all accounts on the network'>
         <div className='space-y-6'>
           <AccountsSearchBar

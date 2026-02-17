@@ -21,7 +21,7 @@ const TopOperators = () => {
   const { data, isLoading, isError, error, isRefetching, refetch } = useOperatorsLeaderboard(10, "totalRails");
 
   return (
-    <PageSection backgroundVariant='light' paddingVariant='default'>
+    <PageSection backgroundVariant='light'>
       <div className='flex flex-col gap-6 -mt-20'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-medium'>Services Leaderboard</h2>
