@@ -407,6 +407,8 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   collect(): void {
     this.updateNetworkMetrics();
     this.updateTokenMetrics();
+    this.updateDailyMetrics();
+    this.updateWeeklyMetrics();
   }
 
   private updateNetworkMetrics(): void {
@@ -425,6 +427,22 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
     tokenMetric.oneTimePaymentAmount = tokenMetric.oneTimePaymentAmount.plus(this.totalAmount);
 
     tokenMetric.save();
+  }
+
+  private updateDailyMetrics(): void {
+    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
+    if (this.isNativeFil) {
+      dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
+    }
+    dailyMetric.save();
+  }
+
+  private updateWeeklyMetrics(): void {
+    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
+    if (this.isNativeFil) {
+      weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
+    }
+    weeklyMetric.save();
   }
 }
 
