@@ -3,11 +3,9 @@ import Link from "next/link";
 
 import { BASE_DOMAIN } from "@/constants/site-metadata";
 
-setUIConfig({
-  baseDomain: BASE_DOMAIN,
-  Link: Link,
-});
-
-export function ConfigInitializer() {
-  return null;
+export function initUIConfig() {
+  setUIConfig({
+    baseDomain: BASE_DOMAIN,
+    Link: Link,
+  });
 }

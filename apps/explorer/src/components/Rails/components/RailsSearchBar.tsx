@@ -129,7 +129,6 @@ function RailsSearchBar({
           </PopoverContent>
         </Popover>
 
-        {/* Refresh Button */}
         <RefreshButton onClick={onRefresh} disabled={isRefetching} />
       </div>
     </div>

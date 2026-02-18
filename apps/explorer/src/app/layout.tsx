@@ -1,5 +1,5 @@
-import "@/app/config-initializer";
 import type { Metadata } from "next";
+import { initUIConfig } from "@/app/config-initializer";
 import "@/styles/globals.css";
 import "@rainbow-me/rainbowkit/styles.css";
 
@@ -12,6 +12,8 @@ import { METADATA } from "@/constants/site-metadata";
 export const metadata: Metadata = METADATA;
 
 type RootLayoutProps = Readonly<{ children: ReactNode }>;
+
+initUIConfig();
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return <SiteLayout>{children}</SiteLayout>;
