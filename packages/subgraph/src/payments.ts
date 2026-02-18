@@ -642,12 +642,6 @@ export function handleBurnForFees(call: BurnForFeesCall): void {
   const requested = call.inputs.requested;
   const filBurned = call.transaction.value;
 
-  const token = Token.load(tokenAddress);
-  if (!token) {
-    log.warning("[handleBurnForFees] Token not found: {}", [tokenAddress.toHexString()]);
-    return;
-  }
-
   // Create FeeAuctionPurchase entity
   const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index);
   const purchase = new FeeAuctionPurchase(purchaseId);
@@ -660,23 +654,11 @@ export function handleBurnForFees(call: BurnForFeesCall): void {
   purchase.transactionHash = call.transaction.hash;
   purchase.save();
 
-  // Update token metrics - reduce accumulated fees and track FIL burned for this token's fees
-  token.accumulatedFees = token.accumulatedFees.minus(requested);
-  token.totalFilBurnedForFees = token.totalFilBurnedForFees.plus(filBurned);
-  token.save();
-
-  // Update global filBurned metrics
-  const timestamp = call.block.timestamp;
-
-  const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(timestamp);
-  dailyMetric.filBurned = dailyMetric.filBurned.plus(filBurned);
-  dailyMetric.save();
-
-  const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(timestamp);
-  weeklyMetric.filBurned = weeklyMetric.filBurned.plus(filBurned);
-  weeklyMetric.save();
-
-  const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
-  networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(filBurned);
-  networkMetric.save();
+  MetricsCollectionOrchestrator.collectFeeAuctionMetrics(
+    requested,
+    filBurned,
+    tokenAddress,
+    call.block.timestamp,
+    call.block.number,
+  );
 }

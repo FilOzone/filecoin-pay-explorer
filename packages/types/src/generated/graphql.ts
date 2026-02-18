@@ -61,6 +61,7 @@ export type DailyOperatorMetric = {
 
 export type DailyTokenMetric = {
   __typename: "DailyTokenMetric";
+  accumulatedFees: Scalars["BigInt"]["output"];
   activeRailsCount: Scalars["BigInt"]["output"];
   commissionPaid: Scalars["BigInt"]["output"];
   date: Scalars["String"]["output"];
@@ -70,6 +71,7 @@ export type DailyTokenMetric = {
   settledAmount: Scalars["BigInt"]["output"];
   timestamp: Scalars["BigInt"]["output"];
   token: Token;
+  totalFilBurnedForFees: Scalars["BigInt"]["output"];
   totalLocked: Scalars["BigInt"]["output"];
   uniqueHolders: Scalars["BigInt"]["output"];
   volume: Scalars["BigInt"]["output"];

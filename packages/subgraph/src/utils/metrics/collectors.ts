@@ -446,6 +446,56 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   }
 }
 
+// One Time Payment Collector
+export class FeeAuctionCollector extends BaseMetricsCollector {
+  private amountPurchased: GraphBN;
+  private filBurned: GraphBN;
+  private token: Bytes;
+
+  constructor(amountPurchased: GraphBN, filBurned: GraphBN, token: Bytes, timestamp: GraphBN, blockNumber: GraphBN) {
+    super(timestamp, blockNumber);
+    this.amountPurchased = amountPurchased;
+    this.filBurned = filBurned;
+    this.token = token;
+  }
+
+  collect(): void {
+    this.updateNetworkMetrics();
+    this.updateTokenMetrics();
+    this.updateDailyMetrics();
+    this.updateWeeklyMetrics();
+  }
+
+  private updateNetworkMetrics(): void {
+    const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
+
+    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.filBurned);
+    networkMetric.save();
+  }
+
+  private updateTokenMetrics(): void {
+    const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(Address.fromBytes(this.token), this.timestamp);
+
+    tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.minus(this.amountPurchased);
+    tokenMetric.totalFilBurnedForFees = tokenMetric.totalFilBurnedForFees.plus(this.filBurned);
+    tokenMetric.save();
+  }
+
+  private updateDailyMetrics(): void {
+    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
+
+    dailyMetric.filBurned = dailyMetric.filBurned.plus(this.filBurned);
+    dailyMetric.save();
+  }
+
+  private updateWeeklyMetrics(): void {
+    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
+
+    weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.filBurned);
+    weeklyMetric.save();
+  }
+}
+
 // Metrics Collection Orchestrator
 export class MetricsCollectionOrchestrator {
   static collectRailCreationMetrics(
@@ -544,6 +594,17 @@ export class MetricsCollectionOrchestrator {
     blockNumber: GraphBN,
   ): void {
     const collector = new OneTimePaymentCollector(totalAmount, networkFee, token, timestamp, blockNumber);
+    collector.collect();
+  }
+
+  static collectFeeAuctionMetrics(
+    amountPurchased: GraphBN,
+    filBurned: GraphBN,
+    token: Bytes,
+    timestamp: GraphBN,
+    blockNumber: GraphBN,
+  ): void {
+    const collector = new FeeAuctionCollector(amountPurchased, filBurned, token, timestamp, blockNumber);
     collector.collect();
   }
 }
