@@ -61,6 +61,7 @@ export type DailyOperatorMetric = {
 
 export type DailyTokenMetric = {
   __typename: "DailyTokenMetric";
+  accumulatedFees: Scalars["BigInt"]["output"];
   activeRailsCount: Scalars["BigInt"]["output"];
   commissionPaid: Scalars["BigInt"]["output"];
   date: Scalars["String"]["output"];
@@ -70,10 +71,23 @@ export type DailyTokenMetric = {
   settledAmount: Scalars["BigInt"]["output"];
   timestamp: Scalars["BigInt"]["output"];
   token: Token;
+  totalFilBurnedForFees: Scalars["BigInt"]["output"];
   totalLocked: Scalars["BigInt"]["output"];
   uniqueHolders: Scalars["BigInt"]["output"];
   volume: Scalars["BigInt"]["output"];
   withdrawal: Scalars["BigInt"]["output"];
+};
+
+export type FeeAuctionPurchase = {
+  __typename: "FeeAuctionPurchase";
+  amountPurchased: Scalars["BigInt"]["output"];
+  blockNumber: Scalars["BigInt"]["output"];
+  blockTimestamp: Scalars["BigInt"]["output"];
+  filBurned: Scalars["BigInt"]["output"];
+  id: Scalars["Bytes"]["output"];
+  recipient: Scalars["Bytes"]["output"];
+  token: Token;
+  transactionHash: Scalars["Bytes"]["output"];
 };
 
 export type OneTimePayment = {
@@ -204,12 +218,14 @@ export type Settlement = {
 
 export type Token = {
   __typename: "Token";
+  accumulatedFees: Scalars["BigInt"]["output"];
   decimals: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
   name: Scalars["String"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];
   totalDeposits: Scalars["BigInt"]["output"];
+  totalFilBurnedForFees: Scalars["BigInt"]["output"];
   totalOneTimePayment: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   totalUsers: Scalars["BigInt"]["output"];

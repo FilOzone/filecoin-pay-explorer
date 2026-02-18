@@ -29,6 +29,7 @@ dataSources:
         - Account
         - Operator
         - Payments
+        - FeeAuctionPurchase
       abis:
         - name: Payments
           file: ./config/Payments-abi.json
@@ -57,4 +58,7 @@ dataSources:
           handler: handleWithdrawRecorded
         - event: AccountLockupSettled(indexed address,indexed address,uint256,uint256,uint256)
           handler: handleAccountLockupSettled
+      callHandlers:
+        - function: burnForFees(address,address,uint256)
+          handler: handleBurnForFees
       file: ./src/payments.ts
