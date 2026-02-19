@@ -1,5 +1,5 @@
 /* eslint-disable no-underscore-dangle */
-import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { Address, Bytes, BigInt as GraphBN, log } from "@graphprotocol/graph-ts";
 import { erc20 } from "../../generated/Payments/erc20";
 import { RailOneTimePaymentProcessed } from "../../generated/Payments/Payments";
 import {
@@ -120,6 +120,9 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.totalSettledAmount = ZERO_BIG_INT;
     token.userFunds = ZERO_BIG_INT;
     token.operatorCommission = ZERO_BIG_INT;
+    token.lockupCurrent = ZERO_BIG_INT;
+    token.lockupRate = ZERO_BIG_INT;
+    token.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
     token.totalUsers = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);
@@ -369,4 +372,45 @@ export function getLockupLastSettledUntilTimestamp(
   if (lockupLastSettledUntilEpoch.equals(blockNumber)) return blockTimestamp;
 
   return blockTimestamp.minus(blockNumber.minus(lockupLastSettledUntilEpoch).times(EPOCH_DURATION));
+}
+
+export function remainingEpochsForTerminatedRail(rail: Rail, blockNumber: GraphBN): GraphBN {
+  if (blockNumber.gt(rail.endEpoch)) {
+    return ZERO_BIG_INT;
+  }
+
+  return rail.endEpoch.minus(blockNumber);
+}
+
+/**
+ * Computes the settled amount of tokens that should be locked up until the given epoch
+ * @param token the token to compute the settled amount for
+ * @param untilEpoch the epoch until which the settled amount should be computed
+ * @returns the settled amount of tokens that should be locked up until the given epoch
+ */
+export function computeSettledLockup(token: Token, untilEpoch: GraphBN): GraphBN {
+  const duration = untilEpoch.minus(token.lockupLastSettledUntilEpoch);
+  return token.lockupCurrent.plus(token.lockupRate.times(duration));
+}
+
+/**
+ * Returns the number of epochs in the settlement window where this rate applies.
+ *
+ * RateChangeQueue semantics:
+ * - `startEpoch` is exclusive: rate applies starting at `startEpoch + 1`
+ * - `untilEpoch` is inclusive: rate applies through `untilEpoch`
+ *
+ * Settlement window semantics:
+ * - `start` is exclusive (previous settled epoch)
+ * - `end` is inclusive (newly settled up to)
+ */
+export function epochsRateChangeApplicable(rateChange: RateChangeQueue, start: GraphBN, end: GraphBN): GraphBN {
+  const windowStart = rateChange.startEpoch.gt(start) ? rateChange.startEpoch : start;
+  const windowEnd = rateChange.untilEpoch.lt(end) ? rateChange.untilEpoch : end;
+
+  if (windowEnd.le(windowStart)) {
+    return ZERO_BIG_INT;
+  }
+
+  return windowEnd.minus(windowStart);
 }

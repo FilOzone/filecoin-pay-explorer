@@ -13,14 +13,16 @@ import {
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon } from "@phosphor-icons/react";
+import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
+import { useBlockNumber } from "@/hooks/useBlockNumber";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
 import { formatToken } from "@/utils/formatter";
+import { calculateTotalLockup } from "@/utils/lockup";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -73,6 +75,7 @@ const Stats: React.FC = () => {
 
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
+  const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
 
   const cards = useMemo<MetricCard[]>(
     () => [
@@ -108,8 +111,42 @@ const Stats: React.FC = () => {
           : `${DEFAULT_TOKEN_VALUE} FIL`,
         icon: CoinsIcon,
       },
+      {
+        title: "Total USDFC Locked",
+        value: data?.usdfcToken
+          ? formatToken(
+              calculateTotalLockup(
+                data.usdfcToken.lockupCurrent,
+                data.usdfcToken.lockupRate,
+                data.usdfcToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
+              data.usdfcToken.decimals,
+              "USDFC",
+            )
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
+        icon: LockIcon,
+        isLoading: loadingBlockNumber,
+      },
+      {
+        title: "Total FIL Locked",
+        value: data?.filToken
+          ? formatToken(
+              calculateTotalLockup(
+                data.filToken.lockupCurrent,
+                data.filToken.lockupRate,
+                data.filToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
+              data.filToken.decimals,
+              "FIL",
+            )
+          : `${DEFAULT_TOKEN_VALUE} FIL`,
+        icon: LockIcon,
+        isLoading: loadingBlockNumber,
+      },
     ],
-    [data],
+    [data, blockNumber, loadingBlockNumber],
   );
 
   return (

@@ -435,22 +435,6 @@ export const GET_ACCOUNT_APPROVALS = gql`
   }
 `;
 
-// Token Details Queries
-
-export const GET_TOKEN_DETAILS = gql`
-  query GetTokenDetails($id: Bytes!) {
-    token(id: $id) {
-      id
-      name
-      symbol
-      decimals
-      totalSettledAmount
-      userFunds
-      totalUsers
-    }
-  }
-`;
-
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
     usdfcToken: token(id: $usdfcAddress) {
@@ -458,12 +442,18 @@ export const GET_STATS_DASHBOARD = gql`
       totalSettledAmount
       totalOneTimePayment
       userFunds
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
     filToken: token(id: $filAddress) {
       decimals
       totalSettledAmount
       totalOneTimePayment
       userFunds
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
   }
 `;
