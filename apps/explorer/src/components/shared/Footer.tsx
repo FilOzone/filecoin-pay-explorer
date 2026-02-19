@@ -2,7 +2,7 @@ import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { LegalSection } from "@filecoin-foundation/ui-filecoin/Footer/LegalSection";
 import { Section } from "@filecoin-foundation/ui-filecoin/Section/Section";
 import { PATHS } from "@/constants/paths";
-import { BASE_DOMAIN, FIL_OZ_URL, FILECOIN_FOUNDATION_URL, FOC_URLS } from "@/constants/site-metadata";
+import { FIL_OZ_URL, FILECOIN_FOUNDATION_URL, FOC_URLS } from "@/constants/site-metadata";
 import FilecoinFoundationLogo from "@/public/filecoin-foundation-logo.svg";
 import FilozLogo from "@/public/filoz-logo.svg";
 
@@ -19,7 +19,6 @@ function Footer() {
     <Section as='footer' backgroundVariant='dark'>
       <Container>
         <LegalSection
-          baseDomain={BASE_DOMAIN}
           legalItems={legalLinks}
           creators={[
             {

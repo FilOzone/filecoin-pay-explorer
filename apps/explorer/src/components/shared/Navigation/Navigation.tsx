@@ -2,7 +2,6 @@
 
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { MobileNavigation } from "@filecoin-foundation/ui-filecoin/Navigation/MobileNavigation";
-import { NavigationMainLink } from "@filecoin-foundation/ui-filecoin/Navigation/NavigationMainLink";
 import { Section, type SectionProps } from "@filecoin-foundation/ui-filecoin/Section/Section";
 import { useNavigationItems } from "@/hooks/useNavigationItems";
 import { HomeLogoIconLink } from "./components/HomeLogoIconLink";
@@ -22,11 +21,7 @@ function Navigation({ backgroundVariant }: NavigationProps) {
           <HomeLogoIconLink />
 
           <div className='block xl:hidden'>
-            <MobileNavigation
-              items={mobileNavigationItems}
-              NavigationMainLinkComponent={NavigationMainLink}
-              HomeLogoIconLinkComponent={HomeLogoIconLink}
-            />
+            <MobileNavigation items={mobileNavigationItems} HomeLogoIconLinkComponent={HomeLogoIconLink} />
           </div>
 
           <div className='hidden xl:block xl:flex-1'>

@@ -16,7 +16,6 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -402,22 +401,10 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <FilecoinButton
-            baseDomain={BASE_DOMAIN}
-            variant='ghost'
-            onClick={handleClose}
-            disabled={isExecuting}
-            className='py-2'
-          >
+          <FilecoinButton variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
             Cancel
           </FilecoinButton>
-          <FilecoinButton
-            baseDomain={BASE_DOMAIN}
-            variant='primary'
-            onClick={handleDeposit}
-            disabled={!canDeposit}
-            className='py-2'
-          >
+          <FilecoinButton variant='primary' onClick={handleDeposit} disabled={!canDeposit} className='py-2'>
             {isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

@@ -1,6 +1,6 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Rail } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -9,139 +9,116 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { useState } from "react";
-import { useBlockNumber } from "wagmi";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
-import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
-import { SETTLEMENT_FEE } from "@/utils/constants";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
+import type { Hex } from "viem";
+import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
+import type { SettleRailParams } from "@/hooks/useRailSettlements";
 import { formatAddress, formatToken } from "@/utils/formatter";
-import { RailStateBadge } from "../shared";
+import { InlineTextLoader, RailStateBadge } from "../shared";
 
 interface SettleRailDialogProps {
   rail: Rail;
   userAddress: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isSettling?: boolean;
+  settleRail: (params: SettleRailParams) => Promise<Hex | undefined>;
 }
 
-export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAddress, open, onOpenChange }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { data: blockNumber, isLoading: isLoadingBlockNumber } = useBlockNumber({ watch: true });
+export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
+  rail,
+  userAddress,
+  open,
+  onOpenChange,
+  isSettling = false,
+  settleRail,
+}) => {
+  const {
+    isPayer,
+    currentEpoch,
+    settledUptoEpoch,
+    epochsSinceLastSettlement,
+    expectedSettleAmount,
+    isLoadingBlockNumber,
+  } = useRailSettlementCalculations(rail, userAddress);
 
-  const { synapse, constants } = useSynapse();
+  const canSettle = !isSettling && !isLoadingBlockNumber && epochsSinceLastSettlement > 0n;
 
-  const { execute, isExecuting } = useContractTransaction({
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
-  });
-
-  const isPayer = rail.payer.address.toLowerCase() === userAddress.toLowerCase();
-  const expectedSettleAmount = blockNumber
-    ? BigInt(rail.paymentRate) * (BigInt(blockNumber) - BigInt(rail.settledUpto))
-    : 0n;
-
-  const canSettle = isPayer && !isSubmitting && !isExecuting && !isLoadingBlockNumber;
-
-  // TODO: Fix and test Rail settlement
   const handleSettle = async () => {
-    if (!synapse) {
-      console.log("Synapse not initialized");
+    if (isLoadingBlockNumber || currentEpoch === 0n) {
       return;
     }
     try {
-      setIsSubmitting(true);
-      await execute({
-        functionName: "settleRail",
-        args: [rail.railId, blockNumber],
-        value: SETTLEMENT_FEE,
-        metadata: {
-          type: "settleRail",
-          railId: rail.railId.toString(),
-          amount: formatToken(expectedSettleAmount, Number(rail.token.decimals)),
-          token: rail.token.symbol,
-        },
-        onSubmitOnChain: () => onOpenChange(false),
+      await settleRail({
+        railId: rail.railId,
+        paymentRate: BigInt(rail.paymentRate),
+        tokenSymbol: rail.token.symbol,
+        tokenDecimals: Number(rail.token.decimals),
+        settledUpto: settledUptoEpoch,
       });
-    } catch (error) {
-      console.error("Settle failed:", error);
-    } finally {
-      setIsSubmitting(false);
+      // Close dialog immediately after initiating settlement
+      onOpenChange(false);
+    } catch {
+      // Error already handled by useRailSettlements hook with toast notifications
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
+      <DialogContent className='sm:max-w-[500px] max-h-[90vh] flex flex-col'>
         <DialogHeader>
           <DialogTitle>Settle Rail #{rail.railId.toString()}</DialogTitle>
-          <DialogDescription>Settle this payment rail and finalize the current state.</DialogDescription>
+          <DialogDescription>Confirm settlement for all pending payments up to the current epoch.</DialogDescription>
         </DialogHeader>
 
-        <div className='grid gap-4 py-4'>
-          {/* Rail Info */}
-          <div className='grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50'>
-            <div>
-              <span className='text-xs text-muted-foreground'>Your Role</span>
-              <div>
-                <Badge variant={isPayer ? "destructive" : "default"}>{isPayer ? "Payer" : "Payee"}</Badge>
-              </div>
+        <div className='grid gap-4 py-4 overflow-y-auto'>
+          {/* Rail Overview */}
+          <div className='flex items-center justify-between p-3 rounded-lg bg-muted/50'>
+            <div className='flex items-center gap-2'>
+              <Badge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
+                {isPayer ? "Payer" : "Payee"}
+              </Badge>
+              <RailStateBadge state={rail.state} />
             </div>
-            <div>
-              <span className='text-xs text-muted-foreground'>State</span>
-              <div>
-                <RailStateBadge state={rail.state} />
-              </div>
-            </div>
+            <div className='text-xs text-muted-foreground'>Operator: {formatAddress(rail.operator.address)}</div>
           </div>
 
-          {/* Participants */}
-          <div className='grid gap-2 p-3 rounded-lg border'>
-            <h4 className='text-sm font-medium'>Participants</h4>
+          {/* Settlement Information */}
+          <div className='grid gap-3 p-4 rounded-lg border'>
             <div className='grid gap-2 text-sm'>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Payer:</span>
-                <span className='font-mono'>{formatAddress(rail.payer.address)}</span>
-              </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Payee:</span>
-                <span className='font-mono'>{formatAddress(rail.payee.address)}</span>
-              </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Operator:</span>
-                <span className='font-mono'>{formatAddress(rail.operator.address)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Details */}
-          <div className='grid gap-2 p-3 rounded-lg border'>
-            <h4 className='text-sm font-medium'>Payment Details</h4>
-            <div className='grid gap-2 text-sm'>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Token:</span>
-                <span className='font-medium'>{rail.token.symbol}</span>
-              </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Payment Rate:</span>
-                <span className='font-medium'>
-                  {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 15)}
+              <div className='flex justify-between items-center'>
+                <span className='text-muted-foreground'>Current Epoch:</span>
+                <span className='font-mono font-medium'>
+                  {isLoadingBlockNumber ? "Loading..." : currentEpoch.toString()}
                 </span>
               </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Settled Amount:</span>
-                <span className='font-medium'>
+              <div className='flex justify-between items-center'>
+                <span className='text-muted-foreground'>Settled Up To:</span>
+                <span className='font-mono font-medium'>{settledUptoEpoch.toString()}</span>
+              </div>
+              <div className='flex justify-between items-center'>
+                <span className='text-muted-foreground'>Epochs to Settle:</span>
+                <span className='font-mono font-medium'>
+                  {isLoadingBlockNumber ? "Loading..." : epochsSinceLastSettlement.toString()}
+                </span>
+              </div>
+              <div className='h-px bg-border my-1' />
+              <div className='flex justify-between items-center'>
+                <span className='text-muted-foreground'>Payment Rate:</span>
+                <span className='font-mono font-medium'>
+                  {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+                </span>
+              </div>
+              <div className='flex justify-between items-center'>
+                <span className='text-muted-foreground'>Historical Settled:</span>
+                <span className='font-mono font-medium'>
                   {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
                 </span>
               </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Settled Upto:</span>
-                <span className='font-medium'>{rail.settledUpto.toString()} epochs</span>
-              </div>
-              <div className='flex justify-between'>
-                <span className='text-muted-foreground'>Expected Amount (until current epoch):</span>
-                <span className='font-medium'>
+              <div className='h-px bg-border my-1' />
+              <div className='flex justify-between items-center py-2 px-3 rounded-md bg-primary/5'>
+                <span className='font-medium'>Expected Amount:</span>
+                <span className='font-mono font-semibold text-lg'>
                   {isLoadingBlockNumber
                     ? "Loading..."
                     : formatToken(expectedSettleAmount, rail.token.decimals, rail.token.symbol, 8)}
@@ -150,30 +127,36 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({ rail, userAd
             </div>
           </div>
 
-          {/* Warning */}
-          <div className='p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 text-sm text-orange-600 dark:text-orange-400'>
-            <p>⚠️ Settling a rail will finalize the current payment state. This action may affect your balance.</p>
+          {/* Estimate Disclaimer */}
+          <div className='flex gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20'>
+            <Info className='h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5' />
+            <p className='text-xs text-blue-600 dark:text-blue-400 leading-relaxed'>
+              Amount is an estimate and may vary on-chain based on rate changes and network conditions.
+            </p>
           </div>
+
+          {/* Warning */}
+          {epochsSinceLastSettlement === 0n && (
+            <div className='flex gap-2 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20'>
+              <AlertCircle className='h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5' />
+              <p className='text-xs text-orange-600 dark:text-orange-400'>
+                The rail is already settled up to the current epoch.
+              </p>
+            </div>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isExecuting}
-            className='py-2'
-          >
+        <DialogFooter className='flex-col sm:flex-row gap-2'>
+          <Button variant='ghost' onClick={() => onOpenChange(false)} className='w-full sm:w-auto'>
             Cancel
           </Button>
           <Button
-            baseDomain={BASE_DOMAIN}
             variant='primary'
             onClick={handleSettle}
-            disabled={!canSettle}
-            className='py-2'
+            disabled={!canSettle || isSettling}
+            className='w-full sm:w-auto'
           >
-            {isSubmitting || isExecuting ? "Settling..." : "Settle Rail"}
+            {isSettling ? <InlineTextLoader text='Settling...' /> : "Confirm"}
           </Button>
         </DialogFooter>
       </DialogContent>

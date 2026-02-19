@@ -96,7 +96,7 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
           description: `Processing settlement...`,
         },
         success: {
-          title: "Rail Settled",
+          title: `Rail #${railId} Settled`,
           description: railId ? `Rail #${railId} settled for ${amount} ${token}` : "Rail settlement complete",
         },
         error: {
