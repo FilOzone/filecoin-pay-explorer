@@ -16,7 +16,6 @@ import { AlertCircle, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, isAddress, maxUint256, parseUnits } from "viem";
 import { useReadContracts } from "wagmi";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -481,7 +480,6 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
 
         <DialogFooter>
           <FilecoinButton
-            baseDomain={BASE_DOMAIN}
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
@@ -489,13 +487,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
           >
             Cancel
           </FilecoinButton>
-          <FilecoinButton
-            baseDomain={BASE_DOMAIN}
-            variant='primary'
-            onClick={handleApprove}
-            disabled={!canSubmit}
-            className='py-2'
-          >
+          <FilecoinButton variant='primary' onClick={handleApprove} disabled={!canSubmit} className='py-2'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

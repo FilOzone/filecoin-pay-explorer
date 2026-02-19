@@ -14,7 +14,6 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { maxUint256, parseUnits } from "viem";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
@@ -225,7 +224,6 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
 
         <DialogFooter>
           <FilecoinButton
-            baseDomain={BASE_DOMAIN}
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
@@ -233,13 +231,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
           >
             Cancel
           </FilecoinButton>
-          <FilecoinButton
-            baseDomain={BASE_DOMAIN}
-            variant='primary'
-            onClick={handleIncrease}
-            disabled={!canSubmit}
-            className='py-2'
-          >
+          <FilecoinButton variant='primary' onClick={handleIncrease} disabled={!canSubmit} className='py-2'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

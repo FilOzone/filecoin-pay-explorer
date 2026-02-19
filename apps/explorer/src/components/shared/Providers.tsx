@@ -1,12 +1,16 @@
 "use client";
+
 import { ProgressBar } from "@filecoin-pay/ui/components/progress-bar";
 import { Toaster } from "@filecoin-pay/ui/components/sonner";
 import { TooltipProvider } from "@filecoin-pay/ui/components/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { initUIConfig } from "@/app/config-initializer";
 import { NetworkProvider } from "@/context/Network";
 import { DEFAULT_TOAST_POSITION } from "@/utils/constants";
 
 const queryClient = new QueryClient();
+
+initUIConfig();
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
   return (

@@ -1,5 +1,6 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import type { Account } from "@filecoin-pay/types";
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { InfiniteScrollLoader } from "@/components/shared";
 import { columns } from "../data/column-definitions";
 
@@ -11,9 +12,16 @@ export type AccountsTableProps = {
 };
 
 function AccountsTable({ data, observerTarget, isFetchingNextPage, hasNextPage }: AccountsTableProps) {
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    enableSorting: false,
+  });
+
   return (
     <>
-      <TanstackTable data={data} columns={columns} />
+      <TanstackTable table={table} />
       <InfiniteScrollLoader
         observerTarget={observerTarget}
         isFetchingNextPage={isFetchingNextPage}

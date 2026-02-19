@@ -6,7 +6,6 @@ import { Infinity as InfinityIcon } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { CopyableText } from "@/components/shared";
 import AllowanceDisplay from "@/components/shared/AllowanceDisplay";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { formatToken } from "@/utils/formatter";
 
 // Create column helper
@@ -109,12 +108,7 @@ export const columns = [
     cell: (info) => {
       const approval = info.row.original;
       return approval.isApproved ? (
-        <Button
-          baseDomain={BASE_DOMAIN}
-          variant='primary'
-          onClick={() => approval.onIncrease(approval)}
-          className='my-3 py-3'
-        >
+        <Button variant='primary' onClick={() => approval.onIncrease(approval)} className='my-3 py-3'>
           Increase
         </Button>
       ) : null;

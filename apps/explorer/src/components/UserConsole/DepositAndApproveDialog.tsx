@@ -14,7 +14,6 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, maxUint256, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -441,7 +440,6 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
 
         <DialogFooter>
           <FilecoinButton
-            baseDomain={BASE_DOMAIN}
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
@@ -449,13 +447,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
           >
             Cancel
           </FilecoinButton>
-          <FilecoinButton
-            baseDomain={BASE_DOMAIN}
-            variant='primary'
-            onClick={handleDepositAndApprove}
-            disabled={!canSubmit}
-            className='py-2'
-          >
+          <FilecoinButton variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} className='py-2'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

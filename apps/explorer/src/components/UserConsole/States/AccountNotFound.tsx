@@ -4,7 +4,6 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { WalletIcon } from "@phosphor-icons/react";
 import { ArrowDownCircle, Shield } from "lucide-react";
 import { useState } from "react";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 import { ApproveOperatorDialog } from "../ApproveOperatorDialog";
 import DepositAndApproveDialog from "../DepositAndApproveDialog";
 import { DepositDialog } from "../DepositDialog";
@@ -23,34 +22,19 @@ const AccountNotFound = () => {
     >
       <div className='flex flex-col gap-4 mt-6'>
         <div className='flex flex-col sm:flex-row gap-3'>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            onClick={() => setDepositDialogOpen(true)}
-            variant='ghost'
-            className='gap-2 py-2'
-          >
+          <Button onClick={() => setDepositDialogOpen(true)} variant='ghost' className='gap-2 py-2'>
             <span className='flex items-center gap-2'>
               <ArrowDownCircle className='h-5 w-5' />
               Deposit Funds
             </span>
           </Button>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            onClick={() => setApproveDialogOpen(true)}
-            variant='ghost'
-            className='gap-2 py-2'
-          >
+          <Button onClick={() => setApproveDialogOpen(true)} variant='ghost' className='gap-2 py-2'>
             <span className='flex items-center gap-2'>
               <Shield className='h-5 w-5' />
               Approve Service
             </span>
           </Button>
-          <Button
-            baseDomain={BASE_DOMAIN}
-            onClick={() => setDepositAndApproveDialogOpen(true)}
-            className='gap-2 py-2'
-            variant='primary'
-          >
+          <Button onClick={() => setDepositAndApproveDialogOpen(true)} className='gap-2 py-2' variant='primary'>
             <span className='flex items-center gap-2'>
               <ArrowDownCircle className='h-5 w-5' />
               Deposit and Approve Service
