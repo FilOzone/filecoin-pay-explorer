@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, http } from "viem";
-import { getChain } from "@/constants/chains";
+import { getPublicClient } from "@/services/viem/client";
 import useNetwork from "./useNetwork";
 
 interface UseBlockNumberOptions {
@@ -19,16 +18,11 @@ interface UseBlockNumberOptions {
  */
 export function useBlockNumber(options?: UseBlockNumberOptions) {
   const { network } = useNetwork();
-  const chain = getChain(network);
 
   return useQuery({
     queryKey: ["blockNumber", network],
     queryFn: async () => {
-      const publicClient = createPublicClient({
-        chain,
-        transport: http(),
-      });
-
+      const publicClient = getPublicClient(network);
       const blockNumber = await publicClient.getBlockNumber();
       return blockNumber;
     },
