@@ -1,16 +1,14 @@
-import type { PaymentsMetric, Token } from "@filecoin-pay/types";
+import type { Token } from "@filecoin-pay/types";
 import type { Hex } from "viem";
 import { GET_STATS_DASHBOARD } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface StatsDashboardData {
-  paymentsMetrics: PaymentsMetric;
   usdfcToken: Token | null;
   filToken: Token | null;
 }
 
 interface GetStatsDashboardResponse {
-  paymentsMetrics: PaymentsMetric[];
   usdfcToken: Token | null;
   filToken: Token | null;
 }
@@ -24,7 +22,6 @@ export const useStatsDashboard = (usdfcAddress: Hex, filAddress: Hex) =>
       filAddress,
     },
     select: (data) => ({
-      paymentsMetrics: data.paymentsMetrics[0],
       usdfcToken: data.usdfcToken,
       filToken: data.filToken,
     }),

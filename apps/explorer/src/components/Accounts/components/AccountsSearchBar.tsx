@@ -2,7 +2,6 @@ import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
 import { RefreshButton } from "@filecoin-foundation/ui-filecoin/RefreshButton";
 import { Input } from "@filecoin-pay/ui/components/input";
 import { Search } from "lucide-react";
-import { BASE_DOMAIN } from "@/constants/site-metadata";
 
 export type AccountsSearchBarProps = {
   searchInput: string;
@@ -42,13 +41,13 @@ function AccountsSearchBar({
       <div className='flex items-center gap-2'>
         {/* Clear Button */}
         {hasActiveFilters && (
-          <NewButton baseDomain={BASE_DOMAIN} variant='ghost' onClick={onClear}>
+          <NewButton variant='ghost' onClick={onClear}>
             Clear
           </NewButton>
         )}
 
         {/* Refresh Button */}
-        <RefreshButton baseDomain={BASE_DOMAIN} onClick={onRefresh} disabled={isRefetching} />
+        <RefreshButton onClick={onRefresh} disabled={isRefetching} />
       </div>
     </div>
   );

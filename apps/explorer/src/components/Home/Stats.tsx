@@ -13,14 +13,16 @@ import {
   EmptyTitle,
 } from "@filecoin-pay/ui/components/empty";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon, CoinVerticalIcon, CurrencyCircleDollarIcon } from "@phosphor-icons/react";
+import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { getChain } from "@/constants/chains";
+import { useBlockNumber } from "@/hooks/useBlockNumber";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
-import { formatCompactNumber, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
+import { calculateTotalLockup } from "@/utils/lockup";
 import { MetricItem } from "../shared";
 
 interface StatsLayoutProps {
@@ -28,7 +30,7 @@ interface StatsLayoutProps {
 }
 
 const StatsLayout: React.FC<StatsLayoutProps> = ({ children }) => (
-  <PageSection backgroundVariant='light' paddingVariant='medium'>
+  <PageSection backgroundVariant='light'>
     <div className='flex flex-col gap-6 -mt-15'>
       <h3 className='text-2xl font-medium'>Filecoin Pay Stats</h3>
       {children}
@@ -73,38 +75,10 @@ const Stats: React.FC = () => {
 
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
+  const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
 
   const cards = useMemo<MetricCard[]>(
     () => [
-      {
-        title: "Unique Payers",
-        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayers || 0),
-        icon: "/stats/unique-payers.svg",
-      },
-      {
-        title: "Unique Payees",
-        value: formatCompactNumber(data?.paymentsMetrics?.uniquePayees || 0),
-        icon: "/stats/unique-payees.svg",
-      },
-      {
-        title: "Total USDFC",
-        value: data?.usdfcToken
-          ? formatToken(data.usdfcToken.userFunds, data.usdfcToken.decimals, "USDFC")
-          : `${DEFAULT_TOKEN_VALUE} USDFC`,
-        icon: CurrencyCircleDollarIcon,
-      },
-      {
-        title: "Total Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalRails || 0),
-        icon: "/stats/total-rails.svg",
-        tooltip: "Ongoing payment streams between users",
-      },
-      {
-        title: "Services",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalOperators || 0),
-        icon: "/stats/total-services.svg",
-        tooltip: "Payment managers that help automate transactions between users",
-      },
       // TODO: Add this back when network revenue calculation is fixed
       // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
       // {
@@ -138,30 +112,41 @@ const Stats: React.FC = () => {
         icon: CoinsIcon,
       },
       {
-        title: "Rail Settlements",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalRailSettlements || 0),
-        icon: CoinVerticalIcon,
+        title: "Total USDFC Locked",
+        value: data?.usdfcToken
+          ? formatToken(
+              calculateTotalLockup(
+                data.usdfcToken.lockupCurrent,
+                data.usdfcToken.lockupRate,
+                data.usdfcToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
+              data.usdfcToken.decimals,
+              "USDFC",
+            )
+          : `${DEFAULT_TOKEN_VALUE} USDFC`,
+        icon: LockIcon,
+        isLoading: loadingBlockNumber,
       },
       {
-        title: "Idle Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalZeroRateRails || 0),
-        icon: "/stats/idle-rails.svg",
-        tooltip: "Paused payment streams that are currently inactive",
-      },
-      {
-        title: "Active Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalActiveRails || 0),
-        icon: "/stats/active-rails.svg",
-        tooltip: "Payment streams that are currently running",
-      },
-      {
-        title: "Terminated Rails",
-        value: formatCompactNumber(data?.paymentsMetrics?.totalTerminatedRails || 0),
-        icon: "/stats/terminated-rails.svg",
-        tooltip: "Payment streams that have been permanently stopped",
+        title: "Total FIL Locked",
+        value: data?.filToken
+          ? formatToken(
+              calculateTotalLockup(
+                data.filToken.lockupCurrent,
+                data.filToken.lockupRate,
+                data.filToken.lockupLastSettledUntilEpoch,
+                blockNumber,
+              ),
+              data.filToken.decimals,
+              "FIL",
+            )
+          : `${DEFAULT_TOKEN_VALUE} FIL`,
+        icon: LockIcon,
+        isLoading: loadingBlockNumber,
       },
     ],
-    [data],
+    [data, blockNumber, loadingBlockNumber],
   );
 
   return (

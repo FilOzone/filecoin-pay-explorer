@@ -221,6 +221,9 @@ export type Token = {
   accumulatedFees: Scalars["BigInt"]["output"];
   decimals: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
+  lockupCurrent: Scalars["BigInt"]["output"];
+  lockupLastSettledUntilEpoch: Scalars["BigInt"]["output"];
+  lockupRate: Scalars["BigInt"]["output"];
   name: Scalars["String"]["output"];
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];

@@ -47,6 +47,7 @@ import {
   assertRailParams,
   assertRailRateParams,
   assertTokenState,
+  assertTokenTotalLockup,
   assertUserTokenState,
   calculateNetworkFee,
   calculateOperatorCommission,
@@ -357,6 +358,9 @@ describe("Payments", () => {
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
 
+    // Assert 1: Verify token lockup is updated (no streaming since paymentRate = 0)
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupFixed, ZERO_BIG_INT, ZERO_BIG_INT);
+
     // Act 2: Modify lockup to new values (lockupPeriod -> newLockupPeriod, lockupFixed -> newLockupFixed)
     const newLockupPeriod = GraphBN.fromI32(5740);
     const newLockupFixed = GraphBN.fromI32(1_000_000);
@@ -373,6 +377,9 @@ describe("Payments", () => {
     assertRailLockupParams(railId, newLockupPeriod, newLockupFixed);
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", newLockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", newLockupFixed.toString());
+
+    // Assert 2: Verify token lockup is updated to new value (no streaming since paymentRate = 0)
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, newLockupFixed, ZERO_BIG_INT, ZERO_BIG_INT);
   });
 
   test("should handle one time payment properly", () => {
@@ -421,6 +428,9 @@ describe("Payments", () => {
     assert.fieldEquals("Rail", railEntityIdStr, "lockupFixed", lockupFixed.toString());
     assert.fieldEquals("OperatorToken", operatorTokenEntityIdStr, "lockupUsage", lockupFixed.toString());
     assert.fieldEquals("OperatorApproval", operatorApprovalEntityIdStr, "lockupUsage", lockupFixed.toString());
+
+    // Verify: Token lockup is set before payment (no streaming since paymentRate = 0)
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupFixed, ZERO_BIG_INT, ZERO_BIG_INT);
 
     // Act: Process one-time payment
     // Payment breakdown: totalAmount = netPayeeAmount + operatorCommission + networkFee
@@ -503,6 +513,9 @@ describe("Payments", () => {
     assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "funds", netPayeeAmount.toString());
     assert.fieldEquals("UserToken", payeeTokenEntityIdStr, "fundsCollected", netPayeeAmount.toString());
     assert.fieldEquals("UserToken", serviceFeeRecipientTokenIdStr, "funds", operatorCommission.toString());
+
+    // Assert: Token fixed lockup reduced by one-time payment amount
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupFixed.minus(totalAmount), ZERO_BIG_INT, ZERO_BIG_INT);
   });
 
   test("should handle rail settled properly", () => {
@@ -590,16 +603,43 @@ describe("Payments", () => {
     const commissionRateBps = GraphBN.fromI32(250); // 2.5%
     setupCompleteRail(depositAmount, railId, commissionRateBps);
 
+    // update rail lockup
+    const lockupPeriod = GraphBN.fromI64(2880);
+    const lockupFixed = GraphBN.fromI64(1_000_000_000_000); // 10^12 = 0.000001 FIL
+    const railLockupModifiedEvent = createRailLockupModifiedEvent(
+      railId,
+      ZERO_BIG_INT,
+      lockupPeriod,
+      ZERO_BIG_INT,
+      lockupFixed,
+    );
+    handleRailLockupModified(railLockupModifiedEvent);
+
+    // token lockup state after RailLockupModified event
+    let lockupCurrent = lockupFixed;
+    let lockupRate = ZERO_BIG_INT;
+    let lockupLastSettledAt = railLockupModifiedEvent.block.number;
+
     // change rail state to active by modifying rate to paymentRate from 0
     const paymentRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
     const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
     handleRailRateModified(railRateModifiedEvent);
 
+    // token lockup state after RailRateModified event
+    lockupCurrent = lockupCurrent.plus(paymentRate.times(lockupPeriod));
+    lockupRate = paymentRate;
+    lockupLastSettledAt = railRateModifiedEvent.block.number;
+
     // Act: Terminate the rail with a future endEpoch
-    const endEpoch = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(5000));
+    const endEpoch = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(2980));
     const railTerminatedEvent = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, endEpoch);
     railTerminatedEvent.block.number = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(100));
     handleRailTerminated(railTerminatedEvent);
+
+    // token lockup state after RailTerminated event
+    lockupCurrent = lockupCurrent.plus(paymentRate.times(GraphBN.fromI64(100)));
+    lockupRate = ZERO_BIG_INT;
+    lockupLastSettledAt = railTerminatedEvent.block.number;
 
     // Assert: Rail state transitions to TERMINATED
     // endEpoch is set correctly
@@ -610,6 +650,9 @@ describe("Payments", () => {
     // Payer's lockupRate is cleared to zero
     const payerTokenIdStr = getUserTokenEntityId(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.TOKEN).toHexString();
     assert.fieldEquals("UserToken", payerTokenIdStr, "lockupRate", ZERO_BIG_INT.toString());
+
+    // Assert: Token's lockup
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupCurrent, lockupRate, lockupLastSettledAt);
   });
 
   test("should handle rail finalized properly", () => {
@@ -618,11 +661,6 @@ describe("Payments", () => {
     const railId = GraphBN.fromI64(400);
     const commissionRateBps = GraphBN.fromI32(300); // 3%
     setupCompleteRail(depositAmount, railId, commissionRateBps);
-
-    // Set payment rate (0 -> paymentRate)
-    const paymentRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
-    const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
-    handleRailRateModified(railRateModifiedEvent);
 
     // Set lockup params (0 -> lockupPeriod, 0 -> lockupFixed)
     const lockupPeriod = GraphBN.fromI64(1000);
@@ -636,9 +674,20 @@ describe("Payments", () => {
     );
     handleRailLockupModified(railLockupModifiedEvent);
 
+    // Set payment rate (0 -> paymentRate)
+    const paymentRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const railRateModifiedEvent = createRailRateModifiedEvent(railId, ZERO_BIG_INT, paymentRate);
+    handleRailRateModified(railRateModifiedEvent);
+
     // Verify: Rail is ACTIVE with correct rate and lockup params
     assertRailRateParams(railId, "ACTIVE", paymentRate, railRateModifiedEvent.block.number.toString());
     assertRailLockupParams(railId, lockupPeriod, lockupFixed);
+
+    // Verify: Token lockup state after RailLockupModified and RailRateModified events
+    let lockupCurrent = lockupFixed.plus(paymentRate.times(lockupPeriod));
+    let lockupRate = paymentRate;
+    let lockupLastSettledUntilEpoch = railRateModifiedEvent.block.number;
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupCurrent, lockupRate, lockupLastSettledUntilEpoch);
 
     // Verify: Operator usage reflects lockupFixed + (paymentRate * lockupPeriod)
     const expectedLockupUsage = lockupFixed.plus(paymentRate.times(lockupPeriod));
@@ -660,10 +709,25 @@ describe("Payments", () => {
       paymentRate.toString(), // rateUsage
     );
 
+    // Act: Terminate the rail with a future endEpoch
+    const endEpoch = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(2980));
+    const railTerminatedEvent = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, endEpoch);
+    railTerminatedEvent.block.number = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(100));
+    handleRailTerminated(railTerminatedEvent);
+
+    lockupCurrent = lockupCurrent.plus(paymentRate.times(GraphBN.fromI64(100)));
+    lockupRate = ZERO_BIG_INT;
+    lockupLastSettledUntilEpoch = railTerminatedEvent.block.number;
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupCurrent, lockupRate, lockupLastSettledUntilEpoch);
+
     // Act: Finalize the rail
     const railFinalizedEvent = createRailFinalizedEvent(railId);
-    railFinalizedEvent.block.number = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(200));
+    railFinalizedEvent.block.number = railRateModifiedEvent.block.number.plus(GraphBN.fromI64(3000));
     handleRailFinalized(railFinalizedEvent);
+
+    // token lockup state after RailFinalized event
+    lockupCurrent = lockupCurrent.minus(lockupFixed);
+    // no update in lockup rate and last settled until epoch
 
     // Assert: Rail state transitions to FINALIZED
     const railEntityId = getRailEntityId(railId).toHex();
@@ -671,5 +735,8 @@ describe("Payments", () => {
 
     // Assert: Operator lockup usage is cleared
     assertOperatorLockupCleared(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN);
+
+    // Assert: Token lockup state after RailFinalized event
+    assertTokenTotalLockup(TEST_ADDRESSES.TOKEN, lockupCurrent, lockupRate, lockupLastSettledUntilEpoch);
   });
 });

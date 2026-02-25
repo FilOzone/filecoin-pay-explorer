@@ -435,50 +435,25 @@ export const GET_ACCOUNT_APPROVALS = gql`
   }
 `;
 
-// Token Details Queries
-
-export const GET_TOKEN_DETAILS = gql`
-  query GetTokenDetails($id: Bytes!) {
-    token(id: $id) {
-      id
-      name
-      symbol
-      decimals
-      totalSettledAmount
-      userFunds
-      totalUsers
-    }
-  }
-`;
-
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
-    paymentsMetrics(first: 1) {
-      id
-      totalRails
-      totalOperators
-      totalTokens
-      totalAccounts
-      totalFilBurned
-      totalRailSettlements
-      totalZeroRateRails
-      totalActiveRails
-      totalTerminatedRails
-      totalFinalizedRails
-      uniquePayers
-      uniquePayees
-    }
     usdfcToken: token(id: $usdfcAddress) {
       decimals
       totalSettledAmount
       totalOneTimePayment
       userFunds
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
     filToken: token(id: $filAddress) {
       decimals
       totalSettledAmount
       totalOneTimePayment
       userFunds
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
     }
   }
 `;
