@@ -1,6 +1,5 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -327,7 +326,6 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                 <Button
                   type='button'
                   variant='ghost'
-                  size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
                   disabled={isSubmitting || balance === undefined || isLoadingBalance}
@@ -435,15 +433,15 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
         </div>
 
         <DialogFooter>
-          <FilecoinButton
+          <Button
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
             className='py-2'
           >
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} className='py-2'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -452,7 +450,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
             ) : (
               "Deposit & Approve Operator"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

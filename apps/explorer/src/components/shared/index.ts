@@ -3,7 +3,6 @@ import CopyableText from "./CopyableText";
 import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
 import Footer from "./Footer";
-import Header from "./Header";
 import InfiniteScrollLoader from "./InfiniteScrollLoader";
 import InlineTextLoader from "./InlineTextLoader";
 import MetricItem from "./MetricItem";
@@ -15,19 +14,18 @@ import StyledLink from "./StyledLink";
 
 export {
   AllowanceDisplay,
-  MetricItem,
-  Footer,
-  Header,
-  CustomConnectButton,
-  CopyButton,
   CopyableText,
+  CopyButton,
+  CustomConnectButton,
+  Footer,
   InfiniteScrollLoader,
+  InlineTextLoader,
+  MetricItem,
   Navigation,
   NetworkIndicator,
   Providers,
   SiteLayout,
   StyledLink,
-  InlineTextLoader,
 };
 
 export { RailStateBadge } from "./RailStateBadge";

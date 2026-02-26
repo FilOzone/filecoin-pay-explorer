@@ -1,4 +1,4 @@
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 
@@ -33,8 +33,8 @@ export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProp
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={onClear} variant='outline'>
-              Clear Search
+            <Button onClick={onClear} variant='ghost'>
+              Clear search
             </Button>
           </EmptyContent>
         </Empty>

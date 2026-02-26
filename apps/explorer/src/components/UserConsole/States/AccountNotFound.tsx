@@ -1,4 +1,3 @@
-// import { Button } from "@filecoin-pay/ui/components/button";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { WalletIcon } from "@phosphor-icons/react";

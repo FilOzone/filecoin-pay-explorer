@@ -1,4 +1,4 @@
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Empty,
@@ -28,7 +28,9 @@ function AccountsErrorState({ error, onRetry }: AccountsErrorStateProps) {
             <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={onRetry}>Retry</Button>
+            <Button variant='primary' onClick={onRetry}>
+              Retry
+            </Button>
           </EmptyContent>
         </Empty>
       </div>

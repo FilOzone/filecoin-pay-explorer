@@ -1,8 +1,7 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { Operator, Token } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -264,7 +263,6 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   <Button
                     type='button'
                     variant='ghost'
-                    size='sm'
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowOperatorDropdown(!showOperatorDropdown)}
                     disabled={isSubmitting}
@@ -335,7 +333,6 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   <Button
                     type='button'
                     variant='ghost'
-                    size='sm'
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowTokenDropdown(!showTokenDropdown)}
                     disabled={isSubmitting}
@@ -479,15 +476,15 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <FilecoinButton
+          <Button
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
             className='py-2'
           >
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleApprove} disabled={!canSubmit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleApprove} disabled={!canSubmit} className='py-2'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -496,7 +493,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
             ) : (
               "Approve Operator"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

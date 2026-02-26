@@ -1,5 +1,5 @@
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
-import { Button } from "@filecoin-pay/ui/components/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { Search, X } from "lucide-react";
 import { useState } from "react";
@@ -80,12 +80,12 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
         </div>
 
         {/* Action Buttons */}
-        <Button onClick={handleSearch} disabled={!searchQuery.trim()}>
+        <Button variant='primary' onClick={handleSearch} disabled={!searchQuery.trim()}>
           Search
         </Button>
 
         {isActive && (
-          <Button variant='outline' onClick={handleClear} className='gap-2'>
+          <Button variant='tertiary' onClick={handleClear} className='gap-2'>
             <X className='h-4 w-4' />
             Clear
           </Button>
