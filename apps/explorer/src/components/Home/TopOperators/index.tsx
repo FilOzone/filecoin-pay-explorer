@@ -43,7 +43,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
   <EmptyStateCard
     icon={AlertCircle}
     title='Failed to load operators'
-    titleTag='h3'
+    titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
     <Button onClick={refetch} variant='primary'>
@@ -56,7 +56,7 @@ const EmptyState = () => (
   <EmptyStateCard
     icon={MagnifyingGlassIcon}
     title='No operators found'
-    titleTag='h3'
+    titleTag='h2'
     description='There are no operators to display at the moment.'
   />
 );

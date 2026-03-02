@@ -7,7 +7,7 @@ export function OperatorsEmptyInitial() {
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No operators found'
-      titleTag='h3'
+      titleTag='h2'
       description='There are no operators to display at the moment.'
     />
   );
@@ -22,7 +22,7 @@ export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProp
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No results found'
-      titleTag='h3'
+      titleTag='h2'
       description='No operator found with this address. Make sure the address is correct and try again.'
     >
       <Button onClick={onClear} variant='ghost'>

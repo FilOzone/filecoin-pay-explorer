@@ -7,7 +7,7 @@ export function AccountsEmptyInitial() {
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No accounts found'
-      titleTag='h3'
+      titleTag='h2'
       description='There are no accounts to display at the moment.'
     />
   );
@@ -22,7 +22,7 @@ export function AccountsEmptyNoResults({ onClear }: AccountsEmptyNoResultsProps)
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No results found'
-      titleTag='h3'
+      titleTag='h2'
       description='No account found with this address. Make sure the address is correct and try again.'
     >
       <Button onClick={onClear} variant='ghost'>
