@@ -26,7 +26,6 @@ export function AccountsEmptyNoResults({ onClear }: AccountsEmptyNoResultsProps)
       description='No account found with this address. Make sure the address is correct and try again.'
     >
       <Button onClick={onClear} variant='ghost'>
-        {" "}
         Clear Search
       </Button>
     </EmptyStateCard>
