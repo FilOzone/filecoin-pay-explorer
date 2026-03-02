@@ -1,17 +1,9 @@
 "use client";
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
-import { Card } from "@filecoin-pay/ui/components/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@filecoin-pay/ui/components/empty";
 import type { IconProps } from "@phosphor-icons/react";
 import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
@@ -44,22 +36,16 @@ interface ErrorStateProps {
 }
 
 const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
-  <Card>
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant='icon' className='text-brand-error'>
-          <AlertCircle />
-        </EmptyMedia>
-        <EmptyTitle className='text-brand-error'>Something went wrong</EmptyTitle>
-        <EmptyDescription>{error?.message || "Failed to fetch data"}</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <Button variant='primary' onClick={refetch} size='compact'>
-          Retry
-        </Button>
-      </EmptyContent>
-    </Empty>
-  </Card>
+  <EmptyStateCard
+    icon={AlertCircle}
+    title='Failed to load stats'
+    titleTag='h3'
+    description={error?.message || "Something went wrong"}
+  >
+    <Button onClick={refetch} variant='primary'>
+      Retry
+    </Button>
+  </EmptyStateCard>
 );
 
 interface MetricCard {

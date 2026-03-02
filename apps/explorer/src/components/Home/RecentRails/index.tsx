@@ -1,17 +1,10 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { RefreshOverlay } from "@filecoin-foundation/ui-filecoin/RefreshOverlay";
-import { Card } from "@filecoin-pay/ui/components/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@filecoin-pay/ui/components/empty";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { StyledLink } from "@/components/shared";
 import useRecentRails from "@/hooks/useRecentRails";
@@ -71,37 +64,25 @@ const RecentRails = () => {
 // );
 
 const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, error }) => (
-  <Card>
-    <div className='py-12'>
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant='icon' className='text-brand-error'>
-            <AlertCircle />
-          </EmptyMedia>
-          <EmptyTitle className='text-brand-error'>Failed to load rails</EmptyTitle>
-          <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant='primary' onClick={refetch} size='compact'>
-            Retry
-          </Button>
-        </EmptyContent>
-      </Empty>
-    </div>
-  </Card>
+  <EmptyStateCard
+    icon={AlertCircle}
+    title='Failed to load rails'
+    titleTag='h3'
+    description={error?.message || "Something went wrong"}
+  >
+    <Button onClick={refetch} variant='primary'>
+      Retry
+    </Button>
+  </EmptyStateCard>
 );
 
 const EmptyState = () => (
-  <Card>
-    <div className='py-12'>
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No rails found</EmptyTitle>
-          <EmptyDescription>There are no rails to display at the moment.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    </div>
-  </Card>
+  <EmptyStateCard
+    icon={MagnifyingGlassIcon}
+    title='No rails found'
+    titleTag='h3'
+    description='There are no rails to display at the moment.'
+  />
 );
 
 export default RecentRails;

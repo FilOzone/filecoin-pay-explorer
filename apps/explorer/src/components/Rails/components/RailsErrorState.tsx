@@ -1,13 +1,5 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { Card } from "@filecoin-pay/ui/components/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@filecoin-pay/ui/components/empty";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { AlertCircle } from "lucide-react";
 
 export type RailsErrorStateProps = {
@@ -17,24 +9,16 @@ export type RailsErrorStateProps = {
 
 function RailsErrorState({ error, onRetry }: RailsErrorStateProps) {
   return (
-    <Card>
-      <div className='py-16'>
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant='icon' className='text-brand-error'>
-              <AlertCircle />
-            </EmptyMedia>
-            <EmptyTitle className='text-brand-error'>Failed to load rails</EmptyTitle>
-            <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button variant='primary' onClick={onRetry} size='compact'>
-              Retry
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    </Card>
+    <EmptyStateCard
+      icon={AlertCircle}
+      title='Failed to load rails'
+      titleTag='h3'
+      description={error?.message || "Something went wrong"}
+    >
+      <Button onClick={onRetry} variant='primary'>
+        Retry
+      </Button>
+    </EmptyStateCard>
   );
 }
 

@@ -1,19 +1,15 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { Card } from "@filecoin-pay/ui/components/card";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 
 export function OperatorsEmptyInitial() {
   return (
-    <Card>
-      <div className='py-16'>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No operators found</EmptyTitle>
-            <EmptyDescription>There are no operators to display at the moment.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
-    </Card>
+    <EmptyStateCard
+      icon={MagnifyingGlassIcon}
+      title='No operators found'
+      titleTag='h3'
+      description='There are no operators to display at the moment.'
+    />
   );
 }
 
@@ -23,22 +19,15 @@ export type OperatorsEmptyNoResultsProps = {
 
 export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProps) {
   return (
-    <Card>
-      <div className='py-16'>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No results found</EmptyTitle>
-            <EmptyDescription>
-              No operator found with this address. Make sure the address is correct and try again.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button onClick={onClear} variant='ghost' size='compact'>
-              Clear Search
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    </Card>
+    <EmptyStateCard
+      icon={MagnifyingGlassIcon}
+      title='No results found'
+      titleTag='h3'
+      description='No operator found with this address. Make sure the address is correct and try again.'
+    >
+      <Button onClick={onClear} variant='ghost'>
+        Clear Search
+      </Button>
+    </EmptyStateCard>
   );
 }
