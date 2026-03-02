@@ -1,3 +1,4 @@
+// ! not used
 import { Card } from "@filecoin-pay/ui/components/card";
 import { formatAddress } from "@/utils/formatter";
 import { CopyableText } from "../shared";
