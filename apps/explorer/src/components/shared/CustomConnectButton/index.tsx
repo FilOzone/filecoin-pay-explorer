@@ -29,8 +29,8 @@ const CustomConnectButton = () => {
               }
               if (chain.unsupported) {
                 return (
-                  <Button variant='ghost' onClick={openChainModal} type='button'>
-                    Wrong network
+                  <Button variant='primary' onClick={openChainModal} type='button'>
+                    Wrong Network
                   </Button>
                 );
               }

@@ -90,7 +90,7 @@ export const OperatorNotFoundState: React.FC<NotFoundStateProps> = ({ address })
             </EmptyHeader>
             <EmptyContent>
               <Link href='/operators'>
-                <Button variant='ghost'>Browse all operators</Button>
+                <Button variant='ghost'>Browse All Operators</Button>
               </Link>
             </EmptyContent>
           </Empty>

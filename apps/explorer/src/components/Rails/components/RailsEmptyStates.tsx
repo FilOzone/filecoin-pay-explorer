@@ -32,7 +32,7 @@ export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={onClear} variant='ghost'>
-              Clear filters
+              Clear Filters
             </Button>
           </EmptyContent>
         </Empty>

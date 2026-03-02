@@ -91,7 +91,7 @@ export const RailNotFoundState: React.FC<NotFoundStateProps> = ({ railId }) => (
             </EmptyHeader>
             <EmptyContent>
               <Link href='/rails'>
-                <Button variant='ghost'>Browse all rails</Button>
+                <Button variant='ghost'>Browse All Rails</Button>
               </Link>
             </EmptyContent>
           </Empty>

@@ -34,7 +34,7 @@ export function AccountsEmptyNoResults({ onClear }: AccountsEmptyNoResultsProps)
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={onClear} variant='ghost'>
-              Clear search
+              Clear Search
             </Button>
           </EmptyContent>
         </Empty>
