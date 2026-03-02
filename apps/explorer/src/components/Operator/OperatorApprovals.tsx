@@ -1,4 +1,4 @@
-// ! not used
+//  Unused component — verify if still needed
 import type { Operator } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Card } from "@filecoin-pay/ui/components/card";

@@ -1,4 +1,4 @@
-// ! not used
+//  Unused component — verify if still needed
 import { Card } from "@filecoin-pay/ui/components/card";
 import { formatAddress } from "@/utils/formatter";
 import { CopyableText } from "../shared";
