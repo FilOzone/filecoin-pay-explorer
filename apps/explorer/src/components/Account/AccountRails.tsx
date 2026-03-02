@@ -1,4 +1,4 @@
-// ! not used
+//  Unused component — verify if still needed
 import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import type { Account, Rail } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";

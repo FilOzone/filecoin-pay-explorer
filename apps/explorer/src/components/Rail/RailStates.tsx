@@ -1,4 +1,4 @@
-// ! not used
+//  Unused component — verify if still needed
 import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
