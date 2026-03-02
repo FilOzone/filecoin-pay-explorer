@@ -7,7 +7,7 @@ export function RailsEmptyInitial() {
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No rails found'
-      titleTag='h3'
+      titleTag='h2'
       description='There are no rails to display at the moment.'
     />
   );
@@ -22,7 +22,7 @@ export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
     <EmptyStateCard
       icon={MagnifyingGlassIcon}
       title='No results found'
-      titleTag='h3'
+      titleTag='h2'
       description="Try adjusting your search filters to find what you're looking for."
     >
       <Button onClick={onClear} variant='ghost'>

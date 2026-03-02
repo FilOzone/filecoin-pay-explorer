@@ -39,7 +39,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
   <EmptyStateCard
     icon={AlertCircle}
     title='Failed to load stats'
-    titleTag='h3'
+    titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
     <Button onClick={refetch} variant='primary'>

@@ -13,7 +13,7 @@ function AccountsErrorState({ error, onRetry }: AccountsErrorStateProps) {
     <EmptyStateCard
       icon={AlertCircle}
       title='Failed to load accounts'
-      titleTag='h3'
+      titleTag='h2'
       description={error?.message || "Something went wrong"}
     >
       <Button onClick={onRetry} variant='primary'>
