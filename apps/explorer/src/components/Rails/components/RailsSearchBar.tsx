@@ -1,8 +1,8 @@
 import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { RefreshButton } from "@filecoin-foundation/ui-filecoin/RefreshButton";
 import type { RailState } from "@filecoin-pay/types";
 import { Button } from "@filecoin-pay/ui/components/button";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@filecoin-pay/ui/components/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { FunnelSimpleIcon } from "@phosphor-icons/react";
@@ -75,7 +75,7 @@ function RailsSearchBar({
           <Input
             placeholder='Search'
             value={searchInput}
-            onChange={(e) => onSearchInputChange(e.target.value)}
+            onChange={(value) => onSearchInputChange(value)}
             onKeyDown={onKeyDown}
             className='pl-10'
           />
