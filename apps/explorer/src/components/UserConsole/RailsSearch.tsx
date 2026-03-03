@@ -30,7 +30,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
     onClear();
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
     }
@@ -74,7 +74,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
             placeholder={getPlaceholder()}
             value={searchQuery}
             onChange={(value) => setSearchQuery(value)}
-            onKeyDown={handleKeyPress}
+            onKeyDown={handleKeyDown}
             className='pl-9'
           />
         </div>
