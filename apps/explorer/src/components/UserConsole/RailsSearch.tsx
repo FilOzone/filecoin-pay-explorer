@@ -73,7 +73,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
           <Input
             placeholder={getPlaceholder()}
             value={searchQuery}
-            onChange={(value) => setSearchQuery(value)}
+            onChange={setSearchQuery}
             onKeyDown={handleKeyDown}
             className='pl-9'
           />

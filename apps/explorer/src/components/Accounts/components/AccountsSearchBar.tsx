@@ -31,7 +31,7 @@ function AccountsSearchBar({
         <Input
           placeholder='Search by address (0x...)'
           value={searchInput}
-          onChange={(value) => onSearchInputChange(value)}
+          onChange={onSearchInputChange}
           onKeyDown={onKeyDown}
           className='pl-10'
         />

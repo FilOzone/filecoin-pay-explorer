@@ -443,7 +443,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   type='number'
                   placeholder='0.0'
                   value={lockupAllowance}
-                  onChange={(value) => setLockupAllowance(value)}
+                  onChange={setLockupAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -456,7 +456,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   type='number'
                   placeholder='0.0'
                   value={rateAllowance}
-                  onChange={(value) => setRateAllowance(value)}
+                  onChange={setRateAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -471,7 +471,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
               type='number'
               placeholder='e.g., 2880 (1 day)'
               value={maxLockupPeriod}
-              onChange={(value) => setMaxLockupPeriod(value)}
+              onChange={setMaxLockupPeriod}
               disabled={isSubmitting}
             />
             <p className='text-xs text-muted-foreground'>Maximum duration the operator can lock your funds</p>

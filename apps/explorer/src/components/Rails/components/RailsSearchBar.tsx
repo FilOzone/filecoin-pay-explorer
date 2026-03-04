@@ -75,7 +75,7 @@ function RailsSearchBar({
           <Input
             placeholder='Search'
             value={searchInput}
-            onChange={(value) => onSearchInputChange(value)}
+            onChange={onSearchInputChange}
             onKeyDown={onKeyDown}
             className='pl-10'
           />

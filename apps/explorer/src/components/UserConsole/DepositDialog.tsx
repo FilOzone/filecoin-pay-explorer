@@ -254,9 +254,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   id='tokenAddress'
                   placeholder='0x...'
                   value={tokenAddress}
-                  onChange={(value) => {
-                    setTokenAddress(value);
-                  }}
+                  onChange={setTokenAddress}
                   disabled={loadingState === "loading" || isExecuting}
                   className='font-mono text-sm'
                 />
@@ -367,7 +365,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   type='number'
                   placeholder='0.0'
                   value={amount}
-                  onChange={(value) => setAmount(value)}
+                  onChange={setAmount}
                   min='0'
                   step='any'
                   disabled={isExecuting}

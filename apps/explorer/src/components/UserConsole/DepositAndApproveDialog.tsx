@@ -237,9 +237,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   id='token'
                   placeholder='Enter token address 0x...'
                   value={tokenInput}
-                  onChange={(value) => {
-                    setTokenInput(value);
-                  }}
+                  onChange={setTokenInput}
                   disabled={isSubmitting}
                   className='pr-10'
                 />
@@ -320,7 +318,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={tokenAmount}
-                  onChange={(value) => setTokenAmount(value)}
+                  onChange={setTokenAmount}
                   min='0'
                   step='any'
                   disabled={isSubmitting}
@@ -352,9 +350,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   id='operator'
                   placeholder='Enter Operator address 0x...'
                   value={operatorInput}
-                  onChange={(value) => {
-                    setOperatorInput(value);
-                  }}
+                  onChange={setOperatorInput}
                   disabled={isSubmitting}
                   className='pr-10'
                 />
@@ -403,7 +399,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={lockupAllowance}
-                  onChange={(value) => setLockupAllowance(value)}
+                  onChange={setLockupAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -416,7 +412,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={rateAllowance}
-                  onChange={(value) => setRateAllowance(value)}
+                  onChange={setRateAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -431,7 +427,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
               type='number'
               placeholder='e.g., 2880 (1 day)'
               value={maxLockupPeriod}
-              onChange={(value) => setMaxLockupPeriod(value)}
+              onChange={setMaxLockupPeriod}
               disabled={isSubmitting}
             />
             <p className='text-xs text-muted-foreground'>Maximum duration the operator can lock your funds</p>

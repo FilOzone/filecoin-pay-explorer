@@ -188,7 +188,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={lockupIncrease}
-                  onChange={(value) => setLockupIncrease(value)}
+                  onChange={setLockupIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -201,7 +201,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={rateIncrease}
-                  onChange={(value) => setRateIncrease(value)}
+                  onChange={setRateIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -214,7 +214,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={maxLockupPeriodIncrease}
-                  onChange={(value) => setMaxLockupPeriodIncrease(value)}
+                  onChange={setMaxLockupPeriodIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>

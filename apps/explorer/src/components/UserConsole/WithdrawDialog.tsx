@@ -212,7 +212,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
                   type='number'
                   placeholder='0.0'
                   value={amount}
-                  onChange={(value) => setAmount(value)}
+                  onChange={setAmount}
                   min='0'
                   step='any'
                   disabled={isExecuting}
