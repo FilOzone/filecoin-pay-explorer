@@ -1,11 +1,11 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { Search } from "lucide-react";
 
 export function RailsEmptyInitial() {
   return (
     <EmptyStateCard
-      icon={MagnifyingGlassIcon}
+      icon={Search}
       title='No rails found'
       titleTag='h2'
       description='There are no rails to display at the moment.'
@@ -20,7 +20,7 @@ export type RailsEmptyNoResultsProps = {
 export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
   return (
     <EmptyStateCard
-      icon={MagnifyingGlassIcon}
+      icon={Search}
       title='No results found'
       titleTag='h2'
       description="Try adjusting your search filters to find what you're looking for."

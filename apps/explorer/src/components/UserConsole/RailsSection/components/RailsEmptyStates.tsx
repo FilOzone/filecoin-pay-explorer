@@ -1,5 +1,5 @@
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { FileTextIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { FileText, Search } from "lucide-react";
 import RailsSectionLayout from "./RailsSectionLayout";
 
 export function RailsEmptyInitial() {
@@ -9,7 +9,7 @@ export function RailsEmptyInitial() {
         titleTag='h2'
         title='No payment rails'
         description="You don't have any active payment rails yet. Create a rail to start sending or receiving payments."
-        icon={FileTextIcon}
+        icon={FileText}
       />
     </RailsSectionLayout>
   );
@@ -22,7 +22,7 @@ export function RailsEmptyNoResults({ searchFilter }: { searchFilter: string }) 
         titleTag='h2'
         title='No results found'
         description={`No rails match your search criteria. Try a different ${searchFilter}.`}
-        icon={MagnifyingGlassIcon}
+        icon={Search}
       />
     </RailsSectionLayout>
   );
