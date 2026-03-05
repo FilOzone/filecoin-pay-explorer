@@ -33,7 +33,7 @@ export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProp
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={onClear} variant='ghost'>
+            <Button onClick={onClear} variant='ghost' size='compact'>
               Clear Search
             </Button>
           </EmptyContent>

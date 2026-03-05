@@ -60,7 +60,7 @@ export const RailErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) =>
               <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button variant='primary' onClick={refetch}>
+              <Button variant='primary' onClick={refetch} size='compact'>
                 Retry
               </Button>
             </EmptyContent>
@@ -91,7 +91,9 @@ export const RailNotFoundState: React.FC<NotFoundStateProps> = ({ railId }) => (
             </EmptyHeader>
             <EmptyContent>
               <Link href='/rails'>
-                <Button variant='ghost'>Browse All Rails</Button>
+                <Button variant='ghost' size='compact'>
+                  Browse All Rails
+                </Button>
               </Link>
             </EmptyContent>
           </Empty>

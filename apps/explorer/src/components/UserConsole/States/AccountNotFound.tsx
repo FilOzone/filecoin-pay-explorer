@@ -21,19 +21,19 @@ const AccountNotFound = () => {
     >
       <div className='flex flex-col gap-4 mt-6'>
         <div className='flex flex-col sm:flex-row gap-3'>
-          <Button onClick={() => setDepositDialogOpen(true)} variant='ghost' className='gap-2 py-2'>
+          <Button onClick={() => setDepositDialogOpen(true)} variant='ghost' size='compact'>
             <span className='flex items-center gap-2'>
               <ArrowDownCircle className='h-5 w-5' />
               Deposit Funds
             </span>
           </Button>
-          <Button onClick={() => setApproveDialogOpen(true)} variant='ghost' className='gap-2 py-2'>
+          <Button onClick={() => setApproveDialogOpen(true)} variant='ghost' size='compact'>
             <span className='flex items-center gap-2'>
               <Shield className='h-5 w-5' />
               Approve Service
             </span>
           </Button>
-          <Button onClick={() => setDepositAndApproveDialogOpen(true)} className='gap-2 py-2' variant='primary'>
+          <Button onClick={() => setDepositAndApproveDialogOpen(true)} size='compact' variant='primary'>
             <span className='flex items-center gap-2'>
               <ArrowDownCircle className='h-5 w-5' />
               Deposit and Approve Service

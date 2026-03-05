@@ -28,7 +28,7 @@ function AccountsErrorState({ error, onRetry }: AccountsErrorStateProps) {
             <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant='primary' onClick={onRetry}>
+            <Button variant='primary' onClick={onRetry} size='compact'>
               Retry
             </Button>
           </EmptyContent>

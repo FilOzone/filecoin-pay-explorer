@@ -41,7 +41,7 @@ function AccountsSearchBar({
       <div className='flex items-center gap-6'>
         {/* Clear Button */}
         {hasActiveFilters && (
-          <Button variant='tertiary' onClick={onClear}>
+          <Button variant='tertiary' onClick={onClear} size='compact'>
             Clear
           </Button>
         )}

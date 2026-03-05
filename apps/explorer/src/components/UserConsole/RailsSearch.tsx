@@ -85,7 +85,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
         </Button>
 
         {isActive && (
-          <Button variant='tertiary' onClick={handleClear} className='gap-2'>
+          <Button variant='tertiary' onClick={handleClear} className='gap-2' size='compact'>
             <X className='h-4 w-4' />
             Clear
           </Button>

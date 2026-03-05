@@ -71,7 +71,7 @@ const Balance = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='tertiary'>
+        <Button variant='tertiary' size='compact'>
           <div className='flex items-center gap-2'>
             <WalletIcon color='var(--color-zinc-400)' size={20} className='w-5 h-5' />
             {isLoading ? (

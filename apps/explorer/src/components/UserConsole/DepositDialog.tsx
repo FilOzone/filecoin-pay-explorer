@@ -397,10 +397,10 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} size='compact'>
             Cancel
           </Button>
-          <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} className='py-2'>
+          <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
             {isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

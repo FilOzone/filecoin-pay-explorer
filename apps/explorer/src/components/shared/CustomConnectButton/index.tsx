@@ -22,14 +22,14 @@ const CustomConnectButton = () => {
             {(() => {
               if (!connected) {
                 return (
-                  <Button variant='primary' onClick={openConnectModal} type='button'>
+                  <Button variant='primary' onClick={openConnectModal} type='button' size='compact'>
                     Connect Wallet
                   </Button>
                 );
               }
               if (chain.unsupported) {
                 return (
-                  <Button variant='primary' onClick={openChainModal} type='button'>
+                  <Button variant='primary' onClick={openChainModal} type='button' size='compact'>
                     Wrong Network
                   </Button>
                 );

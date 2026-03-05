@@ -115,11 +115,11 @@ function RailsSearchBar({
               </div>
 
               <div className='flex gap-6 justify-center pt-2'>
-                <Button variant='primary' onClick={handleApplyFilters}>
+                <Button variant='primary' onClick={handleApplyFilters} size='compact'>
                   Apply
                 </Button>
                 {hasActiveFilters && (
-                  <Button variant='tertiary' onClick={handleClearFilters}>
+                  <Button variant='tertiary' onClick={handleClearFilters} size='compact'>
                     Clear
                   </Button>
                 )}

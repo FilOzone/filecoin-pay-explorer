@@ -31,7 +31,7 @@ export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
             <EmptyDescription>Try adjusting your search filters to find what you're looking for.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={onClear} variant='ghost'>
+            <Button onClick={onClear} variant='ghost' size='compact'>
               Clear Filters
             </Button>
           </EmptyContent>

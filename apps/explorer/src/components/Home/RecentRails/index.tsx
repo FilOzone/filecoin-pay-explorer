@@ -82,7 +82,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
           <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button variant='primary' onClick={refetch}>
+          <Button variant='primary' onClick={refetch} size='compact'>
             Retry
           </Button>
         </EmptyContent>

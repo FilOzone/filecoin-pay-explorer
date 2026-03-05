@@ -437,11 +437,11 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
-            className='py-2'
+            size='compact'
           >
             Cancel
           </Button>
-          <Button variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} className='py-2'>
+          <Button variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} size='compact'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

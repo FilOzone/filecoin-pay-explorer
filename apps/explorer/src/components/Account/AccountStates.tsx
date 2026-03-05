@@ -57,7 +57,7 @@ export const AccountErrorState: React.FC<ErrorStateProps> = ({ refetch, error })
               <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button variant='primary' onClick={refetch}>
+              <Button variant='primary' onClick={refetch} size='compact'>
                 Retry
               </Button>
             </EmptyContent>
@@ -90,7 +90,9 @@ export const AccountNotFoundState: React.FC<NotFoundStateProps> = ({ address }) 
             </EmptyHeader>
             <EmptyContent>
               <Link href='/accounts'>
-                <Button variant='ghost'>Browse All Accounts</Button>
+                <Button variant='ghost' size='compact'>
+                  Browse All Accounts
+                </Button>
               </Link>
             </EmptyContent>
           </Empty>

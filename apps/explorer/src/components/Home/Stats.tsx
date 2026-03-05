@@ -54,7 +54,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
         <EmptyDescription>{error?.message || "Failed to fetch data"}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button variant='primary' onClick={refetch}>
+        <Button variant='primary' onClick={refetch} size='compact'>
           Retry
         </Button>
       </EmptyContent>

@@ -57,7 +57,7 @@ export const OperatorErrorState: React.FC<ErrorStateProps> = ({ refetch, error }
               <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button variant='primary' onClick={refetch}>
+              <Button variant='primary' onClick={refetch} size='compact'>
                 Retry
               </Button>
             </EmptyContent>
@@ -90,7 +90,9 @@ export const OperatorNotFoundState: React.FC<NotFoundStateProps> = ({ address })
             </EmptyHeader>
             <EmptyContent>
               <Link href='/operators'>
-                <Button variant='ghost'>Browse All Operators</Button>
+                <Button variant='ghost' size='compact'>
+                  Browse All Operators
+                </Button>
               </Link>
             </EmptyContent>
           </Empty>

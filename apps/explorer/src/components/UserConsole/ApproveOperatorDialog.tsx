@@ -266,6 +266,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowOperatorDropdown(!showOperatorDropdown)}
                     disabled={isSubmitting}
+                    size='compact'
                   >
                     <ChevronDown className='h-4 w-4 text-muted-foreground' />
                   </Button>
@@ -333,6 +334,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   <Button
                     type='button'
                     variant='ghost'
+                    size='compact'
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowTokenDropdown(!showTokenDropdown)}
                     disabled={isSubmitting}
@@ -480,11 +482,11 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
-            className='py-2'
+            size='compact'
           >
             Cancel
           </Button>
-          <Button variant='primary' onClick={handleApprove} disabled={!canSubmit} className='py-2'>
+          <Button variant='primary' onClick={handleApprove} disabled={!canSubmit} size='compact'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
