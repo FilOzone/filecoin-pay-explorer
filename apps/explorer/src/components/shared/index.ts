@@ -3,6 +3,7 @@ import CopyableText from "./CopyableText";
 import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
 import Footer from "./Footer";
+import Header from "./Header";
 import InfiniteScrollLoader from "./InfiniteScrollLoader";
 import InlineTextLoader from "./InlineTextLoader";
 import MetricItem from "./MetricItem";
@@ -18,6 +19,7 @@ export {
   CopyButton,
   CustomConnectButton,
   Footer,
+  Header,
   InfiniteScrollLoader,
   InlineTextLoader,
   MetricItem,
