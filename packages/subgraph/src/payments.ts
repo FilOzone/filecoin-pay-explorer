@@ -1,6 +1,7 @@
 import { Address, Bytes, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
+  BurnForFeesCall,
   DepositRecorded as DepositRecordedEvent,
   OperatorApprovalUpdated as OperatorApprovalUpdatedEvent,
   RailCreated as RailCreatedEvent,
@@ -12,7 +13,7 @@ import {
   RailTerminated as RailTerminatedEvent,
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
-import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -25,14 +26,20 @@ import {
   epochsRateChangeApplicable,
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
+  isNativeToken,
   remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import {
+  getFeeAuctionPurchaseEntityId,
+  getIdFromTxHashAndLogIndex,
+  getRailEntityId,
+  getSettlementEntityId,
+} from "./utils/keys";
+import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -449,15 +456,14 @@ export function handleRailSettled(event: RailSettledEvent): void {
     token.lockupLastSettledUntilEpoch = event.block.number;
 
     // Subtract the network fee from user funds since it is not retained by the user.
-    // The fee is either burned or deposited into the Filecoin-pay contract account.
-    //
-    // NOTE: When the auction system is integrated, the network fee will be
-    // deposited into the Filecoin-pay contract. At that point, we should stop
-    // subtracting the network fee here, as `token.userFunds` can be derived
-    // by summing all `userTokens.funds`.
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
 
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     // Reduce streaming lockup by rate × actualSettledDuration.
     // Settlement window is (previousSettledUpto, settledUpTo].
     // RateChangeQueue applies for (startEpoch, untilEpoch], i.e., startEpoch is exclusive.
@@ -628,6 +634,12 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     token.userFunds = token.userFunds.minus(networkFee);
     token.lockupCurrent = token.lockupCurrent.minus(totalAmount);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
+
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     token.save();
   }
   if (payerToken) {
@@ -708,5 +720,34 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
     "FINALIZED",
     event.block.timestamp,
     event.block.number,
+  );
+}
+
+// ==================== Call Handlers ====================
+
+export function handleBurnForFees(call: BurnForFeesCall): void {
+  const tokenAddress = call.inputs.token;
+  const recipient = call.inputs.recipient;
+  const requested = call.inputs.requested;
+  const filBurned = call.transaction.value;
+
+  // Create FeeAuctionPurchase entity
+  const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index);
+  const purchase = new FeeAuctionPurchase(purchaseId);
+  purchase.token = tokenAddress;
+  purchase.recipient = recipient;
+  purchase.amountPurchased = requested;
+  purchase.filBurned = filBurned;
+  purchase.blockNumber = call.block.number;
+  purchase.blockTimestamp = call.block.timestamp;
+  purchase.transactionHash = call.transaction.hash;
+  purchase.save();
+
+  MetricsCollectionOrchestrator.collectFeeAuctionMetrics(
+    requested,
+    filBurned,
+    tokenAddress,
+    call.block.timestamp,
+    call.block.number,
   );
 }

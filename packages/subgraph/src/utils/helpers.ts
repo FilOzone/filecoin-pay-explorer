@@ -30,6 +30,11 @@ import {
 } from "./keys";
 import { ZERO_BIG_INT } from "./metrics";
 
+// Checks if token is native FIL (address zero)
+export function isNativeToken(tokenAddress: Bytes): boolean {
+  return Address.fromBytes(tokenAddress).equals(Address.zero());
+}
+
 class TokenDetails {
   constructor(
     public token: Token,
@@ -124,6 +129,8 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.lockupRate = ZERO_BIG_INT;
     token.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
     token.totalUsers = ZERO_BIG_INT;
+    token.accumulatedFees = ZERO_BIG_INT;
+    token.totalFilBurnedForFees = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);
   }
