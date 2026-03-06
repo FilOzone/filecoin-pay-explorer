@@ -1,4 +1,3 @@
-export { AccountInfo, AccountInfoSkeleton } from "./AccountInfo";
 export { ApproveOperatorDialog } from "./ApproveOperatorDialog";
 export { BetaWarning } from "./BetaWarning";
 export { DepositDialog } from "./DepositDialog";
