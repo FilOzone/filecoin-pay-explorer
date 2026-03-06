@@ -1,5 +1,4 @@
-import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Balance, NetworkOptions } from "./components";
 
@@ -23,15 +22,15 @@ const CustomConnectButton = () => {
             {(() => {
               if (!connected) {
                 return (
-                  <NewButton variant='primary' onClick={openConnectModal} type='button'>
+                  <Button variant='primary' onClick={openConnectModal} type='button' size='compact'>
                     Connect Wallet
-                  </NewButton>
+                  </Button>
                 );
               }
               if (chain.unsupported) {
                 return (
-                  <Button variant='destructive' onClick={openChainModal} type='button'>
-                    Wrong network
+                  <Button variant='primary' onClick={openChainModal} type='button' size='compact'>
+                    Wrong Network
                   </Button>
                 );
               }

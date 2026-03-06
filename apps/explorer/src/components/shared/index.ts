@@ -15,19 +15,19 @@ import StyledLink from "./StyledLink";
 
 export {
   AllowanceDisplay,
-  MetricItem,
+  CopyableText,
+  CopyButton,
+  CustomConnectButton,
   Footer,
   Header,
-  CustomConnectButton,
-  CopyButton,
-  CopyableText,
   InfiniteScrollLoader,
+  InlineTextLoader,
+  MetricItem,
   Navigation,
   NetworkIndicator,
   Providers,
   SiteLayout,
   StyledLink,
-  InlineTextLoader,
 };
 
 export { RailStateBadge } from "./RailStateBadge";
