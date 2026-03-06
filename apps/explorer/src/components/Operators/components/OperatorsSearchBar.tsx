@@ -1,6 +1,6 @@
 import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { RefreshButton } from "@filecoin-foundation/ui-filecoin/RefreshButton";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Search } from "lucide-react";
 
 export type OperatorsSearchBarProps = {
@@ -31,7 +31,7 @@ function OperatorsSearchBar({
         <Input
           placeholder='Search by address (0x...)'
           value={searchInput}
-          onChange={(e) => onSearchInputChange(e.target.value)}
+          onChange={onSearchInputChange}
           onKeyDown={onKeyDown}
           className='pl-10'
         />

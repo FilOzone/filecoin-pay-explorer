@@ -1,5 +1,5 @@
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Button } from "@filecoin-pay/ui/components/button";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { Search, X } from "lucide-react";
 import { useState } from "react";
@@ -30,7 +30,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
     onClear();
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
     }
@@ -73,8 +73,8 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
           <Input
             placeholder={getPlaceholder()}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onChange={setSearchQuery}
+            onKeyDown={handleKeyDown}
             className='pl-9'
           />
         </div>

@@ -1,4 +1,5 @@
 import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
@@ -9,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -188,7 +188,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={lockupIncrease}
-                  onChange={(e) => setLockupIncrease(e.target.value)}
+                  onChange={setLockupIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -201,7 +201,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={rateIncrease}
-                  onChange={(e) => setRateIncrease(e.target.value)}
+                  onChange={setRateIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -214,7 +214,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                   type='number'
                   placeholder='0.0'
                   value={maxLockupPeriodIncrease}
-                  onChange={(e) => setMaxLockupPeriodIncrease(e.target.value)}
+                  onChange={setMaxLockupPeriodIncrease}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
