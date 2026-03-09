@@ -1,4 +1,3 @@
-//  Unused component — verify if still needed
 import type { Account } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Skeleton } from "@filecoin-pay/ui/components/skeleton";

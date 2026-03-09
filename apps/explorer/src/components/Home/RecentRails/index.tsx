@@ -4,8 +4,7 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { RefreshOverlay } from "@filecoin-foundation/ui-filecoin/RefreshOverlay";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, SearchIcon } from "lucide-react";
 import { StyledLink } from "@/components/shared";
 import useRecentRails from "@/hooks/useRecentRails";
 import RecentRailsTable from "./components/RecentRailsTable";
@@ -78,7 +77,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
 
 const EmptyState = () => (
   <EmptyStateCard
-    icon={MagnifyingGlassIcon}
+    icon={SearchIcon}
     title='No rails found'
     titleTag='h2'
     description='There are no rails to display at the moment.'

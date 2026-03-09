@@ -1,11 +1,11 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { SearchIcon } from "lucide-react";
 
 export function OperatorsEmptyInitial() {
   return (
     <EmptyStateCard
-      icon={MagnifyingGlassIcon}
+      icon={SearchIcon}
       title='No operators found'
       titleTag='h2'
       description='There are no operators to display at the moment.'
@@ -20,7 +20,7 @@ export type OperatorsEmptyNoResultsProps = {
 export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProps) {
   return (
     <EmptyStateCard
-      icon={MagnifyingGlassIcon}
+      icon={SearchIcon}
       title='No results found'
       titleTag='h2'
       description='No operator found with this address. Make sure the address is correct and try again.'
