@@ -1,8 +1,8 @@
 "use client";
 
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
-import { Button } from "@filecoin-pay/ui/components/button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Empty,
@@ -54,7 +54,9 @@ const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
         <EmptyDescription>{error?.message || "Failed to fetch data"}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={refetch}>Retry</Button>
+        <Button variant='primary' onClick={refetch} size='compact'>
+          Retry
+        </Button>
       </EmptyContent>
     </Empty>
   </Card>

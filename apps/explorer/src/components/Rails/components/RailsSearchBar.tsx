@@ -1,8 +1,8 @@
-import { Button as NewButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { FilterButton } from "@filecoin-foundation/ui-filecoin/FilterButton";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { RefreshButton } from "@filecoin-foundation/ui-filecoin/RefreshButton";
 import type { RailState } from "@filecoin-pay/types";
-import { Button } from "@filecoin-pay/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@filecoin-pay/ui/components/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { FunnelSimpleIcon } from "@phosphor-icons/react";
@@ -54,7 +54,7 @@ function RailsSearchBar({
   };
 
   return (
-    <div className='flex items-center gap-3 justify-between'>
+    <div className='flex md:items-center gap-6 md:justify-between md:flex-row flex-col'>
       {/* Search Input */}
       <div className='relative flex-1 max-w-[600px]'>
         <Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
@@ -83,19 +83,18 @@ function RailsSearchBar({
       </div>
 
       {/* Actions */}
-      <div className='flex items-center gap-2'>
+      <div className='flex items-center gap-6 max-w-fit'>
         {/* Filters Button */}
         <Popover open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
           <PopoverTrigger asChild>
-            <Button variant='outline' className='flex items-center gap-2 border-0'>
-              <FunnelSimpleIcon size={20} />
+            <FilterButton Icon={FunnelSimpleIcon}>
               Filters
               {hasActiveFilters && (
-                <span className='ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground'>
+                <span className='bg-primary text-xs text-primary-foreground absolute top-1/2 right-3 -translate-y-1/2 rounded-full min-w-5 h-5 grid place-content-center'>
                   1
                 </span>
               )}
-            </Button>
+            </FilterButton>
           </PopoverTrigger>
           <PopoverContent align='end' className='w-80'>
             <div className='space-y-4'>
@@ -115,14 +114,14 @@ function RailsSearchBar({
                 </Select>
               </div>
 
-              <div className='flex gap-2 pt-2'>
-                <NewButton variant='primary' onClick={handleApplyFilters} className='flex-1 py-2'>
+              <div className='flex gap-6 justify-center pt-2'>
+                <Button variant='primary' onClick={handleApplyFilters} size='compact'>
                   Apply
-                </NewButton>
+                </Button>
                 {hasActiveFilters && (
-                  <NewButton variant='ghost' onClick={handleClearFilters}>
+                  <Button variant='tertiary' onClick={handleClearFilters} size='compact'>
                     Clear
-                  </NewButton>
+                  </Button>
                 )}
               </div>
             </div>

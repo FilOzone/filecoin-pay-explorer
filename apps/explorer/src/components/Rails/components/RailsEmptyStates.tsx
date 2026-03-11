@@ -1,4 +1,4 @@
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 
@@ -31,7 +31,7 @@ export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
             <EmptyDescription>Try adjusting your search filters to find what you're looking for.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={onClear} variant='outline'>
+            <Button onClick={onClear} variant='ghost' size='compact'>
               Clear Filters
             </Button>
           </EmptyContent>

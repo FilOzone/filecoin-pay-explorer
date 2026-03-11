@@ -1,8 +1,7 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { UserToken } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -374,7 +373,6 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                 <Button
                   type='button'
                   variant='ghost'
-                  size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
                   disabled={isExecuting || balance === undefined || isLoadingBalance}
@@ -399,10 +397,10 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <FilecoinButton variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} size='compact'>
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleDeposit} disabled={!canDeposit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
             {isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -411,7 +409,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
             ) : (
               "Deposit"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,4 +1,4 @@
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Empty,
@@ -57,7 +57,9 @@ export const AccountErrorState: React.FC<ErrorStateProps> = ({ refetch, error })
               <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button onClick={refetch}>Retry</Button>
+              <Button variant='primary' onClick={refetch} size='compact'>
+                Retry
+              </Button>
             </EmptyContent>
           </Empty>
         </div>
@@ -88,7 +90,9 @@ export const AccountNotFoundState: React.FC<NotFoundStateProps> = ({ address }) 
             </EmptyHeader>
             <EmptyContent>
               <Link href='/accounts'>
-                <Button variant='outline'>Browse All Accounts</Button>
+                <Button variant='ghost' size='compact'>
+                  Browse All Accounts
+                </Button>
               </Link>
             </EmptyContent>
           </Empty>
