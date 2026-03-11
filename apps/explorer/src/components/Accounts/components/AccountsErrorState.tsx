@@ -15,7 +15,7 @@ function AccountsErrorState({ error, onRetry }: AccountsErrorStateProps) {
       titleTag='h2'
       description={error?.message || "Something went wrong"}
     >
-      <Button onClick={onRetry} variant='primary'>
+      <Button onClick={onRetry} variant='primary' size='compact'>
         Retry
       </Button>
     </EmptyStateCard>

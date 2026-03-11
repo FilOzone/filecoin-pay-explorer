@@ -25,7 +25,7 @@ export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
       titleTag='h2'
       description="Try adjusting your search filters to find what you're looking for."
     >
-      <Button onClick={onClear} variant='ghost'>
+      <Button onClick={onClear} variant='ghost' size='compact'>
         Clear Filters
       </Button>
     </EmptyStateCard>

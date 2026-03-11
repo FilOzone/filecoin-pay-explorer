@@ -1,4 +1,5 @@
 "use client";
+
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
@@ -69,7 +70,7 @@ const ErrorState: React.FC<{ refetch: () => void; error: Error }> = ({ refetch, 
     titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
-    <Button onClick={refetch} variant='primary'>
+    <Button onClick={refetch} variant='primary' size='compact'>
       Retry
     </Button>
   </EmptyStateCard>

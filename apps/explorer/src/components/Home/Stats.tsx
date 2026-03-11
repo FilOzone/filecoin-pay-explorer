@@ -42,7 +42,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
     titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
-    <Button onClick={refetch} variant='primary'>
+    <Button onClick={refetch} variant='primary' size='compact'>
       Retry
     </Button>
   </EmptyStateCard>

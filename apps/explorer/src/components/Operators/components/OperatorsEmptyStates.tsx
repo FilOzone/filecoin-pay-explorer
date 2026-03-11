@@ -25,7 +25,7 @@ export function OperatorsEmptyNoResults({ onClear }: OperatorsEmptyNoResultsProp
       titleTag='h2'
       description='No operator found with this address. Make sure the address is correct and try again.'
     >
-      <Button onClick={onClear} variant='ghost'>
+      <Button onClick={onClear} variant='ghost' size='compact'>
         Clear Search
       </Button>
     </EmptyStateCard>
