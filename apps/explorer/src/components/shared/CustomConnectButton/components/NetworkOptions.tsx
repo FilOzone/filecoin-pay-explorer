@@ -1,13 +1,9 @@
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@filecoin-pay/ui/components/select";
+import { Listbox } from "@filecoin-foundation/ui-filecoin/Listbox";
+import { GlobeIcon } from "lucide-react";
 import { useSwitchChain } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { supportedChains } from "@/services/wagmi/config";
+import { getNetworkFromChainId } from "@/utils/network";
 
 interface NetworkOptionsProps {
   chainId: number;
@@ -17,20 +13,12 @@ interface NetworkOptionsProps {
 const NetworkOptions = ({ chainId }: NetworkOptionsProps) => {
   const { switchChain } = useSwitchChain();
   return (
-    <Select value={chainId.toString()} onValueChange={(value) => switchChain({ chainId: parseInt(value, 10) })}>
-      <SelectTrigger className='w-[120px]'>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {supportedChains.map((chain) => (
-            <SelectItem className='px-4' key={chain.id} value={chain.id.toString()}>
-              {chain.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <Listbox
+      Icon={GlobeIcon}
+      options={supportedChains}
+      selected={getChain(getNetworkFromChainId(chainId))}
+      setSelected={(option) => switchChain({ chainId: option.id })}
+    />
   );
 };
 

@@ -15,8 +15,9 @@ export function DesktopNavigation() {
             <NavigationMainLink on='desktop' {...item} />
           </li>
         ))}
-
-        <NetworkOptions />
+        <div className='w-40'>
+          <NetworkOptions />
+        </div>
       </ul>
     </div>
   );
