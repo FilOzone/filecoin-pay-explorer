@@ -8,8 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
-import { ArrowUpRightIcon, CopyIcon, SignOutIcon, WalletIcon } from "@phosphor-icons/react";
-import { Check } from "lucide-react";
+import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
 import { type Address, erc20Abi, formatEther } from "viem";
 import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
@@ -71,17 +70,22 @@ const Balance = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline'>
-          <div className='flex items-center gap-2'>
-            <WalletIcon color='var(--color-zinc-400)' size={20} className='w-5 h-5' />
+        <Button variant='outline' className='h-full w-full'>
+          <div className='flex items-center justify-between gap-2 w-full'>
+            <Wallet color='var(--color-zinc-500)' className='size-5' />
             {isLoading ? (
               "Loading..."
             ) : (
-              <>
-                {tFilBalanceFormatted} <FilecoinLogo className='w-4 h-4' /> {usdfcBalanceFormatted}{" "}
-                <USDFCLogo className='w-4 h-4' />
-              </>
-            )}{" "}
+              <div className='flex items-center gap-4 text-base'>
+                <span className='flex items-center gap-1 '>
+                  {tFilBalanceFormatted} <FilecoinLogo className='w-5 h-5' />
+                </span>
+                <span className='flex items-center gap-1'>
+                  {usdfcBalanceFormatted}
+                  <USDFCLogo className='w-5 h-5' />
+                </span>
+              </div>
+            )}
           </div>
         </Button>
       </DropdownMenuTrigger>
@@ -94,18 +98,14 @@ const Balance = () => {
         >
           <div className='flex items-center w-full gap-2'>
             <div className='flex items-center gap-2'>
-              <WalletIcon color='var(--color-zinc-400)' size={20} />
+              <Wallet className='size-4' />
               <span className='text-base text-zinc-950'>{address && formatAddress(address)}</span>
             </div>
-            {copied ? (
-              <Check className='w-4 h-4 text-green-500' />
-            ) : (
-              <CopyIcon color='var(--color-zinc-400)' size={16} />
-            )}
+            {copied ? <Check className='text-green-500 size-4' /> : <Copy className='size-4' />}
           </div>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer py-2'>
-          <SignOutIcon className='w-5 h-5' />
+          <LogOut className='size-4' />
           <span className='text-base text-zinc-950'>Disconnect</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
