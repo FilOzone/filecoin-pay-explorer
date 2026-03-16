@@ -71,18 +71,18 @@ const Balance = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='h-full w-full'>
-          <div className='flex items-center gap-2 w-full'>
-            <Wallet color='var(--color-zinc-500)' className='size-5' />
+          <div className='flex items-center gap-3 w-full'>
+            <Wallet color='var(--color-zinc-500)' className='size-4' />
             {isLoading ? (
               "Loading..."
             ) : (
-              <div className='flex items-center gap-2 text-base'>
-                <span className='flex items-center gap-1 '>
-                  {tFilBalanceFormatted} <FilecoinLogo className='size-5' />
+              <div className='flex items-center gap-3 text-base'>
+                <span className='flex items-center gap-1.5'>
+                  {tFilBalanceFormatted} <FilecoinLogo className='size-4' />
                 </span>
-                <span className='flex items-center gap-1'>
+                <span className='flex items-center gap-1.5'>
                   {usdfcBalanceFormatted}
-                  <USDFCLogo className='size-5' />
+                  <USDFCLogo className='size-4' />
                 </span>
               </div>
             )}
