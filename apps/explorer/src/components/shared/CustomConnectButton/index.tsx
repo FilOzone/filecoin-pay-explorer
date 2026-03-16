@@ -35,9 +35,13 @@ const CustomConnectButton = () => {
                 );
               }
               return (
-                <div style={{ display: "flex", gap: 12 }}>
-                  <Balance />
-                  <NetworkOptions chainId={chain.id} />
+                <div className='flex items-stretch gap-4'>
+                  <div className='min-w-40 flex-1'>
+                    <Balance />
+                  </div>
+                  <div className='w-40'>
+                    <NetworkOptions chainId={chain.id} />
+                  </div>
                 </div>
               );
             })()}
