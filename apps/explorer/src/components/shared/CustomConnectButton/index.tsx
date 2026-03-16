@@ -36,7 +36,7 @@ const CustomConnectButton = () => {
               }
               return (
                 <div className='flex items-stretch gap-4'>
-                  <div className='min-w-48 flex-1'>
+                  <div className='min-w-40 flex-1'>
                     <Balance />
                   </div>
                   <div className='w-40'>
