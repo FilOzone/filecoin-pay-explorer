@@ -76,6 +76,7 @@ export const GET_RECENT_RAILS = gql`
       state
       paymentRate
       totalSettledAmount
+      totalOneTimePaymentAmount
       createdAt
       payer {
         address

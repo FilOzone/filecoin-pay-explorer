@@ -43,10 +43,20 @@ export const columns = [
       );
     },
   }),
-  columnHelper.accessor("state", {
-    header: "State",
-    cell: (info) => <RailStateBadge state={info.getValue()} />,
-  }),
+  columnHelper.accessor(
+    (row) => ({
+      state: row.state,
+      isOtp: BigInt(row.paymentRate) === 0n && BigInt(row.totalOneTimePaymentAmount ?? 0) > 0n,
+    }),
+    {
+      id: "state",
+      header: "State",
+      cell: (info) => {
+        const { state, isOtp } = info.getValue();
+        return <RailStateBadge state={state} isOneTimePayment={isOtp} />;
+      },
+    },
+  ),
   columnHelper.accessor(
     (row) => ({
       paymentRate: row.paymentRate,
@@ -64,14 +74,16 @@ export const columns = [
   columnHelper.accessor(
     (row) => ({
       totalSettledAmount: row.totalSettledAmount,
+      totalOneTimePaymentAmount: row.totalOneTimePaymentAmount,
       token: row.token,
     }),
     {
-      id: "settledAmount",
-      header: "Settled Amount",
+      id: "transactedAmount",
+      header: "Transacted Amount",
       cell: (info) => {
-        const { totalSettledAmount, token } = info.getValue();
-        return formatToken(totalSettledAmount, token.decimals, token.symbol, 8);
+        const { totalSettledAmount, totalOneTimePaymentAmount, token } = info.getValue();
+        const total = BigInt(totalSettledAmount) + BigInt(totalOneTimePaymentAmount ?? 0);
+        return formatToken(total, token.decimals, token.symbol, 8);
       },
     },
   ),
