@@ -44,14 +44,15 @@ const RAIL_STATE_CONFIG: Record<StateKey, StateConfig> = {
 };
 
 export function RailStateBadge({ state, isOneTimePayment, className }: RailStateBadgeProps) {
-  let config: StateConfig;
-  if (isOneTimePayment) {
-    config = RAIL_STATE_CONFIG.ONE_TIME_PAYMENT;
-  } else if (state === "%future added value") {
-    config = RAIL_STATE_CONFIG.ZERORATE;
-  } else {
-    config = RAIL_STATE_CONFIG[state];
-  }
+  // Use the underlying state for lifecycle (Active/Terminated/Finalized),
+  // but add a one-time payment indicator when applicable
+  const stateConfig = state === "%future added value" ? RAIL_STATE_CONFIG.ZERORATE : RAIL_STATE_CONFIG[state];
+
+  // For active/idle one-time payment rails, use the blue badge.
+  // For terminated/finalized, keep the lifecycle state but append the type.
+  const isTerminalState = state === "TERMINATED" || state === "FINALIZED";
+  const config = isOneTimePayment && !isTerminalState ? RAIL_STATE_CONFIG.ONE_TIME_PAYMENT : stateConfig;
+  const label = isOneTimePayment && isTerminalState ? `${config.label} (One-Time)` : config.label;
 
   return (
     <div className={cn("inline-flex items-center gap-2.5", className)}>
@@ -61,7 +62,7 @@ export function RailStateBadge({ state, isOneTimePayment, className }: RailState
         {/* Inner dot */}
         <div className={cn("relative w-3 h-3 rounded-full", config.dotColor)} />
       </div>
-      <span className={cn("font-medium text-lg", config.textColor)}>{config.label}</span>
+      <span className={cn("font-medium text-lg", config.textColor)}>{label}</span>
     </div>
   );
 }
