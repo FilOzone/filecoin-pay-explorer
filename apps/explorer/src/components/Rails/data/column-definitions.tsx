@@ -67,14 +67,14 @@ export const columns = [
   columnHelper.accessor(
     (row) => ({
       state: row.state,
-      isOtp: BigInt(row.paymentRate) === 0n && BigInt(row.totalOneTimePaymentAmount ?? 0) > 0n,
+      isOneTimePayment: BigInt(row.paymentRate) === 0n && BigInt(row.totalOneTimePaymentAmount ?? 0) > 0n,
     }),
     {
       id: "state",
       header: "Status",
       cell: (info) => {
-        const { state, isOtp } = info.getValue();
-        return <RailStateBadge state={state} isOneTimePayment={isOtp} />;
+        const { state, isOneTimePayment } = info.getValue();
+        return <RailStateBadge state={state} isOneTimePayment={isOneTimePayment} />;
       },
     },
   ),

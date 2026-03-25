@@ -13,7 +13,9 @@ interface RailStateBadgeProps {
   className?: string;
 }
 
-const RAIL_STATE_CONFIG: Record<string, StateConfig> = {
+type StateKey = Exclude<RailState, "%future added value"> | "ONE_TIME_PAYMENT";
+
+const RAIL_STATE_CONFIG: Record<StateKey, StateConfig> = {
   ACTIVE: {
     label: "Active",
     dotColor: "bg-brand-300",
