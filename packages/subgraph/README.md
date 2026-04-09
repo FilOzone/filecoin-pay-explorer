@@ -41,14 +41,14 @@ Follow these steps to build and deploy the subgraph:
     The Graph CLI uses the `subgraph.yaml` manifest and GraphQL schema (`schema.graphql`) to generate AssemblyScript types.
 
     ```bash
-    graph codegen
+    npm run codegen
     ```
 
 4.  **Build the Subgraph:**
     Compile your subgraph code into WebAssembly (WASM).
 
     ```bash
-    graph build
+    npm run build
     ```
 
 5.  **Authenticate with Goldsky:**
