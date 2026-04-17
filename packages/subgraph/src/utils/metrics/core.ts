@@ -87,6 +87,7 @@ export class MetricsEntityManager {
       metric.uniqueHolders = ZERO_BIG_INT;
       metric.totalLocked = ZERO_BIG_INT;
       metric.accumulatedFees = ZERO_BIG_INT;
+      metric.totalFilBurnedForFees = ZERO_BIG_INT;
     }
 
     return metric;
