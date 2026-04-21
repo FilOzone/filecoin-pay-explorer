@@ -30,6 +30,11 @@ import {
 } from "./keys";
 import { ZERO_BIG_INT } from "./metrics";
 
+// Checks if token is native FIL (address zero)
+export function isNativeToken(tokenAddress: Bytes): boolean {
+  return Address.fromBytes(tokenAddress).equals(Address.zero());
+}
+
 class TokenDetails {
   constructor(
     public token: Token,

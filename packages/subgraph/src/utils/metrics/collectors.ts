@@ -1,5 +1,6 @@
 import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { Rail } from "../../../generated/schema";
+import { isNativeToken } from "../helpers";
 import { ONE_BIG_INT, ZERO_BIG_INT } from "./constants";
 import { MetricsEntityManager } from "./core";
 
@@ -129,6 +130,7 @@ export class SettlementCollector extends BaseMetricsCollector {
   private totalSettledAmount: GraphBN;
   private operatorCommission: GraphBN;
   private networkFee: GraphBN;
+  private isNativeFil: boolean;
 
   constructor(
     rail: Rail,
@@ -143,6 +145,7 @@ export class SettlementCollector extends BaseMetricsCollector {
     this.totalSettledAmount = totalSettledAmount;
     this.operatorCommission = operatorCommission;
     this.networkFee = networkFee;
+    this.isNativeFil = isNativeToken(rail.token);
   }
 
   collect(): void {
@@ -156,13 +159,19 @@ export class SettlementCollector extends BaseMetricsCollector {
     // Daily metrics
     const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
     dailyMetric.totalRailSettlements = dailyMetric.totalRailSettlements.plus(ONE_BIG_INT);
-    dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
+    // Only add to filBurned if token is native FIL
+    if (this.isNativeFil) {
+      dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
+    }
     dailyMetric.save();
 
     // Weekly metrics
     const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
     weeklyMetric.totalRailSettlements = weeklyMetric.totalRailSettlements.plus(ONE_BIG_INT);
-    weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
+    // Only add to filBurned if token is native FIL
+    if (this.isNativeFil) {
+      weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
+    }
     weeklyMetric.save();
   }
 
@@ -193,7 +202,10 @@ export class SettlementCollector extends BaseMetricsCollector {
   private updateNetworkMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
 
-    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+    // Only add to filBurned if token is native FIL
+    if (this.isNativeFil) {
+      networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+    }
     networkMetric.totalRailSettlements = networkMetric.totalRailSettlements.plus(ONE_BIG_INT);
 
     networkMetric.save();
@@ -382,12 +394,14 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   private totalAmount: GraphBN;
   private networkFee: GraphBN;
   private token: Bytes;
+  private isNativeFil: boolean;
 
   constructor(totalAmount: GraphBN, networkFee: GraphBN, token: Bytes, timestamp: GraphBN, blockNumber: GraphBN) {
     super(timestamp, blockNumber);
     this.totalAmount = totalAmount;
     this.networkFee = networkFee;
     this.token = token;
+    this.isNativeFil = isNativeToken(token);
   }
 
   collect(): void {
@@ -397,7 +411,11 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
 
   private updateNetworkMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
-    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+    // Only add to filBurned if token is native FIL
+    if (this.isNativeFil) {
+      networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+    }
+    networkMetric.save();
   }
 
   private updateTokenMetrics(): void {
