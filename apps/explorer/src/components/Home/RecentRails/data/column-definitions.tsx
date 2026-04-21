@@ -43,31 +43,24 @@ export const columns = [
       );
     },
   }),
-  columnHelper.accessor(
-    (row) => ({
-      state: row.state,
-      isOneTimePayment: BigInt(row.paymentRate) === 0n && BigInt(row.totalOneTimePaymentAmount ?? 0) > 0n,
-    }),
-    {
-      id: "state",
-      header: "State",
-      cell: (info) => {
-        const { state, isOneTimePayment } = info.getValue();
-        return <RailStateBadge state={state} isOneTimePayment={isOneTimePayment} />;
-      },
-    },
-  ),
+  columnHelper.accessor("state", {
+    header: "Status",
+    cell: (info) => <RailStateBadge state={info.getValue()} />,
+  }),
   columnHelper.accessor(
     (row) => ({
       paymentRate: row.paymentRate,
       token: row.token,
+      totalOneTimePaymentAmount: row.totalOneTimePaymentAmount,
     }),
     {
       id: "paymentRate",
       header: "Payment Rate",
       cell: (info) => {
-        const { paymentRate, token } = info.getValue();
-        return formatToken(paymentRate, token.decimals, token.symbol, 8);
+        const { paymentRate, token, totalOneTimePaymentAmount } = info.getValue();
+        return BigInt(paymentRate) === 0n && BigInt(totalOneTimePaymentAmount) > 0n
+          ? "One-time"
+          : formatToken(paymentRate, token.decimals, token.symbol, 8);
       },
     },
   ),
