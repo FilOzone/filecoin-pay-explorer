@@ -1,12 +1,5 @@
 const USDFCLogo = ({ className }: { className?: string }) => (
-  <svg
-    fill='none'
-    height='162'
-    viewBox='0 0 162 162'
-    width='162'
-    xmlns='http://www.w3.org/2000/svg'
-    className={className}
-  >
+  <svg fill='none' viewBox='0 0 162 162' xmlns='http://www.w3.org/2000/svg' className={className}>
     <title>USDFC</title>
     <path
       d='M161.318 81.493c.101-14.909-3.424-28.357-10.173-39.085-13.748-24.578-40.035-41.25-70.15-41.25C36.728 1.158.72 37.17.67 81.442c-.1 14.909 3.425 28.356 10.173 39.084 13.748 24.579 40.036 41.25 70.15 41.25 44.267 0 80.274-36.011 80.324-80.283'

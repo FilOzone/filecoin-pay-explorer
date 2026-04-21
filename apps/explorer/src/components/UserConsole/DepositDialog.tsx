@@ -1,7 +1,7 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { UserToken } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -254,9 +253,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   id='tokenAddress'
                   placeholder='0x...'
                   value={tokenAddress}
-                  onChange={(e) => {
-                    setTokenAddress(e.target.value);
-                  }}
+                  onChange={setTokenAddress}
                   disabled={loadingState === "loading" || isExecuting}
                   className='font-mono text-sm'
                 />
@@ -367,7 +364,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   type='number'
                   placeholder='0.0'
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={setAmount}
                   min='0'
                   step='any'
                   disabled={isExecuting}
@@ -376,7 +373,6 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                 <Button
                   type='button'
                   variant='ghost'
-                  size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
                   disabled={isExecuting || balance === undefined || isLoadingBalance}
@@ -401,10 +397,10 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         </div>
 
         <DialogFooter>
-          <FilecoinButton variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} size='compact'>
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleDeposit} disabled={!canDeposit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
             {isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -413,7 +409,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
             ) : (
               "Deposit"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

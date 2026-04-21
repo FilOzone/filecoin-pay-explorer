@@ -1,7 +1,7 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { UserToken } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -212,7 +211,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
                   type='number'
                   placeholder='0.0'
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={setAmount}
                   min='0'
                   step='any'
                   disabled={isExecuting}
@@ -221,7 +220,6 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
                 <Button
                   type='button'
                   variant='ghost'
-                  size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
                   disabled={isExecuting || !accountInfo || isLoadingAccountInfo || isRefetchingAccountInfo}
@@ -249,10 +247,10 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
         </div>
 
         <DialogFooter>
-          <FilecoinButton variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleWithdraw} disabled={!canExecute} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleWithdraw} disabled={!canExecute} className='py-2'>
             {isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -261,7 +259,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
             ) : (
               "Withdraw"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

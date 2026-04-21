@@ -1,4 +1,4 @@
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Empty,
@@ -60,7 +60,9 @@ export const RailErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) =>
               <EmptyDescription>{error?.message || "Something went wrong"}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button onClick={refetch}>Retry</Button>
+              <Button variant='primary' onClick={refetch} size='compact'>
+                Retry
+              </Button>
             </EmptyContent>
           </Empty>
         </div>
@@ -89,7 +91,9 @@ export const RailNotFoundState: React.FC<NotFoundStateProps> = ({ railId }) => (
             </EmptyHeader>
             <EmptyContent>
               <Link href='/rails'>
-                <Button variant='outline'>Browse All Rails</Button>
+                <Button variant='ghost' size='compact'>
+                  Browse All Rails
+                </Button>
               </Link>
             </EmptyContent>
           </Empty>

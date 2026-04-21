@@ -412,12 +412,12 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   }
 
   private updateNetworkMetrics(): void {
-    const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
     // Only add to filBurned if token is native FIL
     if (this.isNativeFil) {
+      const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
       networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.networkFee);
+      networkMetric.save();
     }
-    networkMetric.save();
   }
 
   private updateTokenMetrics(): void {

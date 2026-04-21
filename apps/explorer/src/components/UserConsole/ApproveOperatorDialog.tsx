@@ -1,7 +1,7 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { Operator, Token } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Button } from "@filecoin-pay/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -252,8 +251,8 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   id='operator'
                   placeholder='Enter address or select from list...'
                   value={operatorInput}
-                  onChange={(e) => {
-                    setOperatorInput(e.target.value);
+                  onChange={(value) => {
+                    setOperatorInput(value);
                     setShowOperatorDropdown(true);
                   }}
                   onFocus={() => setShowOperatorDropdown(true)}
@@ -264,10 +263,10 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   <Button
                     type='button'
                     variant='ghost'
-                    size='sm'
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowOperatorDropdown(!showOperatorDropdown)}
                     disabled={isSubmitting}
+                    size='compact'
                   >
                     <ChevronDown className='h-4 w-4 text-muted-foreground' />
                   </Button>
@@ -323,8 +322,8 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   id='token'
                   placeholder='Enter token address or select from list...'
                   value={tokenInput}
-                  onChange={(e) => {
-                    setTokenInput(e.target.value);
+                  onChange={(value) => {
+                    setTokenInput(value);
                     setShowTokenDropdown(true);
                   }}
                   onFocus={() => setShowTokenDropdown(true)}
@@ -335,7 +334,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   <Button
                     type='button'
                     variant='ghost'
-                    size='sm'
+                    size='compact'
                     className='absolute right-0 top-0 h-full px-3'
                     onClick={() => setShowTokenDropdown(!showTokenDropdown)}
                     disabled={isSubmitting}
@@ -434,7 +433,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
               </label>
             </div>
             <div className='grid grid-cols-2 gap-3'>
-              <div>
+              <div className='grid gap-2'>
                 <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
                   Lockup Allowance
                 </Label>
@@ -443,11 +442,11 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   type='number'
                   placeholder='0.0'
                   value={lockupAllowance}
-                  onChange={(e) => setLockupAllowance(e.target.value)}
+                  onChange={setLockupAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
-              <div>
+              <div className='grid gap-2'>
                 <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
                   Rate Allowance
                 </Label>
@@ -456,7 +455,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                   type='number'
                   placeholder='0.0'
                   value={rateAllowance}
-                  onChange={(e) => setRateAllowance(e.target.value)}
+                  onChange={setRateAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -471,7 +470,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
               type='number'
               placeholder='e.g., 2880 (1 day)'
               value={maxLockupPeriod}
-              onChange={(e) => setMaxLockupPeriod(e.target.value)}
+              onChange={setMaxLockupPeriod}
               disabled={isSubmitting}
             />
             <p className='text-xs text-muted-foreground'>Maximum duration the operator can lock your funds</p>
@@ -479,15 +478,15 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <FilecoinButton
+          <Button
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
-            className='py-2'
+            size='compact'
           >
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleApprove} disabled={!canSubmit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleApprove} disabled={!canSubmit} size='compact'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -496,7 +495,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
             ) : (
               "Approve Operator"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

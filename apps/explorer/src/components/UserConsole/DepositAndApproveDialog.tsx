@@ -1,5 +1,5 @@
-import { Button as FilecoinButton } from "@filecoin-foundation/ui-filecoin/Button";
-import { Button } from "@filecoin-pay/ui/components/button";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -237,9 +236,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   id='token'
                   placeholder='Enter token address 0x...'
                   value={tokenInput}
-                  onChange={(e) => {
-                    setTokenInput(e.target.value);
-                  }}
+                  onChange={setTokenInput}
                   disabled={isSubmitting}
                   className='pr-10'
                 />
@@ -320,7 +317,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={tokenAmount}
-                  onChange={(e) => setTokenAmount(e.target.value)}
+                  onChange={setTokenAmount}
                   min='0'
                   step='any'
                   disabled={isSubmitting}
@@ -329,7 +326,6 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                 <Button
                   type='button'
                   variant='ghost'
-                  size='sm'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
                   disabled={isSubmitting || balance === undefined || isLoadingBalance}
@@ -352,9 +348,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   id='operator'
                   placeholder='Enter Operator address 0x...'
                   value={operatorInput}
-                  onChange={(e) => {
-                    setOperatorInput(e.target.value);
-                  }}
+                  onChange={setOperatorInput}
                   disabled={isSubmitting}
                   className='pr-10'
                 />
@@ -394,7 +388,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
               </label>
             </div>
             <div className='grid grid-cols-2 gap-3'>
-              <div>
+              <div className='grid gap-2'>
                 <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
                   Lockup Allowance
                 </Label>
@@ -403,11 +397,11 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={lockupAllowance}
-                  onChange={(e) => setLockupAllowance(e.target.value)}
+                  onChange={setLockupAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
-              <div>
+              <div className='grid gap-2'>
                 <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
                   Rate Allowance
                 </Label>
@@ -416,7 +410,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
                   type='number'
                   placeholder='0.0'
                   value={rateAllowance}
-                  onChange={(e) => setRateAllowance(e.target.value)}
+                  onChange={setRateAllowance}
                   disabled={isUnlimited || isSubmitting}
                 />
               </div>
@@ -431,7 +425,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
               type='number'
               placeholder='e.g., 2880 (1 day)'
               value={maxLockupPeriod}
-              onChange={(e) => setMaxLockupPeriod(e.target.value)}
+              onChange={setMaxLockupPeriod}
               disabled={isSubmitting}
             />
             <p className='text-xs text-muted-foreground'>Maximum duration the operator can lock your funds</p>
@@ -439,15 +433,15 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
         </div>
 
         <DialogFooter>
-          <FilecoinButton
+          <Button
             variant='ghost'
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting || isExecuting}
-            className='py-2'
+            size='compact'
           >
             Cancel
-          </FilecoinButton>
-          <FilecoinButton variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} className='py-2'>
+          </Button>
+          <Button variant='primary' onClick={handleDepositAndApprove} disabled={!canSubmit} size='compact'>
             {isSubmitting || isExecuting ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
@@ -456,7 +450,7 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
             ) : (
               "Deposit & Approve Operator"
             )}
-          </FilecoinButton>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

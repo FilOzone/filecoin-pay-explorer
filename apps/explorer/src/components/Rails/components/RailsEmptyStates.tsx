@@ -1,19 +1,15 @@
-import { Button } from "@filecoin-pay/ui/components/button";
-import { Card } from "@filecoin-pay/ui/components/card";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
+import { SearchIcon } from "lucide-react";
 
 export function RailsEmptyInitial() {
   return (
-    <Card>
-      <div className='py-16'>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No rails found</EmptyTitle>
-            <EmptyDescription>There are no rails to display at the moment.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
-    </Card>
+    <EmptyStateCard
+      icon={SearchIcon}
+      title='No rails found'
+      titleTag='h2'
+      description='There are no rails to display at the moment.'
+    />
   );
 }
 
@@ -23,20 +19,15 @@ export type RailsEmptyNoResultsProps = {
 
 export function RailsEmptyNoResults({ onClear }: RailsEmptyNoResultsProps) {
   return (
-    <Card>
-      <div className='py-16'>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No results found</EmptyTitle>
-            <EmptyDescription>Try adjusting your search filters to find what you're looking for.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button onClick={onClear} variant='outline'>
-              Clear Filters
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    </Card>
+    <EmptyStateCard
+      icon={SearchIcon}
+      title='No results found'
+      titleTag='h2'
+      description="Try adjusting your search filters to find what you're looking for."
+    >
+      <Button onClick={onClear} variant='ghost' size='compact'>
+        Clear Filters
+      </Button>
+    </EmptyStateCard>
   );
 }
