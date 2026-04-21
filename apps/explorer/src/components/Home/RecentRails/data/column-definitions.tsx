@@ -61,13 +61,16 @@ export const columns = [
     (row) => ({
       paymentRate: row.paymentRate,
       token: row.token,
+      totalOneTimePaymentAmount: row.totalOneTimePaymentAmount,
     }),
     {
       id: "paymentRate",
       header: "Payment Rate",
       cell: (info) => {
-        const { paymentRate, token } = info.getValue();
-        return formatToken(paymentRate, token.decimals, token.symbol, 8);
+        const { paymentRate, token, totalOneTimePaymentAmount } = info.getValue();
+        return BigInt(paymentRate) === 0n && BigInt(totalOneTimePaymentAmount) > 0n
+          ? "One-time"
+          : formatToken(paymentRate, token.decimals, token.symbol, 8);
       },
     },
   ),
