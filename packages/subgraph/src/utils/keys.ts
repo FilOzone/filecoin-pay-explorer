@@ -35,7 +35,3 @@ export function getSettlementEntityId(txHash: Bytes, logIndex: BigInt): Bytes {
 export function getPaymentsMetricEntityId(): Bytes {
   return Bytes.fromUTF8(PAYMENTS_NETWORK_STATS_ID);
 }
-
-export function getFeeAuctionPurchaseEntityId(txHash: Bytes, txIndex: BigInt): Bytes {
-  return txHash.concatI32(txIndex.toI32());
-}

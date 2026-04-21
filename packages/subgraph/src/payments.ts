@@ -1,4 +1,4 @@
-import { Address, Bytes, dataSource, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -13,7 +13,8 @@ import {
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
 import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
-import { Transfer as TransferEvent } from "../generated/USDFC/erc20";
+import { TokenTemplate } from "../generated/templates";
+import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -33,12 +34,7 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import {
-  getFeeAuctionPurchaseEntityId,
-  getIdFromTxHashAndLogIndex,
-  getRailEntityId,
-  getSettlementEntityId,
-} from "./utils/keys";
+import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
@@ -556,6 +552,15 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
 
+  // Native FIL has no ERC-20 contract, so no Transfer events to track.
+  if (isNewToken && !isNativeToken(tokenAddress)) {
+    const paymentsAddress = event.address;
+    const context = new DataSourceContext();
+    context.setBytes("paymentsAddress", paymentsAddress);
+
+    TokenTemplate.createWithContext(tokenAddress, context);
+  }
+
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
     tokenAddress,
@@ -775,7 +780,7 @@ export function handleFeeAuctionTransfer(event: TransferEvent): void {
   const amountPurchased = event.params.value;
   const filBurned = event.transaction.value;
 
-  const purchaseId = getFeeAuctionPurchaseEntityId(event.transaction.hash, event.transaction.index);
+  const purchaseId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
   const purchase = new FeeAuctionPurchase(purchaseId);
   purchase.token = tokenAddress;
   purchase.recipient = recipient;
