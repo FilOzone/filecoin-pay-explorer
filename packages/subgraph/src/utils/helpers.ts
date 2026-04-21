@@ -28,7 +28,7 @@ import {
   getRateChangeQueueEntityId,
   getUserTokenEntityId,
 } from "./keys";
-import { ZERO_BIG_INT } from "./metrics";
+import { ZERO_BIG_INT } from "./metrics/constants";
 
 // Checks if token is native FIL (address zero)
 export function isNativeToken(tokenAddress: Bytes): boolean {
