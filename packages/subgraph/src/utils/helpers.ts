@@ -28,7 +28,12 @@ import {
   getRateChangeQueueEntityId,
   getUserTokenEntityId,
 } from "./keys";
-import { ZERO_BIG_INT } from "./metrics";
+import { ZERO_BIG_INT } from "./metrics/constants";
+
+// Checks if token is native FIL (address zero)
+export function isNativeToken(tokenAddress: Bytes): boolean {
+  return Address.fromBytes(tokenAddress).equals(Address.zero());
+}
 
 class TokenDetails {
   constructor(
@@ -96,9 +101,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
   if (!token) {
     token = new Token(address);
 
-    const isNativeToken = address.equals(Address.zero());
-
-    if (isNativeToken) {
+    if (isNativeToken(address)) {
       token.name = NATIVE_TOKEN_NAME;
       token.symbol = NATIVE_TOKEN_SYMBOL;
       token.decimals = NATIVE_TOKEN_DECIMALS;
