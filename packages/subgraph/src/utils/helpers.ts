@@ -101,9 +101,7 @@ export const getTokenDetails = (address: Address): TokenDetails => {
   if (!token) {
     token = new Token(address);
 
-    const isNativeToken = address.equals(Address.zero());
-
-    if (isNativeToken) {
+    if (isNativeToken(address)) {
       token.name = NATIVE_TOKEN_NAME;
       token.symbol = NATIVE_TOKEN_SYMBOL;
       token.decimals = NATIVE_TOKEN_DECIMALS;
