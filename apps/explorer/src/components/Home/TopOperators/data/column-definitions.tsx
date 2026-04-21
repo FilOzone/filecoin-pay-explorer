@@ -3,6 +3,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CopyableText } from "@/components/shared";
+import useNetwork from "@/hooks/useNetwork";
+import { explorerUrls } from "@/utils/constants";
 import { formatCompactNumber } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Operator>();
@@ -16,16 +18,20 @@ export const columns = [
   }),
   columnHelper.accessor("address", {
     header: "Address",
-    cell: (info) => (
-      <CopyableText
-        value={info.getValue()}
-        to={`/operator/${info.getValue()}`}
-        monospace={true}
-        label='Service address'
-        truncate={true}
-        truncateLength={8}
-      />
-    ),
+    cell: (info) => {
+      const { network } = useNetwork();
+      return (
+        <CopyableText
+          value={info.getValue()}
+          to={`${explorerUrls[network]}/address/${info.getValue()}`}
+          external
+          monospace={true}
+          label='Service address'
+          truncate={true}
+          truncateLength={8}
+        />
+      );
+    },
   }),
   columnHelper.accessor("totalRails", {
     header: "Total Rails",

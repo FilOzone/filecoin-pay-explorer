@@ -15,7 +15,7 @@ export const columns = [
       return (
         <CopyableText
           value={address}
-          to={`/account/${address}`}
+          // to={`/account/${address}`}
           monospace={true}
           label='Account address'
           truncate={true}
