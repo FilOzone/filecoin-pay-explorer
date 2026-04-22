@@ -13,7 +13,8 @@ import {
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
 import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
-import { Transfer as TransferEvent } from "../generated/USDFC/erc20";
+import { TokenTemplate } from "../generated/templates";
+import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -40,6 +41,11 @@ import {
   getSettlementEntityId,
 } from "./utils/keys";
 import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+
+// TODO
+// - get token list for each network
+// - pass `- context` from yaml
+TokenTemplate.create(TOKEN_ADDRESS);
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
