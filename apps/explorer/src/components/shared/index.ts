@@ -2,6 +2,7 @@ import AllowanceDisplay from "./AllowanceDisplay";
 import CopyableText from "./CopyableText";
 import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
+import ExplorerLink from "./ExplorerLink";
 import Footer from "./Footer";
 import Header from "./Header";
 import InfiniteScrollLoader from "./InfiniteScrollLoader";
@@ -18,6 +19,7 @@ export {
   CopyableText,
   CopyButton,
   CustomConnectButton,
+  ExplorerLink,
   Footer,
   Header,
   InfiniteScrollLoader,

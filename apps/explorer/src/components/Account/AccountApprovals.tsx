@@ -110,7 +110,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={approval.operator.address}
-                    to={`/operator/${approval.operator.address}`}
+                    // to={`/operator/${approval.operator.address}`}
                     monospace={true}
                     label='Service address'
                     truncate={true}

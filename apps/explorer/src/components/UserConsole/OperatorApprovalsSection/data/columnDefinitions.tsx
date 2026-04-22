@@ -19,7 +19,7 @@ export const columns = [
       const approval = info.row.original;
       return (
         <CopyableText
-          to={`/operator/${approval.operator.address}`}
+          // to={`/operator/${approval.operator.address}`}
           value={approval.operator.address}
           monospace={true}
           label='Operator address'
