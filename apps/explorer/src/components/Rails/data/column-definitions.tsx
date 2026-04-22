@@ -64,10 +64,20 @@ export const columns = [
       );
     },
   }),
-  columnHelper.accessor("state", {
-    header: "Status",
-    cell: (info) => <RailStateBadge state={info.getValue()} />,
-  }),
+  columnHelper.accessor(
+    (row) => ({
+      state: row.state,
+      isOneTimePayment: BigInt(row.paymentRate) === 0n && BigInt(row.totalOneTimePaymentAmount ?? 0) > 0n,
+    }),
+    {
+      id: "state",
+      header: "Status",
+      cell: (info) => {
+        const { state, isOneTimePayment } = info.getValue();
+        return <RailStateBadge state={state} isOneTimePayment={isOneTimePayment} />;
+      },
+    },
+  ),
   columnHelper.accessor(
     (row) => ({
       paymentRate: row.paymentRate,
