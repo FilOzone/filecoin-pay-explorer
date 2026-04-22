@@ -41,6 +41,7 @@ const CopyableText = ({
           className={cn("text-link inline-block text-pretty whitespace-nowrap", linkClassName)}
           title={value}
           target={external ? "_blank" : "_self"}
+          rel={external ? "noopener noreferrer" : undefined}
         >
           {displayValue}
           {external && <ExternalLink className='ml-1 h-4 w-4 inline-block' />}
