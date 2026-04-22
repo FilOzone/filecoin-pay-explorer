@@ -11,7 +11,7 @@
     "lint": "biome check --write",
     "precodegen": "rm -rf ./generated && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
-    "generate:yaml": "mustache ./config/${NETWORK:-calibration}.json ./templates/subgraph.yaml.template > subgraph.yaml",
+    "generate:yaml": "mustache ./config/${NETWORK:-calibration}.json ./templates/subgraph.template.yaml > subgraph.yaml",
     "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
     "prebuild": "pnpm codegen",
     "build": "graph build",
