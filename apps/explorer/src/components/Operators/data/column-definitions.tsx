@@ -2,9 +2,7 @@ import type { Operator } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
-import { CopyableText } from "@/components/shared";
-import useNetwork from "@/hooks/useNetwork";
-import { explorerUrls } from "@/utils/constants";
+import { ExplorerLink } from "@/components/shared";
 import { formatCompactNumber } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Operator>();
@@ -13,19 +11,7 @@ export const columns = [
   columnHelper.accessor("address", {
     header: "Address",
     cell: (info) => {
-      const { network } = useNetwork();
-      const address = info.getValue();
-      return (
-        <CopyableText
-          value={address}
-          to={`${explorerUrls[network]}/address/${address}`}
-          external
-          monospace={true}
-          label='Service address'
-          truncate={true}
-          truncateLength={8}
-        />
-      );
+      return <ExplorerLink address={info.getValue()} label='Service address' />;
     },
   }),
   columnHelper.accessor("totalRails", {
