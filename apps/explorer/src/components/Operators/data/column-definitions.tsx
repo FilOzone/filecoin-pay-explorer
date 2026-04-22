@@ -3,16 +3,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CopyableText } from "@/components/shared";
-import type { Network } from "@/types";
+import useNetwork from "@/hooks/useNetwork";
 import { explorerUrls } from "@/utils/constants";
 import { formatCompactNumber } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Operator>();
 
-export const createColumns = (network: Network) => [
+export const columns = [
   columnHelper.accessor("address", {
     header: "Address",
     cell: (info) => {
+      const { network } = useNetwork();
       const address = info.getValue();
       return (
         <CopyableText

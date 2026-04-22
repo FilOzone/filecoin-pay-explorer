@@ -1,10 +1,8 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import type { Operator } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { useMemo } from "react";
 import { InfiniteScrollLoader } from "@/components/shared";
-import useNetwork from "@/hooks/useNetwork";
-import { createColumns } from "../data/column-definitions";
+import { columns } from "../data/column-definitions";
 
 export type OperatorsTableProps = {
   data: Array<Operator>;
@@ -14,8 +12,6 @@ export type OperatorsTableProps = {
 };
 
 function OperatorsTable({ data, observerTarget, isFetchingNextPage, hasNextPage }: OperatorsTableProps) {
-  const { network } = useNetwork();
-  const columns = useMemo(() => createColumns(network), [network]);
   const table = useReactTable({
     data,
     columns,
