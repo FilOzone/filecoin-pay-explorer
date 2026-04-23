@@ -40,7 +40,7 @@ interface ErrorStateProps {
 const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
   <EmptyStateCard
     icon={AlertCircle}
-    title='Failed to load Rail'
+    title='Failed to load rate changes'
     titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
