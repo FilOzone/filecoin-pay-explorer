@@ -1,6 +1,22 @@
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail } from "@filecoin-pay/types";
-import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
+import {
+  CalendarCheckIcon,
+  CalendarPlusIcon,
+  CheckCircleIcon,
+  CoinsIcon,
+  GavelIcon,
+  HandDepositIcon,
+  HandWithdrawIcon,
+  HourglassIcon,
+  LockIcon,
+  ReceiptIcon,
+  StackIcon,
+  TagIcon,
+  TrendUpIcon,
+  UserGearIcon,
+  WalletIcon,
+} from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
 import { CopyableText, MetricItem } from "../shared";
@@ -46,6 +62,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               truncateLength={8}
             />
           }
+          Icon={HandDepositIcon}
         />
         <MetricItem
           title='Payee'
@@ -59,6 +76,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               truncateLength={8}
             />
           }
+          Icon={HandWithdrawIcon}
         />
         <MetricItem
           title='Operator'
@@ -72,13 +90,14 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               truncateLength={8}
             />
           }
+          Icon={UserGearIcon}
         />
 
         <MetricItem title='Token' value={`${rail.token.symbol} (${rail.token.name})`} Icon={CoinsIcon} />
         <MetricItem
           title='Payment Rate'
           value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
-          Icon={CoinsIcon}
+          Icon={TrendUpIcon}
         />
         <MetricItem
           title='Lockup Fixed'
@@ -86,27 +105,31 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           Icon={LockIcon}
         />
 
-        <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={LockIcon} />
-        <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} />
+        <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
+        <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
 
         <MetricItem
           title='Total Settled Amount'
           value={formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={CoinsIcon}
+          Icon={CheckCircleIcon}
         />
         <MetricItem
           title='Total Net Payee Amount'
           value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={CoinsIcon}
+          Icon={WalletIcon}
         />
         <MetricItem
           title='Total Commission'
           value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={CoinsIcon}
+          Icon={TagIcon}
         />
 
-        <MetricItem title='Commission Rate' value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`} />
-        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} />
+        <MetricItem
+          title='Commission Rate'
+          value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`}
+          Icon={TagIcon}
+        />
+        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
 
         <MetricItem
           title='Arbiter'
@@ -119,6 +142,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               truncateLength={8}
             />
           }
+          Icon={GavelIcon}
         />
         <MetricItem
           title='Service Fee Recipient'
@@ -131,6 +155,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               truncateLength={8}
             />
           }
+          Icon={ReceiptIcon}
         />
         <MetricItem
           title='Created At'
@@ -139,6 +164,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             day: "numeric",
             year: "numeric",
           })}
+          Icon={CalendarPlusIcon}
         />
       </div>
     </StatsLayout>
