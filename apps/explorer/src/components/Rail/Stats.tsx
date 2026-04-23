@@ -1,8 +1,9 @@
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail } from "@filecoin-pay/types";
+import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
-import { DetailCard } from "./DetailCard";
+import { CopyableText, MetricItem } from "../shared";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
@@ -32,49 +33,107 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
 
   return (
     <StatsLayout>
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
-        <DetailCard label='Payer' value={rail.payer.address} isAddress linkTo={`/account/${rail.payer.address}`} />
-        <DetailCard label='Payee' value={rail.payee.address} isAddress linkTo={`/account/${rail.payee.address}`} />
-        <DetailCard
-          label='Operator address'
-          value={rail.operator.address}
-          isAddress
-          linkTo={`/operator/${rail.operator.address}`}
+      <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+        <MetricItem
+          title='Payer'
+          value={
+            <CopyableText
+              value={rail.payer.address}
+              // to={`/account/${rail.payer.address}`}
+              monospace={true}
+              label='Payer address'
+              truncate={true}
+              truncateLength={8}
+            />
+          }
+        />
+        <MetricItem
+          title='Payee'
+          value={
+            <CopyableText
+              value={rail.payee.address}
+              // to={`/account/${rail.payee.address}`}
+              monospace={true}
+              label='Payee address'
+              truncate={true}
+              truncateLength={8}
+            />
+          }
+        />
+        <MetricItem
+          title='Operator'
+          value={
+            <CopyableText
+              value={rail.operator.address}
+              // to={`/account/${rail.operator.address}`}
+              monospace={true}
+              label='Operator address'
+              truncate={true}
+              truncateLength={8}
+            />
+          }
         />
 
-        <DetailCard label='Token' value={`${rail.token.symbol} (${rail.token.name})`} />
-        <DetailCard
-          label='Payment Rate'
+        <MetricItem title='Token' value={`${rail.token.symbol} (${rail.token.name})`} Icon={CoinsIcon} />
+        <MetricItem
+          title='Payment Rate'
           value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+          Icon={CoinsIcon}
         />
-        <DetailCard
-          label='Lockup Fixed'
+        <MetricItem
+          title='Lockup Fixed'
           value={formatToken(rail.lockupFixed, rail.token.decimals, rail.token.symbol, 2)}
+          Icon={LockIcon}
         />
 
-        <DetailCard label='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} />
-        <DetailCard label='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} />
+        <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={LockIcon} />
+        <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} />
 
-        <DetailCard
-          label='Total Settled Amount'
+        <MetricItem
+          title='Total Settled Amount'
           value={formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
+          Icon={CoinsIcon}
         />
-        <DetailCard
-          label='Total Net Payee Amount'
+        <MetricItem
+          title='Total Net Payee Amount'
           value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
+          Icon={CoinsIcon}
         />
-        <DetailCard
-          label='Total Commission'
+        <MetricItem
+          title='Total Commission'
           value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
+          Icon={CoinsIcon}
         />
 
-        <DetailCard label='Commission Rate' value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`} />
-        <DetailCard label='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} />
+        <MetricItem title='Commission Rate' value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`} />
+        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} />
 
-        <DetailCard label='Arbiter' value={rail.arbiter} isAddress={false} />
-        <DetailCard label='Service Fee Recipient' value={rail.serviceFeeRecipient} isAddress={false} />
-        <DetailCard
-          label='Created At'
+        <MetricItem
+          title='Arbiter'
+          value={
+            <CopyableText
+              value={rail.arbiter}
+              monospace={true}
+              label='Arbiter address'
+              truncate={true}
+              truncateLength={8}
+            />
+          }
+        />
+        <MetricItem
+          title='Service Fee Recipient'
+          value={
+            <CopyableText
+              value={rail.serviceFeeRecipient}
+              monospace={true}
+              label='Service Fee Recipient address'
+              truncate={true}
+              truncateLength={8}
+            />
+          }
+        />
+        <MetricItem
+          title='Created At'
           value={new Date(Number(rail.createdAt) * 1000).toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
