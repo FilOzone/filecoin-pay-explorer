@@ -8,6 +8,7 @@ import {
   GavelIcon,
   HandDepositIcon,
   HandWithdrawIcon,
+  HashIcon,
   HourglassIcon,
   LockIcon,
   ReceiptIcon,
@@ -50,6 +51,11 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
   return (
     <StatsLayout>
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
+        <MetricItem
+          title='ID'
+          value={<CopyableText value={String(rail.railId)} monospace={true} label='Rail ID' />}
+          Icon={HashIcon}
+        />
         <MetricItem
           title='Payer'
           value={
