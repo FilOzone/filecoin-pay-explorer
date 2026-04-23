@@ -183,9 +183,9 @@ export const GET_RAIL_DETAILS = gql`
       arbiter
       commissionRateBps
       serviceFeeRecipient
+      totalOneTimePaymentAmount
       totalSettledAmount
-      totalNetPayeeAmount
-      totalCommission
+      totalOneTimePayments
       totalSettlements
       totalRateChanges
       createdAt

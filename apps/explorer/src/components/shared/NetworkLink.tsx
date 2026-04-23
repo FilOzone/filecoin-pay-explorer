@@ -2,7 +2,13 @@ import type { LinkProps } from "next/link";
 import Link from "next/link";
 import useNetwork from "@/hooks/useNetwork";
 
-const NetworkLink = ({ href, children, ...props }: LinkProps) => {
+const NetworkLink = ({
+  href,
+  children,
+  ...props
+}: LinkProps & {
+  children?: React.ReactNode | undefined;
+}) => {
   const { network } = useNetwork();
 
   return (
