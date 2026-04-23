@@ -80,9 +80,7 @@ export const RailRateChanges: React.FC<RailRateChangesProps> = ({ rail }) => {
 
       {!isLoading && !isError && totalRateChanges > 0 && data && (
         <div className='flex flex-col gap-4'>
-          <div className='flex items-center justify-between'>
-            <span className='text-sm text-muted-foreground'>{rail.totalRateChanges.toString()} total</span>
-          </div>
+          <span className='text-sm text-muted-foreground'>{rail.totalRateChanges.toString()} total</span>
 
           <Card>
             <Table>
