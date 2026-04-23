@@ -120,7 +120,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           Icon={CheckCircleIcon}
         />
         <MetricItem
-          title='Total One Time Payment Amount'
+          title='Paid One Time'
           value={formatToken(rail.totalOneTimePaymentAmount, rail.token.decimals, rail.token.symbol, 8)}
           Icon={CheckCircleIcon}
         />
