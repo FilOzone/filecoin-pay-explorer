@@ -53,7 +53,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
 const NotFoundState: React.FC = () => (
   <EmptyStateCard
     icon={Info}
-    title='No rate changes found'
+    title='No settlements found'
     titleTag='h2'
     description={`This rail has no settlements yet.`}
   ></EmptyStateCard>
