@@ -178,16 +178,16 @@ export const GET_RAIL_DETAILS = gql`
       lockupFixed
       lockupPeriod
       settledUpto
-      state // TODO
-      endEpoch // TODO
+      state # TODO
+      endEpoch # TODO
       arbiter
       commissionRateBps
       serviceFeeRecipient
-      totalOneTimePaymentAmount // TODO
+      totalOneTimePaymentAmount # TODO
       totalSettledAmount
-      totalOneTimePayments // TODO
+      totalOneTimePayments # TODO
       totalSettlements
-      totalRateChanges // TODO
+      totalRateChanges # TODO
       createdAt
       payer {
         id
