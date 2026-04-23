@@ -183,9 +183,9 @@ export const GET_RAIL_DETAILS = gql`
       arbiter
       commissionRateBps
       serviceFeeRecipient
-      totalOneTimePaymentAmount # TODO
+      totalOneTimePaymentAmount
       totalSettledAmount
-      totalOneTimePayments # TODO
+      totalOneTimePayments
       totalSettlements
       totalRateChanges # TODO
       createdAt
