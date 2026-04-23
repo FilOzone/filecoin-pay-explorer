@@ -110,11 +110,14 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
         <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
         <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
 
-        <MetricItem
-          title='Total Settled Amount'
-          value={formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={CheckCircleIcon}
-        />
+        {Number(rail.totalSettlements) > 0 && (
+          <MetricItem
+            title='Total Settled Amount'
+            value={formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
+            Icon={CheckCircleIcon}
+          />
+        )}
+
         <MetricItem
           title='Paid One Time'
           value={formatToken(rail.totalOneTimePaymentAmount, rail.token.decimals, rail.token.symbol, 8)}
@@ -125,11 +128,14 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
           Icon={WalletIcon}
         />
-        <MetricItem
-          title='Total Commission'
-          value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={TagIcon}
-        />
+
+        {Number(rail.commissionRateBps) > 0 && (
+          <MetricItem
+            title='Total Commission'
+            value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
+            Icon={TagIcon}
+          />
+        )}
 
         <MetricItem
           title='Commission Rate'
