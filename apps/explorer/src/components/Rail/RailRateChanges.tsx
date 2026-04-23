@@ -25,7 +25,7 @@ interface RailRateChangesLayoutProps {
 
 const RailRateChangesLayout: React.FC<RailRateChangesLayoutProps> = ({ children }) => (
   <PageSection backgroundVariant='light'>
-    <div className='flex flex-col gap-6 -mt-15'>
+    <div className='flex flex-col gap-6 -mt-20'>
       <h3 className='text-2xl font-medium'>Rate Change Queue</h3>
       {children}
     </div>
