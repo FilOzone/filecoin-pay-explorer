@@ -109,6 +109,7 @@ export const GET_RAILS_PAGINATED = gql`
       totalOneTimePaymentAmount
       totalSettledAmount
       totalSettlements
+      totalRateChanges
       createdAt
       payer {
         id

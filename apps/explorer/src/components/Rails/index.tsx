@@ -90,6 +90,15 @@ const Rails = () => {
         if (formattedHex) newFilters.operator = formattedHex;
         break;
       }
+      case "totalRateChanges": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
+        newFilters.totalRateChanges = trimmedInput;
+        break;
+      }
       case "state":
         if (!selectedState) {
           setAppliedFilters({});

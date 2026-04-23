@@ -7,6 +7,7 @@ export interface RailsFilter {
   payer?: string;
   payee?: string;
   operator?: string;
+  totalRateChanges?: string;
   state?: string;
 }
 
@@ -35,10 +36,12 @@ const useInfiniteRails = (filters: RailsFilter = {}) => {
   if (filters.operator) {
     where.operator = filters.operator;
   }
+  if (filters.totalRateChanges) {
+    where.totalRateChanges = filters.totalRateChanges;
+  }
   if (filters.state) {
     where.state = filters.state;
   }
-
   return useGraphQLInfiniteQuery<RailsResponse, RailsPage>({
     queryKey: ["rails", "infinite", filters],
     query: GET_RAILS_PAGINATED,

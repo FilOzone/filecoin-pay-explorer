@@ -100,6 +100,10 @@ export const columns = [
       },
     },
   ),
+  columnHelper.accessor("totalRateChanges", {
+    header: "Rate Changes",
+    cell: (info) => info.getValue(),
+  }),
   columnHelper.accessor("createdAt", {
     header: "Created At",
     cell: (info) => formatDate(info.getValue()),

@@ -10,7 +10,7 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 import { RAIL_STATES } from "@/constants/railStates";
 
-export type SearchByOption = "railId" | "payer" | "payee" | "operator" | "state";
+export type SearchByOption = "railId" | "payer" | "payee" | "operator" | "totalRateChanges" | "state";
 
 export type RailsSearchBarProps = {
   searchBy: SearchByOption;
@@ -109,6 +109,7 @@ function RailsSearchBar({
                     <SelectItem value='payer'>Payer Address</SelectItem>
                     <SelectItem value='payee'>Payee Address</SelectItem>
                     <SelectItem value='operator'>Operator Address</SelectItem>
+                    <SelectItem value='totalRateChanges'>Rate Changes</SelectItem>
                     <SelectItem value='state'>State</SelectItem>
                   </SelectContent>
                 </Select>
