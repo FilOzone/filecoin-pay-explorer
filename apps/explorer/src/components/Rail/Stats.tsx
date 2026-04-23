@@ -124,30 +124,29 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           Icon={CheckCircleIcon}
         />
         <MetricItem
-          title='Total Net Payee Amount'
-          value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={WalletIcon}
-        />
-
-        {Number(rail.commissionRateBps) > 0 && (
-          <MetricItem
-            title='Total Commission'
-            value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
-            Icon={TagIcon}
-          />
-        )}
-
-        <MetricItem
-          title='Commission Rate'
-          value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`}
-          Icon={TagIcon}
-        />
-        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
-        <MetricItem
           title='Total One Time Payments'
           value={formatCompactNumber(rail.totalOneTimePayments)}
           Icon={StackIcon}
         />
+        <MetricItem
+          title='Total Net Payee Amount'
+          value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
+          Icon={WalletIcon}
+        />
+        <MetricItem
+          title='Total Commission'
+          value={formatToken(totalCommission, rail.token.decimals, rail.token.symbol, 8)}
+          Icon={TagIcon}
+        />
+
+        {Number(rail.commissionRateBps) > 0 && (
+          <MetricItem
+            title='Commission Rate'
+            value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`}
+            Icon={TagIcon}
+          />
+        )}
+        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
 
         <MetricItem
           title='Arbiter'
