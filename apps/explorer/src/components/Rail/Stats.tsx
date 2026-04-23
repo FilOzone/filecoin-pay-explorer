@@ -24,12 +24,13 @@ import { CopyableText, MetricItem } from "../shared";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
+  railId: string;
 }
 
-const StatsLayout: React.FC<StatsLayoutProps> = ({ children }) => (
+const StatsLayout: React.FC<StatsLayoutProps> = ({ children, railId }) => (
   <PageSection backgroundVariant='light'>
     <div className='flex flex-col gap-6 -mt-15'>
-      <h3 className='text-2xl font-medium'>Rail Stats</h3>
+      <h3 className='text-2xl font-medium'>Rail #{railId}</h3>
       {children}
     </div>
   </PageSection>
@@ -49,13 +50,8 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
   }, [rail.totalOneTimePaymentAmount, rail.totalSettledAmount, rail.commissionRateBps]);
 
   return (
-    <StatsLayout>
+    <StatsLayout railId={String(rail.railId)}>
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-        <MetricItem
-          title='ID'
-          value={<CopyableText value={String(rail.railId)} monospace={true} label='Rail ID' />}
-          Icon={HashIcon}
-        />
         <MetricItem
           title='Payer'
           value={
