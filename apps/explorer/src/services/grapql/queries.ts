@@ -218,7 +218,8 @@ export const GET_RAIL_SETTLEMENTS = gql`
       id
       totalSettledAmount
       totalNetPayeeAmount
-      filBurned
+      # filBurned
+      networkFee
       operatorCommission
       settledUpto
     }

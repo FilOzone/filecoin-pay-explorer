@@ -80,10 +80,7 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
 
       {!isLoading && !isError && totalSettlements > 0 && data && (
         <div className='flex flex-col gap-4'>
-          <div className='flex items-center justify-between'>
-            <h2 className='text-2xl font-semibold'>Settlements</h2>
-            <span className='text-sm text-muted-foreground'>{rail.totalSettlements.toString()} total</span>
-          </div>
+          <span className='text-sm text-muted-foreground'>{rail.totalSettlements.toString()} total</span>
 
           <Card>
             <Table>
