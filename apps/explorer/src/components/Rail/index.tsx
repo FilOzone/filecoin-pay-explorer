@@ -10,13 +10,6 @@ import { RailRateChanges } from "./RailRateChanges";
 import { RailSettlements } from "./RailSettlements";
 import { Stats } from "./Stats";
 
-interface RailLayoutProps {
-  children: React.ReactNode;
-}
-
-// TODO
-const RailLayout: React.FC<RailLayoutProps> = ({ children }) => <>{children}</>;
-
 interface ErrorStateProps {
   refetch: () => void;
   error: Error | null;
@@ -54,7 +47,7 @@ export default function Rail() {
   const { data, error, isLoading, isError, refetch } = useRailDetails(railId);
 
   return (
-    <RailLayout>
+    <>
       {isLoading && <LoadingStateCard message='Loading Rail...' />}
 
       {isError && <ErrorState refetch={refetch} error={error} />}
@@ -68,6 +61,6 @@ export default function Rail() {
           <RailSettlements rail={data} />
         </>
       )}
-    </RailLayout>
+    </>
   );
 }
