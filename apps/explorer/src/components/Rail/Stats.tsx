@@ -118,11 +118,14 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           />
         )}
 
-        <MetricItem
-          title='Paid One Time'
-          value={formatToken(rail.totalOneTimePaymentAmount, rail.token.decimals, rail.token.symbol, 8)}
-          Icon={CheckCircleIcon}
-        />
+        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
+        {Number(rail.totalOneTimePayments) > 0 && (
+          <MetricItem
+            title='Paid One Time'
+            value={formatToken(rail.totalOneTimePaymentAmount, rail.token.decimals, rail.token.symbol, 8)}
+            Icon={CheckCircleIcon}
+          />
+        )}
         <MetricItem
           title='Total One Time Payments'
           value={formatCompactNumber(rail.totalOneTimePayments)}
@@ -146,7 +149,6 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             Icon={TagIcon}
           />
         )}
-        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
 
         <MetricItem
           title='Arbiter'
