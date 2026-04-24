@@ -432,5 +432,18 @@ export const GET_STATS_DASHBOARD = gql`
       lockupRate
       lockupLastSettledUntilEpoch
     }
+    paymentsMetrics(first: 1) {
+      id
+      totalRails
+      totalAccounts
+      totalFilBurned
+      totalRailSettlements
+      totalZeroRateRails
+      totalActiveRails
+      totalTerminatedRails
+      totalFinalizedRails
+      uniquePayers
+      uniquePayees
+    }
   }
 `;

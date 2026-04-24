@@ -5,7 +5,7 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
+import { ArrowsSplitIcon, CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
@@ -64,7 +64,7 @@ const Stats: React.FC = () => {
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
   const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
-
+  console.log(data?.paymentsMetrics);
   const cards = useMemo<MetricCard[]>(
     () => [
       // TODO: Add this back when network revenue calculation is fixed
@@ -75,6 +75,11 @@ const Stats: React.FC = () => {
       //   icon: "/stats/total-fil-burned.svg",
       //   tooltip: "Network fees paid to process payment settlements",
       // },
+      {
+        title: "Active Rails",
+        value: String(data?.paymentsMetrics?.totalActiveRails),
+        icon: ArrowsSplitIcon,
+      },
       {
         title: "Total USDFC Transacted",
         value: data?.usdfcToken
