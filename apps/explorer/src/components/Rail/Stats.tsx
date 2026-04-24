@@ -95,7 +95,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           Icon={UserGearIcon}
         />
 
-        <MetricItem title='Token' value={`${rail.token.symbol} (${rail.token.name})`} Icon={CoinsIcon} />
+        <MetricItem title='Token' value={rail.token.symbol} Icon={CoinsIcon} />
         <MetricItem
           title='Payment Rate'
           value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
