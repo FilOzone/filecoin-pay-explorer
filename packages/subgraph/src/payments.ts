@@ -39,7 +39,7 @@ import {
   getRailEntityId,
   getSettlementEntityId,
 } from "./utils/keys";
-import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
