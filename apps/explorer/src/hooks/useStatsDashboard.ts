@@ -7,8 +7,7 @@ export interface StatsDashboardData {
 }
 
 interface GetStatsDashboardResponse {
-  usdfcToken: Token | null;
-  filToken: Token | null;
+  tokens: Token[];
 }
 
 export const useStatsDashboard = () =>
