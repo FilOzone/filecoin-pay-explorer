@@ -126,11 +126,6 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           />
         )}
         <MetricItem
-          title='Total One Time Payments'
-          value={formatCompactNumber(rail.totalOneTimePayments)}
-          Icon={StackIcon}
-        />
-        <MetricItem
           title='Total Net Payee Amount'
           value={formatToken(totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
           Icon={WalletIcon}

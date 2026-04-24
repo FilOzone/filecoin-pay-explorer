@@ -226,6 +226,19 @@ export const GET_RAIL_SETTLEMENTS = gql`
   }
 `;
 
+export const GET_RAIL_ONE_TIME_PAYMENTS = gql`
+  query GetRailOneTimePayments($railId: Bytes!, $first: Int!, $skip: Int!) {
+    oneTimePayments(where: { rail: $railId }, first: $first, skip: $skip, orderBy: blockNumber, orderDirection: desc) {
+      id
+      totalAmount
+      netPayeeAmount
+      networkFee
+      operatorCommission
+      blockNumber
+    }
+  }
+`;
+
 export const GET_RAIL_RATE_CHANGES = gql`
   query GetRailRateChanges($railId: Bytes!, $first: Int!, $skip: Int!) {
     rateChangeQueues(where: { rail: $railId }, first: $first, skip: $skip, orderBy: startEpoch, orderDirection: asc) {

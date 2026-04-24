@@ -6,6 +6,7 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useRailDetails } from "@/hooks/useRailDetails";
+import { RailOneTimePayments } from "./RailOneTimePayments";
 import { RailRateChanges } from "./RailRateChanges";
 import { RailSettlements } from "./RailSettlements";
 import { Stats } from "./Stats";
@@ -59,6 +60,7 @@ export default function Rail() {
           <Stats rail={data} />
           <RailRateChanges rail={data} />
           <RailSettlements rail={data} />
+          <RailOneTimePayments rail={data} />
         </>
       )}
     </>
