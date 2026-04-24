@@ -3,12 +3,12 @@ import type { Rail } from "@filecoin-pay/types";
 import {
   CalendarCheckIcon,
   CalendarPlusIcon,
+  CalendarSlashIcon,
   CheckCircleIcon,
   CoinsIcon,
   GavelIcon,
   HandDepositIcon,
   HandWithdrawIcon,
-  HashIcon,
   HourglassIcon,
   LockIcon,
   ReceiptIcon,
@@ -185,6 +185,9 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           })}
           Icon={CalendarPlusIcon}
         />
+        {Number(rail.endEpoch) > 0 && (
+          <MetricItem title='End' value={`Epoch ${rail.endEpoch}`} Icon={CalendarSlashIcon} />
+        )}
       </div>
     </StatsLayout>
   );
