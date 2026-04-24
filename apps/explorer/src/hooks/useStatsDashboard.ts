@@ -3,7 +3,7 @@ import { GET_STATS_DASHBOARD } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface StatsDashboardData {
-  tokens: [Token];
+  tokens: Token[];
 }
 
 interface GetStatsDashboardResponse {
