@@ -8,10 +8,7 @@ import type { IconProps } from "@phosphor-icons/react";
 import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
-import { zeroAddress } from "viem";
-import { getChain } from "@/constants/chains";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
-import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
 import { formatToken } from "@/utils/formatter";
 import { calculateTotalLockup } from "@/utils/lockup";
@@ -56,13 +53,8 @@ interface MetricCard {
   isLoading?: boolean;
 }
 
-const DEFAULT_TOKEN_VALUE = "0";
-
 const Stats: React.FC = () => {
-  const { network } = useNetwork();
-
-  const chain = getChain(network);
-  const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
+  const { data, isLoading, isError, error, refetch } = useStatsDashboard();
   const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
 
   const cards = useMemo<MetricCard[]>(
@@ -75,64 +67,26 @@ const Stats: React.FC = () => {
       //   icon: "/stats/total-fil-burned.svg",
       //   tooltip: "Network fees paid to process payment settlements",
       // },
-      {
-        title: "Total USDFC Transacted",
-        value: data?.usdfcToken
-          ? formatToken(
-              BigInt(data.usdfcToken.totalSettledAmount) + BigInt(data.usdfcToken.totalOneTimePayment),
-              data.usdfcToken.decimals,
-              "USDFC",
-              5,
-            )
-          : `${DEFAULT_TOKEN_VALUE} USDFC`,
+      ...(data?.tokens.map((token) => ({
+        title: `Total ${token.symbol} Transacted`,
+        value: formatToken(
+          BigInt(token.totalSettledAmount) + BigInt(token.totalOneTimePayment),
+          token.decimals,
+          token.symbol,
+          5,
+        ),
         icon: CoinsIcon,
-      },
-      {
-        title: "Total FIL Transacted",
-        value: data?.filToken
-          ? formatToken(
-              BigInt(data.filToken.totalSettledAmount) + BigInt(data.filToken.totalOneTimePayment),
-              data.filToken.decimals,
-              "FIL",
-              5,
-            )
-          : `${DEFAULT_TOKEN_VALUE} FIL`,
-        icon: CoinsIcon,
-      },
-      {
-        title: "Total USDFC Locked",
-        value: data?.usdfcToken
-          ? formatToken(
-              calculateTotalLockup(
-                data.usdfcToken.lockupCurrent,
-                data.usdfcToken.lockupRate,
-                data.usdfcToken.lockupLastSettledUntilEpoch,
-                blockNumber,
-              ),
-              data.usdfcToken.decimals,
-              "USDFC",
-            )
-          : `${DEFAULT_TOKEN_VALUE} USDFC`,
+      })) || []),
+      ...(data?.tokens.map((token) => ({
+        title: `Total ${token.symbol} Locked`,
+        value: formatToken(
+          calculateTotalLockup(token.lockupCurrent, token.lockupRate, token.lockupLastSettledUntilEpoch, blockNumber),
+          token.decimals,
+          token.symbol,
+        ),
         icon: LockIcon,
         isLoading: loadingBlockNumber,
-      },
-      {
-        title: "Total FIL Locked",
-        value: data?.filToken
-          ? formatToken(
-              calculateTotalLockup(
-                data.filToken.lockupCurrent,
-                data.filToken.lockupRate,
-                data.filToken.lockupLastSettledUntilEpoch,
-                blockNumber,
-              ),
-              data.filToken.decimals,
-              "FIL",
-            )
-          : `${DEFAULT_TOKEN_VALUE} FIL`,
-        icon: LockIcon,
-        isLoading: loadingBlockNumber,
-      },
+      })) || []),
     ],
     [data, blockNumber, loadingBlockNumber],
   );

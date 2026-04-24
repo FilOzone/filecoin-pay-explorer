@@ -436,20 +436,13 @@ export const GET_ACCOUNT_APPROVALS = gql`
 `;
 
 export const GET_STATS_DASHBOARD = gql`
-  query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
-    usdfcToken: token(id: $usdfcAddress) {
+  query GetStatsDashboard {
+    tokens {
+      name
+      symbol
       decimals
-      totalSettledAmount
       totalOneTimePayment
-      userFunds
-      lockupCurrent
-      lockupRate
-      lockupLastSettledUntilEpoch
-    }
-    filToken: token(id: $filAddress) {
-      decimals
       totalSettledAmount
-      totalOneTimePayment
       userFunds
       lockupCurrent
       lockupRate
