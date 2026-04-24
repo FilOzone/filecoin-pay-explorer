@@ -118,7 +118,6 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           />
         )}
 
-        <MetricItem title='Total Settlements' value={formatCompactNumber(rail.totalSettlements)} Icon={StackIcon} />
         {Number(rail.totalOneTimePayments) > 0 && (
           <MetricItem
             title='Paid One Time'
