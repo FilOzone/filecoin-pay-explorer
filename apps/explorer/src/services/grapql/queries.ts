@@ -438,6 +438,7 @@ export const GET_ACCOUNT_APPROVALS = gql`
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard {
     tokens {
+      id
       name
       symbol
       decimals
