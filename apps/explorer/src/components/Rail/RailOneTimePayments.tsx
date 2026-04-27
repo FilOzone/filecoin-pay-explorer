@@ -68,11 +68,11 @@ export const RailOneTimePayments: React.FC<RailOneTimePaymentsProps> = ({ rail }
   const { data, isLoading, isError, error, refetch } = useRailOneTimePayments(rail.id, page);
 
   const totalOneTimePayments = Number(rail.totalOneTimePayments);
-  const totalPages = rail.totalSettlements ? Math.ceil(totalOneTimePayments / 10) : 1;
+  const totalPages = totalOneTimePayments ? Math.ceil(totalOneTimePayments / 10) : 1;
 
   return (
     <RailOneTimePaymentsLayout>
-      {isLoading && totalOneTimePayments > 0 && <LoadingStateCard message='Loading Settlements...' />}
+      {isLoading && totalOneTimePayments > 0 && <LoadingStateCard message='Loading one time payments...' />}
 
       {isError && totalOneTimePayments > 0 && <ErrorState refetch={refetch} error={error} />}
 
