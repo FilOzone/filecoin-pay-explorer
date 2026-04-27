@@ -102,7 +102,7 @@ export const columns = [
   ),
   columnHelper.accessor("totalRateChanges", {
     header: "Rate Changes",
-    cell: (info) => info.getValue(),
+    cell: (info) => info.getValue().toString(),
   }),
   columnHelper.accessor("createdAt", {
     header: "Created At",
