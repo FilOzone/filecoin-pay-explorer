@@ -42,11 +42,6 @@ import {
 } from "./utils/keys";
 import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
-// TODO
-// - get token list for each network
-// - pass `- context` from yaml
-TokenTemplate.create(TOKEN_ADDRESS);
-
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
   const ownerAddress = event.params.owner;
@@ -561,6 +556,14 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
 
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
+
+  if (isNewToken) {
+    const paymentsAddress = event.address;
+    const context = new DataSourceContext();
+    context.setBytes("paymentsAddress", paymentsAddress);
+
+    TokenTemplate.createWithContext(tokenAddress, context);
+  }
 
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
