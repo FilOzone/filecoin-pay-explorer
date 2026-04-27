@@ -51,6 +51,12 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
     const totalNetPayeeAmount = totalTransactedAmount - totalNetworkFees - totalCommission;
     return { totalNetPayeeAmount, totalCommission };
   }, [rail.totalOneTimePaymentAmount, rail.totalSettledAmount, rail.commissionRateBps]);
+  const isOneTimePaymentOnly =
+    BigInt(rail.totalOneTimePaymentAmount) > 0n &&
+    BigInt(rail.paymentRate) === 0n &&
+    BigInt(rail.lockupFixed) === 0n &&
+    BigInt(rail.lockupPeriod) === 0n &&
+    rail.arbiter === "0x0000000000000000000000000000000000000000";
 
   return (
     <StatsLayout railId={String(rail.railId)} state={rail.state}>
@@ -99,19 +105,23 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
         />
 
         <MetricItem title='Token' value={rail.token.symbol} Icon={CoinsIcon} />
-        <MetricItem
-          title='Payment Rate'
-          value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
-          Icon={TrendUpIcon}
-        />
-        <MetricItem
-          title='Lockup Fixed'
-          value={formatToken(rail.lockupFixed, rail.token.decimals, rail.token.symbol, 2)}
-          Icon={LockIcon}
-        />
 
-        <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
-        <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
+        {!isOneTimePaymentOnly && (
+          <>
+            <MetricItem
+              title='Payment Rate'
+              value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+              Icon={TrendUpIcon}
+            />
+            <MetricItem
+              title='Lockup Fixed'
+              value={formatToken(rail.lockupFixed, rail.token.decimals, rail.token.symbol, 2)}
+              Icon={LockIcon}
+            />
+            <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
+            <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
+          </>
+        )}
 
         {Number(rail.totalSettlements) > 0 && (
           <MetricItem
@@ -162,19 +172,21 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           </>
         )}
 
-        <MetricItem
-          title='Arbiter'
-          value={
-            <CopyableText
-              value={rail.arbiter}
-              monospace={true}
-              label='Arbiter address'
-              truncate={true}
-              truncateLength={8}
-            />
-          }
-          Icon={GavelIcon}
-        />
+        {!isOneTimePaymentOnly && (
+          <MetricItem
+            title='Arbiter'
+            value={
+              <CopyableText
+                value={rail.arbiter}
+                monospace={true}
+                label='Arbiter address'
+                truncate={true}
+                truncateLength={8}
+              />
+            }
+            Icon={GavelIcon}
+          />
+        )}
         <MetricItem
           title='Created At'
           value={new Date(Number(rail.createdAt) * 1000).toLocaleDateString("en-US", {
@@ -184,7 +196,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           })}
           Icon={CalendarPlusIcon}
         />
-        {Number(rail.endEpoch) > 0 && (
+        {Number(rail.endEpoch) > 0 && !isOneTimePaymentOnly && (
           <MetricItem title='End' value={`Epoch ${rail.endEpoch}`} Icon={CalendarSlashIcon} />
         )}
       </div>
