@@ -1,4 +1,4 @@
-import { Address, Bytes, dataSource, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,

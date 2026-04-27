@@ -1,9 +1,5 @@
 {
   "network": "filecoin",
   "paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
-  "paymentsContractStartBlock": 5873369,
-  "usdfcContractAddress": "0x80B98d3aA09FFff255c3ba4A241111Ff1262F045",
-  "usdfcContractStartBlock": 5873369,
-  "axlUsdcContractAddress": "0xeb466342c4d449bc9f53a865d5cb90586f405215",
-  "axlUsdcContractStartBlock": 5873369
+  "paymentsContractStartBlock": 5873369
 }
