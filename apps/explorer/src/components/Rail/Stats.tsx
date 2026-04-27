@@ -12,14 +12,13 @@ import {
   HourglassIcon,
   LockIcon,
   ReceiptIcon,
-  StackIcon,
   TagIcon,
   TrendUpIcon,
   UserGearIcon,
   WalletIcon,
 } from "@phosphor-icons/react";
 import { useMemo } from "react";
-import { formatCompactNumber, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
 import { CopyableText, MetricItem, RailStateBadge } from "../shared";
 
 interface StatsLayoutProps {
