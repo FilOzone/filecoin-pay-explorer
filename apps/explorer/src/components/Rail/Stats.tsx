@@ -140,11 +140,26 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
         />
 
         {Number(rail.commissionRateBps) > 0 && (
-          <MetricItem
-            title='Commission Rate'
-            value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`}
-            Icon={TagIcon}
-          />
+          <>
+            <MetricItem
+              title='Commission Rate'
+              value={`${(Number(rail.commissionRateBps) / 100).toFixed(2)}%`}
+              Icon={TagIcon}
+            />
+            <MetricItem
+              title='Service Fee Recipient'
+              value={
+                <CopyableText
+                  value={rail.serviceFeeRecipient}
+                  monospace={true}
+                  label='Service Fee Recipient address'
+                  truncate={true}
+                  truncateLength={8}
+                />
+              }
+              Icon={ReceiptIcon}
+            />
+          </>
         )}
 
         <MetricItem
@@ -159,19 +174,6 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             />
           }
           Icon={GavelIcon}
-        />
-        <MetricItem
-          title='Service Fee Recipient'
-          value={
-            <CopyableText
-              value={rail.serviceFeeRecipient}
-              monospace={true}
-              label='Service Fee Recipient address'
-              truncate={true}
-              truncateLength={8}
-            />
-          }
-          Icon={ReceiptIcon}
         />
         <MetricItem
           title='Created At'
