@@ -251,8 +251,6 @@ export class RailStateChangeCollector extends BaseMetricsCollector {
   private updateNetworkStateMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
 
-    // ZERORATE -> TERMINATED -> FINALIZED
-
     if (this.previousState === "ZERORATE") {
       networkMetric.totalZeroRateRails = networkMetric.totalZeroRateRails.minus(ONE_BIG_INT);
     } else if (this.previousState === "ACTIVE") {
