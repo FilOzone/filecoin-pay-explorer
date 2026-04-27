@@ -113,11 +113,13 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               value={formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
               Icon={TrendUpIcon}
             />
-            <MetricItem
-              title='Lockup Fixed'
-              value={formatToken(rail.lockupFixed, rail.token.decimals, rail.token.symbol, 2)}
-              Icon={LockIcon}
-            />
+            {BigInt(rail.lockupFixed) > 0n && (
+              <MetricItem
+                title='Lockup Fixed'
+                value={formatToken(rail.lockupFixed, rail.token.decimals, rail.token.symbol, 2)}
+                Icon={LockIcon}
+              />
+            )}
             <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
             <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
           </>
