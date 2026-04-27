@@ -120,7 +120,9 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                 Icon={LockIcon}
               />
             )}
-            <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
+            {BigInt(rail.paymentRate) > 0n && BigInt(rail.lockupPeriod) > 0n && (
+              <MetricItem title='Lockup Period' value={`${rail.lockupPeriod.toString()} epochs`} Icon={HourglassIcon} />
+            )}
             <MetricItem title='Settled Upto' value={`Epoch ${rail.settledUpto.toString()}`} Icon={CalendarCheckIcon} />
           </>
         )}
