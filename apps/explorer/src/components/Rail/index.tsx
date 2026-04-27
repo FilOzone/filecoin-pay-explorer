@@ -3,6 +3,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
+import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useRailDetails } from "@/hooks/useRailDetails";
@@ -49,19 +50,19 @@ export default function Rail() {
 
   return (
     <>
-      {isLoading && <LoadingStateCard message='Loading Rail...' />}
-
-      {isError && <ErrorState refetch={refetch} error={error} />}
-
-      {!isLoading && !isError && !data && <NotFoundState railId={railId} />}
-
-      {!isLoading && !isError && data && (
+      {(!isLoading && !isError && data && (
         <>
           <Stats rail={data} />
           <RailRateChanges rail={data} />
           <RailSettlements rail={data} />
           <RailOneTimePayments rail={data} />
         </>
+      )) || (
+        <PageSection backgroundVariant='light'>
+          {isLoading && <LoadingStateCard message='Loading Rail...' />}
+          {isError && <ErrorState refetch={refetch} error={error} />}
+          {!isLoading && !isError && !data && <NotFoundState railId={railId} />}
+        </PageSection>
       )}
     </>
   );
