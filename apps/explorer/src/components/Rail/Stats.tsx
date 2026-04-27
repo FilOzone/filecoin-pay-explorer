@@ -1,5 +1,5 @@
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
-import type { Rail } from "@filecoin-pay/types";
+import type { Rail, RailState } from "@filecoin-pay/types";
 import {
   CalendarCheckIcon,
   CalendarPlusIcon,
@@ -20,17 +20,21 @@ import {
 } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
-import { CopyableText, MetricItem } from "../shared";
+import { CopyableText, MetricItem, RailStateBadge } from "../shared";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
   railId: string;
+  state: RailState;
 }
 
-const StatsLayout: React.FC<StatsLayoutProps> = ({ children, railId }) => (
+const StatsLayout: React.FC<StatsLayoutProps> = ({ children, railId, state }) => (
   <PageSection backgroundVariant='light'>
     <div className='flex flex-col gap-6 -mt-15'>
-      <h3 className='text-2xl font-medium'>Rail #{railId}</h3>
+      <div className='flex items-center justify-between'>
+        <h3 className='text-2xl font-medium'>Rail #{railId}</h3>
+        <RailStateBadge state={state} />
+      </div>
       {children}
     </div>
   </PageSection>
@@ -50,7 +54,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
   }, [rail.totalOneTimePaymentAmount, rail.totalSettledAmount, rail.commissionRateBps]);
 
   return (
-    <StatsLayout railId={String(rail.railId)}>
+    <StatsLayout railId={String(rail.railId)} state={rail.state}>
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
         <MetricItem
           title='Payer'
