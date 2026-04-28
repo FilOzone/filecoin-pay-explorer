@@ -28,7 +28,10 @@ const TopAccounts = () => {
 
         {data && data.length > 0 && (
           <RefreshOverlay isRefetching={isRefetching}>
-            <TopAccountsTable data={data} />
+            <div className='flex items-center justify-between gap-6'>
+              <TopAccountsTable data={data} />
+              <TopAccountsTable data={data} />
+            </div>
           </RefreshOverlay>
         )}
 
