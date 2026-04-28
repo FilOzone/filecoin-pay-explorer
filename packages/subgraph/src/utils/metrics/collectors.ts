@@ -251,16 +251,21 @@ export class RailStateChangeCollector extends BaseMetricsCollector {
   private updateNetworkStateMetrics(): void {
     const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
 
-    if (this.newState === "TERMINATED") {
-      networkMetric.totalTerminatedRails = networkMetric.totalTerminatedRails.plus(ONE_BIG_INT);
+    if (this.previousState === "ZERORATE") {
+      networkMetric.totalZeroRateRails = networkMetric.totalZeroRateRails.minus(ONE_BIG_INT);
+    } else if (this.previousState === "ACTIVE") {
       networkMetric.totalActiveRails = networkMetric.totalActiveRails.minus(ONE_BIG_INT);
+    } else if (this.previousState === "TERMINATED") {
+      networkMetric.totalTerminatedRails = networkMetric.totalTerminatedRails.minus(ONE_BIG_INT);
+    }
+
+    if (this.newState === "ACTIVE") {
+      networkMetric.totalActiveRails = networkMetric.totalActiveRails.plus(ONE_BIG_INT);
     } else if (this.newState === "FINALIZED") {
       networkMetric.totalFinalizedRails = networkMetric.totalFinalizedRails.plus(ONE_BIG_INT);
-      networkMetric.totalTerminatedRails = networkMetric.totalTerminatedRails.minus(ONE_BIG_INT);
-    } else if (this.newState === "ACTIVE" && this.previousState === "ZERORATE") {
-      networkMetric.totalZeroRateRails = networkMetric.totalZeroRateRails.minus(ONE_BIG_INT);
-      networkMetric.totalActiveRails = networkMetric.totalActiveRails.plus(ONE_BIG_INT);
-    } else if (this.newState === "ZERORATE" && this.previousState === "") {
+    } else if (this.newState === "TERMINATED") {
+      networkMetric.totalTerminatedRails = networkMetric.totalTerminatedRails.plus(ONE_BIG_INT);
+    } else if (this.newState === "ZERORATE") {
       // already updated in RailCreationCollector
     }
 
