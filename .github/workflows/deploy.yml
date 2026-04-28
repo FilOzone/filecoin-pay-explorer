@@ -46,5 +46,5 @@ jobs:
         env:
           GOLDSKY_API_KEY: ${{ secrets.GOLDSKY_API_KEY }}
         run: |
-          VERSION=${${{ github.ref_name }}#v}
-          goldsky subgraph deploy filecoin-pay-${{ matrix.network }}/$VERSION --path .
+          VERSION="${GITHUB_REF_NAME#v}"
+          goldsky subgraph deploy "filecoin-pay-${{ matrix.network }}/$VERSION" --path .
