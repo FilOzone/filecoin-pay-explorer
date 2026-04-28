@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on any tag starting with 'v'
+
+jobs:
+  subgraph:
+    name: Subgraph
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/subgraph
+    strategy:
+      matrix:
+        network: [calibration, mainnet]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Install Goldsky CLI
+        run: curl https://goldsky.com | sh
+
+      - name: Build Subgraph
+        run: |
+          NETWORK=${{ matrix.network }} pnpm run build
+
+      - name: Deploy to Goldsky
+        env:
+          GOLDSKY_API_KEY: ${{ secrets.GOLDSKY_API_KEY }}
+        run: |
+          VERSION=${${{ github.ref_name }}#v}
+          goldsky subgraph deploy filecoin-pay-${{ matrix.network }}/$VERSION --path .
