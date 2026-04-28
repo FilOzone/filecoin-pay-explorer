@@ -3,7 +3,7 @@ name: Deploy
 on:
   push:
     tags:
-      - 'v*' # Triggers on any tag starting with 'v'
+      - 'v*'
 
 jobs:
   subgraph:
