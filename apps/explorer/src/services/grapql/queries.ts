@@ -235,6 +235,10 @@ export const GET_RAIL_ONE_TIME_PAYMENTS = gql`
       networkFee
       operatorCommission
       blockNumber
+      token {
+        decimals
+        symbol
+      }
     }
   }
 `;

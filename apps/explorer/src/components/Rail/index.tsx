@@ -7,10 +7,10 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useRailDetails } from "@/hooks/useRailDetails";
-import { RailOneTimePayments } from "./RailOneTimePayments";
-import { RailRateChanges } from "./RailRateChanges";
-import { RailSettlements } from "./RailSettlements";
-import { Stats } from "./Stats";
+import { RailOneTimePayments } from "./components/RailOneTimePayments";
+import { RailRateChanges } from "./components/RailRateChanges";
+import { RailSettlements } from "./components/RailSettlements";
+import { Stats } from "./components/Stats";
 
 interface ErrorStateProps {
   refetch: () => void;

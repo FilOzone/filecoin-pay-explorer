@@ -4,7 +4,6 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail } from "@filecoin-pay/types";
-import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Pagination,
   PaginationContent,
@@ -13,11 +12,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
 import { useRailOneTimePayments } from "@/hooks/useRailDetails";
-import { formatFIL, formatToken } from "@/utils/formatter";
+import RailOneTimePaymentsTable from "./RailOneTimePaymentsTable";
 
 interface RailOneTimePaymentsLayoutProps {
   children: React.ReactNode;
@@ -82,36 +80,7 @@ export const RailOneTimePayments: React.FC<RailOneTimePaymentsProps> = ({ rail }
         <div className='flex flex-col gap-4'>
           <span className='text-sm text-muted-foreground'>{rail.totalOneTimePayments.toString()} total</span>
 
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Block Number</TableHead>
-                  <TableHead className='text-right'>Total Amount</TableHead>
-                  <TableHead className='text-right'>Net Payee Amount</TableHead>
-                  <TableHead className='text-right'>Network Fees</TableHead>
-                  <TableHead className='text-right'>Operator Commission</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.oneTimePayments.map((oneTimePayment) => (
-                  <TableRow key={oneTimePayment.id}>
-                    <TableCell className='font-medium'>Epoch {oneTimePayment.blockNumber.toString()}</TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(oneTimePayment.totalAmount, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(oneTimePayment.netPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                    <TableCell className='text-right'>{formatFIL(oneTimePayment.networkFee)}</TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(oneTimePayment.operatorCommission, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <RailOneTimePaymentsTable data={data.oneTimePayments} />
 
           {totalPages > 1 && (
             <Pagination>

@@ -19,7 +19,7 @@ import {
 } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { formatToken } from "@/utils/formatter";
-import { CopyableText, MetricItem, RailStateBadge } from "../shared";
+import { CopyableText, MetricItem, RailStateBadge } from "../../shared";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
