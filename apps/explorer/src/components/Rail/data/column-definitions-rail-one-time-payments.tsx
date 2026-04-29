@@ -1,6 +1,6 @@
 import type { OneTimePayment } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { formatFIL, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<OneTimePayment>();
 
@@ -35,10 +35,19 @@ export const columns = [
       },
     },
   ),
-  columnHelper.accessor("networkFee", {
-    header: "Network Fees",
-    cell: (info) => formatFIL(info.getValue()),
-  }),
+  columnHelper.accessor(
+    (row) => ({
+      networkFee: row.networkFee,
+      token: row.token,
+    }),
+    {
+      header: "Network Fees",
+      cell: (info) => {
+        const { networkFee, token } = info.getValue();
+        return formatToken(networkFee, token.decimals, token.symbol, 8);
+      },
+    },
+  ),
   columnHelper.accessor(
     (row) => ({
       operatorCommission: row.operatorCommission,
