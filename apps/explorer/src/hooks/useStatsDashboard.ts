@@ -6,13 +6,13 @@ import { useGraphQLQuery } from "./useGraphQLQuery";
 export interface StatsDashboardData {
   usdfcToken: Token | null;
   filToken: Token | null;
-  paymentsMetrics: PaymentsMetric;
+  paymentsMetrics: PaymentsMetric | null;
 }
 
 interface GetStatsDashboardResponse {
-  usdfcToken: Token;
-  filToken: Token;
-  paymentsMetrics: [PaymentsMetric];
+  usdfcToken: Token | null;
+  filToken: Token | null;
+  paymentsMetrics: PaymentsMetric[];
 }
 
 export const useStatsDashboard = (usdfcAddress: Hex, filAddress: Hex) =>

@@ -78,7 +78,7 @@ const Stats: React.FC = () => {
       // },
       {
         title: "Active Rails",
-        value: String(data?.paymentsMetrics.totalActiveRails),
+        value: data?.paymentsMetrics?.totalActiveRails?.toString() ?? "0",
         icon: ArrowsSplitIcon,
         href: `/${network}/rails`,
       },
