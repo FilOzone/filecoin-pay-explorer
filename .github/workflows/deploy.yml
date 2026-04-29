@@ -36,7 +36,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Install Goldsky CLI
-        run: curl https://goldsky.com | sh
+        run: curl -fsSL https://goldsky.com | sh -s -- -f
+        shell: bash
 
       - name: Build Subgraph
         run: |
