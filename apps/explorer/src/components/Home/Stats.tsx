@@ -54,6 +54,7 @@ interface MetricCard {
   icon: string | React.ComponentType<IconProps>;
   tooltip?: string;
   isLoading?: boolean;
+  href?: string;
 }
 
 const DEFAULT_TOKEN_VALUE = "0";
@@ -79,6 +80,7 @@ const Stats: React.FC = () => {
         title: "Active Rails",
         value: String(data?.paymentsMetrics?.totalActiveRails),
         icon: ArrowsSplitIcon,
+        href: `/${network}/rails`,
       },
       {
         title: "Total USDFC Transacted",
@@ -139,7 +141,7 @@ const Stats: React.FC = () => {
         isLoading: loadingBlockNumber,
       },
     ],
-    [data, blockNumber, loadingBlockNumber],
+    [data, blockNumber, loadingBlockNumber, network],
   );
 
   return (
@@ -158,6 +160,7 @@ const Stats: React.FC = () => {
               Icon={card.icon}
               tooltip={card.tooltip}
               isLoading={card.isLoading}
+              href={card.href}
             />
           ))}
         </div>
