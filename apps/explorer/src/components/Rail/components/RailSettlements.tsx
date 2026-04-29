@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
 import { useRailSettlements } from "@/hooks/useRailDetails";
-import { formatFIL, formatToken } from "@/utils/formatter";
+import { formatToken } from "@/utils/formatter";
 
 interface RailSettlementsLayoutProps {
   children: React.ReactNode;
@@ -103,7 +103,9 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
                     <TableCell className='text-right'>
                       {formatToken(settlement.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
                     </TableCell>
-                    <TableCell className='text-right'>{formatFIL(settlement.networkFee)}</TableCell>
+                    <TableCell className='text-right'>
+                      {formatToken(settlement.networkFee, rail.token.decimals, rail.token.symbol, 8)}
+                    </TableCell>
                     <TableCell className='text-right'>
                       {formatToken(settlement.operatorCommission, rail.token.decimals, rail.token.symbol, 8)}
                     </TableCell>
