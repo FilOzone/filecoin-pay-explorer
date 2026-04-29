@@ -27,12 +27,11 @@ const CopyableText = ({
   linkClassName,
   monospace = true,
 }: CopyableTextProps) => {
-  const maybeKnownAddress = value.toLowerCase();
-  const displayValue = knownWallets[maybeKnownAddress]
-    ? knownWallets[maybeKnownAddress]
-    : truncate && value.length > truncateLength * 2
+  const displayValue =
+    knownWallets[value.toLowerCase()] ??
+    (truncate && value.length > truncateLength * 2
       ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
-      : value;
+      : value);
 
   return (
     <div
