@@ -65,7 +65,7 @@ const Stats: React.FC = () => {
   const chain = getChain(network);
   const { data, isLoading, isError, error, refetch } = useStatsDashboard(chain.contracts.usdfc.address, zeroAddress);
   const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
-  console.log(data?.paymentsMetrics);
+
   const cards = useMemo<MetricCard[]>(
     () => [
       // TODO: Add this back when network revenue calculation is fixed
