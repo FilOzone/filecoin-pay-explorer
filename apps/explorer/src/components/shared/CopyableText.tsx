@@ -1,7 +1,7 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
-import knownWallets from "@/constants/known-wallets";
+import { knownWallets } from "@/constants/known-wallets";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
