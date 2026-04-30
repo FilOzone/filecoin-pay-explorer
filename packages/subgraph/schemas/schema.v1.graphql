@@ -261,3 +261,10 @@ type DailyOperatorMetric @entity(immutable: false) {
   uniqueClients: BigInt!
   totalApprovals: BigInt!
 }
+
+type AccountMetric @entity(immutable: false) {
+  id: Bytes! # account address + timestamp
+  account: Account!
+  # Rail management
+  totalActiveRails: BigInt!
+}
