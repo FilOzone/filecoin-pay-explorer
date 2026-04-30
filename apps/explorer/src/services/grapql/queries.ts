@@ -68,29 +68,6 @@ export const GET_OPERATORS_LEADERBOARD = gql`
   }
 `;
 
-export const GET_RECENT_RAILS = gql`
-  query GetRecentRails($first: Int = 10) {
-    rails(first: $first, orderBy: createdAt, orderDirection: desc) {
-      id
-      railId
-      state
-      paymentRate
-      totalSettledAmount
-      createdAt
-      payer {
-        address
-      }
-      payee {
-        address
-      }
-      token {
-        symbol
-        decimals
-      }
-    }
-  }
-`;
-
 // Paginated queries with search filters
 
 export const GET_RAILS_PAGINATED = gql`
@@ -455,20 +432,14 @@ export const GET_ACCOUNT_APPROVALS = gql`
 `;
 
 export const GET_STATS_DASHBOARD = gql`
-  query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
-    usdfcToken: token(id: $usdfcAddress) {
+  query GetStatsDashboard {
+    tokens(orderBy: symbol, orderDirection: desc) {
+      id
+      name
+      symbol
       decimals
-      totalSettledAmount
       totalOneTimePayment
-      userFunds
-      lockupCurrent
-      lockupRate
-      lockupLastSettledUntilEpoch
-    }
-    filToken: token(id: $filAddress) {
-      decimals
       totalSettledAmount
-      totalOneTimePayment
       userFunds
       lockupCurrent
       lockupRate
