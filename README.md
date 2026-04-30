@@ -161,6 +161,7 @@ cd ../..
 
 - Frontend hosted on Vercel
 - Subgraph hosted on Goldsky
+- Monitoring through https://status.filoz.org/
 
 ## Contributing
 
