@@ -10,7 +10,14 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 import { RAIL_STATES } from "@/constants/railStates";
 
-export type SearchByOption = "railId" | "payer" | "payee" | "operator" | "totalRateChanges" | "state";
+export type SearchByOption =
+  | "railId"
+  | "payer"
+  | "payee"
+  | "operator"
+  | "totalSettlements"
+  | "totalRateChanges"
+  | "state";
 
 export type RailsSearchBarProps = {
   searchBy: SearchByOption;
