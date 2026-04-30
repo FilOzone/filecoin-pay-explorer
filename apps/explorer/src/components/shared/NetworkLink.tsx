@@ -1,4 +1,5 @@
-import Link, type { LinkProps } from "next/link";
+import type { LinkProps } from "next/link";
+import Link from "next/link";
 import useNetwork from "@/hooks/useNetwork";
 
 const NetworkLink = ({
