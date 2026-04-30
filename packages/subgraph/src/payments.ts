@@ -1,4 +1,4 @@
-import { Address, Bytes, dataSource, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -13,7 +13,8 @@ import {
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
 import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
-import { Transfer as TransferEvent } from "../generated/USDFC/erc20";
+import { TokenTemplate } from "../generated/templates";
+import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -555,6 +556,14 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
 
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
+
+  if (isNewToken) {
+    const paymentsAddress = event.address;
+    const context = new DataSourceContext();
+    context.setBytes("paymentsAddress", paymentsAddress);
+
+    TokenTemplate.createWithContext(tokenAddress, context);
+  }
 
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
