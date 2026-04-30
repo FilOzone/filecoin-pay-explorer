@@ -4,7 +4,6 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail } from "@filecoin-pay/types";
-import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Pagination,
   PaginationContent,
@@ -13,11 +12,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
 import { useRailSettlements } from "@/hooks/useRailDetails";
-import { formatToken } from "@/utils/formatter";
+import RailSettlementsTable from "./RailSettlementsTable";
 
 interface RailSettlementsLayoutProps {
   children: React.ReactNode;
@@ -82,38 +80,7 @@ export const RailSettlements: React.FC<RailSettlementsProps> = ({ rail }) => {
         <div className='flex flex-col gap-4'>
           <span className='text-sm text-muted-foreground'>{rail.totalSettlements.toString()} total</span>
 
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Settled Upto</TableHead>
-                  <TableHead className='text-right'>Total Settled</TableHead>
-                  <TableHead className='text-right'>Net Payee Amount</TableHead>
-                  <TableHead className='text-right'>Network Fees</TableHead>
-                  <TableHead className='text-right'>Operator Commission</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.settlements.map((settlement) => (
-                  <TableRow key={settlement.id}>
-                    <TableCell className='font-medium'>Epoch {settlement.settledUpto.toString()}</TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(settlement.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(settlement.totalNetPayeeAmount, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(settlement.networkFee, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(settlement.operatorCommission, rail.token.decimals, rail.token.symbol, 8)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <RailSettlementsTable data={data.settlements} />
 
           {totalPages > 1 && (
             <Pagination>

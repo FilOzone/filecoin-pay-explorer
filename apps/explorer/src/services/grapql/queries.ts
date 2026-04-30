@@ -199,6 +199,10 @@ export const GET_RAIL_SETTLEMENTS = gql`
       networkFee
       operatorCommission
       settledUpto
+      token {
+        decimals
+        symbol
+      }
     }
   }
 `;
@@ -227,6 +231,12 @@ export const GET_RAIL_RATE_CHANGES = gql`
       startEpoch
       untilEpoch
       rate
+      rail {
+        token {
+          decimals
+          symbol
+        }
+      }
     }
   }
 `;

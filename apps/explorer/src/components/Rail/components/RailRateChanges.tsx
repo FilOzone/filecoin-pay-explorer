@@ -4,7 +4,6 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail } from "@filecoin-pay/types";
-import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Pagination,
   PaginationContent,
@@ -13,11 +12,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, Info } from "lucide-react";
 import { useState } from "react";
 import { useRailRateChanges } from "@/hooks/useRailDetails";
-import { formatToken } from "@/utils/formatter";
+import RailRateChangesTable from "./RailRateChangesTable";
 
 interface RailRateChangesLayoutProps {
   children: React.ReactNode;
@@ -82,28 +80,7 @@ export const RailRateChanges: React.FC<RailRateChangesProps> = ({ rail }) => {
         <div className='flex flex-col gap-4'>
           <span className='text-sm text-muted-foreground'>{rail.totalRateChanges.toString()} total</span>
 
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Start Epoch</TableHead>
-                  <TableHead>Until Epoch</TableHead>
-                  <TableHead className='text-right'>Rate</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.rateChanges.map((rateChange) => (
-                  <TableRow key={rateChange.id}>
-                    <TableCell className='font-medium'>Epoch {rateChange.startEpoch.toString()}</TableCell>
-                    <TableCell>Epoch {rateChange.untilEpoch.toString()}</TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(rateChange.rate, rail.token.decimals, `${rail.token.symbol}/epoch`, 15)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <RailRateChangesTable data={data.rateChanges} />
 
           {totalPages > 1 && (
             <Pagination>
