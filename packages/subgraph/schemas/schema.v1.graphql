@@ -36,6 +36,8 @@ type Account @entity(immutable: false) {
   totalRails: BigInt!
   totalTokens: BigInt!
   totalApprovals: BigInt!
+  usdfcSpent: BigInt!
+  usdfcEarned: BigInt!
 
   payerRails: [Rail!]! @derivedFrom(field: "payer")
   payeeRails: [Rail!]! @derivedFrom(field: "payee")

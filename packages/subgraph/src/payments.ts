@@ -484,6 +484,16 @@ export function handleRailSettled(event: RailSettledEvent): void {
     }
 
     token.lockupCurrent = token.lockupCurrent.minus(lockupReduction);
+
+    if (token.symbol === "USDFC") {
+      const payer = createOrLoadAccountByAddress(Address.fromBytes(rail.payer));
+      const payee = createOrLoadAccountByAddress(Address.fromBytes(rail.payee));
+      payer.account.usdfcSpent = payer.account.usdfcSpent.plus(totalSettledAmount);
+      payee.account.usdfcEarned = payee.account.usdfcEarned.plus(totalNetPayeeAmount);
+      payer.account.save();
+      payee.account.save();
+    }
+
     token.save();
   }
 
@@ -628,6 +638,16 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     token.userFunds = token.userFunds.minus(networkFee);
     token.lockupCurrent = token.lockupCurrent.minus(totalAmount);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
+
+    if (token.symbol === "USDFC") {
+      const payer = createOrLoadAccountByAddress(Address.fromBytes(rail.payer));
+      const payee = createOrLoadAccountByAddress(Address.fromBytes(rail.payee));
+      payer.account.usdfcSpent = payer.account.usdfcSpent.plus(totalAmount);
+      payee.account.usdfcEarned = payee.account.usdfcEarned.plus(netPayeeAmount);
+      payer.account.save();
+      payee.account.save();
+    }
+
     token.save();
   }
   if (payerToken) {
