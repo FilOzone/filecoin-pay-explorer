@@ -157,6 +157,12 @@ cd ../..
 - **Test:** `pnpm test`
 - **Clean:** `pnpm clean` (removes build artifacts and node_modules)
 
+## Architecture
+
+- Frontend hosted on Vercel
+- Subgraph hosted on Goldsky
+- Monitoring through https://status.filoz.org/
+
 ## Contributing
 
 - Use Node/pnpm versions from root `package.json` engines.
