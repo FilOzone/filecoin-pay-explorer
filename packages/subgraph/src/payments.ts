@@ -484,6 +484,13 @@ export function handleRailSettled(event: RailSettledEvent): void {
     }
 
     token.lockupCurrent = token.lockupCurrent.minus(lockupReduction);
+
+    if (token.symbol === "USDFC") {
+      const operator = createOrLoadOperator(Address.fromBytes(rail.operator));
+      operator.operator.usdfcSettled = operator.operator.usdfcSettled.plus(totalSettledAmount);
+      operator.operator.save();
+    }
+
     token.save();
   }
 

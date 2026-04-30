@@ -78,6 +78,7 @@ type Operator @entity(immutable: false) {
   totalRails: BigInt!
   totalTokens: BigInt!
   totalApprovals: BigInt!
+  usdfcSettled: BigInt!
 
   operatorTokens: [OperatorToken!]! @derivedFrom(field: "operator")
   rails: [Rail!]! @derivedFrom(field: "operator")

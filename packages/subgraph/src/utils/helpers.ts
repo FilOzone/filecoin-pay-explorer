@@ -167,6 +167,7 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
     operator.totalRails = ZERO_BIG_INT;
     operator.totalApprovals = ZERO_BIG_INT;
     operator.totalTokens = ZERO_BIG_INT;
+    operator.usdfcSettled = ZERO_BIG_INT;
     operator.save();
     return new OperatorWithIsNew(operator, true);
   }
