@@ -5,7 +5,8 @@ const NetworkLink = ({
   href,
   children,
   ...props
-}: LinkProps & {
+}: Omit<LinkProps, "href"> & {
+  href: `/${string}`;
   children?: React.ReactNode | undefined;
 }) => {
   const { network } = useNetwork();
