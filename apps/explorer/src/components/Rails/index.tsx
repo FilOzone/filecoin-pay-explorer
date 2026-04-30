@@ -10,6 +10,8 @@ import { formatHexForSearch } from "@/utils/hexUtils";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
+const isIntegerInString = (str: string) => !Number.isNaN(Number(str)) && parseInt(str, 10) === Number(str);
+
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
   const [searchInput, setSearchInput] = useState("");
@@ -57,7 +59,7 @@ const Rails = () => {
           setAppliedFilters({});
           return;
         }
-        newFilters.railId = trimmedInput;
+        if (isIntegerInString(trimmedInput)) newFilters.railId = trimmedInput;
         break;
       }
       case "payer": {
