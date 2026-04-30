@@ -10,7 +10,8 @@ import { formatHexForSearch } from "@/utils/hexUtils";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
-const isIntegerInString = (str: string) => !Number.isNaN(Number(str)) && parseInt(str, 10) === Number(str);
+const isIntegerInString = (str: string) =>
+  !Number.isNaN(Number(str)) && parseInt(str, 10) === Number(str) && String(Number(str)) === str;
 
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
