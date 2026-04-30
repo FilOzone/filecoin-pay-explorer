@@ -2,9 +2,11 @@
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
-## CI
+## CICD
 
-Create a GitHub release with a tag `vX.Y.Z` when you wish to deploy a new version of the subgraph. GitHub Actions will publish the subgraph. Wait for the email that the subgraph has finished indexing before pointing the explorer at the new subgraph version.
+Create a GitHub release with a tag `vX.Y.Z` when you wish to deploy a new version of the subgraph. GitHub Actions will build and publish the subgraph.
+
+One you received emails that both subgraphs have finished indexing, tag the new subgraphs with `prod`.
 
 ## Prerequisites
 
