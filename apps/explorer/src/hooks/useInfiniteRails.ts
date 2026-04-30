@@ -38,10 +38,10 @@ const useInfiniteRails = (filters: RailsFilter = {}) => {
     where.operator = filters.operator;
   }
   if (filters.totalSettlements) {
-    where.totalSettlements = filters.totalSettlements;
+    where.totalSettlements_gte = filters.totalSettlements;
   }
   if (filters.totalRateChanges) {
-    where.totalRateChanges = filters.totalRateChanges;
+    where.totalRateChanges_gte = filters.totalRateChanges;
   }
   if (filters.state) {
     where.state = filters.state;
