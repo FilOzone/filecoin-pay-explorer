@@ -59,21 +59,17 @@ dataSources:
           handler: handleAccountLockupSettled
       file: ./src/payments.ts
 
-  # USDFC Transfer events from FilecoinPay capture fee-auction purchases (burnForFees)
+templates:
+
+  # Token Transfer events from FilecoinPay capture fee-auction purchases (burnForFees)
   # without needing trace_filter. burnForFees emits no event directly; instead it calls
   # ERC-20 transfer to the auction recipient, producing a standard Transfer log we can
   # anchor on. We filter by from == FilecoinPay and the top-level tx's function selector.
-  - kind: ethereum
-    name: USDFC
+  - name: TokenTemplate
+    kind: ethereum
     network: "{{network}}"
     source:
       abi: erc20
-      address: "{{usdfcContractAddress}}"
-      startBlock: {{usdfcContractStartBlock}}
-    context:
-      paymentsAddress:
-        type: Bytes
-        data: "{{paymentsContractAddress}}"
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
