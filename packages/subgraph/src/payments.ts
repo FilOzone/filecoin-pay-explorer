@@ -486,8 +486,8 @@ export function handleRailSettled(event: RailSettledEvent): void {
     token.lockupCurrent = token.lockupCurrent.minus(lockupReduction);
 
     if (token.symbol === "USDFC") {
-      const payer = createOrLoadAccountByAddress(rail.payer);
-      const payee = createOrLoadAccountByAddress(rail.payee);
+      const payer = createOrLoadAccountByAddress(Address.fromBytes(rail.payer));
+      const payee = createOrLoadAccountByAddress(Address.fromBytes(rail.payee));
       payer.account.usdfcSpent = payer.account.usdfcSpent.plus(totalSettledAmount);
       payee.account.usdfcEarned = payee.account.usdfcEarned.plus(totalNetPayeeAmount);
       payer.account.save();
