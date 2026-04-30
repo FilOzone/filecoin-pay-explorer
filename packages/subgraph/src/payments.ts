@@ -640,8 +640,8 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
 
     if (token.symbol === "USDFC") {
-      const payer = createOrLoadAccountByAddress(rail.payer);
-      const payee = createOrLoadAccountByAddress(rail.payee);
+      const payer = createOrLoadAccountByAddress(Address.fromBytes(rail.payer));
+      const payee = createOrLoadAccountByAddress(Address.fromBytes(rail.payee));
       payer.account.usdfcSpent = payer.account.usdfcSpent.plus(totalAmount);
       payee.account.usdfcEarned = payee.account.usdfcEarned.plus(netPayeeAmount);
       payer.account.save();
