@@ -7,6 +7,7 @@ export interface RailsFilter {
   payer?: string;
   payee?: string;
   operator?: string;
+  totalSettlements?: string;
   totalRateChanges?: string;
   state?: string;
 }
@@ -35,6 +36,9 @@ const useInfiniteRails = (filters: RailsFilter = {}) => {
   }
   if (filters.operator) {
     where.operator = filters.operator;
+  }
+  if (filters.totalSettlements) {
+    where.totalSettlements = filters.totalSettlements;
   }
   if (filters.totalRateChanges) {
     where.totalRateChanges = filters.totalRateChanges;

@@ -109,6 +109,7 @@ function RailsSearchBar({
                     <SelectItem value='payer'>Payer Address</SelectItem>
                     <SelectItem value='payee'>Payee Address</SelectItem>
                     <SelectItem value='operator'>Operator Address</SelectItem>
+                    <SelectItem value='totalSettlements'>Settlements</SelectItem>
                     <SelectItem value='totalRateChanges'>Rate Changes</SelectItem>
                     <SelectItem value='state'>State</SelectItem>
                   </SelectContent>
