@@ -1,5 +1,6 @@
 import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import {
+  AccountMetric,
   DailyMetric,
   DailyOperatorMetric,
   DailyTokenMetric,
@@ -107,6 +108,18 @@ export class MetricsEntityManager {
       metric.settlementsProcessed = ZERO_BIG_INT;
       metric.uniqueClients = ZERO_BIG_INT;
       metric.totalApprovals = ZERO_BIG_INT;
+    }
+
+    return metric;
+  }
+
+  static loadOrCreateAccountMetric(accountAddress: Address): AccountMetric {
+    let metric = AccountMetric.load(Bytes.fromByteArray(accountAddress));
+
+    if (!metric) {
+      metric = new AccountMetric(accountAddress);
+      metric.account = accountAddress;
+      metric.totalActiveRails = ZERO_BIG_INT;
     }
 
     return metric;
