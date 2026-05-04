@@ -1,5 +1,10 @@
-import type { Rail, RateChangeQueue, Settlement } from "@filecoin-pay/types";
-import { GET_RAIL_DETAILS, GET_RAIL_RATE_CHANGES, GET_RAIL_SETTLEMENTS } from "@/services/grapql/queries";
+import type { OneTimePayment, Rail, RateChangeQueue, Settlement } from "@filecoin-pay/types";
+import {
+  GET_RAIL_DETAILS,
+  GET_RAIL_ONE_TIME_PAYMENTS,
+  GET_RAIL_RATE_CHANGES,
+  GET_RAIL_SETTLEMENTS,
+} from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
 interface RailDetailsResponse {
@@ -8,6 +13,10 @@ interface RailDetailsResponse {
 
 interface SettlementsResponse {
   settlements: Settlement[];
+}
+
+interface OneTimePaymentsResponse {
+  oneTimePayments: OneTimePayment[];
 }
 
 interface RateChangesResponse {
@@ -37,6 +46,22 @@ export const useRailSettlements = (railId: string, page: number = 1) =>
     select: (data) => ({
       settlements: data.settlements,
       hasMore: data.settlements.length === PAGE_SIZE,
+    }),
+    enabled: !!railId,
+  });
+
+export const useRailOneTimePayments = (railId: string, page: number = 1) =>
+  useGraphQLQuery<OneTimePaymentsResponse, { oneTimePayments: OneTimePayment[]; hasMore: boolean }>({
+    queryKey: ["rail", railId, "oneTimePayments", page],
+    query: GET_RAIL_ONE_TIME_PAYMENTS,
+    variables: {
+      railId,
+      first: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+    },
+    select: (data) => ({
+      oneTimePayments: data.oneTimePayments,
+      hasMore: data.oneTimePayments.length === PAGE_SIZE,
     }),
     enabled: !!railId,
   });

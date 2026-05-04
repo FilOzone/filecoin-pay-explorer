@@ -93,6 +93,28 @@ const Rails = () => {
         if (formattedHex) newFilters.operator = formattedHex;
         break;
       }
+      case "totalSettlements": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
+        if (isIntegerInString(trimmedInput)) {
+          newFilters.totalSettlements = trimmedInput;
+        }
+        break;
+      }
+      case "totalRateChanges": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
+        if (isIntegerInString(trimmedInput)) {
+          newFilters.totalRateChanges = trimmedInput;
+        }
+        break;
+      }
       case "state":
         if (!selectedState) {
           setAppliedFilters({});
