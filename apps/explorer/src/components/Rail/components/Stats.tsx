@@ -23,6 +23,7 @@ import {
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
+import { EPOCH_DURATION } from "@/utils/constants";
 import { epochToDate, formatToken } from "@/utils/formatter";
 import { CopyableText, MetricItem, RailStateBadge } from "../../shared";
 
@@ -140,7 +141,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               <MetricItem
                 title='Payment Rate'
                 value={formatToken(
-                  Number(rail.paymentRate) * 2 * 60 * 24,
+                  (Number(rail.paymentRate) / EPOCH_DURATION) * 60 * 60 * 24,
                   rail.token.decimals,
                   `${rail.token.symbol}/day`,
                   12,
