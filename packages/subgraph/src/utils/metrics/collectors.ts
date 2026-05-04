@@ -451,7 +451,6 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   }
 }
 
-// Fee Auction Collector
 export class FeeAuctionCollector extends BaseMetricsCollector {
   private amountPurchased: GraphBN;
   private filBurned: GraphBN;
