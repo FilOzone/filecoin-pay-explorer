@@ -11,7 +11,7 @@ import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar
 import type { SearchByOption } from "./components/RailsSearchBar";
 
 const isIntegerInString = (str: string) =>
-  !Number.isNaN(Number(str)) && parseInt(str, 10) === Number(str) && String(Number(str)) === str;
+  Number.isInteger(Number(str)) && String(Number(str)) === str;
 
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
