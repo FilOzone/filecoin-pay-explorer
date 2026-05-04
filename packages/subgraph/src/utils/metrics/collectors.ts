@@ -435,19 +435,19 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   }
 
   private updateDailyMetrics(): void {
-    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
     if (this.isNativeFil) {
+      const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
       dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
+      dailyMetric.save();
     }
-    dailyMetric.save();
   }
 
   private updateWeeklyMetrics(): void {
-    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
     if (this.isNativeFil) {
+      const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
       weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
+      weeklyMetric.save();
     }
-    weeklyMetric.save();
   }
 }
 
