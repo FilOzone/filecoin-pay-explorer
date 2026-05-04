@@ -1,11 +1,11 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 
-import type { Operator } from "@filecoin-pay/types";
+import type { OperatorToken } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { columns } from "../data/column-definitions";
 
 export type TopOperatorsTableProps = {
-  data: Array<Operator>;
+  data: Array<OperatorToken>;
 };
 
 function TopOperatorsTable({ data }: TopOperatorsTableProps) {
