@@ -716,13 +716,14 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
     token.save();
   }
 
+  const previousRailState = rail.state;
   rail.state = "FINALIZED";
   rail.save();
 
   // Collect rail state change metrics
   MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
+    previousRailState,
     rail.state,
-    "FINALIZED",
     event.block.timestamp,
     event.block.number,
   );

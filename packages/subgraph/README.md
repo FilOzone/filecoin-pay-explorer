@@ -2,6 +2,12 @@
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
+## CI/CD
+
+Create a GitHub release with a tag `vX.Y.Z` when you wish to deploy a new version of the subgraph. GitHub Actions will build and publish the subgraph.
+
+Once you have received confirmation emails that the mainnet and calibration subgraphs have finished indexing, tag the new subgraphs with `prod`.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed and set up:
@@ -17,7 +23,7 @@ Before you begin, ensure you have the following installed and set up:
 3.  **Goldsky Account:** You need an account on Goldsky to host your subgraph. Sign up at [goldsky.com](https://goldsky.com/).
 4.  **Goldsky CLI:** This tool allows you to deploy subgraphs to the Goldsky platform. Follow the installation instructions in the [Goldsky Documentation](https://docs.goldsky.com/introduction).
 
-## Deploying the Subgraph to Goldsky
+## Manually Deploying the Subgraph to Goldsky
 
 Follow these steps to build and deploy the subgraph:
 
@@ -77,7 +83,7 @@ Follow these steps to build and deploy the subgraph:
     goldsky subgraph tag delete <your-subgraph-name>/<version> --tag <tag-name>
     ```
 
-## Modifying and Redeploying the Subgraph
+## Manually Modifying and Redeploying the Subgraph
 
 If you need to make changes to the subgraph's logic, schema, or configuration, follow these general steps:
 

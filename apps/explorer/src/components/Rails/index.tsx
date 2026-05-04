@@ -10,6 +10,8 @@ import { formatHexForSearch } from "@/utils/hexUtils";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
+const isIntegerInString = (str: string) => Number.isInteger(Number(str)) && String(Number(str)) === str;
+
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
   const [searchInput, setSearchInput] = useState("");
@@ -57,7 +59,7 @@ const Rails = () => {
           setAppliedFilters({});
           return;
         }
-        newFilters.railId = trimmedInput;
+        if (isIntegerInString(trimmedInput)) newFilters.railId = trimmedInput;
         break;
       }
       case "payer": {
@@ -88,6 +90,28 @@ const Rails = () => {
         }
         const formattedHex = formatHexForSearch(trimmedInput);
         if (formattedHex) newFilters.operator = formattedHex;
+        break;
+      }
+      case "totalSettlements": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
+        if (isIntegerInString(trimmedInput)) {
+          newFilters.totalSettlements = trimmedInput;
+        }
+        break;
+      }
+      case "totalRateChanges": {
+        const trimmedInput = searchInput.trim();
+        if (!trimmedInput) {
+          setAppliedFilters({});
+          return;
+        }
+        if (isIntegerInString(trimmedInput)) {
+          newFilters.totalRateChanges = trimmedInput;
+        }
         break;
       }
       case "state":

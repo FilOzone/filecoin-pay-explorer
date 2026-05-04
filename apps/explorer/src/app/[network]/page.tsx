@@ -1,10 +1,9 @@
-import { RecentRails, Stats, TopAccounts, TopOperators } from "@/components/Home";
+import { Stats, TopAccounts, TopOperators } from "@/components/Home";
 
 function Page() {
   return (
     <>
       <Stats />
-      <RecentRails />
       <TopAccounts />
       <TopOperators />
     </>
