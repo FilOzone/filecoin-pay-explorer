@@ -34,8 +34,8 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import { getIdFromTxHashAndLogIndex, getRailEntityId } from "./utils/keys";
+import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -459,6 +459,10 @@ export function handleRailSettled(event: RailSettledEvent): void {
     // For native FIL, the fee is burned directly (no accumulated fees to track)
     if (!isNativeToken(rail.token)) {
       token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+
+      const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(Address.fromBytes(rail.token), timestamp);
+      tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.plus(networkFee);
+      tokenMetric.save();
     }
     // Reduce streaming lockup by rate × actualSettledDuration.
     // Settlement window is (previousSettledUpto, settledUpTo].
@@ -644,6 +648,13 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     // For native FIL, the fee is burned directly (no accumulated fees to track)
     if (!isNativeToken(rail.token)) {
       token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+
+      const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(
+        Address.fromBytes(rail.token),
+        event.block.timestamp,
+      );
+      tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.plus(networkFee);
+      tokenMetric.save();
     }
     token.save();
   }
