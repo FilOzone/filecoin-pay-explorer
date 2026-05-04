@@ -128,7 +128,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   const railId = event.params.railId;
   const payeeAddress = event.params.payee;
   const payerAddress = event.params.payer;
-  const arbiter = event.params.validator;
+  const validator = event.params.validator;
   const tokenAddress = event.params.token;
   const operatorAddress = event.params.operator;
   const commissionRateBps = event.params.commissionRateBps;
@@ -157,7 +157,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     payeeAddress,
     operatorAddress,
     tokenAddress,
-    arbiter,
+    validator,
     event.block.number,
     commissionRateBps,
     serviceFeeRecipient,
