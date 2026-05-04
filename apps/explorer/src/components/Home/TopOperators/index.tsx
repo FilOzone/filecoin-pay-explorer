@@ -15,7 +15,7 @@ const TopOperators = () => {
   const { network } = useNetwork();
   const token =
     network === "mainnet" ? "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045" : "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0";
-  const { data, isLoading, isError, error, isRefetching, refetch } = useOperatorsLeaderboard(token);
+  const { data, isLoading, isError, error, isRefetching, refetch } = useOperatorsLeaderboard(10, token);
 
   return (
     <PageSection backgroundVariant='light'>

@@ -6,11 +6,11 @@ interface OperatorsLeaderboardResponse {
   operatorTokens: OperatorToken[];
 }
 
-const useOperatorsLeaderboard = (token: string) =>
+const useOperatorsLeaderboard = (first: number = 10, token: string) =>
   useGraphQLQuery<OperatorsLeaderboardResponse, OperatorToken[]>({
-    queryKey: ["operatorsLeaderboard", token],
+    queryKey: ["operatorsLeaderboard", first, token],
     query: GET_OPERATORS_LEADERBOARD,
-    variables: { token },
+    variables: { first, token },
     select: (data) => data.operatorTokens,
     refetchInterval: 60 * 1000,
   });
