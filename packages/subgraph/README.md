@@ -63,7 +63,7 @@ Follow these steps to build and deploy the subgraph:
     - You can manage your deployments and find your subgraph details in the [Goldsky Dashboard](https://app.goldsky.com/). The deployment command will output the GraphQL endpoint URL for your subgraph upon successful completion. **Copy this URL**, as you will need it for the client.
 
 1.  **Tag the Subgraph (Optional):**
-    Tag the subgraph you deployed in step 6.
+    Tag the subgraph you deployed in step 5.
 
     ```bash
     goldsky subgraph tag create <your-subgraph-name>/<version> --tag <tag-name>
