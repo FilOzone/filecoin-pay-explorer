@@ -1,7 +1,6 @@
-import { Address, Bytes, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
-  BurnForFeesCall,
   DepositRecorded as DepositRecordedEvent,
   OperatorApprovalUpdated as OperatorApprovalUpdatedEvent,
   RailCreated as RailCreatedEvent,
@@ -14,6 +13,8 @@ import {
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
 import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { TokenTemplate } from "../generated/templates";
+import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -33,12 +34,7 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import {
-  getFeeAuctionPurchaseEntityId,
-  getIdFromTxHashAndLogIndex,
-  getRailEntityId,
-  getSettlementEntityId,
-} from "./utils/keys";
+import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
@@ -556,6 +552,15 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
 
+  // Native FIL has no ERC-20 contract, so no Transfer events to track.
+  if (isNewToken && !isNativeToken(tokenAddress)) {
+    const paymentsAddress = event.address;
+    const context = new DataSourceContext();
+    context.setBytes("paymentsAddress", paymentsAddress);
+
+    TokenTemplate.createWithContext(tokenAddress, context);
+  }
+
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
     tokenAddress,
@@ -723,31 +728,85 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
   );
 }
 
-// ==================== Call Handlers ====================
+// ==================== ERC-20 Transfer handlers ====================
 
-export function handleBurnForFees(call: BurnForFeesCall): void {
-  const tokenAddress = call.inputs.token;
-  const recipient = call.inputs.recipient;
-  const requested = call.inputs.requested;
-  const filBurned = call.transaction.value;
+// Function selector for burnForFees(address,address,uint256).
+// Used to identify fee-auction purchases from a top-level tx's calldata prefix.
+const BURN_FOR_FEES_SELECTOR_0: u8 = 0x1a;
+const BURN_FOR_FEES_SELECTOR_1: u8 = 0x25;
+const BURN_FOR_FEES_SELECTOR_2: u8 = 0x73;
+const BURN_FOR_FEES_SELECTOR_3: u8 = 0x00;
 
-  // Create FeeAuctionPurchase entity
-  const purchaseId = getFeeAuctionPurchaseEntityId(call.transaction.hash, call.transaction.index);
+/**
+ * FilecoinPay's burnForFees emits no event, but internally calls
+ * ERC-20 transfer() on the auctioned token, producing a standard Transfer log.
+ * We anchor on that log to capture the auction purchase without trace_filter.
+ *
+ * Disambiguation from withdrawals (also transfer out from FilecoinPay):
+ *   - from == FilecoinPay (the USDFC balance is FilecoinPay's)
+ *   - top-level tx.to == FilecoinPay
+ *   - top-level tx selector == burnForFees
+ *
+ * Fee-on-transfer caveat: Transfer.value is the `actual` amount transferred.
+ * For standard ERC-20 tokens (USDFC), actual == requested.
+ */
+export function handleFeeAuctionTransfer(event: TransferEvent): void {
+  const paymentsAddress = dataSource.context().getBytes("paymentsAddress");
+
+  // Only interested in outflows FROM FilecoinPay (i.e. FilecoinPay paying out
+  // either a withdrawal or a fee-auction purchase).
+  if (event.params.from.notEqual(Address.fromBytes(paymentsAddress))) return;
+
+  // Must be a direct top-level call to FilecoinPay; a router would fall through.
+  const txTo = event.transaction.to;
+  if (txTo === null) return;
+  if ((txTo as Address).notEqual(Address.fromBytes(paymentsAddress))) return;
+
+  // Selector check filters withdrawals and other paths that also produce
+  // Transfer-from-FilecoinPay events.
+  const input = event.transaction.input;
+  if (input.length < 4) return;
+  if (
+    input[0] != BURN_FOR_FEES_SELECTOR_0 ||
+    input[1] != BURN_FOR_FEES_SELECTOR_1 ||
+    input[2] != BURN_FOR_FEES_SELECTOR_2 ||
+    input[3] != BURN_FOR_FEES_SELECTOR_3
+  ) {
+    return;
+  }
+
+  const tokenAddress = event.address;
+  const recipient = event.params.to;
+  const amountPurchased = event.params.value;
+  const filBurned = event.transaction.value;
+
+  const purchaseId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
   const purchase = new FeeAuctionPurchase(purchaseId);
   purchase.token = tokenAddress;
   purchase.recipient = recipient;
-  purchase.amountPurchased = requested;
+  purchase.amountPurchased = amountPurchased;
   purchase.filBurned = filBurned;
-  purchase.blockNumber = call.block.number;
-  purchase.blockTimestamp = call.block.timestamp;
-  purchase.transactionHash = call.transaction.hash;
+  purchase.blockNumber = event.block.number;
+  purchase.blockTimestamp = event.block.timestamp;
+  purchase.transactionHash = event.transaction.hash;
   purchase.save();
 
+  // The running Token.accumulatedFees total is incremented on settlements and
+  // one-time payments; draw it back down when those fees are auctioned off so
+  // the total reflects the actual pending balance (mirrors FilecoinPay's
+  // `fees.funds = available - actual`).
+  const token = Token.load(tokenAddress);
+  if (token) {
+    token.accumulatedFees = token.accumulatedFees.minus(amountPurchased);
+    token.totalFilBurnedForFees = token.totalFilBurnedForFees.plus(filBurned);
+    token.save();
+  }
+
   MetricsCollectionOrchestrator.collectFeeAuctionMetrics(
-    requested,
+    amountPurchased,
     filBurned,
     tokenAddress,
-    call.block.timestamp,
-    call.block.number,
+    event.block.timestamp,
+    event.block.number,
   );
 }
