@@ -5,10 +5,11 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { IconProps } from "@phosphor-icons/react";
-import { CoinsIcon, LockIcon } from "@phosphor-icons/react";
+import { ArrowsSplitIcon, CoinsIcon, LockIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
+import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
 import { formatToken } from "@/utils/formatter";
 import { calculateTotalLockup } from "@/utils/lockup";
@@ -51,9 +52,11 @@ interface MetricCard {
   icon: string | React.ComponentType<IconProps>;
   tooltip?: string;
   isLoading?: boolean;
+  href?: string;
 }
 
 const Stats: React.FC = () => {
+  const { network } = useNetwork();
   const { data, isLoading, isError, error, refetch } = useStatsDashboard();
   const { data: blockNumber, isLoading: loadingBlockNumber } = useBlockNumber();
 
@@ -67,6 +70,12 @@ const Stats: React.FC = () => {
       //   icon: "/stats/total-fil-burned.svg",
       //   tooltip: "Network fees paid to process payment settlements",
       // },
+      {
+        title: "Active Rails",
+        value: data?.paymentsMetrics?.totalActiveRails?.toString() ?? "0",
+        icon: ArrowsSplitIcon,
+        href: `/${network}/rails`,
+      },
       ...(data?.tokens.map((token) => ({
         title: `Total ${token.symbol} Transacted`,
         value: formatToken(
@@ -88,7 +97,7 @@ const Stats: React.FC = () => {
         isLoading: loadingBlockNumber,
       })) || []),
     ],
-    [data, blockNumber, loadingBlockNumber],
+    [data, blockNumber, loadingBlockNumber, network],
   );
 
   return (
@@ -107,6 +116,7 @@ const Stats: React.FC = () => {
               Icon={card.icon}
               tooltip={card.tooltip}
               isLoading={card.isLoading}
+              href={card.href}
             />
           ))}
         </div>
