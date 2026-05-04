@@ -140,6 +140,7 @@ export const createOrLoadUserToken = (account: Address, token: Address): UserTok
   let userToken = UserToken.load(id);
 
   if (!userToken) {
+    createOrLoadAccountByAddress(account);
     userToken = new UserToken(id);
     userToken.account = account;
     userToken.token = token;
