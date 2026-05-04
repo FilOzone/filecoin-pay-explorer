@@ -254,7 +254,6 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               day: "numeric",
               year: "numeric",
             })}
-            tooltip={`Epoch ${rail.createdAt}`}
             Icon={CalendarPlusIcon}
           />
           {Number(rail.endEpoch) > 0 && !isOneTimePaymentOnly && (
