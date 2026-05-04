@@ -269,7 +269,7 @@ type DailyOperatorMetric @entity(immutable: false) {
 }
 
 type FeeAuctionPurchase @entity(immutable: true) {
-  id: Bytes! # txHash + txIndex
+  id: Bytes! # txHash + logIndex
   token: Token!
   recipient: Bytes!
   amountPurchased: BigInt! # ERC-20 tokens purchased
