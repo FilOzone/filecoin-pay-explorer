@@ -4,7 +4,7 @@ import { useGraphQLQuery } from "./useGraphQLQuery";
 
 export interface StatsDashboardData {
   tokens: Token[];
-  paymentsMetrics: PaymentsMetric | null;
+  paymentsMetrics: PaymentsMetric | undefined;
 }
 
 interface GetStatsDashboardResponse {
