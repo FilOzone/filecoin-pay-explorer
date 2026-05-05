@@ -228,7 +228,7 @@ export const createRail = (
   payee: Address,
   operator: Address,
   token: Address,
-  arbiter: Address,
+  validator: Address,
   settledUpTo: GraphBN,
   commissionRateBps: GraphBN,
   serviceFeeRecipient: Address,
@@ -248,7 +248,8 @@ export const createRail = (
   rail.settledUpto = settledUpTo;
   rail.state = "ZERORATE";
   rail.endEpoch = ZERO_BIG_INT;
-  rail.arbiter = arbiter;
+  rail.validator = validator;
+  rail.arbiter = validator; // legacy
   rail.totalSettledAmount = ZERO_BIG_INT;
   rail.totalOneTimePaymentAmount = ZERO_BIG_INT;
   rail.totalOneTimePayments = ZERO_BIG_INT;
