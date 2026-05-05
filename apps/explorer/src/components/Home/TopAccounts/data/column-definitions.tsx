@@ -15,11 +15,11 @@ export const columns = [
     size: 48,
   }),
   columnHelper.accessor("address", {
-    header: "Address",
+    header: "Account",
     cell: (info) => (
       <CopyableText
         value={info.getValue()}
-        // to={`/account/${info.getValue()}`}
+        to={`/accounts/${info.getValue()}`}
         monospace={true}
         label='Account address'
         truncate={true}
