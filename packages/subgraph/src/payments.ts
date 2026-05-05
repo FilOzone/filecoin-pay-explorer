@@ -1,4 +1,4 @@
-import { Address, Bytes, log } from "@graphprotocol/graph-ts";
+import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -12,7 +12,9 @@ import {
   RailTerminated as RailTerminatedEvent,
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
-import { Account, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { TokenTemplate } from "../generated/templates";
+import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
   computeSettledLockup,
   createOneTimePayment,
@@ -25,14 +27,15 @@ import {
   epochsRateChangeApplicable,
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
+  isNativeToken,
   remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId, getSettlementEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import { getIdFromTxHashAndLogIndex, getRailEntityId } from "./utils/keys";
+import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -128,7 +131,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   const railId = event.params.railId;
   const payeeAddress = event.params.payee;
   const payerAddress = event.params.payer;
-  const arbiter = event.params.validator;
+  const validator = event.params.validator;
   const tokenAddress = event.params.token;
   const operatorAddress = event.params.operator;
   const commissionRateBps = event.params.commissionRateBps;
@@ -159,7 +162,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     payeeAddress,
     operatorAddress,
     tokenAddress,
-    arbiter,
+    validator,
     event.block.number,
     commissionRateBps,
     serviceFeeRecipient,
@@ -451,15 +454,14 @@ export function handleRailSettled(event: RailSettledEvent): void {
     token.lockupLastSettledUntilEpoch = event.block.number;
 
     // Subtract the network fee from user funds since it is not retained by the user.
-    // The fee is either burned or deposited into the Filecoin-pay contract account.
-    //
-    // NOTE: When the auction system is integrated, the network fee will be
-    // deposited into the Filecoin-pay contract. At that point, we should stop
-    // subtracting the network fee here, as `token.userFunds` can be derived
-    // by summing all `userTokens.funds`.
     token.userFunds = token.userFunds.minus(networkFee);
     token.totalSettledAmount = token.totalSettledAmount.plus(totalSettledAmount);
 
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     // Reduce streaming lockup by rate × actualSettledDuration.
     // Settlement window is (previousSettledUpto, settledUpTo].
     // RateChangeQueue applies for (startEpoch, untilEpoch], i.e., startEpoch is exclusive.
@@ -546,6 +548,15 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
 
+  // Native FIL has no ERC-20 contract, so no Transfer events to track.
+  if (isNewToken && !isNativeToken(tokenAddress)) {
+    const paymentsAddress = event.address;
+    const context = new DataSourceContext();
+    context.setBytes("paymentsAddress", paymentsAddress);
+
+    TokenTemplate.createWithContext(tokenAddress, context);
+  }
+
   // Collect Metrics
   MetricsCollectionOrchestrator.collectTokenActivityMetrics(
     tokenAddress,
@@ -624,6 +635,12 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     token.userFunds = token.userFunds.minus(networkFee);
     token.lockupCurrent = token.lockupCurrent.minus(totalAmount);
     token.totalOneTimePayment = token.totalOneTimePayment.plus(totalAmount);
+
+    // For ERC-20 tokens, the network fee accumulates for dutch auction
+    // For native FIL, the fee is burned directly (no accumulated fees to track)
+    if (!isNativeToken(rail.token)) {
+      token.accumulatedFees = token.accumulatedFees.plus(networkFee);
+    }
     token.save();
   }
   if (payerToken) {
@@ -706,4 +723,81 @@ export function handleRailFinalized(event: RailFinalizedEvent): void {
     event.block.timestamp,
     event.block.number,
   );
+}
+
+// ==================== ERC-20 Transfer handlers ====================
+
+// Function selector for burnForFees(address,address,uint256).
+// Used to identify fee-auction purchases from a top-level tx's calldata prefix.
+const BURN_FOR_FEES_SELECTOR_0: u8 = 0x1a;
+const BURN_FOR_FEES_SELECTOR_1: u8 = 0x25;
+const BURN_FOR_FEES_SELECTOR_2: u8 = 0x73;
+const BURN_FOR_FEES_SELECTOR_3: u8 = 0x00;
+
+/**
+ * FilecoinPay's burnForFees emits no event, but internally calls
+ * ERC-20 transfer() on the auctioned token, producing a standard Transfer log.
+ * We anchor on that log to capture the auction purchase without trace_filter.
+ *
+ * Disambiguation from withdrawals (also transfer out from FilecoinPay):
+ *   - from == FilecoinPay (the USDFC balance is FilecoinPay's)
+ *   - top-level tx.to == FilecoinPay
+ *   - top-level tx selector == burnForFees
+ *
+ * Fee-on-transfer caveat: Transfer.value is the `actual` amount transferred.
+ * For standard ERC-20 tokens (USDFC), actual == requested.
+ */
+export function handleFeeAuctionTransfer(event: TransferEvent): void {
+  const paymentsAddress = dataSource.context().getBytes("paymentsAddress");
+
+  // Only interested in outflows FROM FilecoinPay (i.e. FilecoinPay paying out
+  // either a withdrawal or a fee-auction purchase).
+  if (event.params.from.notEqual(Address.fromBytes(paymentsAddress))) return;
+
+  // Must be a direct top-level call to FilecoinPay; a router would fall through.
+  const txTo = event.transaction.to;
+  if (txTo === null) return;
+  if ((txTo as Address).notEqual(Address.fromBytes(paymentsAddress))) return;
+
+  // Selector check filters withdrawals and other paths that also produce
+  // Transfer-from-FilecoinPay events.
+  const input = event.transaction.input;
+  if (input.length < 4) return;
+  if (
+    input[0] != BURN_FOR_FEES_SELECTOR_0 ||
+    input[1] != BURN_FOR_FEES_SELECTOR_1 ||
+    input[2] != BURN_FOR_FEES_SELECTOR_2 ||
+    input[3] != BURN_FOR_FEES_SELECTOR_3
+  ) {
+    return;
+  }
+
+  const tokenAddress = event.address;
+  const recipient = event.params.to;
+  const amountPurchased = event.params.value;
+  const filBurned = event.transaction.value;
+
+  const purchaseId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+  const purchase = new FeeAuctionPurchase(purchaseId);
+  purchase.token = tokenAddress;
+  purchase.recipient = recipient;
+  purchase.amountPurchased = amountPurchased;
+  purchase.filBurned = filBurned;
+  purchase.blockNumber = event.block.number;
+  purchase.blockTimestamp = event.block.timestamp;
+  purchase.transactionHash = event.transaction.hash;
+  purchase.save();
+
+  // The running Token.accumulatedFees total is incremented on settlements and
+  // one-time payments; draw it back down when those fees are auctioned off so
+  // the total reflects the actual pending balance (mirrors FilecoinPay's
+  // `fees.funds = available - actual`).
+  const token = Token.load(tokenAddress);
+  if (token) {
+    token.accumulatedFees = token.accumulatedFees.minus(amountPurchased);
+    token.totalFilBurnedForFees = token.totalFilBurnedForFees.plus(filBurned);
+    token.save();
+  }
+
+  MetricsCollectionOrchestrator.collectFeeAuctionMetrics(filBurned, event.block.timestamp, event.block.number);
 }

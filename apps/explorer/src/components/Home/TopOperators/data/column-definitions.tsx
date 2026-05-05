@@ -1,11 +1,11 @@
-import type { Operator } from "@filecoin-pay/types";
+import type { OperatorToken } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { ExplorerLink } from "@/components/shared";
-import { formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
-const columnHelper = createColumnHelper<Operator>();
+const columnHelper = createColumnHelper<OperatorToken>();
 
 export const columns = [
   columnHelper.display({
@@ -14,21 +14,35 @@ export const columns = [
     cell: (info) => <span className='font-semibold text-muted-foreground'>{info.row.index + 1}</span>,
     size: 48,
   }),
-  columnHelper.accessor("address", {
+  columnHelper.accessor("operator.address", {
     header: "Address",
     cell: (info) => {
       return <ExplorerLink address={info.getValue()} label='Service address' />;
     },
   }),
-  columnHelper.accessor("totalRails", {
+  columnHelper.accessor(
+    (row) => ({
+      settledAmount: row.settledAmount,
+      token: row.token,
+    }),
+    {
+      id: "usdfcSettled",
+      header: "USDFC settled",
+      cell: (info) => {
+        const { settledAmount, token } = info.getValue();
+        return formatToken(settledAmount, token.decimals, token.symbol, 8);
+      },
+    },
+  ),
+  columnHelper.accessor("operator.totalRails", {
     header: "Total Rails",
     cell: (info) => formatCompactNumber(info.getValue()),
   }),
-  columnHelper.accessor("totalTokens", {
+  columnHelper.accessor("operator.totalTokens", {
     header: "Total Tokens",
     cell: (info) => formatCompactNumber(info.getValue()),
   }),
-  columnHelper.accessor("totalApprovals", {
+  columnHelper.accessor("operator.totalApprovals", {
     header: () => (
       <div className='flex items-center gap-1.5'>
         Total Approvals

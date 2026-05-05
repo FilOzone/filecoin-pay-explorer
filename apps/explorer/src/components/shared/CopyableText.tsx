@@ -1,7 +1,7 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { knownWallets } from "@/constants/known-wallets";
+import { knownAddresses } from "@/constants/known-addresses";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
@@ -28,7 +28,7 @@ const CopyableText = ({
   monospace = true,
 }: CopyableTextProps) => {
   const displayValue =
-    knownWallets[value.toLowerCase()] ??
+    knownAddresses[value.toLowerCase()] ??
     (truncate && value.length > truncateLength * 2
       ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
       : value);
