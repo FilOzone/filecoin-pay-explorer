@@ -28,7 +28,7 @@ import {
   getRateChangeQueueEntityId,
   getUserTokenEntityId,
 } from "./keys";
-import { ZERO_BIG_INT } from "./metrics/constants";
+import { ONE_BIG_INT, ZERO_BIG_INT } from "./metrics/constants";
 
 // Checks if token is native FIL (address zero)
 export function isNativeToken(tokenAddress: Bytes): boolean {
@@ -137,6 +137,10 @@ export const getTokenDetails = (address: Address): TokenDetails => {
 };
 
 // UserToken entity functions
+//
+// When a UserToken is created for the first time, we also bump the owning
+// Account's `totalTokens` counter so it stays in sync. Callers are expected
+// to have created the Account entity beforehand.
 export const createOrLoadUserToken = (account: Address, token: Address): UserTokenWithIsNew => {
   const id = getUserTokenEntityId(account, token);
   let userToken = UserToken.load(id);
@@ -153,6 +157,17 @@ export const createOrLoadUserToken = (account: Address, token: Address): UserTok
     userToken.payout = ZERO_BIG_INT;
     userToken.fundsCollected = ZERO_BIG_INT;
     userToken.save();
+
+    const accountEntity = Account.load(account);
+    if (accountEntity) {
+      accountEntity.totalTokens = accountEntity.totalTokens.plus(ONE_BIG_INT);
+      accountEntity.save();
+    } else {
+      log.warning("[createOrLoadUserToken] Account not found when creating UserToken for account: {}", [
+        account.toHexString(),
+      ]);
+    }
+
     return new UserTokenWithIsNew(userToken, true);
   }
 

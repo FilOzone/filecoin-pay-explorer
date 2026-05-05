@@ -145,6 +145,8 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   const payeeAccount = payeeAccountWithIsNew.account;
   const isNewPayee = payeeAccount.totalRails.equals(ZERO_BIG_INT);
   const isNewPayeeAccount = payeeAccountWithIsNew.isNew;
+  // Create Service Fee Recipient account if it doesn't exist
+  const isNewServiceFeeRecipientAccount = createOrLoadAccountByAddress(serviceFeeRecipient).isNew;
 
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
   const operator = operatorWithIsNew.operator;
@@ -172,9 +174,9 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   operator.save();
 
   // Collect Metrics
-  const newAccounts = (isNewPayerAccount ? ONE_BIG_INT : ZERO_BIG_INT).plus(
-    isNewPayeeAccount ? ONE_BIG_INT : ZERO_BIG_INT,
-  );
+  const newAccounts = (isNewPayerAccount ? ONE_BIG_INT : ZERO_BIG_INT)
+    .plus(isNewPayeeAccount ? ONE_BIG_INT : ZERO_BIG_INT)
+    .plus(isNewServiceFeeRecipientAccount ? ONE_BIG_INT : ZERO_BIG_INT);
   MetricsCollectionOrchestrator.collectRailCreationMetrics(
     rail,
     newAccounts,
@@ -438,7 +440,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
   operatorToken.volume = operatorToken.volume.plus(totalSettledAmount);
   operatorToken.commissionEarned = operatorToken.commissionEarned.plus(operatorCommission);
 
-  // update funds for payer and payee
+  // update funds for payer, payee and service fee recipient
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;
   const serviceFeeRecipientUserToken = createOrLoadUserToken(
@@ -530,9 +532,8 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const token = tokenWithIsNew.token;
   const isNewToken = tokenWithIsNew.isNew;
 
-  const accountWithIsNew = createOrLoadAccountByAddress(accountAddress);
-  const account = accountWithIsNew.account;
-  const isNewAccount = accountWithIsNew.isNew;
+  // Ensure the Account exists before the UserToken
+  const isNewAccount = createOrLoadAccountByAddress(accountAddress).isNew;
 
   const userTokenWithIsNew = createOrLoadUserToken(accountAddress, tokenAddress);
   const userToken = userTokenWithIsNew.userToken;
@@ -543,11 +544,6 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   token.volume = token.volume.plus(amount);
   token.totalUsers = isNewUserToken ? token.totalUsers.plus(ONE_BIG_INT) : token.totalUsers;
   token.save();
-
-  if (isNewUserToken) {
-    account.totalTokens = account.totalTokens.plus(ONE_BIG_INT);
-    account.save();
-  }
 
   userToken.funds = userToken.funds.plus(amount);
   userToken.save();
