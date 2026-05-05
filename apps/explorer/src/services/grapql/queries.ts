@@ -57,13 +57,25 @@ export const GET_RECENT_OPERATORS = gql`
 `;
 
 export const GET_OPERATORS_LEADERBOARD = gql`
-  query GetOperatorsLeaderboard($first: Int = 10, $orderBy: Operator_orderBy = totalRails) {
-    operators(first: $first, orderBy: $orderBy, orderDirection: desc) {
-      id
-      address
-      totalRails
-      totalTokens
-      totalApprovals
+  query GetOperatorsByUSDFCSettledAmount($first: Int = 10, $token: String) {
+    operatorTokens(
+      first: $first
+      orderBy: settledAmount
+      where: {token: $token}
+      orderDirection: desc
+    ) {
+      settledAmount
+      operator {
+        id
+        address
+        totalRails
+        totalTokens
+        totalApprovals
+      }
+      token {
+        decimals
+        symbol
+      }
     }
   }
 `;
