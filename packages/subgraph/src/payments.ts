@@ -459,10 +459,6 @@ export function handleRailSettled(event: RailSettledEvent): void {
     // For native FIL, the fee is burned directly (no accumulated fees to track)
     if (!isNativeToken(rail.token)) {
       token.accumulatedFees = token.accumulatedFees.plus(networkFee);
-
-      const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(Address.fromBytes(rail.token), timestamp);
-      tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.plus(networkFee);
-      tokenMetric.save();
     }
     // Reduce streaming lockup by rate × actualSettledDuration.
     // Settlement window is (previousSettledUpto, settledUpTo].
@@ -648,13 +644,6 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
     // For native FIL, the fee is burned directly (no accumulated fees to track)
     if (!isNativeToken(rail.token)) {
       token.accumulatedFees = token.accumulatedFees.plus(networkFee);
-
-      const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(
-        Address.fromBytes(rail.token),
-        event.block.timestamp,
-      );
-      tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.plus(networkFee);
-      tokenMetric.save();
     }
     token.save();
   }
@@ -814,11 +803,5 @@ export function handleFeeAuctionTransfer(event: TransferEvent): void {
     token.save();
   }
 
-  MetricsCollectionOrchestrator.collectFeeAuctionMetrics(
-    amountPurchased,
-    filBurned,
-    tokenAddress,
-    event.block.timestamp,
-    event.block.number,
-  );
+  MetricsCollectionOrchestrator.collectFeeAuctionMetrics(filBurned, event.block.timestamp, event.block.number);
 }

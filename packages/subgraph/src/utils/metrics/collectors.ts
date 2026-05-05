@@ -452,20 +452,15 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
 }
 
 export class FeeAuctionCollector extends BaseMetricsCollector {
-  private amountPurchased: GraphBN;
   private filBurned: GraphBN;
-  private token: Bytes;
 
-  constructor(amountPurchased: GraphBN, filBurned: GraphBN, token: Bytes, timestamp: GraphBN, blockNumber: GraphBN) {
+  constructor(filBurned: GraphBN, timestamp: GraphBN, blockNumber: GraphBN) {
     super(timestamp, blockNumber);
-    this.amountPurchased = amountPurchased;
     this.filBurned = filBurned;
-    this.token = token;
   }
 
   collect(): void {
     this.updateNetworkMetrics();
-    this.updateTokenMetrics();
     this.updateDailyMetrics();
     this.updateWeeklyMetrics();
   }
@@ -475,14 +470,6 @@ export class FeeAuctionCollector extends BaseMetricsCollector {
 
     networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.filBurned);
     networkMetric.save();
-  }
-
-  private updateTokenMetrics(): void {
-    const tokenMetric = MetricsEntityManager.loadOrCreateTokenMetric(Address.fromBytes(this.token), this.timestamp);
-
-    tokenMetric.accumulatedFees = tokenMetric.accumulatedFees.minus(this.amountPurchased);
-    tokenMetric.totalFilBurnedForFees = tokenMetric.totalFilBurnedForFees.plus(this.filBurned);
-    tokenMetric.save();
   }
 
   private updateDailyMetrics(): void {
@@ -601,14 +588,8 @@ export class MetricsCollectionOrchestrator {
     collector.collect();
   }
 
-  static collectFeeAuctionMetrics(
-    amountPurchased: GraphBN,
-    filBurned: GraphBN,
-    token: Bytes,
-    timestamp: GraphBN,
-    blockNumber: GraphBN,
-  ): void {
-    const collector = new FeeAuctionCollector(amountPurchased, filBurned, token, timestamp, blockNumber);
+  static collectFeeAuctionMetrics(filBurned: GraphBN, timestamp: GraphBN, blockNumber: GraphBN): void {
+    const collector = new FeeAuctionCollector(filBurned, timestamp, blockNumber);
     collector.collect();
   }
 }

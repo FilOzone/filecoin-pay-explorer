@@ -248,10 +248,6 @@ type DailyTokenMetric @entity(immutable: false) {
   activeRailsCount: BigInt!
   uniqueHolders: BigInt!
   totalLocked: BigInt!
-
-  # Auction stats
-  accumulatedFees: BigInt!
-  totalFilBurnedForFees: BigInt!
 }
 
 type DailyOperatorMetric @entity(immutable: false) {
