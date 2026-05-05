@@ -164,7 +164,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               {BigInt(rail.paymentRate) > 0n && BigInt(rail.lockupPeriod) > 0n && (
                 <MetricItem
                   title='Lockup Period'
-                  value={`${((Number(rail.lockupPeriod) * EPOCH_DURATION) / 60) / 60 / 24} days`}
+                  value={`${Math.ceil((Number(rail.lockupPeriod) * EPOCH_DURATION) / 60 / 60 / 24)} days`}
                   tooltip={`${Number(rail.lockupPeriod)} epochs`}
                   Icon={HourglassIcon}
                 />
