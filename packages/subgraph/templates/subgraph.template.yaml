@@ -83,4 +83,5 @@ templates:
       eventHandlers:
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleFeeAuctionTransfer
+          topic1: ["{{paymentsContractAddress}}"]
       file: ./src/payments.ts
