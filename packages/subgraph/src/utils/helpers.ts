@@ -127,6 +127,8 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.lockupRate = ZERO_BIG_INT;
     token.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
     token.totalUsers = ZERO_BIG_INT;
+    token.accumulatedFees = ZERO_BIG_INT;
+    token.totalFilBurnedForFees = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);
   }

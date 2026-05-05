@@ -76,6 +76,18 @@ export type DailyTokenMetric = {
   withdrawal: Scalars["BigInt"]["output"];
 };
 
+export type FeeAuctionPurchase = {
+  __typename: "FeeAuctionPurchase";
+  amountPurchased: Scalars["BigInt"]["output"];
+  blockNumber: Scalars["BigInt"]["output"];
+  blockTimestamp: Scalars["BigInt"]["output"];
+  filBurned: Scalars["BigInt"]["output"];
+  id: Scalars["Bytes"]["output"];
+  recipient: Scalars["Bytes"]["output"];
+  token: Token;
+  transactionHash: Scalars["Bytes"]["output"];
+};
+
 export type OneTimePayment = {
   __typename: "OneTimePayment";
   blockNumber: Scalars["BigInt"]["output"];
@@ -204,6 +216,7 @@ export type Settlement = {
 
 export type Token = {
   __typename: "Token";
+  accumulatedFees: Scalars["BigInt"]["output"];
   decimals: Scalars["BigInt"]["output"];
   id: Scalars["Bytes"]["output"];
   lockupCurrent: Scalars["BigInt"]["output"];
@@ -213,6 +226,7 @@ export type Token = {
   operatorCommission: Scalars["BigInt"]["output"];
   symbol: Scalars["String"]["output"];
   totalDeposits: Scalars["BigInt"]["output"];
+  totalFilBurnedForFees: Scalars["BigInt"]["output"];
   totalOneTimePayment: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   totalUsers: Scalars["BigInt"]["output"];

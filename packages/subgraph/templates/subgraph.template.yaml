@@ -58,3 +58,30 @@ dataSources:
         - event: AccountLockupSettled(indexed address,indexed address,uint256,uint256,uint256)
           handler: handleAccountLockupSettled
       file: ./src/payments.ts
+
+templates:
+
+  # Token Transfer events from FilecoinPay capture fee-auction purchases (burnForFees)
+  # without needing trace_filter. burnForFees emits no event directly; instead it calls
+  # ERC-20 transfer to the auction recipient, producing a standard Transfer log we can
+  # anchor on. We filter by from == FilecoinPay and the top-level tx's function selector.
+  - name: TokenTemplate
+    kind: ethereum
+    network: "{{network}}"
+    source:
+      abi: erc20
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Token
+        - FeeAuctionPurchase
+      abis:
+        - name: erc20
+          file: ./config/erc20-abi.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleFeeAuctionTransfer
+          topic1: ["{{paymentsContractAddress}}"]
+      file: ./src/payments.ts

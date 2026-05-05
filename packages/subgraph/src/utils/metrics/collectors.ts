@@ -412,6 +412,8 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
   collect(): void {
     this.updateNetworkMetrics();
     this.updateTokenMetrics();
+    this.updateDailyMetrics();
+    this.updateWeeklyMetrics();
   }
 
   private updateNetworkMetrics(): void {
@@ -430,6 +432,58 @@ export class OneTimePaymentCollector extends BaseMetricsCollector {
     tokenMetric.oneTimePaymentAmount = tokenMetric.oneTimePaymentAmount.plus(this.totalAmount);
 
     tokenMetric.save();
+  }
+
+  private updateDailyMetrics(): void {
+    if (this.isNativeFil) {
+      const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
+      dailyMetric.filBurned = dailyMetric.filBurned.plus(this.networkFee);
+      dailyMetric.save();
+    }
+  }
+
+  private updateWeeklyMetrics(): void {
+    if (this.isNativeFil) {
+      const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
+      weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.networkFee);
+      weeklyMetric.save();
+    }
+  }
+}
+
+export class FeeAuctionCollector extends BaseMetricsCollector {
+  private filBurned: GraphBN;
+
+  constructor(filBurned: GraphBN, timestamp: GraphBN, blockNumber: GraphBN) {
+    super(timestamp, blockNumber);
+    this.filBurned = filBurned;
+  }
+
+  collect(): void {
+    this.updateNetworkMetrics();
+    this.updateDailyMetrics();
+    this.updateWeeklyMetrics();
+  }
+
+  private updateNetworkMetrics(): void {
+    const networkMetric = MetricsEntityManager.loadOrCreatePaymentsMetric();
+
+    networkMetric.totalFilBurned = networkMetric.totalFilBurned.plus(this.filBurned);
+    networkMetric.save();
+  }
+
+  private updateDailyMetrics(): void {
+    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
+
+    dailyMetric.filBurned = dailyMetric.filBurned.plus(this.filBurned);
+    dailyMetric.save();
+  }
+
+  private updateWeeklyMetrics(): void {
+    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
+
+    weeklyMetric.filBurned = weeklyMetric.filBurned.plus(this.filBurned);
+    weeklyMetric.save();
   }
 }
 
@@ -531,6 +585,11 @@ export class MetricsCollectionOrchestrator {
     blockNumber: GraphBN,
   ): void {
     const collector = new OneTimePaymentCollector(totalAmount, networkFee, token, timestamp, blockNumber);
+    collector.collect();
+  }
+
+  static collectFeeAuctionMetrics(filBurned: GraphBN, timestamp: GraphBN, blockNumber: GraphBN): void {
+    const collector = new FeeAuctionCollector(filBurned, timestamp, blockNumber);
     collector.collect();
   }
 }
