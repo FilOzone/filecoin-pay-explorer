@@ -235,12 +235,12 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
 
           {!isOneTimePaymentOnly && (
             <MetricItem
-              title='Arbiter'
+              title='Validator'
               value={
                 <CopyableText
-                  value={rail.arbiter}
+                  value={rail.arbiter} // FIXME
                   monospace={true}
-                  label='Arbiter address'
+                  label='Validator address'
                   truncate={true}
                   truncateLength={8}
                 />
