@@ -170,7 +170,7 @@ export const GET_RAIL_DETAILS = gql`
       settledUpto
       state
       endEpoch
-      arbiter
+      validator
       commissionRateBps
       serviceFeeRecipient
       totalOneTimePaymentAmount

@@ -101,7 +101,6 @@ type Rail @entity(immutable: false) {
   state: RailState!
   endEpoch: BigInt!
   validator: Bytes!
-  arbiter: Bytes! # legacy
   commissionRateBps: BigInt!
   serviceFeeRecipient: Bytes!
 

@@ -150,7 +150,6 @@ export type PaymentsMetric = {
 
 export type Rail = {
   __typename: "Rail";
-  arbiter: Scalars["Bytes"]["output"];
   commissionRateBps: Scalars["BigInt"]["output"];
   createdAt: Scalars["BigInt"]["output"];
   endEpoch: Scalars["BigInt"]["output"];
@@ -174,6 +173,7 @@ export type Rail = {
   totalRateChanges: Scalars["BigInt"]["output"];
   totalSettledAmount: Scalars["BigInt"]["output"];
   totalSettlements: Scalars["BigInt"]["output"];
+  validator: Scalars["Bytes"]["output"];
 };
 
 export type RailState = "ACTIVE" | "FINALIZED" | "TERMINATED" | "ZERORATE" | "%future added value";
