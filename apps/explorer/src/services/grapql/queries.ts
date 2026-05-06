@@ -34,7 +34,7 @@ export const GET_RECENT_ACCOUNTS = gql`
 
 export const GET_ACCOUNTS_LEADERBOARD = gql`
   query GetAccountsLeaderboard($first: Int = 10, $token: String!) {
-    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first:5, where:{token: $token}) {
+    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first: $first, where:{token: $token}) {
       fundsCollected
       account {
         id
@@ -46,7 +46,7 @@ export const GET_ACCOUNTS_LEADERBOARD = gql`
         decimals
       }
     }
-    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first:5, where:{token: $token}) {
+    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first: $first, where:{token: $token}) {
       payout
       account {
         id
