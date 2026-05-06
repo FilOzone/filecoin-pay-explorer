@@ -8,7 +8,7 @@ export type TopEarnersTableProps = {
   data: Array<UserToken>;
 };
 
-function TopAccountsTable({ data }: TopEarnersTableProps) {
+function TopEarnersTable({ data }: TopEarnersTableProps) {
   const table = useReactTable({
     data,
     columns,
@@ -19,4 +19,4 @@ function TopAccountsTable({ data }: TopEarnersTableProps) {
   return <TanstackTable table={table} />;
 }
 
-export default TopAccountsTable;
+export default TopEarnersTable;
