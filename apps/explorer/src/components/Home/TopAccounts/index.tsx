@@ -23,7 +23,7 @@ const TopAccounts = () => {
     <PageSection backgroundVariant='light'>
       <div className='flex flex-col gap-6 -mt-20'>
         <div className='flex items-center justify-between'>
-          <h2 className='text-2xl font-medium'>Accounts Leaderboard</h2>
+          <h2 className='text-2xl font-medium'>Accounts Leaderboards</h2>
           <StyledLink to='/accounts' className='text-sm'>
             View All
           </StyledLink>
@@ -36,8 +36,14 @@ const TopAccounts = () => {
         {data && !isEmpty && (
           <RefreshOverlay isRefetching={isRefetching}>
             <div className='flex items-center justify-between gap-6'>
-              <TopEarnersTable data={data.topEarners} />
-              <TopSpendersTable data={data.topSpenders} />
+              <div className='w-full'>
+                <h3 className='text-xl font-medium mb-3'>Top Earners</h3>
+                <TopEarnersTable data={data.topEarners} />
+              </div>
+              <div className='w-full'>
+                <h3 className='text-xl font-medium mb-3'>Top Spenders</h3>
+                <TopSpendersTable data={data.topSpenders} />
+              </div>
             </div>
           </RefreshOverlay>
         )}
