@@ -135,6 +135,15 @@ export const GET_ACCOUNTS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      userTokens {
+        payout
+        fundsCollected
+        token {
+          id
+          symbol
+          decimals
+        }
+      }
     }
   }
 `;

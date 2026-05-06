@@ -3,7 +3,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CopyableText } from "@/components/shared";
-import { formatCompactNumber } from "@/utils/formatter";
+import { calibration, mainnet } from "@/constants/chains";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Account>();
 
@@ -24,6 +25,42 @@ export const columns = [
       );
     },
   }),
+  columnHelper.accessor(
+    (row) => ({
+      usdfcUserToken: row.userTokens.find((userToken) =>
+        [mainnet.contracts.usdfc.address, calibration.contracts.usdfc.address]
+          .map((address) => address.toLowerCase())
+          .includes(userToken.token.id.toLowerCase()),
+      ),
+    }),
+    {
+      id: "usdfcEarned",
+      header: "USDFC earned",
+      cell: (info) => {
+        const { usdfcUserToken } = info.getValue();
+        if (!usdfcUserToken) return formatToken(0, 0, "USDFC");
+        return formatToken(usdfcUserToken.fundsCollected, usdfcUserToken.token.decimals, "USDFC", 8);
+      },
+    },
+  ),
+  columnHelper.accessor(
+    (row) => ({
+      usdfcUserToken: row.userTokens.find((userToken) =>
+        [mainnet.contracts.usdfc.address, calibration.contracts.usdfc.address]
+          .map((address) => address.toLowerCase())
+          .includes(userToken.token.id.toLowerCase()),
+      ),
+    }),
+    {
+      id: "usdfcSpent",
+      header: "USDFC spent",
+      cell: (info) => {
+        const { usdfcUserToken } = info.getValue();
+        if (!usdfcUserToken) return formatToken(0, 0, "USDFC");
+        return formatToken(usdfcUserToken.payout, usdfcUserToken.token.decimals, "USDFC", 8);
+      },
+    },
+  ),
   columnHelper.accessor("totalRails", {
     header: () => <div className='text-right'>Total Rails</div>,
     cell: (info) => <div className='text-right'>{formatCompactNumber(info.getValue())}</div>,
