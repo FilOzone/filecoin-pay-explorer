@@ -11,7 +11,7 @@ import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
-import { formatToken } from "@/utils/formatter";
+import { formatFIL, formatToken } from "@/utils/formatter";
 import { calculateTotalLockup } from "@/utils/lockup";
 import { MetricItem } from "../shared";
 
@@ -62,14 +62,12 @@ const Stats: React.FC = () => {
 
   const cards = useMemo<MetricCard[]>(
     () => [
-      // TODO: Add this back when network revenue calculation is fixed
-      // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
-      // {
-      //   title: "Network Revenue",
-      //   value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
-      //   icon: "/stats/total-fil-burned.svg",
-      //   tooltip: "Network fees paid to process payment settlements",
-      // },
+      {
+        title: "Network Revenue",
+        value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
+        icon: "/stats/total-fil-burned.svg",
+        tooltip: "Network fees paid to process payment settlements",
+      },
       {
         title: "Active Rails",
         value: data?.paymentsMetrics?.totalActiveRails?.toString() ?? "0",
