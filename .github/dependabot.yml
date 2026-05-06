@@ -16,6 +16,9 @@ updates:
       safe-workspace-updates:
         patterns:
           - "*"
+        exclude-patterns:
+          - "@filoz/synapse-sdk" # Unstable / fast-moving API
+          - "@biomejs/biome" # Required manual schema updates & can fail CI
         update-types:
           - minor
           - patch
