@@ -125,6 +125,7 @@ export const GET_ACCOUNTS_PAGINATED = gql`
   query GetAccountsPaginated(
     $first: Int!
     $skip: Int!
+    $token: String!
     $where: Account_filter
     $orderBy: Account_orderBy
     $orderDirection: OrderDirection
@@ -135,7 +136,7 @@ export const GET_ACCOUNTS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
-      userTokens {
+      userTokens(where: {token: $token}) {
         payout
         fundsCollected
         token {

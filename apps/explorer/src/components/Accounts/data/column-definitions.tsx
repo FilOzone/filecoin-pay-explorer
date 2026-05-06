@@ -3,7 +3,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CopyableText } from "@/components/shared";
-import { calibration, mainnet } from "@/constants/chains";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Account>();
@@ -27,11 +26,7 @@ export const columns = [
   }),
   columnHelper.accessor(
     (row) => ({
-      usdfcUserToken: row.userTokens.find((userToken) =>
-        [mainnet.contracts.usdfc.address, calibration.contracts.usdfc.address]
-          .map((address) => address.toLowerCase())
-          .includes(userToken.token.id.toLowerCase()),
-      ),
+      usdfcUserToken: row.userTokens[0],
     }),
     {
       id: "usdfcEarned",
@@ -45,11 +40,7 @@ export const columns = [
   ),
   columnHelper.accessor(
     (row) => ({
-      usdfcUserToken: row.userTokens.find((userToken) =>
-        [mainnet.contracts.usdfc.address, calibration.contracts.usdfc.address]
-          .map((address) => address.toLowerCase())
-          .includes(userToken.token.id.toLowerCase()),
-      ),
+      usdfcUserToken: row.userTokens[0],
     }),
     {
       id: "usdfcSpent",
