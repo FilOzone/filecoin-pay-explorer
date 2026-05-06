@@ -153,6 +153,14 @@ export const GET_OPERATORS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      operatorTokens {
+        settledAmount
+        token {
+          id
+          decimals
+          symbol
+        }
+      }
     }
   }
 `;
