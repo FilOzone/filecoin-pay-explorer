@@ -17,7 +17,7 @@
     "framer-motion": "^12.23.11",
     "graphql-request": "^7.2.0",
     "lucide-react": "^0.533.0",
-    "postcss": "^8.4.35",
+    "postcss": "^8.5.12",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "recharts": "^3.1.0",
