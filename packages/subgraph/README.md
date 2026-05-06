@@ -2,6 +2,12 @@
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
+## CI/CD
+
+Create a GitHub release with a tag `vX.Y.Z` when you wish to deploy a new version of the subgraph. GitHub Actions will build and publish the subgraph.
+
+Once you have received confirmation emails that the mainnet and calibration subgraphs have finished indexing, tag the new subgraphs with `prod`.
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed and set up:
@@ -17,7 +23,7 @@ Before you begin, ensure you have the following installed and set up:
 3.  **Goldsky Account:** You need an account on Goldsky to host your subgraph. Sign up at [goldsky.com](https://goldsky.com/).
 4.  **Goldsky CLI:** This tool allows you to deploy subgraphs to the Goldsky platform. Follow the installation instructions in the [Goldsky Documentation](https://docs.goldsky.com/introduction).
 
-## Deploying the Subgraph to Goldsky
+## Manually Deploying the Subgraph to Goldsky
 
 Follow these steps to build and deploy the subgraph:
 
@@ -28,7 +34,7 @@ Follow these steps to build and deploy the subgraph:
     cd path/to/filecoin-pay-explorer/subgraph
     ```
 
-2.  **Install Dependencies:**
+1.  **Install Dependencies:**
     Install the necessary node modules:
 
     ```bash
@@ -37,28 +43,21 @@ Follow these steps to build and deploy the subgraph:
     yarn install
     ```
 
-3.  **Generate Code:**
-    The Graph CLI uses the `subgraph.yaml` manifest and GraphQL schema (`schema.graphql`) to generate AssemblyScript types.
+1.  **Generate Code and Build the Subgraph:**
+    The Graph CLI uses the `subgraph.yaml` manifest and GraphQL schema (`schema.graphql`) to generate AssemblyScript types. Then compile your subgraph code into WebAssembly (WASM).
 
     ```bash
-    graph codegen
+    npm run build
     ```
 
-4.  **Build the Subgraph:**
-    Compile your subgraph code into WebAssembly (WASM).
-
-    ```bash
-    graph build
-    ```
-
-5.  **Authenticate with Goldsky:**
+1.  **Authenticate with Goldsky:**
     Log in to your Goldsky account using the CLI. Go to settings section of your Goldsky dashboard to get your API key.
 
     ```bash
     goldsky login
     ```
 
-6.  **Deploy to Goldsky:**
+1.  **Deploy to Goldsky:**
     Use the Goldsky CLI to deploy your built subgraph.
 
     ```bash
@@ -69,8 +68,8 @@ Follow these steps to build and deploy the subgraph:
     - Replace `<version>` with a version identifier (e.g., `v0.0.1`).
     - You can manage your deployments and find your subgraph details in the [Goldsky Dashboard](https://app.goldsky.com/). The deployment command will output the GraphQL endpoint URL for your subgraph upon successful completion. **Copy this URL**, as you will need it for the client.
 
-7.  **Tag the Subgraph (Optional):**
-    Tag the subgraph you deployed in step 6.
+1.  **Tag the Subgraph (Optional):**
+    Tag the subgraph you deployed in step 5.
 
     ```bash
     goldsky subgraph tag create <your-subgraph-name>/<version> --tag <tag-name>
@@ -84,7 +83,7 @@ Follow these steps to build and deploy the subgraph:
     goldsky subgraph tag delete <your-subgraph-name>/<version> --tag <tag-name>
     ```
 
-## Modifying and Redeploying the Subgraph
+## Manually Modifying and Redeploying the Subgraph
 
 If you need to make changes to the subgraph's logic, schema, or configuration, follow these general steps:
 

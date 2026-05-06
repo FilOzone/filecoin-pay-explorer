@@ -1,7 +1,7 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, RailStateBadge } from "@/components/shared";
+import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Rail>();
@@ -10,10 +10,11 @@ export const columns = [
   columnHelper.accessor("railId", {
     header: "Rail ID",
     cell: (info) => (
-      // TODO: enable link when per rail page is ready
-      // <StyledLink to={`/rail/${info.getValue()}`}>
-      <ID number={Number(info.getValue())} />
-      // </StyledLink>
+      <StyledLink>
+        <NetworkLink href={`/rails/${info.getValue()}`}>
+          <ID number={Number(info.getValue())} />
+        </NetworkLink>
+      </StyledLink>
     ),
   }),
   columnHelper.accessor("payer", {
@@ -99,6 +100,14 @@ export const columns = [
       },
     },
   ),
+  columnHelper.accessor("totalSettlements", {
+    header: "Settlements",
+    cell: (info) => info.getValue().toString(),
+  }),
+  columnHelper.accessor("totalRateChanges", {
+    header: "Rate Changes",
+    cell: (info) => info.getValue().toString(),
+  }),
   columnHelper.accessor("createdAt", {
     header: "Created At",
     cell: (info) => formatDate(info.getValue()),

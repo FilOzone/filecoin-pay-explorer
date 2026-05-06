@@ -1,14 +1,13 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
-
-import type { OperatorToken } from "@filecoin-pay/types";
+import type { RateChangeQueue } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { columns } from "../data/column-definitions";
+import { columns } from "../data/column-definitions-rail-rate-changes";
 
-export type TopOperatorsTableProps = {
-  data: Array<OperatorToken>;
+export type RailRateChangesTableProps = {
+  data: Array<RateChangeQueue>;
 };
 
-function TopOperatorsTable({ data }: TopOperatorsTableProps) {
+function RailRateChangesTable({ data }: RailRateChangesTableProps) {
   const table = useReactTable({
     data,
     columns,
@@ -19,4 +18,4 @@ function TopOperatorsTable({ data }: TopOperatorsTableProps) {
   return <TanstackTable table={table} />;
 }
 
-export default TopOperatorsTable;
+export default RailRateChangesTable;

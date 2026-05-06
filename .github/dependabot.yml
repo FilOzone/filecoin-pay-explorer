@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    open-pull-requests-limit: 5
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /
+    open-pull-requests-limit: 5
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      safe-workspace-updates:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

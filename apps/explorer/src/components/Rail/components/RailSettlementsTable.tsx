@@ -1,14 +1,13 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
-
-import type { OperatorToken } from "@filecoin-pay/types";
+import type { Settlement } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { columns } from "../data/column-definitions";
+import { columns } from "../data/column-definitions-rail-settlements";
 
-export type TopOperatorsTableProps = {
-  data: Array<OperatorToken>;
+export type RailSettlementsTableProps = {
+  data: Array<Settlement>;
 };
 
-function TopOperatorsTable({ data }: TopOperatorsTableProps) {
+function RailSettlementsTable({ data }: RailSettlementsTableProps) {
   const table = useReactTable({
     data,
     columns,
@@ -19,4 +18,4 @@ function TopOperatorsTable({ data }: TopOperatorsTableProps) {
   return <TanstackTable table={table} />;
 }
 
-export default TopOperatorsTable;
+export default RailSettlementsTable;

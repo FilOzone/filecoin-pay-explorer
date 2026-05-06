@@ -1,14 +1,13 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
-
-import type { OperatorToken } from "@filecoin-pay/types";
+import type { OneTimePayment } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { columns } from "../data/column-definitions";
+import { columns } from "../data/column-definitions-rail-one-time-payments";
 
-export type TopOperatorsTableProps = {
-  data: Array<OperatorToken>;
+export type RailOneTimePaymentsTableProps = {
+  data: Array<OneTimePayment>;
 };
 
-function TopOperatorsTable({ data }: TopOperatorsTableProps) {
+function RailOneTimePaymentsTable({ data }: RailOneTimePaymentsTableProps) {
   const table = useReactTable({
     data,
     columns,
@@ -19,4 +18,4 @@ function TopOperatorsTable({ data }: TopOperatorsTableProps) {
   return <TanstackTable table={table} />;
 }
 
-export default TopOperatorsTable;
+export default RailOneTimePaymentsTable;

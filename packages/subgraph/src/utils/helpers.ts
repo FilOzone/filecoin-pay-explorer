@@ -28,7 +28,7 @@ import {
   getRateChangeQueueEntityId,
   getUserTokenEntityId,
 } from "./keys";
-import { ZERO_BIG_INT } from "./metrics/constants";
+import { ONE_BIG_INT, ZERO_BIG_INT } from "./metrics/constants";
 
 // Checks if token is native FIL (address zero)
 export function isNativeToken(tokenAddress: Bytes): boolean {
@@ -127,6 +127,8 @@ export const getTokenDetails = (address: Address): TokenDetails => {
     token.lockupRate = ZERO_BIG_INT;
     token.lockupLastSettledUntilEpoch = ZERO_BIG_INT;
     token.totalUsers = ZERO_BIG_INT;
+    token.accumulatedFees = ZERO_BIG_INT;
+    token.totalFilBurnedForFees = ZERO_BIG_INT;
 
     return new TokenDetails(token, true);
   }
@@ -135,6 +137,10 @@ export const getTokenDetails = (address: Address): TokenDetails => {
 };
 
 // UserToken entity functions
+//
+// When a UserToken is created for the first time, we also bump the owning
+// Account's `totalTokens` counter so it stays in sync. Callers are expected
+// to have created the Account entity beforehand.
 export const createOrLoadUserToken = (account: Address, token: Address): UserTokenWithIsNew => {
   const id = getUserTokenEntityId(account, token);
   let userToken = UserToken.load(id);
@@ -151,6 +157,17 @@ export const createOrLoadUserToken = (account: Address, token: Address): UserTok
     userToken.payout = ZERO_BIG_INT;
     userToken.fundsCollected = ZERO_BIG_INT;
     userToken.save();
+
+    const accountEntity = Account.load(account);
+    if (accountEntity) {
+      accountEntity.totalTokens = accountEntity.totalTokens.plus(ONE_BIG_INT);
+      accountEntity.save();
+    } else {
+      log.warning("[createOrLoadUserToken] Account not found when creating UserToken for account: {}", [
+        account.toHexString(),
+      ]);
+    }
+
     return new UserTokenWithIsNew(userToken, true);
   }
 
@@ -228,7 +245,7 @@ export const createRail = (
   payee: Address,
   operator: Address,
   token: Address,
-  arbiter: Address,
+  validator: Address,
   settledUpTo: GraphBN,
   commissionRateBps: GraphBN,
   serviceFeeRecipient: Address,
@@ -248,7 +265,8 @@ export const createRail = (
   rail.settledUpto = settledUpTo;
   rail.state = "ZERORATE";
   rail.endEpoch = ZERO_BIG_INT;
-  rail.arbiter = arbiter;
+  rail.validator = validator;
+  rail.arbiter = validator; // legacy
   rail.totalSettledAmount = ZERO_BIG_INT;
   rail.totalOneTimePaymentAmount = ZERO_BIG_INT;
   rail.totalOneTimePayments = ZERO_BIG_INT;
