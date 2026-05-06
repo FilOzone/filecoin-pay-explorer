@@ -6,11 +6,18 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { RefreshOverlay } from "@filecoin-foundation/ui-filecoin/RefreshOverlay";
 import { AlertCircle, SearchIcon } from "lucide-react";
 import { StyledLink } from "@/components/shared";
+import { calibration, mainnet } from "@/constants/chains";
 import useAccountsLeaderboard from "@/hooks/useAccountsLeaderboard";
-import TopAccountsTable from "./components/TopAccountsTable";
+import useNetwork from "@/hooks/useNetwork";
+import TopEarnersTable from "./components/TopEarnersTable";
+import TopSpendersTable from "./components/TopSpendersTable";
 
 const TopAccounts = () => {
-  const { data, isLoading, isError, error, isRefetching, refetch } = useAccountsLeaderboard(10, "totalRails");
+  const { network } = useNetwork();
+  const token = network === "mainnet" ? mainnet.contracts.usdfc.address : calibration.contracts.usdfc.address;
+  const { data, isLoading, isError, error, isRefetching, refetch } = useAccountsLeaderboard(10, token);
+
+  const isEmpty = data && data.topEarners.length === 0 && data.topSpenders.length === 0;
 
   return (
     <PageSection backgroundVariant='light'>
@@ -26,16 +33,16 @@ const TopAccounts = () => {
 
         {isError && <ErrorState refetch={refetch} error={error} />}
 
-        {data && data.length > 0 && (
+        {data && !isEmpty && (
           <RefreshOverlay isRefetching={isRefetching}>
             <div className='flex items-center justify-between gap-6'>
-              <TopAccountsTable data={data} />
-              <TopAccountsTable data={data} />
+              <TopEarnersTable data={data.topEarners} />
+              <TopSpendersTable data={data.topSpenders} />
             </div>
           </RefreshOverlay>
         )}
 
-        {!isLoading && data && data.length === 0 && <EmptyState />}
+        {!isLoading && data && isEmpty && <EmptyState />}
       </div>
     </PageSection>
   );

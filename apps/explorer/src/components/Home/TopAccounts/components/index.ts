@@ -1,3 +1,4 @@
-import TopAccountsTable from "./TopAccountsTable";
+import TopEarnersTable from "./TopEarnersTable";
+import TopSpendersTable from "./TopSpendersTable";
 
-export { TopAccountsTable };
+export { TopEarnersTable, TopSpendersTable };

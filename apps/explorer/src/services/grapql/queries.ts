@@ -33,13 +33,30 @@ export const GET_RECENT_ACCOUNTS = gql`
 `;
 
 export const GET_ACCOUNTS_LEADERBOARD = gql`
-  query GetAccountsLeaderboard($first: Int = 10, $orderBy: Account_orderBy = totalRails) {
-    accounts(first: $first, orderBy: $orderBy, orderDirection: desc) {
-      id
-      address
-      totalRails
-      totalTokens
-      totalApprovals
+  query GetAccountsLeaderboard($first: Int = 10, $token: String!) {
+    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first:5, where:{token: $token}) {
+      fundsCollected
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
+    }
+    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first:5, where:{token: $token}) {
+      payout
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
     }
   }
 `;
