@@ -14,7 +14,7 @@ export const HeroStats: React.FC = () => {
   if (isLoading) {
     return (
       <div className='relative'>
-        <div className='absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
+        <div className='absolute inset-0 bg-linear-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
         <div className='relative bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-8 mb-8'>
           <div className='flex items-center justify-center h-64'>
             <LoadingSpinner size='lg' text='Loading network metrics...' />
@@ -27,7 +27,7 @@ export const HeroStats: React.FC = () => {
   if (isError || !paymentsMetric) {
     return (
       <div className='relative'>
-        <div className='absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
+        <div className='absolute inset-0 bg-linear-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
         <div className='relative bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-3xl p-8 mb-8'>
           <ErrorBoundary
             error={error as Error}
@@ -45,7 +45,7 @@ export const HeroStats: React.FC = () => {
   return (
     <div className='relative'>
       {/* Background Effects */}
-      <div className='absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
+      <div className='absolute inset-0 bg-linear-to-r from-purple-500/10 via-blue-500/10 to-teal-500/10 rounded-3xl blur-3xl' />
 
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -59,7 +59,7 @@ export const HeroStats: React.FC = () => {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className='inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-blue-600 bg-clip-text text-transparent text-sm font-semibold mb-4'
+            className='inline-flex items-center gap-2 bg-linear-to-r from-purple-500 to-blue-600 bg-clip-text text-transparent text-sm font-semibold mb-4'
           >
             <Zap className='w-4 h-4' />
             FILECOIN PAYMENTS NETWORK
