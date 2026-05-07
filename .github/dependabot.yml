@@ -12,3 +12,10 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      safe-workspace-updates:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

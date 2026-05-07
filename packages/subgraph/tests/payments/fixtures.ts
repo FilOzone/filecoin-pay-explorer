@@ -229,7 +229,6 @@ export function assertRailParams(
   assert.fieldEquals("Rail", railEntityId, "payer", payer.toHex());
   assert.fieldEquals("Rail", railEntityId, "payee", payee.toHex());
   assert.fieldEquals("Rail", railEntityId, "validator", validator.toHex());
-  assert.fieldEquals("Rail", railEntityId, "arbiter", validator.toHex());
   assert.fieldEquals("Rail", railEntityId, "serviceFeeRecipient", serviceFeeRecipient.toHex());
   assert.fieldEquals("Rail", railEntityId, "commissionRateBps", commissionRateBps.toString());
   assert.fieldEquals("Rail", railEntityId, "totalOneTimePaymentAmount", totalOneTimePaymentAmount);

@@ -17,21 +17,24 @@
     "framer-motion": "^12.23.11",
     "graphql-request": "^7.2.0",
     "lucide-react": "^0.533.0",
-    "postcss": "^8.4.35",
+    "postcss": "^8.5.12",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "recharts": "^3.1.0",
     "tailwindcss": "^3.4.1"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
     "@filecoin-pay/configs": "workspace:*",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@types/babel__core": "^7.20.5",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.21",
-    "babel-plugin-react-compiler": "^19.1.0-rc.3",
+    "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "~5.9.3",
-    "vite": "^7.1.7"
+    "vite": "^8.0.10"
   }
 }
