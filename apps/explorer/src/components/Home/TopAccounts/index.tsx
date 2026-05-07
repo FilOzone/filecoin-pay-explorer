@@ -35,12 +35,12 @@ const TopAccounts = () => {
 
         {data && !isEmpty && (
           <RefreshOverlay isRefetching={isRefetching}>
-            <div className='flex items-center justify-between gap-6'>
-              <div className='w-full'>
+            <div className='grid grid-cols-1 gap-10 xl:grid-cols-2 xl:gap-6'>
+              <div>
                 <h3 className='text-xl font-medium mb-3'>Top Earners</h3>
                 <TopEarnersTable data={data.topEarners} />
               </div>
-              <div className='w-full'>
+              <div>
                 <h3 className='text-xl font-medium mb-3'>Top Spenders</h3>
                 <TopSpendersTable data={data.topSpenders} />
               </div>
