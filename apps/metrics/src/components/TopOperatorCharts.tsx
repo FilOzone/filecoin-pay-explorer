@@ -98,7 +98,7 @@ export const TopOperatorCharts: React.FC = () => {
       {/* Header with Toggle */}
       <div className='flex items-center justify-between mb-6'>
         <div className='flex items-center gap-3'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-purple-500 to-pink-600 bg-opacity-20'>
             <Crown className='w-5 h-5 text-purple-400' />
           </div>
           <div>

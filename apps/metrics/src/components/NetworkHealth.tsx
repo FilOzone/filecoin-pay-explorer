@@ -13,7 +13,7 @@ export const NetworkHealth: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-green-500 to-teal-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-green-500 to-teal-600 bg-opacity-20'>
             <Shield className='w-5 h-5 text-green-400' />
           </div>
           <div>
@@ -32,7 +32,7 @@ export const NetworkHealth: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-green-500 to-teal-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-green-500 to-teal-600 bg-opacity-20'>
             <Shield className='w-5 h-5 text-green-400' />
           </div>
           <div>
@@ -101,7 +101,7 @@ export const NetworkHealth: React.FC = () => {
       className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'
     >
       <div className='flex items-center gap-3 mb-6'>
-        <div className='p-2 rounded-lg bg-gradient-to-r from-green-500 to-teal-600 bg-opacity-20'>
+        <div className='p-2 rounded-lg bg-linear-to-r from-green-500 to-teal-600 bg-opacity-20'>
           <Shield className='w-5 h-5 text-green-400' />
         </div>
         <div>
@@ -120,7 +120,7 @@ export const NetworkHealth: React.FC = () => {
             className='relative group'
           >
             <div
-              className={`absolute inset-0 bg-gradient-to-r ${metric.bgColor} to-transparent rounded-xl opacity-10 group-hover:opacity-20 transition-opacity duration-300`}
+              className={`absolute inset-0 bg-linear-to-r ${metric.bgColor} to-transparent rounded-xl opacity-10 group-hover:opacity-20 transition-opacity duration-300`}
             />
 
             <div className='relative bg-gray-900/30 border border-gray-700/30 rounded-xl p-4 hover:border-gray-600/50 transition-colors duration-300'>
@@ -155,7 +155,7 @@ export const NetworkHealth: React.FC = () => {
             initial={{ width: 0 }}
             animate={{ width: `${healthScore}%` }}
             transition={{ duration: 1, delay: 1 }}
-            className='bg-gradient-to-r from-green-500 to-teal-500 h-2 rounded-full'
+            className='bg-linear-to-r from-green-500 to-teal-500 h-2 rounded-full'
           />
         </div>
 

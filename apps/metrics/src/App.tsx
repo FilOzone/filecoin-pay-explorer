@@ -7,10 +7,10 @@ import { TrendChart } from "./components/TrendChart";
 
 function App() {
   return (
-    <div className='min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'>
+    <div className='min-h-screen bg-linear-to-br from-gray-900 via-gray-800 to-gray-900'>
       {/* Background Pattern */}
-      <div className='absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent' />
-      <div className='absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent' />
+      <div className='absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent' />
+      <div className='absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,var(--tw-gradient-stops))] from-blue-900/20 via-transparent to-transparent' />
 
       {/* Content */}
       <div className='relative'>
