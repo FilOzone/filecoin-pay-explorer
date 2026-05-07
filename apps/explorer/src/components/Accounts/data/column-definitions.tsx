@@ -24,34 +24,24 @@ export const columns = [
       );
     },
   }),
-  columnHelper.accessor(
-    (row) => ({
-      usdfcUserToken: row.userTokens[0],
-    }),
-    {
-      id: "usdfcEarned",
-      header: "USDFC earned",
-      cell: (info) => {
-        const { usdfcUserToken } = info.getValue();
-        if (!usdfcUserToken) return formatToken(0, 0, "USDFC");
-        return formatToken(usdfcUserToken.fundsCollected, usdfcUserToken.token.decimals, "USDFC", 8);
-      },
+  columnHelper.accessor((row) => row.userTokens[0], {
+    id: "usdfcEarned",
+    header: "USDFC earned",
+    cell: (info) => {
+      const userToken = info.getValue();
+      if (!userToken) return formatToken(0, 0, "USDFC");
+      return formatToken(userToken.fundsCollected, userToken.token.decimals, userToken.token.symbol, 8);
     },
-  ),
-  columnHelper.accessor(
-    (row) => ({
-      usdfcUserToken: row.userTokens[0],
-    }),
-    {
-      id: "usdfcSpent",
-      header: "USDFC spent",
-      cell: (info) => {
-        const { usdfcUserToken } = info.getValue();
-        if (!usdfcUserToken) return formatToken(0, 0, "USDFC");
-        return formatToken(usdfcUserToken.payout, usdfcUserToken.token.decimals, "USDFC", 8);
-      },
+  }),
+  columnHelper.accessor((row) => row.userTokens[0], {
+    id: "usdfcSpent",
+    header: "USDFC spent",
+    cell: (info) => {
+      const userToken = info.getValue();
+      if (!userToken) return formatToken(0, 0, "USDFC");
+      return formatToken(userToken.payout, userToken.token.decimals, "USDFC", 8);
     },
-  ),
+  }),
   columnHelper.accessor("totalRails", {
     header: () => <div className='text-right'>Total Rails</div>,
     cell: (info) => <div className='text-right'>{formatCompactNumber(info.getValue())}</div>,
