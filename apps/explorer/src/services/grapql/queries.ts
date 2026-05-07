@@ -58,12 +58,7 @@ export const GET_RECENT_OPERATORS = gql`
 
 export const GET_OPERATORS_LEADERBOARD = gql`
   query GetOperatorsByUSDFCSettledAmount($first: Int = 10, $token: String) {
-    operatorTokens(
-      first: $first
-      orderBy: settledAmount
-      where: {token: $token}
-      orderDirection: desc
-    ) {
+    operatorTokens(first: $first, orderBy: settledAmount, where: { token: $token }, orderDirection: desc) {
       settledAmount
       operator {
         id
@@ -146,6 +141,7 @@ export const GET_OPERATORS_PAGINATED = gql`
     $where: Operator_filter
     $orderBy: Operator_orderBy
     $orderDirection: OrderDirection
+    $token: String!
   ) {
     operators(first: $first, skip: $skip, where: $where, orderBy: $orderBy, orderDirection: $orderDirection) {
       id
@@ -153,7 +149,7 @@ export const GET_OPERATORS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
-      operatorTokens {
+      operatorTokens(where: { token: $token }) {
         settledAmount
         token {
           id

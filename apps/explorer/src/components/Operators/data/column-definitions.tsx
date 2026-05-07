@@ -3,7 +3,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { ExplorerLink } from "@/components/shared";
-import { calibration, mainnet } from "@/constants/chains";
 import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Operator>();
@@ -15,24 +14,15 @@ export const columns = [
       return <ExplorerLink address={info.getValue()} label='Service address' />;
     },
   }),
-  columnHelper.accessor(
-    (row) => ({
-      usdfcOperatorToken: row.operatorTokens.find((operatorToken) =>
-        [mainnet.contracts.usdfc.address, calibration.contracts.usdfc.address]
-          .map((address) => address.toLowerCase())
-          .includes(operatorToken.token.id.toLowerCase()),
-      ),
-    }),
-    {
-      id: "usdfcSettled",
-      header: "USDFC settled",
-      cell: (info) => {
-        const { usdfcOperatorToken } = info.getValue();
-        if (!usdfcOperatorToken) return formatToken(0, 0, "USDFC");
-        return formatToken(usdfcOperatorToken.settledAmount, usdfcOperatorToken.token.decimals, "USDFC", 8);
-      },
+  columnHelper.accessor((row) => row.operatorTokens[0], {
+    id: "usdfcSettled",
+    header: "USDFC settled",
+    cell: (info) => {
+      const operatorToken = info.getValue();
+      if (!operatorToken) return formatToken(0, 0, "USDFC");
+      return formatToken(operatorToken.settledAmount, operatorToken.token.decimals, operatorToken.token.symbol, 8);
     },
-  ),
+  }),
   columnHelper.accessor("totalRails", {
     header: () => <div className='text-right'>Total Rails</div>,
     cell: (info) => <div className='text-right'>{formatCompactNumber(info.getValue())}</div>,
