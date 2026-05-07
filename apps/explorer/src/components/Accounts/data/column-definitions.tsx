@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { CopyableText } from "@/components/shared";
-import { formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Account>();
 
@@ -22,6 +22,24 @@ export const columns = [
           truncateLength={8}
         />
       );
+    },
+  }),
+  columnHelper.accessor((row) => row.userTokens[0], {
+    id: "usdfcEarned",
+    header: "USDFC earned",
+    cell: (info) => {
+      const userToken = info.getValue();
+      if (!userToken) return formatToken(0, 0, "USDFC");
+      return formatToken(userToken.fundsCollected, userToken.token.decimals, userToken.token.symbol, 8);
+    },
+  }),
+  columnHelper.accessor((row) => row.userTokens[0], {
+    id: "usdfcSpent",
+    header: "USDFC spent",
+    cell: (info) => {
+      const userToken = info.getValue();
+      if (!userToken) return formatToken(0, 0, "USDFC");
+      return formatToken(userToken.payout, userToken.token.decimals, "USDFC", 8);
     },
   }),
   columnHelper.accessor("totalRails", {
