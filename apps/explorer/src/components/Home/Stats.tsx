@@ -5,7 +5,14 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { IconProps } from "@phosphor-icons/react";
-import { ArrowsSplitIcon, CoinsIcon, LockIcon, UsersIcon } from "@phosphor-icons/react";
+import {
+  ArrowCircleDownLeftIcon,
+  ArrowCircleUpRightIcon,
+  ArrowsSplitIcon,
+  CoinsIcon,
+  LockIcon,
+  UsersIcon,
+} from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
@@ -80,6 +87,18 @@ const Stats: React.FC = () => {
         title: "Accounts",
         value: data?.paymentsMetrics?.totalAccounts?.toString() ?? "0",
         icon: UsersIcon,
+        href: `/${network}/accounts`,
+      },
+      {
+        title: "Payees",
+        value: data?.paymentsMetrics?.uniquePayees?.toString() ?? "0",
+        icon: ArrowCircleUpRightIcon,
+        href: `/${network}/accounts`,
+      },
+      {
+        title: "Payers",
+        value: data?.paymentsMetrics?.uniquePayers?.toString() ?? "0",
+        icon: ArrowCircleDownLeftIcon,
         href: `/${network}/accounts`,
       },
       ...(data?.tokens.map((token) => ({
