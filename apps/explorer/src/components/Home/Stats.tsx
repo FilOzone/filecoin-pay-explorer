@@ -66,7 +66,7 @@ const Stats: React.FC = () => {
         title: "Network Revenue",
         value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
         icon: "/stats/total-fil-burned.svg",
-        tooltip: "Network fees paid to process payment settlements",
+        tooltip: "Total Filecoin (FIL) burned from native rail settlements and token auctions.",
       },
       {
         title: "Active Rails",
