@@ -24,7 +24,7 @@ export const columns = [
       return (
         <CopyableText
           value={payer.address}
-          // to={`/account/${payer.address}`}
+          to={`/accounts/${payer.address}`}
           monospace={true}
           label='Account address'
           truncate={true}
@@ -40,7 +40,7 @@ export const columns = [
       return (
         <CopyableText
           value={payee.address}
-          // to={`/account/${payee.address}`}
+          to={`/accounts/${payee.address}`}
           monospace={true}
           label='Account address'
           truncate={true}

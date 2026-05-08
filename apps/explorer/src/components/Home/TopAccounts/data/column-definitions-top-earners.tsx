@@ -17,7 +17,7 @@ export const columns = [
     cell: (info) => (
       <CopyableText
         value={info.getValue()}
-        // to={`/account/${info.getValue()}`}
+        to={`/accounts/${info.getValue()}`}
         monospace={true}
         label='Account address'
         truncate={true}

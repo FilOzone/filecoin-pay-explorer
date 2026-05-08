@@ -53,7 +53,7 @@ export const columns = [
           <CopyableText
             className='text-sm font-medium'
             value={counterparty.address}
-            // to={`/account/${counterparty.address}`}
+            to={`/accounts/${counterparty.address}`}
             monospace={true}
             label='Account address'
             truncate={true}

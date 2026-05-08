@@ -64,7 +64,7 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
       <TableCell className='font-mono text-sm'>
         <CopyableText
           value={counterparty.address}
-          // to={`/account/${counterparty.address}`}
+          to={`/accounts/${counterparty.address}`}
           monospace={true}
           label='Account address'
           truncate={true}
