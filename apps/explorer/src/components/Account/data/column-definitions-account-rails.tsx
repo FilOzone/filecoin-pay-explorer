@@ -1,9 +1,7 @@
-import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Account, Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, NetworkLink, StyledLink } from "@/components/shared";
-import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
+import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { RoleIndicator } from "../components/RoleIndicator";
 
@@ -74,10 +72,7 @@ export const columns = [
   }),
   columnHelper.accessor("state", {
     header: "Status",
-    cell: (info) => {
-      const state = info.getValue();
-      return <Badge variant={getRailStateVariant(state)}>{getRailStateLabel(state)}</Badge>;
-    },
+    cell: (info) => <RailStateBadge state={info.getValue()} />,
   }),
   columnHelper.accessor(
     (row) => ({
