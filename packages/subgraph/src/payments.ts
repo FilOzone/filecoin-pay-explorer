@@ -71,7 +71,9 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   const lockupAllowance = event.params.lockupAllowance;
   const maxLockupPeriod = event.params.maxLockupPeriod;
 
-  const isNewToken = getTokenDetails(tokenAddress).isNew;
+  const tokenDetails = getTokenDetails(tokenAddress);
+  const isNewToken = tokenDetails.isNew;
+  if (isNewToken) tokenDetails.token.save();
 
   const clientAccount = Account.load(clientAddress);
 
@@ -534,7 +536,7 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const tokenWithIsNew = getTokenDetails(tokenAddress);
   const token = tokenWithIsNew.token;
   const isNewToken = tokenWithIsNew.isNew;
-  const isFirstDeposit = isNewToken || token.userFunds.equals(ZERO_BIG_INT);
+  const isFirstDeposit = isNewToken || token.totalDeposits.equals(ZERO_BIG_INT);
 
   // Ensure the Account exists before the UserToken
   const isNewAccount = createOrLoadAccountByAddress(accountAddress).isNew;
