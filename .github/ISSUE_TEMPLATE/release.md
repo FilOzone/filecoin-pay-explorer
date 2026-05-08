@@ -3,7 +3,6 @@ name: Release
 about: Checklist for publishing a new release
 title: "Release vX.Y.Z"
 labels: release
-assignees: ""
 ---
 
 ## Release Checklist
@@ -16,16 +15,17 @@ assignees: ""
 ### 1. Define the new version
 
 ```bash
-NEW_RELEASE_VERSION="vX.Y.Z"
+NEW_RELEASE_VERSION="X.Y.Z"   # no v prefix — used for Goldsky subgraph names
+CURRENT_VERSION="X.Y.Z"       # version currently tagged as prod (will be replaced)
 ```
 
-- [ ] Version string agreed and set
+- [ ] Version strings agreed and set
 
 ### 2. Create a GitHub release
 
 ```bash
-gh release create "$NEW_RELEASE_VERSION" \
-  --title "$NEW_RELEASE_VERSION" \
+gh release create "v$NEW_RELEASE_VERSION" \
+  --title "v$NEW_RELEASE_VERSION" \
   --generate-notes
 ```
 
@@ -61,7 +61,7 @@ NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_
 ```bash
 for network in mainnet calibration; do
   # Remove the prod tag from the previous version (if present)
-  goldsky subgraph tag delete filecoin-pay-$network/prod --tag prod 2>/dev/null || true
+  goldsky subgraph tag delete filecoin-pay-$network/$CURRENT_VERSION --tag prod 2>/dev/null || true
   # Apply prod tag to the new version
   goldsky subgraph tag create filecoin-pay-$network/$NEW_RELEASE_VERSION --tag prod
 done
@@ -77,5 +77,5 @@ done
 ### 8. Wrapup
 
 - [ ] Announce the release in #fil-foc
-- [ ] Document if there any improvements that need to be made to the release process
-- Close this issue
+- [ ] Document if there are any improvements that need to be made to the release process
+- [ ] Close this issue

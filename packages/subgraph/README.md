@@ -6,7 +6,7 @@ For a full end-to-end release walkthrough, use the [release issue template](../.
 
 ## CI/CD
 
-A GitHub release with a tag will deploy new subraph versions per [deploy.yml](../../.github/workflows/deploy.yml).
+A GitHub release with a tag matching `vX.Y.Z` will deploy new subgraph versions per [deploy.yml](../../.github/workflows/deploy.yml).
 
 CI/CD doesn't currently do any validation or subgraph tagging. 
 
