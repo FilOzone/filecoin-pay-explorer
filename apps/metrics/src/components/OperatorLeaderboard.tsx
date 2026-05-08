@@ -15,7 +15,7 @@ export const OperatorLeaderboard: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
             <Crown className='w-5 h-5 text-yellow-400' />
           </div>
           <div>
@@ -34,7 +34,7 @@ export const OperatorLeaderboard: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
             <Crown className='w-5 h-5 text-yellow-400' />
           </div>
           <div>
@@ -61,7 +61,7 @@ export const OperatorLeaderboard: React.FC = () => {
     >
       <div className='flex items-center justify-between mb-6'>
         <div className='flex items-center gap-3'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-yellow-500 to-orange-600 bg-opacity-20'>
             <Crown className='w-5 h-5 text-yellow-400' />
           </div>
           <div>
@@ -81,7 +81,7 @@ export const OperatorLeaderboard: React.FC = () => {
               transition={{ duration: 0.4, delay: 0.1 * index }}
               className='relative group'
             >
-              <div className='absolute inset-0 bg-gradient-to-r from-purple-500/10 to-blue-600/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300' />
+              <div className='absolute inset-0 bg-linear-to-r from-purple-500/10 to-blue-600/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300' />
 
               <div className='relative flex items-center justify-between p-4 rounded-xl border border-gray-700/30 hover:border-gray-600/50 transition-colors duration-300'>
                 <div className='flex items-center gap-4'>

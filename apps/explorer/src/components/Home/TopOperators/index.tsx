@@ -7,11 +7,15 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { RefreshOverlay } from "@filecoin-foundation/ui-filecoin/RefreshOverlay";
 import { AlertCircle, SearchIcon } from "lucide-react";
 import { StyledLink } from "@/components/shared";
+import { calibration, mainnet } from "@/constants/chains";
+import useNetwork from "@/hooks/useNetwork";
 import useOperatorsLeaderboard from "@/hooks/useOperatorsLeaderboard";
 import TopOperatorsTable from "./components/TopOperatorsTable";
 
 const TopOperators = () => {
-  const { data, isLoading, isError, error, isRefetching, refetch } = useOperatorsLeaderboard(10, "totalRails");
+  const { network } = useNetwork();
+  const token = network === "mainnet" ? mainnet.contracts.usdfc.address : calibration.contracts.usdfc.address;
+  const { data, isLoading, isError, error, isRefetching, refetch } = useOperatorsLeaderboard(10, token);
 
   return (
     <PageSection backgroundVariant='light'>

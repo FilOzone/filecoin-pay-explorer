@@ -1,14 +1,14 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 
-import type { Account } from "@filecoin-pay/types";
+import type { UserToken } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { columns } from "../data/column-definitions";
+import { columns } from "../data/column-definitions-top-earners";
 
-export type TopAccountsTableProps = {
-  data: Array<Account>;
+export type TopEarnersTableProps = {
+  data: Array<UserToken>;
 };
 
-function TopAccountsTable({ data }: TopAccountsTableProps) {
+function TopEarnersTable({ data }: TopEarnersTableProps) {
   const table = useReactTable({
     data,
     columns,
@@ -19,4 +19,4 @@ function TopAccountsTable({ data }: TopAccountsTableProps) {
   return <TanstackTable table={table} />;
 }
 
-export default TopAccountsTable;
+export default TopEarnersTable;

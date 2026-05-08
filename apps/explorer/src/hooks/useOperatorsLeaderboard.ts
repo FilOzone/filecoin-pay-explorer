@@ -1,19 +1,17 @@
-import type { Operator } from "@filecoin-pay/types";
+import type { OperatorToken } from "@filecoin-pay/types";
 import { GET_OPERATORS_LEADERBOARD } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
 interface OperatorsLeaderboardResponse {
-  operators: Operator[];
+  operatorTokens: OperatorToken[];
 }
 
-export type OperatorOrderBy = "totalRails" | "totalTokens" | "totalApprovals";
-
-const useOperatorsLeaderboard = (first: number = 10, orderBy: OperatorOrderBy = "totalRails") =>
-  useGraphQLQuery<OperatorsLeaderboardResponse, Operator[]>({
-    queryKey: ["operatorsLeaderboard", first, orderBy],
+const useOperatorsLeaderboard = (first: number = 10, token: string) =>
+  useGraphQLQuery<OperatorsLeaderboardResponse, OperatorToken[]>({
+    queryKey: ["operatorsLeaderboard", first, token],
     query: GET_OPERATORS_LEADERBOARD,
-    variables: { first, orderBy },
-    select: (data) => data.operators,
+    variables: { first, token },
+    select: (data) => data.operatorTokens,
     refetchInterval: 60 * 1000,
   });
 

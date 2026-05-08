@@ -24,6 +24,8 @@ type Token @entity(immutable: false) {
   totalUsers: BigInt!
   userFunds: BigInt! # same as sum of all UserToken.funds
   operatorCommission: BigInt!
+  accumulatedFees: BigInt! # ERC-20 fees pending in dutch auction
+  totalFilBurnedForFees: BigInt! # Total FIL burned purchasing this token's fees
   lockupCurrent: BigInt!
   lockupRate: BigInt!
   lockupLastSettledUntilEpoch: BigInt!
@@ -100,7 +102,7 @@ type Rail @entity(immutable: false) {
   settledUpto: BigInt!
   state: RailState!
   endEpoch: BigInt!
-  arbiter: Bytes!
+  validator: Bytes!
   commissionRateBps: BigInt!
   serviceFeeRecipient: Bytes!
 
@@ -260,4 +262,15 @@ type DailyOperatorMetric @entity(immutable: false) {
   # Client metrics
   uniqueClients: BigInt!
   totalApprovals: BigInt!
+}
+
+type FeeAuctionPurchase @entity(immutable: true) {
+  id: Bytes! # txHash + logIndex
+  token: Token!
+  recipient: Bytes!
+  amountPurchased: BigInt! # ERC-20 tokens purchased
+  filBurned: BigInt! # FIL burned to purchase
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
 }

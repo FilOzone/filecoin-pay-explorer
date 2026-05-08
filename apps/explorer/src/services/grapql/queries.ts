@@ -33,13 +33,30 @@ export const GET_RECENT_ACCOUNTS = gql`
 `;
 
 export const GET_ACCOUNTS_LEADERBOARD = gql`
-  query GetAccountsLeaderboard($first: Int = 10, $orderBy: Account_orderBy = totalRails) {
-    accounts(first: $first, orderBy: $orderBy, orderDirection: desc) {
-      id
-      address
-      totalRails
-      totalTokens
-      totalApprovals
+  query GetAccountsLeaderboard($first: Int = 10, $token: String!) {
+    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first: $first, where:{token: $token}) {
+      fundsCollected
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
+    }
+    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first: $first, where:{token: $token}) {
+      payout
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
     }
   }
 `;
@@ -57,13 +74,20 @@ export const GET_RECENT_OPERATORS = gql`
 `;
 
 export const GET_OPERATORS_LEADERBOARD = gql`
-  query GetOperatorsLeaderboard($first: Int = 10, $orderBy: Operator_orderBy = totalRails) {
-    operators(first: $first, orderBy: $orderBy, orderDirection: desc) {
-      id
-      address
-      totalRails
-      totalTokens
-      totalApprovals
+  query GetOperatorsByUSDFCSettledAmount($first: Int = 10, $token: String) {
+    operatorTokens(first: $first, orderBy: settledAmount, where: { token: $token }, orderDirection: desc) {
+      settledAmount
+      operator {
+        id
+        address
+        totalRails
+        totalTokens
+        totalApprovals
+      }
+      token {
+        decimals
+        symbol
+      }
     }
   }
 `;
@@ -86,6 +110,7 @@ export const GET_RAILS_PAGINATED = gql`
       totalOneTimePaymentAmount
       totalSettledAmount
       totalSettlements
+      totalRateChanges
       createdAt
       payer {
         id
@@ -112,6 +137,7 @@ export const GET_ACCOUNTS_PAGINATED = gql`
   query GetAccountsPaginated(
     $first: Int!
     $skip: Int!
+    $token: String!
     $where: Account_filter
     $orderBy: Account_orderBy
     $orderDirection: OrderDirection
@@ -122,6 +148,15 @@ export const GET_ACCOUNTS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      userTokens(where: {token: $token}) {
+        payout
+        fundsCollected
+        token {
+          id
+          symbol
+          decimals
+        }
+      }
     }
   }
 `;
@@ -133,6 +168,7 @@ export const GET_OPERATORS_PAGINATED = gql`
     $where: Operator_filter
     $orderBy: Operator_orderBy
     $orderDirection: OrderDirection
+    $token: String!
   ) {
     operators(first: $first, skip: $skip, where: $where, orderBy: $orderBy, orderDirection: $orderDirection) {
       id
@@ -140,6 +176,14 @@ export const GET_OPERATORS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      operatorTokens(where: { token: $token }) {
+        settledAmount
+        token {
+          id
+          decimals
+          symbol
+        }
+      }
     }
   }
 `;
@@ -157,12 +201,12 @@ export const GET_RAIL_DETAILS = gql`
       settledUpto
       state
       endEpoch
-      arbiter
+      validator
       commissionRateBps
       serviceFeeRecipient
+      totalOneTimePaymentAmount
       totalSettledAmount
-      totalNetPayeeAmount
-      totalCommission
+      totalOneTimePayments
       totalSettlements
       totalRateChanges
       createdAt
@@ -194,9 +238,31 @@ export const GET_RAIL_SETTLEMENTS = gql`
       id
       totalSettledAmount
       totalNetPayeeAmount
-      filBurned
+      # filBurned
+      networkFee
       operatorCommission
       settledUpto
+      token {
+        decimals
+        symbol
+      }
+    }
+  }
+`;
+
+export const GET_RAIL_ONE_TIME_PAYMENTS = gql`
+  query GetRailOneTimePayments($railId: Bytes!, $first: Int!, $skip: Int!) {
+    oneTimePayments(where: { rail: $railId }, first: $first, skip: $skip, orderBy: blockNumber, orderDirection: desc) {
+      id
+      totalAmount
+      netPayeeAmount
+      networkFee
+      operatorCommission
+      blockNumber
+      token {
+        decimals
+        symbol
+      }
     }
   }
 `;
@@ -208,6 +274,12 @@ export const GET_RAIL_RATE_CHANGES = gql`
       startEpoch
       untilEpoch
       rate
+      rail {
+        token {
+          decimals
+          symbol
+        }
+      }
     }
   }
 `;
@@ -413,24 +485,31 @@ export const GET_ACCOUNT_APPROVALS = gql`
 `;
 
 export const GET_STATS_DASHBOARD = gql`
-  query GetStatsDashboard($usdfcAddress: Bytes!, $filAddress: Bytes!) {
-    usdfcToken: token(id: $usdfcAddress) {
+  query GetStatsDashboard {
+    tokens(orderBy: symbol, orderDirection: desc) {
+      id
+      name
+      symbol
       decimals
-      totalSettledAmount
       totalOneTimePayment
+      totalSettledAmount
       userFunds
       lockupCurrent
       lockupRate
       lockupLastSettledUntilEpoch
     }
-    filToken: token(id: $filAddress) {
-      decimals
-      totalSettledAmount
-      totalOneTimePayment
-      userFunds
-      lockupCurrent
-      lockupRate
-      lockupLastSettledUntilEpoch
+    paymentsMetrics(first: 1) {
+      id
+      totalRails
+      totalAccounts
+      totalFilBurned
+      totalRailSettlements
+      totalZeroRateRails
+      totalActiveRails
+      totalTerminatedRails
+      totalFinalizedRails
+      uniquePayers
+      uniquePayees
     }
   }
 `;

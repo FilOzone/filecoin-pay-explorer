@@ -1,19 +1,26 @@
-import type { Account } from "@filecoin-pay/types";
+import type { Address, UserToken } from "@filecoin-pay/types";
 import { GET_ACCOUNTS_LEADERBOARD } from "@/services/grapql/queries";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
 interface AccountsLeaderboardResponse {
-  accounts: Account[];
+  topEarners: UserToken[];
+  topSpenders: UserToken[];
 }
 
-export type AccountOrderBy = "totalRails" | "totalTokens" | "totalApprovals";
+interface AccountsLeaderboardData {
+  topEarners: UserToken[];
+  topSpenders: UserToken[];
+}
 
-const useAccountsLeaderboard = (first: number = 10, orderBy: AccountOrderBy = "totalRails") =>
-  useGraphQLQuery<AccountsLeaderboardResponse, Account[]>({
-    queryKey: ["accountsLeaderboard", first, orderBy],
+const useAccountsLeaderboard = (first: number = 10, token: Address) =>
+  useGraphQLQuery<AccountsLeaderboardResponse, AccountsLeaderboardData>({
+    queryKey: ["accountsLeaderboard", first, token],
     query: GET_ACCOUNTS_LEADERBOARD,
-    variables: { first, orderBy },
-    select: (data) => data.accounts,
+    variables: { first, token },
+    select: (data) => ({
+      topEarners: data.topEarners,
+      topSpenders: data.topSpenders,
+    }),
     refetchInterval: 60 * 1000,
   });
 

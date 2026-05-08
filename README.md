@@ -182,6 +182,10 @@ Static site and subgraph deployments are decoupled. See the [release process](.g
 
 Uptime monitoring for the static site and subgraph is managed via [FilOzone/infra](https://github.com/FilOzone/infra) and visible at [status.filoz.org](https://status.filoz.org).
 
+## Releasing
+
+To publish a new release, open a GitHub issue using the [Release template](.github/ISSUE_TEMPLATE/release.md). It walks through every step: creating the GitHub release, verifying the subgraph deployment, and promoting to production.
+
 ## Contributing
 
 - Use Node/pnpm versions from root `package.json` engines.

@@ -216,7 +216,7 @@ export function assertRailParams(
   state: string,
   payer: Address,
   payee: Address,
-  arbiter: Address,
+  validator: Address,
   serviceFeeRecipient: Address,
   commissionRateBps: GraphBN,
   totalSettledAmount: string,
@@ -228,7 +228,7 @@ export function assertRailParams(
   assert.fieldEquals("Rail", railEntityId, "state", state);
   assert.fieldEquals("Rail", railEntityId, "payer", payer.toHex());
   assert.fieldEquals("Rail", railEntityId, "payee", payee.toHex());
-  assert.fieldEquals("Rail", railEntityId, "arbiter", arbiter.toHex());
+  assert.fieldEquals("Rail", railEntityId, "validator", validator.toHex());
   assert.fieldEquals("Rail", railEntityId, "serviceFeeRecipient", serviceFeeRecipient.toHex());
   assert.fieldEquals("Rail", railEntityId, "commissionRateBps", commissionRateBps.toString());
   assert.fieldEquals("Rail", railEntityId, "totalOneTimePaymentAmount", totalOneTimePaymentAmount);
