@@ -157,6 +157,10 @@ cd ../..
 - **Test:** `pnpm test`
 - **Clean:** `pnpm clean` (removes build artifacts and node_modules)
 
+## Releasing
+
+To publish a new release, open a GitHub issue using the [Release template](.github/ISSUE_TEMPLATE/release.md). It walks through every step: creating the GitHub release, verifying the subgraph deployment, and promoting to production.
+
 ## Contributing
 
 - Use Node/pnpm versions from root `package.json` engines.

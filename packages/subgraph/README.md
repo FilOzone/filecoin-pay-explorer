@@ -2,11 +2,13 @@
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
+For a full end-to-end release walkthrough, use the [release issue template](../../.github/ISSUE_TEMPLATE/release.md).
+
 ## CI/CD
 
-Create a GitHub release with a tag `vX.Y.Z` when you wish to deploy a new version of the subgraph. GitHub Actions will build and publish the subgraph.
+A GitHub release with a tag will deploy new subraph versions per [deploy.yml](../../.github/workflows/deploy.yml).
 
-Once you have received confirmation emails that the mainnet and calibration subgraphs have finished indexing, tag the new subgraphs with `prod`.
+CI/CD doesn't currently do any validation or subgraph tagging. 
 
 ## Prerequisites
 
