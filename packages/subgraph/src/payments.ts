@@ -71,6 +71,8 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   const lockupAllowance = event.params.lockupAllowance;
   const maxLockupPeriod = event.params.maxLockupPeriod;
 
+  const isNewToken = getTokenDetails(tokenAddress).isNew;
+
   const clientAccount = Account.load(clientAddress);
 
   let isNewApproval = false;
@@ -122,6 +124,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     operatorAddress,
     isNewApproval,
     isNewOperator,
+    isNewToken,
     event.block.timestamp,
     event.block.number,
   );
@@ -531,6 +534,7 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   const tokenWithIsNew = getTokenDetails(tokenAddress);
   const token = tokenWithIsNew.token;
   const isNewToken = tokenWithIsNew.isNew;
+  const isFirstDeposit = isNewToken || token.userFunds.equals(ZERO_BIG_INT);
 
   // Ensure the Account exists before the UserToken
   const isNewAccount = createOrLoadAccountByAddress(accountAddress).isNew;
@@ -549,7 +553,7 @@ export function handleDepositRecorded(event: DepositRecordedEvent): void {
   userToken.save();
 
   // Native FIL has no ERC-20 contract, so no Transfer events to track.
-  if (isNewToken && !isNativeToken(tokenAddress)) {
+  if (isFirstDeposit && !isNativeToken(tokenAddress)) {
     const paymentsAddress = event.address;
     const context = new DataSourceContext();
     context.setBytes("paymentsAddress", paymentsAddress);
