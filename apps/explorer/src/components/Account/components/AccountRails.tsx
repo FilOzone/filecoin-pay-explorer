@@ -22,7 +22,10 @@ interface AccountRailsLayoutProps {
 
 const AccountRailsLayout: React.FC<AccountRailsLayoutProps> = ({ children }) => (
   <PageSection backgroundVariant='light'>
-    <div className='flex flex-col gap-6 -mt-20'>{children}</div>
+    <div className='flex flex-col gap-6 -mt-20'>
+      <h3 className='text-2xl font-medium'>Rails</h3>
+      {children}
+    </div>
   </PageSection>
 );
 
@@ -71,10 +74,7 @@ export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
 
       {!isLoading && !isError && data && data.rails.length > 0 && (
         <div className='flex flex-col gap-4'>
-          <div className='flex items-center justify-between'>
-            <h2 className='text-2xl font-semibold'>Rails</h2>
-            <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
-          </div>
+          <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
 
           <AccountRailsTable data={data.rails.map((rail) => ({ ...rail, account }))} />
 
