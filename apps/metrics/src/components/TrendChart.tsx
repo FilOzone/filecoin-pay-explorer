@@ -98,7 +98,7 @@ export const TrendChart: React.FC = () => {
       {/* Header with Toggle */}
       <div className='flex items-center justify-between mb-6'>
         <div className='flex items-center gap-3'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-orange-500 to-red-600 bg-opacity-20'>
             <Activity className='w-5 h-5 text-orange-400' />
           </div>
           <div>

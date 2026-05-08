@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
 import { ExplorerLink } from "@/components/shared";
-import { formatCompactNumber } from "@/utils/formatter";
+import { formatCompactNumber, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Operator>();
 
@@ -12,6 +12,15 @@ export const columns = [
     header: "Address",
     cell: (info) => {
       return <ExplorerLink address={info.getValue()} label='Service address' />;
+    },
+  }),
+  columnHelper.accessor((row) => row.operatorTokens[0], {
+    id: "usdfcSettled",
+    header: "USDFC settled",
+    cell: (info) => {
+      const operatorToken = info.getValue();
+      if (!operatorToken) return formatToken(0, 0, "USDFC");
+      return formatToken(operatorToken.settledAmount, operatorToken.token.decimals, operatorToken.token.symbol, 8);
     },
   }),
   columnHelper.accessor("totalRails", {

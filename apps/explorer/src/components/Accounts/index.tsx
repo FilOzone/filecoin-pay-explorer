@@ -3,8 +3,10 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getChain } from "@/constants/chains";
 import type { AccountsFilter } from "@/hooks/useInfiniteAccounts";
 import useInfiniteAccounts from "@/hooks/useInfiniteAccounts";
+import useNetwork from "@/hooks/useNetwork";
 import { formatHexForSearch } from "@/utils/hexUtils";
 import {
   AccountsEmptyInitial,
@@ -17,9 +19,11 @@ import {
 const Accounts = () => {
   const [searchInput, setSearchInput] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<AccountsFilter>({});
+  const { network } = useNetwork();
+  const token = getChain(network).contracts.usdfc.address;
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
-    useInfiniteAccounts(appliedFilters);
+    useInfiniteAccounts(appliedFilters, token);
 
   const observerTarget = useRef<HTMLDivElement>(null);
 

@@ -16,7 +16,7 @@ export const TokenMetrics: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
             <Coins className='w-5 h-5 text-blue-400' />
           </div>
           <div>
@@ -35,7 +35,7 @@ export const TokenMetrics: React.FC = () => {
     return (
       <div className='bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-2xl p-6'>
         <div className='flex items-center gap-3 mb-6'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
             <Coins className='w-5 h-5 text-blue-400' />
           </div>
           <div>
@@ -62,7 +62,7 @@ export const TokenMetrics: React.FC = () => {
     >
       <div className='flex items-center justify-between mb-6'>
         <div className='flex items-center gap-3'>
-          <div className='p-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
+          <div className='p-2 rounded-lg bg-linear-to-r from-blue-500 to-cyan-600 bg-opacity-20'>
             <Coins className='w-5 h-5 text-blue-400' />
           </div>
           <div>
@@ -82,7 +82,7 @@ export const TokenMetrics: React.FC = () => {
               transition={{ duration: 0.4, delay: 0.1 * index }}
               className='relative group'
             >
-              <div className='absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-600/10 rounded-xl blur-xl group-hover:blur-2xl transition-all duration-300 opacity-0 group-hover:opacity-100' />
+              <div className='absolute inset-0 bg-linear-to-r from-blue-500/10 to-purple-600/10 rounded-xl blur-xl group-hover:blur-2xl transition-all duration-300 opacity-0 group-hover:opacity-100' />
 
               <div className='relative bg-gray-900/30 border border-gray-700/30 rounded-xl p-5 hover:border-gray-600/50 transition-colors duration-300'>
                 <div className='flex items-center justify-between mb-4'>
@@ -90,8 +90,8 @@ export const TokenMetrics: React.FC = () => {
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
                         token.symbol === "FIL"
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                          : "bg-gradient-to-r from-green-500 to-teal-600 text-white"
+                          ? "bg-linear-to-r from-blue-500 to-purple-600 text-white"
+                          : "bg-linear-to-r from-green-500 to-teal-600 text-white"
                       }`}
                     >
                       {token.symbol}

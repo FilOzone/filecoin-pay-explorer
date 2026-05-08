@@ -33,13 +33,30 @@ export const GET_RECENT_ACCOUNTS = gql`
 `;
 
 export const GET_ACCOUNTS_LEADERBOARD = gql`
-  query GetAccountsLeaderboard($first: Int = 10, $orderBy: Account_orderBy = totalRails) {
-    accounts(first: $first, orderBy: $orderBy, orderDirection: desc) {
-      id
-      address
-      totalRails
-      totalTokens
-      totalApprovals
+  query GetAccountsLeaderboard($first: Int = 10, $token: String!) {
+    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first: $first, where:{token: $token}) {
+      fundsCollected
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
+    }
+    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first: $first, where:{token: $token}) {
+      payout
+      account {
+        id
+        address
+        totalRails
+      }
+      token {
+        symbol
+        decimals
+      }
     }
   }
 `;
@@ -58,12 +75,7 @@ export const GET_RECENT_OPERATORS = gql`
 
 export const GET_OPERATORS_LEADERBOARD = gql`
   query GetOperatorsByUSDFCSettledAmount($first: Int = 10, $token: String) {
-    operatorTokens(
-      first: $first
-      orderBy: settledAmount
-      where: {token: $token}
-      orderDirection: desc
-    ) {
+    operatorTokens(first: $first, orderBy: settledAmount, where: { token: $token }, orderDirection: desc) {
       settledAmount
       operator {
         id
@@ -125,6 +137,7 @@ export const GET_ACCOUNTS_PAGINATED = gql`
   query GetAccountsPaginated(
     $first: Int!
     $skip: Int!
+    $token: String!
     $where: Account_filter
     $orderBy: Account_orderBy
     $orderDirection: OrderDirection
@@ -135,6 +148,15 @@ export const GET_ACCOUNTS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      userTokens(where: {token: $token}) {
+        payout
+        fundsCollected
+        token {
+          id
+          symbol
+          decimals
+        }
+      }
     }
   }
 `;
@@ -146,6 +168,7 @@ export const GET_OPERATORS_PAGINATED = gql`
     $where: Operator_filter
     $orderBy: Operator_orderBy
     $orderDirection: OrderDirection
+    $token: String!
   ) {
     operators(first: $first, skip: $skip, where: $where, orderBy: $orderBy, orderDirection: $orderDirection) {
       id
@@ -153,6 +176,14 @@ export const GET_OPERATORS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
+      operatorTokens(where: { token: $token }) {
+        settledAmount
+        token {
+          id
+          decimals
+          symbol
+        }
+      }
     }
   }
 `;
@@ -170,7 +201,7 @@ export const GET_RAIL_DETAILS = gql`
       settledUpto
       state
       endEpoch
-      arbiter
+      validator
       commissionRateBps
       serviceFeeRecipient
       totalOneTimePaymentAmount

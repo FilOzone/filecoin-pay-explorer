@@ -80,7 +80,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
     BigInt(rail.paymentRate) === 0n &&
     BigInt(rail.lockupFixed) === 0n &&
     BigInt(rail.lockupPeriod) === 0n &&
-    rail.arbiter === "0x0000000000000000000000000000000000000000";
+    rail.validator === "0x0000000000000000000000000000000000000000";
   const { data: currentBlock, isLoading, isError, refetch, error } = useBlockNumber();
 
   return (
@@ -235,12 +235,12 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
 
           {!isOneTimePaymentOnly && (
             <MetricItem
-              title='Arbiter'
+              title='Validator'
               value={
                 <CopyableText
-                  value={rail.arbiter}
+                  value={rail.validator}
                   monospace={true}
-                  label='Arbiter address'
+                  label='Validator address'
                   truncate={true}
                   truncateLength={8}
                 />
