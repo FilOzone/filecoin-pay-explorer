@@ -2,9 +2,9 @@ import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
-import type { Account, Address, Rail } from "@filecoin-pay/types";
+import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
+import type { Account, Rail } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
   Pagination,
   PaginationContent,
@@ -20,6 +20,16 @@ import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
+
+interface AccountRailsLayoutProps {
+  children: React.ReactNode;
+}
+
+const AccountRailsLayout: React.FC<AccountRailsLayoutProps> = ({ children }) => (
+  <PageSection backgroundVariant='light'>
+    <div className='flex flex-col gap-6 -mt-20'>{children}</div>
+  </PageSection>
+);
 
 interface ErrorStateProps {
   refetch: () => void;
@@ -131,7 +141,7 @@ export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
   const totalPages = account.totalRails ? Math.ceil(Number(account.totalRails) / 10) : 1;
 
   return (
-    <>
+    <AccountRailsLayout>
       {isLoading && <LoadingStateCard message='Loading Account Rails...' />}
       {isError && <ErrorState refetch={refetch} error={error} />}
       {!isLoading && !isError && (!data || data.rails.length === 0) && <NotFoundState />}
@@ -201,6 +211,6 @@ export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
           )}
         </div>
       )}
-    </>
+    </AccountRailsLayout>
   );
 };
