@@ -8,10 +8,10 @@ import type { Address } from "@filecoin-pay/types";
 import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
-import { AccountApprovals } from "./AccountApprovals";
-import { AccountOverview } from "./AccountOverview";
-import { AccountRails } from "./AccountRails";
-import { AccountTokens } from "./AccountTokens";
+import { AccountApprovals } from "./components/AccountApprovals";
+import { AccountOverview } from "./components/AccountOverview";
+import { AccountRails } from "./components/AccountRails";
+import { AccountTokens } from "./components/AccountTokens";
 
 interface ErrorStateProps {
   refetch: () => void;

@@ -1,10 +1,8 @@
-import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
-import type { Account, Rail } from "@filecoin-pay/types";
-import { Card } from "@filecoin-pay/ui/components/card";
+import type { Account } from "@filecoin-pay/types";
 import {
   Pagination,
   PaginationContent,
@@ -13,13 +11,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle, ArrowDownLeft, ArrowUpRight, CircleQuestionMark } from "lucide-react";
+import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useState } from "react";
-import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
-import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText, StyledLink } from "../shared";
+import AccountRailsTable from "./AccountRailsTable";
 
 interface AccountRailsLayoutProps {
   children: React.ReactNode;
@@ -62,78 +57,6 @@ interface AccountRailsProps {
   account: Account;
 }
 
-interface RoleIndicatorProps {
-  role: "payer" | "payee";
-}
-
-const RoleIndicator: React.FC<RoleIndicatorProps> = ({ role }) => {
-  if (role === "payer") {
-    return (
-      <div className='inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-destructive/10 text-destructive'>
-        <ArrowUpRight className='h-3.5 w-3.5' />
-        <span className='text-xs font-medium'>Payer</span>
-      </div>
-    );
-  }
-  return (
-    <div className='inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 text-green-600 dark:text-green-400'>
-      <ArrowDownLeft className='h-3.5 w-3.5' />
-      <span className='text-xs font-medium'>Payee</span>
-    </div>
-  );
-};
-
-interface RailRowProps {
-  rail: Rail;
-  accountAddress: string;
-}
-
-const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
-  const isPayer = rail.payer.address.toLowerCase() === accountAddress.toLowerCase();
-  const counterparty = isPayer ? rail.payee : rail.payer;
-
-  return (
-    <TableRow>
-      <TableCell className='font-medium'>
-        <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
-      </TableCell>
-      <TableCell>
-        <RoleIndicator role={isPayer ? "payer" : "payee"} />
-      </TableCell>
-      <TableCell className='font-mono text-sm'>
-        <CopyableText
-          value={counterparty.address}
-          to={`/accounts/${counterparty.address}`}
-          monospace={true}
-          label='Account address'
-          truncate={true}
-          truncateLength={8}
-        />
-      </TableCell>
-      <TableCell className='font-mono text-sm'>
-        <CopyableText
-          value={rail.operator.address}
-          // to={`/operator/${rail.operator.address}`}
-          monospace={true}
-          label='Service address'
-          truncate={true}
-          truncateLength={8}
-        />
-      </TableCell>
-      <TableCell>
-        <Badge variant={getRailStateVariant(rail.state)}>{getRailStateLabel(rail.state)}</Badge>
-      </TableCell>
-      <TableCell className='text-right'>
-        {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 8)}
-      </TableCell>
-      <TableCell className='text-right'>
-        {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
-      </TableCell>
-      <TableCell className='text-right text-muted-foreground'>{formatDate(rail.createdAt)}</TableCell>
-    </TableRow>
-  );
-};
-
 export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, refetch, error } = useAccountRails(account.id, page);
@@ -153,27 +76,7 @@ export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
             <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
           </div>
 
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Rail ID</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Counterparty</TableHead>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className='text-right'>Payment Rate</TableHead>
-                  <TableHead className='text-right'>Settled Amount</TableHead>
-                  <TableHead className='text-right'>Created At</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.rails.map((rail) => (
-                  <RailRow key={rail.id} rail={rail} accountAddress={account.address} />
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <AccountRailsTable data={data.rails.map((rail) => ({ ...rail, account }))} />
 
           {totalPages > 1 && (
             <Pagination>

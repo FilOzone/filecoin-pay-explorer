@@ -3,7 +3,7 @@ import type { Account, Address } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { ArrowsSplitIcon, CoinsIcon } from "@phosphor-icons/react";
 import { formatCompactNumber } from "@/utils/formatter";
-import { CopyableText, MetricItem } from "../shared";
+import { CopyableText, MetricItem } from "../../shared";
 
 interface AccountOverviewLayoutProps {
   children: React.ReactNode;
