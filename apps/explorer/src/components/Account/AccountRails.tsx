@@ -1,7 +1,10 @@
 import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
-import type { Account, Rail } from "@filecoin-pay/types";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
+import type { Account, Address, Rail } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@filecoin-pay/ui/components/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
   Pagination,
   PaginationContent,
@@ -10,14 +13,40 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Skeleton } from "@filecoin-pay/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
-import { AlertCircle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { AlertCircle, ArrowDownLeft, ArrowUpRight, CircleQuestionMark } from "lucide-react";
 import { useState } from "react";
 import { getRailStateLabel, getRailStateVariant } from "@/constants/railStates";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { CopyableText, StyledLink } from "../shared";
+
+interface ErrorStateProps {
+  refetch: () => void;
+  error: Error | null;
+}
+
+const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
+  <EmptyStateCard
+    icon={AlertCircle}
+    title='Failed to load Account Rails'
+    titleTag='h2'
+    description={error?.message || "Something went wrong"}
+  >
+    <Button onClick={refetch} variant='primary' size='compact'>
+      Retry
+    </Button>
+  </EmptyStateCard>
+);
+
+const NotFoundState: React.FC = () => (
+  <EmptyStateCard
+    icon={CircleQuestionMark}
+    title='No rails found'
+    titleTag='h2'
+    description='This account is not part of any payment rails yet.'
+  ></EmptyStateCard>
+);
 
 interface AccountRailsProps {
   account: Account;
@@ -97,128 +126,81 @@ const RailRow: React.FC<RailRowProps> = ({ rail, accountAddress }) => {
 
 export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError } = useAccountRails(account.id, page);
+  const { data, isLoading, isError, refetch, error } = useAccountRails(account.id, page);
 
   const totalPages = account.totalRails ? Math.ceil(Number(account.totalRails) / 10) : 1;
 
-  if (isLoading) {
-    return (
-      <div className='flex flex-col gap-4'>
-        <div className='flex items-center justify-between'>
-          <h2 className='text-2xl font-semibold'>Rails</h2>
-        </div>
-        <Card>
-          <div className='p-4 space-y-4'>
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className='h-12 w-full' />
-            ))}
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className='flex flex-col gap-4'>
-        <h2 className='text-2xl font-semibold'>Rails</h2>
-        <Card>
-          <div className='py-12'>
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant='icon'>
-                  <AlertCircle />
-                </EmptyMedia>
-                <EmptyTitle>Failed to load rails</EmptyTitle>
-              </EmptyHeader>
-            </Empty>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!data || data.rails.length === 0) {
-    return (
-      <div className='flex flex-col gap-4'>
-        <h2 className='text-2xl font-semibold'>Rails</h2>
-        <Card>
-          <div className='py-12'>
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>No rails found</EmptyTitle>
-                <EmptyDescription>This account is not part of any payment rails yet.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className='flex flex-col gap-4'>
-      <div className='flex items-center justify-between'>
-        <h2 className='text-2xl font-semibold'>Rails</h2>
-        <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
-      </div>
+    <>
+      {isLoading && <LoadingStateCard message='Loading Account Rails...' />}
+      {isError && <ErrorState refetch={refetch} error={error} />}
+      {!isLoading && !isError && (!data || data.rails.length === 0) && <NotFoundState />}
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Rail ID</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Counterparty</TableHead>
-              <TableHead>Operator</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className='text-right'>Payment Rate</TableHead>
-              <TableHead className='text-right'>Settled Amount</TableHead>
-              <TableHead className='text-right'>Created At</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.rails.map((rail) => (
-              <RailRow key={rail.id} rail={rail} accountAddress={account.address} />
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+      {!isLoading && !isError && data && data.rails.length > 0 && (
+        <div className='flex flex-col gap-4'>
+          <div className='flex items-center justify-between'>
+            <h2 className='text-2xl font-semibold'>Rails</h2>
+            <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
+          </div>
 
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-              />
-            </PaginationItem>
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rail ID</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Counterparty</TableHead>
+                  <TableHead>Operator</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className='text-right'>Payment Rate</TableHead>
+                  <TableHead className='text-right'>Settled Amount</TableHead>
+                  <TableHead className='text-right'>Created At</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.rails.map((rail) => (
+                  <RailRow key={rail.id} rail={rail} accountAddress={account.address} />
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
 
-            {[...Array(Math.min(5, totalPages))].map((_, i) => {
-              const pageNum = i + 1;
-              return (
-                <PaginationItem key={pageNum}>
-                  <PaginationLink
-                    onClick={() => setPage(pageNum)}
-                    isActive={page === pageNum}
-                    className='cursor-pointer'
-                  >
-                    {pageNum}
-                  </PaginationLink>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
                 </PaginationItem>
-              );
-            })}
 
-            <PaginationItem>
-              <PaginationNext
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  const pageNum = i + 1;
+                  return (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        onClick={() => setPage(pageNum)}
+                        isActive={page === pageNum}
+                        className='cursor-pointer'
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 };
