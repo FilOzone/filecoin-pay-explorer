@@ -3,8 +3,6 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Account } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
-import { Card } from "@filecoin-pay/ui/components/card";
 import {
   Pagination,
   PaginationContent,
@@ -13,12 +11,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@filecoin-pay/ui/components/table";
 import { AlertCircle, CircleQuestionMark } from "lucide-react";
 import { useState } from "react";
-import { AllowanceDisplay, CopyableText } from "@/components/shared";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
-import { formatToken } from "@/utils/formatter";
+import AccountApprovalsTable from "./AccountApprovalsTable";
 
 interface AccountApprovalsLayoutProps {
   children: React.ReactNode;
@@ -70,11 +66,6 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
 
   const totalPages = account.totalApprovals ? Math.ceil(Number(account.totalApprovals) / 10) : 1;
 
-  console.log({
-    totalApprovals: account.totalApprovals,
-    operatorApprovals: data?.operatorApprovals,
-  });
-
   return (
     <AccountApprovalsLayout>
       {isLoading && <LoadingStateCard message='Loading Authorized Services...' />}
@@ -84,69 +75,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
         <div className='flex flex-col gap-4'>
           <span className='text-sm text-muted-foreground'>{account.totalApprovals.toString()} total</span>
 
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Token</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className='text-right'>Max Lockup Period</TableHead>
-                  <TableHead className='text-right'>Lockup Allowance</TableHead>
-                  <TableHead className='text-right'>Rate Allowance</TableHead>
-                  <TableHead className='text-right'>Lockup Usage</TableHead>
-                  <TableHead className='text-right'>Rate Usage</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.operatorApprovals.map((approval) => (
-                  <TableRow key={approval.id}>
-                    <TableCell className='font-mono text-sm'>
-                      <CopyableText
-                        value={approval.operator.address}
-                        // to={`/operator/${approval.operator.address}`}
-                        monospace={true}
-                        label='Service address'
-                        truncate={true}
-                        truncateLength={8}
-                      />
-                    </TableCell>
-                    <TableCell className='font-medium'>{approval.token.symbol}</TableCell>
-                    <TableCell>
-                      <Badge variant={approval.isApproved ? "default" : "destructive"}>
-                        {approval.isApproved ? "Approved" : "Revoked"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className='text-right'>{approval.maxLockupPeriod.toString()} epochs</TableCell>
-                    <TableCell className='text-right'>
-                      <AllowanceDisplay
-                        value={approval.lockupAllowance}
-                        tokenDecimals={approval.token.decimals}
-                        symbol={approval.token.symbol}
-                        formatValue={formatToken}
-                        precision={2}
-                      />
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      <AllowanceDisplay
-                        value={approval.rateAllowance}
-                        tokenDecimals={approval.token.decimals}
-                        symbol={approval.token.symbol}
-                        formatValue={formatToken}
-                        precision={2}
-                      />
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(approval.lockupUsage, approval.token.decimals, approval.token.symbol, 5)}
-                    </TableCell>
-                    <TableCell className='text-right'>
-                      {formatToken(approval.rateUsage, approval.token.decimals, approval.token.symbol, 8)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <AccountApprovalsTable data={data.operatorApprovals} />
 
           {totalPages > 1 && (
             <Pagination>
