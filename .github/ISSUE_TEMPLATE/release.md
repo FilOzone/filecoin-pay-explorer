@@ -8,7 +8,10 @@ assignees: ""
 
 ## Release Checklist
 
-> **Subgraphs dashboard:** https://app.goldsky.com/project_cmb9tuo8r1xdw01ykb8uidk7h/dashboard/subgraphs
+### Notes
+* **Goldsky Subgraphs dashboard:** https://app.goldsky.com/project_cmb9tuo8r1xdw01ykb8uidk7h/dashboard/subgraphs
+* This process is for deploying new subgraph versions. Static site changes are automatically deployed as part of the [Vercel GitHub App configuration.](https://github.com/organizations/FilOzone/settings/installations/85630569)
+* This release process assumes that the static site and subgraph are decoupled. Additional steps need to be taken to make a breaking subgraph change that requires a static site change.
 
 ### 1. Define the new version
 
@@ -52,7 +55,8 @@ NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_
 
 ### 6. Promote subgraphs to `prod`
 
-Tagging as `prod` causes [pay.filecoin.cloud](https://pay.filecoin.cloud) to switch over to the new version.
+> [!NOTE]                                                                                    
+> Tagging as `prod` below causes [pay.filecoin.cloud](https://pay.filecoin.cloud) to switch over to the new version. Do this when you're ready to update the production site.
 
 ```bash
 for network in mainnet calibration; do
@@ -70,7 +74,7 @@ done
 
 - [ ] [pay.filecoin.cloud](https://pay.filecoin.cloud) loads and functions correctly after the tag switch
 
-### 8. Wraup
+### 8. Wrapup
 
 - [ ] Announce the release in #fil-foc
 - [ ] Document if there any improvements that need to be made to the release process
