@@ -83,7 +83,7 @@ export const columns = [
       header: "Payment Rate",
       cell: (info) => {
         const { paymentRate, token } = info.getValue();
-        return formatToken(paymentRate, token.decimals, `${token.symbol}/epoch`, 8);
+        return formatToken(paymentRate, token.decimals, token.symbol, 8);
       },
     },
   ),
