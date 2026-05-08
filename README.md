@@ -159,9 +159,28 @@ cd ../..
 
 ## Architecture
 
-- Frontend hosted on Vercel
-- Subgraph hosted on Goldsky
-- Monitoring through https://status.filoz.org/
+### Components
+
+- **[`apps/explorer/`](apps/explorer/)** — The Explorer app: a statically-built Next.js frontend for browsing Filecoin Pay rails, accounts, and deal activity. This is the primary focus of the repo.
+- **[`apps/metrics/`](apps/metrics/)** — A Vite-based metrics dashboard. Not a current focus.
+- **[`packages/subgraph/`](packages/subgraph/)** — A [The Graph](https://thegraph.com/) subgraph hosted on [Goldsky](https://goldsky.com/) that indexes Filecoin Pay contract events on mainnet and Filecoin calibration testnet.
+- **[`packages/ui/`](packages/ui/), [`packages/types/`](packages/types/), [`packages/configs/`](packages/configs/)** — Shared libraries consumed by the apps.
+
+### Hosting
+
+- **Static site** — The Explorer is statically built and deployed to [Vercel](https://vercel.com/). Vercel is used for convenience; there is no server-side logic that requires it.
+- **Subgraph** — Hosted publicly on Goldsky with no proxy layer. It is intended to be consumed only by the deployed static frontend.
+
+### Deployments
+
+Static site and subgraph deployments are decoupled. See the [release process](.github/ISSUE_TEMPLATE/release.md) for the full checklist and more details.
+
+- Static site changes deploy automatically via the Vercel GitHub App on merge to `main`.
+- Subgraph changes are triggered by creating a GitHub release with a `vX.Y.Z` tag (see [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
+
+### Monitoring
+
+Uptime monitoring for the static site and subgraph is managed via [FilOzone/infra](https://github.com/FilOzone/infra) and visible at [status.filoz.org](https://status.filoz.org).
 
 ## Contributing
 
