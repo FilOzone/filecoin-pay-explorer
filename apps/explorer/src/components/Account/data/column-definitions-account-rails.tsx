@@ -1,7 +1,7 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Account, Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
+import { CopyableText, ExplorerLink, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
 import { RoleIndicator } from "../components/RoleIndicator";
 
@@ -57,18 +57,9 @@ export const columns = [
       },
     },
   ),
-  columnHelper.accessor("operator", {
+  columnHelper.accessor("operator.address", {
     header: "Operator",
-    cell: (info) => (
-      <CopyableText
-        value={info.getValue().address}
-        // to={`/operator/${rail.operator.address}`}
-        monospace={true}
-        label='Service address'
-        truncate={true}
-        truncateLength={8}
-      />
-    ),
+    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' />,
   }),
   columnHelper.accessor("state", {
     header: "Status",
