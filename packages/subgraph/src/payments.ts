@@ -71,7 +71,9 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   const lockupAllowance = event.params.lockupAllowance;
   const maxLockupPeriod = event.params.maxLockupPeriod;
 
-  const clientAccount = Account.load(clientAddress);
+  const clientAccountWithIsNew = createOrLoadAccountByAddress(clientAddress);
+  const clientAccount = clientAccountWithIsNew.account;
+  const isNewClient = clientAccountWithIsNew.isNew;
 
   let isNewApproval = false;
 
@@ -122,6 +124,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     operatorAddress,
     isNewApproval,
     isNewOperator,
+    isNewClient,
     event.block.timestamp,
     event.block.number,
   );
