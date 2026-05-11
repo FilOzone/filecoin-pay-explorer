@@ -37,7 +37,7 @@ interface ErrorStateProps {
 const ErrorState: React.FC<ErrorStateProps> = ({ refetch, error }) => (
   <EmptyStateCard
     icon={AlertCircle}
-    title='Failed to load Desposited Tokens'
+    title='Failed to load Deposited Tokens'
     titleTag='h2'
     description={error?.message || "Something went wrong"}
   >
