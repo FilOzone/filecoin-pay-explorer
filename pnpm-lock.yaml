@@ -288,8 +288,8 @@ importers:
         specifier: ^1.3.6
         version: 1.4.0
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@filecoin-pay/configs':
         specifier: workspace:*
