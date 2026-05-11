@@ -1,25 +1,16 @@
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { createColumnHelper } from "@tanstack/react-table";
-import { AllowanceDisplay, CopyableText } from "@/components/shared";
+import { AllowanceDisplay, ExplorerLink } from "@/components/shared";
 import { EPOCH_DURATION } from "@/utils/constants";
 import { formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<OperatorApproval>();
 
 export const columns = [
-  columnHelper.accessor("operator", {
+  columnHelper.accessor("operator.address", {
     header: "Operator",
-    cell: (info) => (
-      <CopyableText
-        value={info.getValue().address}
-        // to={`/operator/${approval.operator.address}`}
-        monospace={true}
-        label='Service address'
-        truncate={true}
-        truncateLength={8}
-      />
-    ),
+    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' />,
   }),
   columnHelper.accessor("token", {
     header: "Token",
