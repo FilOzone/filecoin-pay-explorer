@@ -27,7 +27,7 @@
     "react-dom": "^19.2.5",
     "sonner": "^2.0.7",
     "viem": "^2.48.8",
-    "wagmi": "^2.18.0"
+    "wagmi": "^3.6.9"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
