@@ -13,7 +13,7 @@
     "@filecoin-foundation/ui-filecoin": "^0.9.0",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
-    "@filoz/synapse-sdk": "^0.31.1",
+    "@filoz/synapse-sdk": "^0.40.4",
     "@phosphor-icons/react": "^2.1.10",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@tanstack/react-query": "^5.100.9",
