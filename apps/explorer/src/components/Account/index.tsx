@@ -55,8 +55,8 @@ export default function Account() {
         <>
           <AccountOverview account={data} />
           <AccountRails account={data} />
-          <AccountApprovals account={data} />
           <AccountTokens account={data} />
+          <AccountApprovals account={data} />
         </>
       )) || (
         <PageSection backgroundVariant='light'>
