@@ -2,6 +2,7 @@ import type { OperatorApproval } from "@filecoin-pay/types";
 import { Badge } from "@filecoin-pay/ui/components/badge";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AllowanceDisplay, CopyableText } from "@/components/shared";
+import { EPOCH_DURATION } from "@/utils/constants";
 import { formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<OperatorApproval>();
@@ -33,7 +34,7 @@ export const columns = [
   }),
   columnHelper.accessor("maxLockupPeriod", {
     header: "Max Lockup Period",
-    cell: (info) => `${info.getValue().toString()} epochs`,
+    cell: (info) => `${Math.ceil((Number(info.getValue()) * EPOCH_DURATION) / 60 / 60 / 24)} days`,
   }),
   columnHelper.accessor(
     (row) => ({
