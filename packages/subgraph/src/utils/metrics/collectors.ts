@@ -358,12 +358,14 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
   private isNewApproval: boolean;
   private isNewOperator: boolean;
   private isNewToken: boolean;
+  private isNewClient: boolean;
 
   constructor(
     operatorAddress: Address,
     isNewApproval: boolean,
     isNewOperator: boolean,
     isNewToken: boolean,
+    isNewClient: boolean,
     timestamp: GraphBN,
     blockNumber: GraphBN,
   ) {
@@ -372,6 +374,7 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
     this.isNewApproval = isNewApproval;
     this.isNewOperator = isNewOperator;
     this.isNewToken = isNewToken;
+    this.isNewClient = isNewClient;
   }
 
   collect(): void {
@@ -397,6 +400,10 @@ export class OperatorApprovalCollector extends BaseMetricsCollector {
     if (this.isNewToken) {
       networkMetric.totalTokens = networkMetric.totalTokens.plus(ONE_BIG_INT);
     }
+    if (this.isNewClient) {
+      networkMetric.totalAccounts = networkMetric.totalAccounts.plus(ONE_BIG_INT);
+    }
+
     networkMetric.save();
   }
 }
@@ -572,6 +579,7 @@ export class MetricsCollectionOrchestrator {
     isNewApproval: boolean,
     isNewOperator: boolean,
     isNewToken: boolean,
+    isNewClient: boolean,
     timestamp: GraphBN,
     blockNumber: GraphBN,
   ): void {
@@ -580,6 +588,7 @@ export class MetricsCollectionOrchestrator {
       isNewApproval,
       isNewOperator,
       isNewToken,
+      isNewClient,
       timestamp,
       blockNumber,
     );

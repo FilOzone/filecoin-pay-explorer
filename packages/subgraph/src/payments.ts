@@ -75,7 +75,9 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   const isNewToken = tokenDetails.isNew;
   if (isNewToken) tokenDetails.token.save();
 
-  const clientAccount = Account.load(clientAddress);
+  const clientAccountWithIsNew = createOrLoadAccountByAddress(clientAddress);
+  const clientAccount = clientAccountWithIsNew.account;
+  const isNewClient = clientAccountWithIsNew.isNew;
 
   let isNewApproval = false;
 
@@ -127,6 +129,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
     isNewApproval,
     isNewOperator,
     isNewToken,
+    isNewClient,
     event.block.timestamp,
     event.block.number,
   );
