@@ -6,6 +6,6 @@ export type ValidationError = {
 
 export type InputKind =
   | { kind: "empty" }
-  | { kind: "railId"; value: number }
+  | { kind: "railId"; value: string }
   | { kind: "hexAddress"; value: Hex }
   | { kind: "invalid" };
