@@ -6,4 +6,5 @@ export const knownAddresses: Record<string, string> = {
   "0xa5f90bc2aa73a2e0bad4d7092a932644d5dd5d71": "DealBot (legacy)",
   "0x305025d07c1dee47f25a4990179eff2becddca0b": "DealBot",
   "0x8408502033c418e1bbc97ce9ac48e5528f371a9f": "FWSS",
+  "0xa53bbc04a0a2b7a7e62a78a24dd6c9280f611b97": "Qave",
 };
