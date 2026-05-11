@@ -15,7 +15,7 @@ interface CopyableTextProps {
   className?: string;
   linkClassName?: string;
   monospace?: boolean;
-  lookUpName?: boolean;
+  lookupName?: boolean;
 }
 
 const CopyableText = ({
@@ -28,10 +28,10 @@ const CopyableText = ({
   className,
   linkClassName,
   monospace = true,
-  lookUpName = true,
+  lookupName = true,
 }: CopyableTextProps) => {
   const displayValue =
-    (lookUpName && knownAddresses[value.toLowerCase()]) ||
+    (lookupName && knownAddresses[value.toLowerCase()]) ||
     (truncate && value.length > truncateLength * 2
       ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
       : value);
