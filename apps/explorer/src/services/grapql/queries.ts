@@ -449,6 +449,7 @@ export const GET_ACCOUNT_RAILS = gql`
       state
       paymentRate
       totalSettledAmount
+      totalOneTimePaymentAmount
       lockupPeriod
       settledUpto
       createdAt

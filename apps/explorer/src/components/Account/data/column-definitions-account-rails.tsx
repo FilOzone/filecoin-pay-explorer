@@ -1,10 +1,11 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
-import type { Rail } from "@filecoin-pay/types";
+import type { Account, Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
+import { CopyableText, ExplorerLink, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
+import { RoleIndicator } from "../components/RoleIndicator";
 
-const columnHelper = createColumnHelper<Rail>();
+const columnHelper = createColumnHelper<Rail & { account: Account }>();
 
 export const columns = [
   columnHelper.accessor("railId", {
@@ -17,53 +18,48 @@ export const columns = [
       </StyledLink>
     ),
   }),
-  columnHelper.accessor("payer", {
-    header: "Payer",
-    cell: (info) => {
-      const payer = info.getValue();
-      return (
-        <CopyableText
-          value={payer.address}
-          to={`/accounts/${payer.address}`}
-          monospace={true}
-          label='Account address'
-          truncate={true}
-          truncateLength={8}
-        />
-      );
+  columnHelper.accessor(
+    (row) => ({
+      payer: row.payer,
+      account: row.account,
+    }),
+    {
+      header: "Role",
+      cell: (info) => {
+        const { payer, account } = info.getValue();
+        const isPayer = payer.address.toLowerCase() === account.address.toLowerCase();
+        return <RoleIndicator role={isPayer ? "payer" : "payee"} />;
+      },
     },
-  }),
-  columnHelper.accessor("payee", {
-    header: "Payee",
-    cell: (info) => {
-      const payee = info.getValue();
-      return (
-        <CopyableText
-          value={payee.address}
-          to={`/accounts/${payee.address}`}
-          monospace={true}
-          label='Account address'
-          truncate={true}
-          truncateLength={8}
-        />
-      );
+  ),
+  columnHelper.accessor(
+    (row) => ({
+      payer: row.payer,
+      payee: row.payee,
+      account: row.account,
+    }),
+    {
+      header: "Counterparty",
+      cell: (info) => {
+        const { payer, payee, account } = info.getValue();
+        const isPayer = payer.address.toLowerCase() === account.address.toLowerCase();
+        const counterparty = isPayer ? payee : payer;
+        return (
+          <CopyableText
+            value={counterparty.address}
+            to={`/accounts/${counterparty.address}`}
+            monospace={true}
+            label='Account address'
+            truncate={true}
+            truncateLength={8}
+          />
+        );
+      },
     },
-  }),
-  columnHelper.accessor("operator", {
+  ),
+  columnHelper.accessor("operator.address", {
     header: "Operator",
-    cell: (info) => {
-      const operator = info.getValue();
-      return (
-        <CopyableText
-          value={operator.address}
-          // to={`/operator/${operator.address}`}
-          monospace={true}
-          label='Service address'
-          truncate={true}
-          truncateLength={8}
-        />
-      );
-    },
+    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' />,
   }),
   columnHelper.accessor("state", {
     header: "Status",
@@ -75,7 +71,6 @@ export const columns = [
       token: row.token,
     }),
     {
-      id: "paymentRate",
       header: "Payment Rate",
       cell: (info) => {
         const { paymentRate, token } = info.getValue();
@@ -100,14 +95,6 @@ export const columns = [
       },
     },
   ),
-  columnHelper.accessor("totalSettlements", {
-    header: "Settlements",
-    cell: (info) => info.getValue().toString(),
-  }),
-  columnHelper.accessor("totalRateChanges", {
-    header: "Rate Changes",
-    cell: (info) => info.getValue().toString(),
-  }),
   columnHelper.accessor("createdAt", {
     header: "Created At",
     cell: (info) => formatDate(info.getValue()),
