@@ -111,7 +111,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={rail.payer.address}
-                    // to={`/account/${rail.payer.address}`}
+                    to={`/accounts/${rail.payer.address}`}
                     monospace={true}
                     label='Account address'
                     truncate={true}
@@ -121,7 +121,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                 <TableCell className='font-mono text-sm'>
                   <CopyableText
                     value={rail.payee.address}
-                    // to={`/account/${rail.payee.address}`}
+                    to={`/accounts/${rail.payee.address}`}
                     monospace={true}
                     label='Account address'
                     truncate={true}
