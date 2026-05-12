@@ -1,4 +1,4 @@
-import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
+import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
 import { type Address, erc20Abi, type Chain as ViemChain } from "viem";
 
 import type { Network } from "@/types";
@@ -75,11 +75,11 @@ export const mainnet: Chain = {
   },
   contracts: {
     payments: {
-      address: "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+      address: synapseMainnet.contracts.filecoinPay.address,
       abi: paymentsAbi,
     },
     usdfc: {
-      address: CONTRACT_ADDRESSES.USDFC.mainnet,
+      address: synapseMainnet.contracts.usdfc.address,
       abi: erc20Abi,
     },
   },
@@ -121,11 +121,11 @@ export const calibration: Chain = {
   },
   contracts: {
     payments: {
-      address: "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
+      address: synapseCalibration.contracts.filecoinPay.address,
       abi: paymentsAbi,
     },
     usdfc: {
-      address: CONTRACT_ADDRESSES.USDFC.calibration,
+      address: synapseCalibration.contracts.usdfc.address,
       abi: erc20Abi,
     },
   },
