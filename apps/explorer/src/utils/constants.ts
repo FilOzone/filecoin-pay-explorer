@@ -1,5 +1,3 @@
-import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
-import { paymentsAbi } from "@/abi/payments";
 import { calibration, mainnet } from "@/constants/chains";
 import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
@@ -24,11 +22,8 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
     chain: calibration,
     label: "Calibration",
     contracts: {
-      usdfc: CONTRACT_ADDRESSES.USDFC.calibration,
-      payments: {
-        address: "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
-        abi: paymentsAbi,
-      },
+      usdfc: calibration.contracts.usdfc.address,
+      payments: calibration.contracts.payments,
     },
     faucets: [
       {
@@ -45,11 +40,8 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
     chain: mainnet,
     label: "Mainnet",
     contracts: {
-      usdfc: CONTRACT_ADDRESSES.USDFC.mainnet,
-      payments: {
-        address: "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
-        abi: paymentsAbi,
-      },
+      usdfc: mainnet.contracts.usdfc.address,
+      payments: mainnet.contracts.payments,
     },
   },
 } as const;
