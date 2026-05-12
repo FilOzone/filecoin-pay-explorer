@@ -5,13 +5,13 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { IconProps } from "@phosphor-icons/react";
-import { ArrowsSplitIcon, CoinsIcon, LockIcon } from "@phosphor-icons/react";
+import { ArrowsSplitIcon, CoinsIcon, LockIcon, UsersIcon } from "@phosphor-icons/react";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
 import useNetwork from "@/hooks/useNetwork";
 import { useStatsDashboard } from "@/hooks/useStatsDashboard";
-import { formatToken } from "@/utils/formatter";
+import { formatFIL, formatToken } from "@/utils/formatter";
 import { calculateTotalLockup } from "@/utils/lockup";
 import { MetricItem } from "../shared";
 
@@ -62,19 +62,23 @@ const Stats: React.FC = () => {
 
   const cards = useMemo<MetricCard[]>(
     () => [
-      // TODO: Add this back when network revenue calculation is fixed
-      // See https://github.com/FilOzone/filecoin-pay-explorer/issues/70
-      // {
-      //   title: "Network Revenue",
-      //   value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
-      //   icon: "/stats/total-fil-burned.svg",
-      //   tooltip: "Network fees paid to process payment settlements",
-      // },
+      {
+        title: "Network Revenue",
+        value: formatFIL(data?.paymentsMetrics?.totalFilBurned || "0"),
+        icon: "/stats/total-fil-burned.svg",
+        tooltip: "Total Filecoin (FIL) burned from native rail settlements and token auctions.",
+      },
       {
         title: "Active Rails",
         value: data?.paymentsMetrics?.totalActiveRails?.toString() ?? "0",
         icon: ArrowsSplitIcon,
         href: `/${network}/rails`,
+      },
+      {
+        title: "Accounts",
+        value: data?.paymentsMetrics?.totalAccounts?.toString() ?? "0",
+        icon: UsersIcon,
+        href: `/${network}/accounts`,
       },
       ...(data?.tokens.map((token) => ({
         title: `Total ${token.symbol} Transacted`,

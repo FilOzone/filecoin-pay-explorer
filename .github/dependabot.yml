@@ -12,3 +12,18 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: "assemblyscript"
+      - dependency-name: "@graphprotocol/graph-ts"
+      - dependency-name: "@graphprotocol/graph-cli"
+      - dependency-name: "matchstick-as"
+    groups:
+      safe-workspace-updates:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@filoz/synapse-sdk" # Unstable / fast-moving 0.x.x API
+          - "@biomejs/biome" # Required manual schema updates & can fail CI
+        update-types:
+          - minor
+          - patch
