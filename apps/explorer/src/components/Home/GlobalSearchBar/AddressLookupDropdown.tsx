@@ -29,7 +29,7 @@ export function AddressLookupDropdown({
         <li key={`${result.type}-${result.address}`}>
           <button
             type='button'
-            className='w-full text-left px-4 py-3 hover:bg-accent flex items-center gap-6 transition-colors'
+            className='w-full text-left px-4 py-3 hover:bg-accent flex items-center gap-6 transition-colors cursor-pointer'
             onClick={() => onSelect(result)}
           >
             <Badge variant={result.type === "account" ? "primary" : "secondary"}>{result.type}</Badge>

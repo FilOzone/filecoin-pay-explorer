@@ -1,4 +1,4 @@
-import type { Account, Operator } from "@filecoin-pay/types";
+import type { Account } from "@filecoin-pay/types";
 import { useMemo } from "react";
 import { useDebounce } from "use-debounce";
 import { CHECK_ADDRESS } from "@/services/grapql/queries";
@@ -7,7 +7,8 @@ import { useGraphQLQuery } from "./useGraphQLQuery";
 
 interface CheckAddressResponse {
   accounts: Array<Pick<Account, "id" | "address" | "totalRails" | "totalTokens" | "totalApprovals">>;
-  operators: Array<Pick<Operator, "id" | "address" | "totalRails" | "totalTokens" | "totalApprovals">>;
+  // TODO: Enable when operator page is ready
+  // operators: Array<Pick<Operator, "id" | "address" | "totalRails" | "totalTokens" | "totalApprovals">>;
 }
 
 export interface LookupResult {
@@ -50,15 +51,16 @@ export function useAddressLookup(input: string): UseAddressLookupReturn {
       totalApprovals: account.totalApprovals,
     }));
 
-    const operatorResults: LookupResult[] = data.operators.map((operator) => ({
-      type: "operator",
-      address: operator.address,
-      totalRails: operator.totalRails,
-      totalTokens: operator.totalTokens,
-      totalApprovals: operator.totalApprovals,
-    }));
+    // TODO: Enable when operator page is ready
+    // const operatorResults: LookupResult[] = data.operators.map((operator) => ({
+    //   type: "operator",
+    //   address: operator.address,
+    //   totalRails: operator.totalRails,
+    //   totalTokens: operator.totalTokens,
+    //   totalApprovals: operator.totalApprovals,
+    // }));
 
-    return [...accountResults, ...operatorResults];
+    return accountResults;
   }, [data]);
 
   const isPending = input !== debouncedInput;

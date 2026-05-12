@@ -21,17 +21,14 @@ const GlobalSearchBar = () => {
   const { network } = useNetwork();
 
   const classified = classifyInput(searchInput);
-  // const isHexInput = classified.kind === "hexAddress";
+  const isHexInput = classified.kind === "hexAddress";
 
-  // TODO: Enable address lookup when accounts/operators page are ready
-  // replace "" with isHexInput ? searchInput : ""
-  const { results, isLoading } = useAddressLookup("");
+  const { results, isLoading } = useAddressLookup(isHexInput ? searchInput : "");
 
   const handleInputChange = (value: string) => {
     setSearchInput(value);
     if (validationError) setValidationError(null);
-    // TODO: Enable address lookup when accounts/operators page are ready
-    // setDropdownOpen(classifyInput(value).kind === "hexAddress");
+    setDropdownOpen(classifyInput(value).kind === "hexAddress");
   };
 
   const handleSearch = () => {
@@ -46,14 +43,8 @@ const GlobalSearchBar = () => {
         setSearchInput("");
         break;
 
-      case "hexAddress":
-        // TODO: Implement address lookup functionality
-        // setDropdownOpen(true);
-        setValidationError({ message: "Account & operator search coming soon" });
-        break;
-
       case "invalid":
-        setValidationError({ message: "Enter a valid Rail ID" });
+        setValidationError({ message: "Enter a valid Rail ID or address (0x...)" });
         break;
     }
   };
@@ -63,9 +54,8 @@ const GlobalSearchBar = () => {
     handleSearch();
   };
 
-  const handleResultSelect = (_result: LookupResult) => {
-    // TODO: navigate to account/operator detail page once those pages exist
-    // router.push(`/${network}/${_result.type}s/${_result.address}`);
+  const handleResultSelect = (result: LookupResult) => {
+    router.push(`/${network}/${result.type}s/${result.address}`);
     setDropdownOpen(false);
   };
 
@@ -91,7 +81,7 @@ const GlobalSearchBar = () => {
           <PopoverContent
             align='start'
             sideOffset={8}
-            className='w-[var(--radix-popover-trigger-width)] p-0'
+            className='w-[var(--radix-popover-trigger-width)] max-h-72 overflow-y-auto p-0'
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <AddressLookupDropdown results={results} isLoading={isLoading} onSelect={handleResultSelect} />
