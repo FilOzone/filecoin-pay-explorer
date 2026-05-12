@@ -253,6 +253,25 @@ export const GET_RAIL_RATE_CHANGES = gql`
   }
 `;
 
+export const CHECK_ADDRESS = gql`
+  query CheckAddress($address: Bytes!) {
+    accounts(where: { address_contains: $address }) {
+      id
+      address
+      totalRails
+      totalTokens
+      totalApprovals
+    }
+    operators(where: { address_contains: $address }) {
+      id
+      address
+      totalRails
+      totalTokens
+      totalApprovals
+    }
+  }
+`;
+
 // Operator detail queries
 
 export const GET_OPERATOR_DETAILS = gql`
