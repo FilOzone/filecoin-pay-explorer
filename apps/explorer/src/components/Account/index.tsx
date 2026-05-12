@@ -54,9 +54,9 @@ export default function Account() {
       {(!isLoading && !isError && data && (
         <>
           <AccountOverview account={data} />
-          <AccountRails account={data} />
           <AccountTokens account={data} />
           <AccountApprovals account={data} />
+          <AccountRails account={data} />
         </>
       )) || (
         <PageSection backgroundVariant='light'>
