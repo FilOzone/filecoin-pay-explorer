@@ -22,7 +22,7 @@ interface AccountTokensLayoutProps {
 
 const AccountTokensLayout: React.FC<AccountTokensLayoutProps> = ({ children }) => (
   <PageSection backgroundVariant='light'>
-    <div className='flex flex-col gap-6 -mt-20'>
+    <div className='flex flex-col gap-6 -mt-30'>
       <h3 className='text-2xl font-medium'>Deposited Tokens</h3>
       {children}
     </div>

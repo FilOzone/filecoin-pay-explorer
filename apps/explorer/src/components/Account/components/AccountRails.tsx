@@ -22,7 +22,7 @@ interface AccountRailsLayoutProps {
 
 const AccountRailsLayout: React.FC<AccountRailsLayoutProps> = ({ children }) => (
   <PageSection backgroundVariant='light'>
-    <div className='flex flex-col gap-6 -mt-20'>
+    <div className='flex flex-col gap-6 -mt-30'>
       <h3 className='text-2xl font-medium'>Rails</h3>
       {children}
     </div>
