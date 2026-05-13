@@ -24,9 +24,11 @@ const AllowanceDisplay: React.FC<AllowanceDisplayProps> = ({
 }) => {
   if (isUnlimitedValue(value)) {
     return (
-      <Badge variant='secondary' icon={InfinityIcon}>
-        Unlimited
-      </Badge>
+      <div className='flex justify-start'>
+        <Badge variant='secondary' icon={InfinityIcon}>
+          Unlimited
+        </Badge>
+      </div>
     );
   }
 

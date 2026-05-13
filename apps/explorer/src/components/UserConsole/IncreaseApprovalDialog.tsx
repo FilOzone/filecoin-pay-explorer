@@ -139,9 +139,11 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 <span className='text-muted-foreground'>Lockup:</span>
                 <div className='font-medium'>
                   {isCurrentLockupUnlimited ? (
-                    <Badge variant='secondary' icon={InfinityIcon}>
-                      Unlimited
-                    </Badge>
+                    <div className='flex justify-start'>
+                      <Badge variant='secondary' icon={InfinityIcon}>
+                        Unlimited
+                      </Badge>
+                    </div>
                   ) : (
                     formatToken(approval.lockupAllowance, approval.token.decimals, approval.token.symbol, 2)
                   )}
@@ -151,9 +153,11 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 <span className='text-muted-foreground'>Rate:</span>
                 <div className='font-medium'>
                   {isCurrentRateUnlimited ? (
-                    <Badge variant='secondary' icon={InfinityIcon}>
-                      Unlimited
-                    </Badge>
+                    <div className='flex justify-start'>
+                      <Badge variant='secondary' icon={InfinityIcon}>
+                        Unlimited
+                      </Badge>
+                    </div>
                   ) : (
                     formatToken(approval.rateAllowance, approval.token.decimals, approval.token.symbol, 2)
                   )}

@@ -363,7 +363,9 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                             <div className='font-medium'>{token.symbol}</div>
                             <div className='text-xs text-muted-foreground'>{token.name}</div>
                           </div>
-                          <Badge variant='secondary'>{`${Number(token.decimals)} decimals`}</Badge>
+                          <div className='flex justify-start'>
+                            <Badge variant='secondary'>{`${Number(token.decimals)} decimals`}</Badge>
+                          </div>
                         </div>
                       </button>
                     ))}
