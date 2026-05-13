@@ -63,11 +63,11 @@ export function useAddressLookup(input: string): UseAddressLookupReturn {
     return accountResults;
   }, [data]);
 
-  const isPending = input !== debouncedInput;
+  const isPending = input !== debouncedInput && !!formatHexForSearch(input);
 
   return {
     results,
-    isLoading: isEnabled && (isLoading || isPending),
+    isLoading: isPending || (isEnabled && isLoading),
     error: error ?? null,
   };
 }
