@@ -1,8 +1,7 @@
-import { CONTRACT_ADDRESSES } from "@filoz/synapse-sdk";
-import { type Address, erc20Abi, type Chain as ViemChain } from "viem";
+import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
+import type { Chain as ViemChain } from "viem";
 
 import type { Network } from "@/types";
-import { paymentsAbi } from "../abi/payments";
 
 export type Contract = {
   implementation: string;
@@ -28,14 +27,8 @@ export interface Chain extends ViemChain {
   label: string;
   slug: Network;
   contracts: {
-    payments: {
-      address: Address;
-      abi: typeof paymentsAbi;
-    };
-    usdfc: {
-      address: Address;
-      abi: typeof erc20Abi;
-    };
+    payments: typeof synapseMainnet.contracts.filecoinPay;
+    usdfc: typeof synapseMainnet.contracts.usdfc;
   };
 }
 
@@ -74,14 +67,8 @@ export const mainnet: Chain = {
     },
   },
   contracts: {
-    payments: {
-      address: "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
-      abi: paymentsAbi,
-    },
-    usdfc: {
-      address: CONTRACT_ADDRESSES.USDFC.mainnet,
-      abi: erc20Abi,
-    },
+    payments: synapseMainnet.contracts.filecoinPay,
+    usdfc: synapseMainnet.contracts.usdfc,
   },
 };
 
@@ -120,14 +107,8 @@ export const calibration: Chain = {
     },
   },
   contracts: {
-    payments: {
-      address: "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
-      abi: paymentsAbi,
-    },
-    usdfc: {
-      address: CONTRACT_ADDRESSES.USDFC.calibration,
-      abi: erc20Abi,
-    },
+    payments: synapseCalibration.contracts.filecoinPay,
+    usdfc: synapseCalibration.contracts.usdfc,
   },
 };
 

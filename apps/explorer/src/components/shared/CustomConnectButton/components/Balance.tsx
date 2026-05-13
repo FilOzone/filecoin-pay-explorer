@@ -11,7 +11,7 @@ import {
 import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useDisconnect, useReadContract } from "wagmi";
+import { useAccount, useBalance, useDisconnect, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import useSynapse from "@/hooks/useSynapse";
@@ -21,6 +21,7 @@ const Balance = () => {
   const { constants } = useSynapse();
   const { address } = useAccount();
   const { disconnect } = useDisconnect();
+  const { data: walletClient } = useWalletClient();
   const [copied, setCopied] = useState(false);
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
@@ -48,20 +49,16 @@ const Balance = () => {
   };
 
   const addUsdfcToken = async () => {
+    if (!walletClient) return;
     try {
-      if (window.ethereum) {
-        await window.ethereum.request({
-          method: "wallet_watchAsset",
-          params: {
-            type: "ERC20",
-            options: {
-              address: constants.contracts.usdfc,
-              symbol: "USDFC",
-              decimals: 18,
-            },
-          },
-        });
-      }
+      await walletClient.watchAsset({
+        type: "ERC20",
+        options: {
+          address: constants.contracts.usdfc,
+          symbol: "USDFC",
+          decimals: 18,
+        },
+      });
     } catch (error) {
       console.error("Failed to add token:", error);
     }
