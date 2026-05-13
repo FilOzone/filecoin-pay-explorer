@@ -1,7 +1,7 @@
 import type { UserToken } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { ArrowDownLeftIcon, ArrowUpRightIcon, InfoIcon } from "@phosphor-icons/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<UserToken>();
@@ -50,7 +50,7 @@ export const columns = [
           <Tooltip>
             <TooltipTrigger asChild>
               <button type='button' className='inline-flex'>
-                <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                <InfoIcon className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
               </button>
             </TooltipTrigger>
             <TooltipContent side='top' className='max-w-xs'>
@@ -63,7 +63,7 @@ export const columns = [
         const { payout, token } = info.getValue();
         return (
           <div className='flex items-center gap-1.5'>
-            <ArrowUpRight className='h-3.5 w-3.5 text-destructive' />
+            <ArrowUpRightIcon className='h-3.5 w-3.5 text-destructive' />
             <span>{formatToken(payout, token.decimals, token.symbol, 5)}</span>
           </div>
         );
@@ -83,7 +83,7 @@ export const columns = [
           <Tooltip>
             <TooltipTrigger asChild>
               <button type='button' className='inline-flex'>
-                <Info className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
+                <InfoIcon className='h-3.5 w-3.5 text-muted-foreground cursor-help' />
               </button>
             </TooltipTrigger>
             <TooltipContent side='top' className='max-w-xs'>
@@ -96,7 +96,7 @@ export const columns = [
         const { fundsCollected, token } = info.getValue();
         return (
           <div className='flex items-center gap-1.5'>
-            <ArrowDownLeft className='h-3.5 w-3.5 text-green-600 dark:text-green-500' />
+            <ArrowDownLeftIcon className='h-3.5 w-3.5 text-green-600 dark:text-green-500' />
             <span>{formatToken(fundsCollected, token.decimals, token.symbol, 5)}</span>
           </div>
         );
