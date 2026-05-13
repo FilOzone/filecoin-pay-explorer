@@ -21,7 +21,7 @@
     "clsx": "^2.1.1",
     "ethers": "^6.16.0",
     "graphql-request": "^7.4.0",
-    "lucide-react": "^0.545.0",
+    "lucide-react": "^1.14.0",
     "next": "^15.5.7",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
