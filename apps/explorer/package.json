@@ -39,6 +39,6 @@
     "@types/react-dom": "^19",
     "frontmatter-markdown-loader": "^3.7.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6"
   }
 }
