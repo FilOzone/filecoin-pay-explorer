@@ -25,7 +25,7 @@ export const SynapseProvider = ({ children }: { children: React.ReactNode }) => 
       setSynapse(null);
       return;
     }
-    setSynapse(new Synapse({ client: asClient(client), source: null }));
+    setSynapse(new Synapse({ client: asClient(client), source: "filecoin-pay-explorer" }));
   }, [client]);
 
   return (
