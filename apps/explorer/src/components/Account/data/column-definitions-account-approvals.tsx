@@ -21,7 +21,7 @@ export const columns = [
     cell: (info) => {
       const isApproved = info.getValue();
       return (
-        <div className='flex justify-center'>
+        <div className='flex justify-start'>
           <Badge variant={isApproved ? "primary" : "tertiary"}>{isApproved ? "Approved" : "Revoked"}</Badge>
         </div>
       );

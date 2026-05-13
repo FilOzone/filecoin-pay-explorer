@@ -35,7 +35,7 @@ export const columns = [
         const { payer, account } = info.getValue();
         const isPayer = payer.address.toLowerCase() === account.address.toLowerCase();
         return (
-          <div className='flex justify-center'>
+          <div className='flex justify-start'>
             <RoleIndicator role={isPayer ? "payer" : "payee"} />
           </div>
         );

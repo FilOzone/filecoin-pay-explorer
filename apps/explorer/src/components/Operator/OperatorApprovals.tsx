@@ -120,7 +120,7 @@ export const OperatorApprovals: React.FC<OperatorApprovalsProps> = ({ operator }
                 </TableCell>
                 <TableCell className='font-medium'>{approval.token.symbol}</TableCell>
                 <TableCell>
-                  <div className='flex justify-center'>
+                  <div className='flex justify-start'>
                     <Badge variant={approval.isApproved ? "primary" : "tertiary"}>
                       {approval.isApproved ? "Approved" : "Revoked"}
                     </Badge>

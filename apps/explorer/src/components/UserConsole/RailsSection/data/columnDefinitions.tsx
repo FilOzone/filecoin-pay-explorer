@@ -27,7 +27,7 @@ export const columns = [
       const { isPayer } = info.row.original;
 
       return (
-        <div className='flex justify-center'>
+        <div className='flex justify-start'>
           <RoleIndicator role={isPayer ? "payer" : "payee"} />
         </div>
       );

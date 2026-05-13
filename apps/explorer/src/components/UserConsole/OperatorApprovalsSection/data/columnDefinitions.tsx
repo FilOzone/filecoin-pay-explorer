@@ -84,7 +84,7 @@ export const columns = [
     cell: (info) => {
       const approval = info.row.original;
       return (
-        <div className='flex flex-col gap-1 items-center'>
+        <div className='flex flex-col gap-1 items-start'>
           <Badge variant={approval.isApproved ? "primary" : "tertiary"}>
             {approval.isApproved ? "Active" : "Revoked"}
           </Badge>
