@@ -29,7 +29,7 @@ export const columns = [
       const { isPayer } = info.row.original;
 
       return (
-        <div className='flex flex-col gap-1 items-start'>
+        <div className='flex flex-col gap-1 items-center'>
           <FilecoinBadge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
             {isPayer ? "Payer" : "Payee"}
           </FilecoinBadge>

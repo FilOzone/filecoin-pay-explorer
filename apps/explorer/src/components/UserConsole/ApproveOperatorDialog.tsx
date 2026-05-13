@@ -1,7 +1,7 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { Operator, Token } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -363,9 +363,7 @@ export const ApproveOperatorDialog: React.FC<ApproveOperatorDialogProps> = ({
                             <div className='font-medium'>{token.symbol}</div>
                             <div className='text-xs text-muted-foreground'>{token.name}</div>
                           </div>
-                          <Badge variant='outline' className='text-xs'>
-                            {Number(token.decimals)} decimals
-                          </Badge>
+                          <Badge variant='secondary'>{`${Number(token.decimals)} decimals`}</Badge>
                         </div>
                       </button>
                     ))}
