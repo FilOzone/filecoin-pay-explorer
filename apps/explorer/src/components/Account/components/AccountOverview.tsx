@@ -1,7 +1,7 @@
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Account, Address } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
-import { ArrowsSplitIcon, CoinsIcon } from "@phosphor-icons/react";
+import { ArrowsSplitIcon, CoinsIcon, UserCheckIcon } from "@phosphor-icons/react";
 import { knownAddresses } from "@/constants/known-addresses";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, MetricItem } from "../../shared";
@@ -43,6 +43,7 @@ export const AccountOverview: React.FC<AccountOverviewProps> = ({ account }) => 
           title='Total Approvals'
           value={formatCompactNumber(account.totalApprovals)}
           tooltip='How many payment managers this account has given permission to use their tokens'
+          Icon={UserCheckIcon}
         />
       </div>
     </AccountOverviewLayout>
