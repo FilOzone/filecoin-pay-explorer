@@ -35,3 +35,4 @@ export {
 };
 
 export { RailStateBadge } from "./RailStateBadge";
+export { RoleIndicator } from "./RoleIndicator";
