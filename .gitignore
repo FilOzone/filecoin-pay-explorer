@@ -45,6 +45,4 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 .vercel*
-
-# Claude Code session artifacts
-.claude/scheduled_tasks.lock
+.claude
