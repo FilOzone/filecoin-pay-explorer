@@ -28,7 +28,11 @@ export const columns = [
       cell: (info) => {
         const { payer, account } = info.getValue();
         const isPayer = payer.address.toLowerCase() === account.address.toLowerCase();
-        return <RoleIndicator role={isPayer ? "payer" : "payee"} />;
+        return (
+          <div className='flex justify-center'>
+            <RoleIndicator role={isPayer ? "payer" : "payee"} />
+          </div>
+        );
       },
     },
   ),

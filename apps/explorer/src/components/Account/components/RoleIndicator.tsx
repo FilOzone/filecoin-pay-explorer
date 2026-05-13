@@ -1,3 +1,4 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 
 interface RoleIndicatorProps {
@@ -5,18 +6,10 @@ interface RoleIndicatorProps {
 }
 
 export const RoleIndicator: React.FC<RoleIndicatorProps> = ({ role }) => {
-  if (role === "payer") {
-    return (
-      <div className='inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-destructive/10 text-destructive'>
-        <ArrowUpRight className='h-3.5 w-3.5' />
-        <span className='text-xs font-medium'>Payer</span>
-      </div>
-    );
-  }
+  const isPayer = role === "payer";
   return (
-    <div className='inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/10 text-green-600 dark:text-green-400'>
-      <ArrowDownLeft className='h-3.5 w-3.5' />
-      <span className='text-xs font-medium'>Payee</span>
-    </div>
+    <Badge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
+      {isPayer ? "Payer" : "Payee"}
+    </Badge>
   );
 };
