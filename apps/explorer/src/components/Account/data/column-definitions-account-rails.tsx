@@ -1,9 +1,15 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Account, Rail } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, ExplorerLink, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
+import {
+  CopyableText,
+  ExplorerLink,
+  NetworkLink,
+  RailStateBadge,
+  RoleIndicator,
+  StyledLink,
+} from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { RoleIndicator } from "../components/RoleIndicator";
 
 const columnHelper = createColumnHelper<Rail & { account: Account }>();
 

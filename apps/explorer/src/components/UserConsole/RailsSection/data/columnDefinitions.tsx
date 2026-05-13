@@ -1,8 +1,6 @@
-import { Badge as FilecoinBadge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { CopyableText, RailStateBadge } from "@/components/shared";
+import { CopyableText, RailStateBadge, RoleIndicator } from "@/components/shared";
 import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
@@ -29,10 +27,8 @@ export const columns = [
       const { isPayer } = info.row.original;
 
       return (
-        <div className='flex flex-col gap-1 items-center'>
-          <FilecoinBadge variant={isPayer ? "tertiary" : "primary"} icon={isPayer ? ArrowUpRight : ArrowDownLeft}>
-            {isPayer ? "Payer" : "Payee"}
-          </FilecoinBadge>
+        <div className='flex justify-center'>
+          <RoleIndicator role={isPayer ? "payer" : "payee"} />
         </div>
       );
     },
