@@ -21,11 +21,12 @@
     "clsx": "^2.1.1",
     "ethers": "^6.16.0",
     "graphql-request": "^7.4.0",
-    "lucide-react": "^0.545.0",
+    "lucide-react": "^1.14.0",
     "next": "^15.5.7",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "sonner": "^2.0.7",
+    "use-debounce": "^10.1.1",
     "viem": "^2.48.8",
     "wagmi": "^3.6.9"
   },
@@ -38,6 +39,6 @@
     "@types/react-dom": "^19",
     "frontmatter-markdown-loader": "^3.7.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6"
   }
 }

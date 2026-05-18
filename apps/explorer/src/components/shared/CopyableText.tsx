@@ -2,6 +2,7 @@ import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { knownAddresses } from "@/constants/known-addresses";
+import useNetwork from "@/hooks/useNetwork";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
@@ -14,6 +15,7 @@ interface CopyableTextProps {
   className?: string;
   linkClassName?: string;
   monospace?: boolean;
+  lookupName?: boolean;
 }
 
 const CopyableText = ({
@@ -26,12 +28,14 @@ const CopyableText = ({
   className,
   linkClassName,
   monospace = true,
+  lookupName = true,
 }: CopyableTextProps) => {
   const displayValue =
-    knownAddresses[value.toLowerCase()] ??
+    (lookupName && knownAddresses[value.toLowerCase()]) ||
     (truncate && value.length > truncateLength * 2
       ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
       : value);
+  const { network } = useNetwork();
 
   return (
     <div
@@ -39,7 +43,7 @@ const CopyableText = ({
     >
       {to ? (
         <Link
-          href={to}
+          href={external ? to : `/${network}${to}`}
           className={cn("text-link inline-block text-pretty whitespace-nowrap", linkClassName)}
           title={value}
           target={external ? "_blank" : "_self"}

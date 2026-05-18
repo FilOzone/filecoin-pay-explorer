@@ -96,7 +96,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             value={
               <CopyableText
                 value={rail.payer.address}
-                // to={`/account/${rail.payer.address}`}
+                to={`/accounts/${rail.payer.address}`}
                 monospace={true}
                 label='Payer address'
                 truncate={true}
@@ -110,7 +110,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             value={
               <CopyableText
                 value={rail.payee.address}
-                // to={`/account/${rail.payee.address}`}
+                to={`/accounts/${rail.payee.address}`}
                 monospace={true}
                 label='Payee address'
                 truncate={true}
@@ -124,7 +124,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             value={
               <CopyableText
                 value={rail.operator.address}
-                // to={`/account/${rail.operator.address}`}
+                to={`/accounts/${rail.operator.address}`}
                 monospace={true}
                 label='Operator address'
                 truncate={true}
