@@ -1,5 +1,5 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import type { OperatorApproval } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AllowanceDisplay, ExplorerLink } from "@/components/shared";
 import { EPOCH_DURATION } from "@/utils/constants";
@@ -20,7 +20,11 @@ export const columns = [
     header: "Status",
     cell: (info) => {
       const isApproved = info.getValue();
-      return <Badge variant={isApproved ? "default" : "destructive"}>{isApproved ? "Approved" : "Revoked"}</Badge>;
+      return (
+        <div className='flex justify-start'>
+          <Badge variant={isApproved ? "primary" : "tertiary"}>{isApproved ? "Approved" : "Revoked"}</Badge>
+        </div>
+      );
     },
   }),
   columnHelper.accessor("maxLockupPeriod", {

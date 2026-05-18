@@ -1,4 +1,4 @@
-import { Badge } from "@filecoin-pay/ui/components/badge";
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Infinity as InfinityIcon } from "lucide-react";
 import { isUnlimitedValue } from "@/utils/formatter";
 
@@ -24,10 +24,11 @@ const AllowanceDisplay: React.FC<AllowanceDisplayProps> = ({
 }) => {
   if (isUnlimitedValue(value)) {
     return (
-      <Badge variant='secondary' className='font-normal'>
-        <InfinityIcon className='h-3 w-3 mr-1' />
-        Unlimited
-      </Badge>
+      <div className='flex justify-start'>
+        <Badge variant='secondary' icon={InfinityIcon}>
+          Unlimited
+        </Badge>
+      </div>
     );
   }
 

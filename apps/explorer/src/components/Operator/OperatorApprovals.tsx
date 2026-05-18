@@ -1,5 +1,5 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import type { Operator } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@filecoin-pay/ui/components/empty";
 import {
@@ -120,9 +120,11 @@ export const OperatorApprovals: React.FC<OperatorApprovalsProps> = ({ operator }
                 </TableCell>
                 <TableCell className='font-medium'>{approval.token.symbol}</TableCell>
                 <TableCell>
-                  <Badge variant={approval.isApproved ? "default" : "destructive"}>
-                    {approval.isApproved ? "Approved" : "Revoked"}
-                  </Badge>
+                  <div className='flex justify-start'>
+                    <Badge variant={approval.isApproved ? "primary" : "tertiary"}>
+                      {approval.isApproved ? "Approved" : "Revoked"}
+                    </Badge>
+                  </div>
                 </TableCell>
                 <TableCell className='text-right'>{approval.maxLockupPeriod.toString()} epochs</TableCell>
                 <TableCell className='text-right'>

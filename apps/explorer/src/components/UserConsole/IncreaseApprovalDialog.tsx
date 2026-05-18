@@ -1,7 +1,7 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { OperatorApproval } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -139,10 +139,11 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 <span className='text-muted-foreground'>Lockup:</span>
                 <div className='font-medium'>
                   {isCurrentLockupUnlimited ? (
-                    <Badge variant='secondary' className='font-normal'>
-                      <InfinityIcon className='h-3 w-3 mr-1' />
-                      Unlimited
-                    </Badge>
+                    <div className='flex justify-start'>
+                      <Badge variant='secondary' icon={InfinityIcon}>
+                        Unlimited
+                      </Badge>
+                    </div>
                   ) : (
                     formatToken(approval.lockupAllowance, approval.token.decimals, approval.token.symbol, 2)
                   )}
@@ -152,10 +153,11 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 <span className='text-muted-foreground'>Rate:</span>
                 <div className='font-medium'>
                   {isCurrentRateUnlimited ? (
-                    <Badge variant='secondary' className='font-normal'>
-                      <InfinityIcon className='h-3 w-3 mr-1' />
-                      Unlimited
-                    </Badge>
+                    <div className='flex justify-start'>
+                      <Badge variant='secondary' icon={InfinityIcon}>
+                        Unlimited
+                      </Badge>
+                    </div>
                   ) : (
                     formatToken(approval.rateAllowance, approval.token.decimals, approval.token.symbol, 2)
                   )}

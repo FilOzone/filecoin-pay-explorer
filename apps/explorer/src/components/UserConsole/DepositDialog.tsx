@@ -1,7 +1,7 @@
+import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { UserToken } from "@filecoin-pay/types";
-import { Badge } from "@filecoin-pay/ui/components/badge";
 import {
   Dialog,
   DialogContent,
@@ -311,9 +311,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                 <span className='text-sm text-muted-foreground'>Token</span>
                 <div className='flex items-center gap-2'>
                   <span className='font-medium'>{currentToken.symbol}</span>
-                  <Badge variant='outline' className='text-xs'>
-                    {currentToken.decimals} decimals
-                  </Badge>
+                  <Badge variant='secondary'>{`${currentToken.decimals} decimals`}</Badge>
                 </div>
               </div>
 
