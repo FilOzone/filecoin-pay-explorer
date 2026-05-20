@@ -1,47 +1,30 @@
 import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
-import type { Chain as ViemChain } from "viem";
 
 import type { Network } from "@/types";
 
-export type Contract = {
-  implementation: string;
-  proxy: string;
-};
-
-export type WarmStorage = {
-  implementation: string;
-  proxy: string;
-  stateView: string;
-};
-
-export type Contracts = {
-  pdp?: Partial<Contract>;
-  warmStorage: WarmStorage;
-  serviceProviderRegistry: Contract;
-};
+type SynapseChain = typeof synapseMainnet;
 
 /**
- * Viem compatible chain interface with WarmStorage and ServiceRegistry contracts
+ * Synapse chain augmented with explorer display fields and a `payments`
+ * alias for the `filecoinPay` contract.
+ *
+ * The full synapse contract set (`filecoinPay`, `fwss`, …) and
+ * `genesisTimestamp` are preserved so that the chain object carried by the
+ * wagmi connector client passes `@filoz/synapse-core`'s `asChain` validation
+ * when a wallet (e.g. MetaMask) is connected.
  */
-export interface Chain extends ViemChain {
+export interface Chain extends SynapseChain {
   label: string;
   slug: Network;
-  contracts: {
-    payments: typeof synapseMainnet.contracts.filecoinPay;
-    usdfc: typeof synapseMainnet.contracts.usdfc;
+  contracts: SynapseChain["contracts"] & {
+    payments: SynapseChain["contracts"]["filecoinPay"];
   };
 }
 
 export const mainnet: Chain = {
-  id: 314,
+  ...synapseMainnet,
   label: "Mainnet",
   slug: "mainnet",
-  name: "Filecoin - Mainnet",
-  nativeCurrency: {
-    name: "Filecoin",
-    symbol: "FIL",
-    decimals: 18,
-  },
   rpcUrls: {
     default: {
       http: ["https://api.node.glif.io/rpc/v1"],
@@ -67,21 +50,15 @@ export const mainnet: Chain = {
     },
   },
   contracts: {
+    ...synapseMainnet.contracts,
     payments: synapseMainnet.contracts.filecoinPay,
-    usdfc: synapseMainnet.contracts.usdfc,
   },
 };
 
 export const calibration: Chain = {
-  id: 314_159,
+  ...synapseCalibration,
   label: "Calibration",
   slug: "calibration",
-  name: "Filecoin - Calibration testnet",
-  nativeCurrency: {
-    name: "Filecoin",
-    symbol: "tFIL",
-    decimals: 18,
-  },
   rpcUrls: {
     default: {
       http: ["https://api.calibration.node.glif.io/rpc/v1"],
@@ -107,8 +84,8 @@ export const calibration: Chain = {
     },
   },
   contracts: {
+    ...synapseCalibration.contracts,
     payments: synapseCalibration.contracts.filecoinPay,
-    usdfc: synapseCalibration.contracts.usdfc,
   },
 };
 

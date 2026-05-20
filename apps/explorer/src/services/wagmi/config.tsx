@@ -6,6 +6,7 @@ export const supportedChains = [mainnet, calibration] as const;
 
 export const config = createConfig({
   chains: supportedChains,
+  ssr: true,
   transports: {
     [calibration.id]: http(),
     [mainnet.id]: http(),
