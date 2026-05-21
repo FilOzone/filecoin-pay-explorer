@@ -34,7 +34,7 @@
     "@filecoin-pay/configs": "workspace:*",
     "@svgr/webpack": "^8.1.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "frontmatter-markdown-loader": "^3.7.0",
