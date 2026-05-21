@@ -13,21 +13,21 @@
   },
   "dependencies": {
     "@filecoin-pay/types": "workspace:*",
-    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-query": "^5.100.10",
     "framer-motion": "^12.38.0",
     "graphql-request": "^7.4.0",
     "lucide-react": "^1.14.0",
     "postcss": "^8.5.13",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
-    "tailwindcss": "^4.2.4"
+    "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@filecoin-pay/configs": "workspace:*",
     "@rolldown/plugin-babel": "^0.2.3",
-    "@tailwindcss/vite": "^4.2.4",
+    "@tailwindcss/vite": "^4.3.0",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^25.7.0",
     "@types/react": "^19.2.14",
@@ -35,6 +35,6 @@
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "~6.0.3",
-    "vite": "^8.0.10"
+    "vite": "^8.0.12"
   }
 }
