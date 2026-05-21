@@ -15,6 +15,8 @@ import Providers from "./Providers";
 import SiteLayout from "./SiteLayout";
 import StyledLink from "./StyledLink";
 
+export { RailStateBadge } from "./RailStateBadge";
+export { RoleIndicator } from "./RoleIndicator";
 export {
   AllowanceDisplay,
   CopyableText,
@@ -28,11 +30,8 @@ export {
   MetricItem,
   Navigation,
   NetworkIndicator,
+  NetworkLink,
   Providers,
   SiteLayout,
   StyledLink,
-  NetworkLink,
 };
-
-export { RailStateBadge } from "./RailStateBadge";
-export { RoleIndicator } from "./RoleIndicator";
