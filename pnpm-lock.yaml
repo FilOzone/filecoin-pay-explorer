@@ -33,8 +33,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@filoz/synapse-sdk':
-        specifier: ^0.40.4
-        version: 0.40.4(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+        specifier: ^0.41.0
+        version: 0.41.0(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -1220,13 +1220,13 @@ packages:
       swr: ^2.4.0
       tailwindcss: ^4.1.18
 
-  '@filoz/synapse-core@0.4.1':
-    resolution: {integrity: sha512-Psj2YpIxNh+nxJN0wQdYMBTQRRhq1gR/C9kosI39Kx6y+lV8ppw02c6mPeHEaa47AG3KfUqQyMb3xqurOlwraQ==}
+  '@filoz/synapse-core@0.5.2':
+    resolution: {integrity: sha512-euxg/UhABStkXYJBft259V9KKNdzV/08NwfwIJnlhQnTJDu5suNXqZlP5QEDTdpMVtaCCfqEXJuPGqGZy6Nz6w==}
     peerDependencies:
       viem: 2.x
 
-  '@filoz/synapse-sdk@0.40.4':
-    resolution: {integrity: sha512-MRofQ3EixagTglo3nqWPvTyw15LtlPIFryCWN+1swgZk7JTSuFIqVunBphF5R5yFiMC0bbGohBCqrI4CIw+eCQ==}
+  '@filoz/synapse-sdk@0.41.0':
+    resolution: {integrity: sha512-hbxV71Zjk1AExgghdP+LoYY1UqdnUMVB6Te1aJ5Af/e1lVDIOXIAHYm1WzSLCp6pU/a/+hLpGyl1CCu1IUPwYQ==}
     peerDependencies:
       viem: 2.x
 
@@ -1931,6 +1931,9 @@ packages:
   '@ipld/dag-cbor@9.2.6':
     resolution: {integrity: sha512-vZGJ84Em2jCVAS7td5gc08YTVN8/s4bTQxg4pU77PAXDAR/yLYOthOvkCu01fdl1lrZwz47RdUterxdkrs3p5A==}
     engines: {node: '>=16.0.0', npm: '>=7.0.0'}
+
+  '@ipld/dag-cbor@9.2.7':
+    resolution: {integrity: sha512-ZmfXmElRWATr+hoUTSAOr6HUcjVhOcNHDqgczc76qte2DHHFEK0ZhNzUcdTDQhF/VSIvf2ioaRTRLWwLc83sNw==}
 
   '@ipld/dag-json@10.2.7':
     resolution: {integrity: sha512-G+pXbOV6JpNUQrB+4H+0apnE85M9V0JjSjc7Mm2DdKbC6Qn8so9UYIGnJps+ZRMAvGUieO2iCZbAFLeWE2snvA==}
@@ -4669,8 +4672,8 @@ packages:
   idb-keyval@6.2.1:
     resolution: {integrity: sha512-8Sb3veuYCyrZL+VBt9LJfZjLUPWVvqn8tG28VqYNFCo43KHcKuq+b4EiXGeuaLAQWL2YmyDgMp2aSpH9JHsEQg==}
 
-  idb-keyval@6.2.2:
-    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
+  idb-keyval@6.2.4:
+    resolution: {integrity: sha512-D/NzHWUmYJGXi++z67aMSrnisb9A3621CyRK5G89JyTlN13C8xf0g04DLxUKMufPem3e3L2JAXR6Z00OWy183Q==}
 
   idb-keyval@6.2.4:
     resolution: {integrity: sha512-D/NzHWUmYJGXi++z67aMSrnisb9A3621CyRK5G89JyTlN13C8xf0g04DLxUKMufPem3e3L2JAXR6Z00OWy183Q==}
@@ -5702,8 +5705,8 @@ packages:
     resolution: {integrity: sha512-FRPW2lT1b/B8/CNkCOZ/Xl4mz52CWzwb+/dLa0GcCrH7u7djFf36VftuRJ5w/eCr1YXtbTGPuGoEDVSk14EwNQ==}
     engines: {node: '>=20'}
 
-  p-queue@9.2.0:
-    resolution: {integrity: sha512-dWgLE8AH0HjQ9fe74pUkKkvzzYT18Inp4zra3lKHnnwqGvcfcUBrvF2EAVX+envufDNBOzpPq/IBUONDbI7+3g==}
+  p-queue@9.3.0:
+    resolution: {integrity: sha512-7NED7xhQ74Ngp4JP/2e0VZHp7vSWfJfqeiR92jPgxsz6m0Se4P03YoTKa9dDXyZ3r6P616gUXttrB6nnHYKang==}
     engines: {node: '>=20'}
 
   p-retry@8.0.0:
@@ -8254,24 +8257,24 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@filoz/synapse-core@0.4.1(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
+  '@filoz/synapse-core@0.5.2(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
     dependencies:
       '@web3-storage/data-segment': 5.3.0
       dnum: 2.17.0
       iso-web: 2.2.1
       multiformats: 13.4.2
-      ox: 0.14.22(typescript@6.0.3)(zod@4.4.3)
+      ox: 0.14.25(typescript@6.0.3)(zod@4.4.3)
       p-locate: 7.0.0
-      p-queue: 9.2.0
+      p-queue: 9.3.0
       p-some: 7.0.0
       viem: 2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
       zod: 4.4.3
     transitivePeerDependencies:
       - typescript
 
-  '@filoz/synapse-sdk@0.40.4(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
+  '@filoz/synapse-sdk@0.41.0(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
     dependencies:
-      '@filoz/synapse-core': 0.4.1(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+      '@filoz/synapse-core': 0.5.2(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
       multiformats: 13.4.2
       viem: 2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     transitivePeerDependencies:
@@ -9125,6 +9128,11 @@ snapshots:
       cborg: 5.1.1
       multiformats: 13.4.2
 
+  '@ipld/dag-cbor@9.2.7':
+    dependencies:
+      cborg: 5.1.1
+      multiformats: 13.4.2
+
   '@ipld/dag-json@10.2.7':
     dependencies:
       cborg: 5.1.1
@@ -9215,7 +9223,7 @@ snapshots:
       '@dnsquery/dns-packet': 6.1.1
       '@libp2p/interface': 3.2.2
       hashlru: 2.3.0
-      p-queue: 9.2.0
+      p-queue: 9.3.0
       progress-events: 1.1.0
       uint8arrays: 5.1.1
 
@@ -11295,7 +11303,7 @@ snapshots:
 
   '@web3-storage/data-segment@5.3.0':
     dependencies:
-      '@ipld/dag-cbor': 9.2.6
+      '@ipld/dag-cbor': 9.2.7
       multiformats: 13.4.2
       sync-multihash-sha2: 1.0.0
 
@@ -12694,7 +12702,7 @@ snapshots:
   idb-keyval@6.2.1:
     optional: true
 
-  idb-keyval@6.2.2: {}
+  idb-keyval@6.2.4: {}
 
   idb-keyval@6.2.4:
     optional: true
@@ -12871,7 +12879,7 @@ snapshots:
   iso-kv@3.1.1:
     dependencies:
       conf: 15.1.0
-      idb-keyval: 6.2.2
+      idb-keyval: 6.2.4
       kysely: 0.28.17
 
   iso-url@1.2.1: {}
@@ -13937,7 +13945,7 @@ snapshots:
     dependencies:
       p-limit: 7.3.0
 
-  p-queue@9.2.0:
+  p-queue@9.3.0:
     dependencies:
       eventemitter3: 5.0.4
       p-timeout: 7.0.1
