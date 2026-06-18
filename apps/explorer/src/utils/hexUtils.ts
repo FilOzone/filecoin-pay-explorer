@@ -6,7 +6,9 @@ export const ensureEvenHex = (hex: string): string => {
   const cleanHex = hex.toLowerCase().startsWith("0x") ? hex.slice(2) : hex;
   if (cleanHex.length === 0) return "0x";
 
-  const evenHex = cleanHex.length % 2 === 0 ? cleanHex : `0${cleanHex}`;
+  // Drop the incomplete trailing half-byte to prevent hex corruption
+  // instead of front-padding it.
+  const evenHex = cleanHex.length % 2 === 0 ? cleanHex : cleanHex.slice(0, -1);
   return `0x${evenHex}`;
 };
 
@@ -29,5 +31,7 @@ export const formatHexForSearch = (value: string): string | null => {
   const trimmed = value.trim();
   if (!isValidHex(trimmed)) return null;
 
-  return ensureEvenHex(trimmed);
+  const formatted = ensureEvenHex(trimmed);
+  // Treat "0x" as no filter
+  return formatted === "0x" ? null : formatted;
 };

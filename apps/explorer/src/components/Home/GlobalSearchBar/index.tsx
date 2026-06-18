@@ -5,10 +5,11 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SearchInput } from "@filecoin-foundation/ui-filecoin/SearchInput";
 import { Popover, PopoverAnchor, PopoverContent } from "@filecoin-pay/ui/components/popover";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { LookupResult } from "@/hooks/useAddressLookup";
 import { useAddressLookup } from "@/hooks/useAddressLookup";
 import useNetwork from "@/hooks/useNetwork";
+import { formatHexForSearch } from "@/utils/hexUtils";
 import { AddressLookupDropdown } from "./AddressLookupDropdown";
 import type { ValidationError } from "./types";
 import { classifyInput } from "./utils";
@@ -17,13 +18,35 @@ const GlobalSearchBar = () => {
   const [searchInput, setSearchInput] = useState("");
   const [validationError, setValidationError] = useState<ValidationError | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const { network } = useNetwork();
 
   const classified = classifyInput(searchInput);
   const isHexInput = classified.kind === "hexAddress";
+  // Only look up once there is at least one whole byte to match on.
+  const canLookup = isHexInput && formatHexForSearch(searchInput) !== null;
 
-  const { results, isLoading } = useAddressLookup(isHexInput ? searchInput : "");
+  const { results, isLoading } = useAddressLookup(canLookup ? searchInput : "");
+
+  const handleResultSelect = useCallback(
+    (result: LookupResult) => {
+      router.push(`/${network}/${result.type}s/${result.address}`);
+      setDropdownOpen(false);
+      setSearchInput("");
+    },
+    [router, network],
+  );
+
+  // Defer submit to lookup result rather than navigating to hardcoded path (account vs operator)
+  const resolveAddressSubmit = useCallback(() => {
+    if (results.length === 1) {
+      handleResultSelect(results[0]);
+    } else {
+      // Keep dropdown open for zero ('Not Found') or multiple results.
+      setDropdownOpen(true);
+    }
+  }, [results, handleResultSelect]);
 
   const handleInputChange = (value: string) => {
     setSearchInput(value);
@@ -32,15 +55,19 @@ const GlobalSearchBar = () => {
   };
 
   const handleSearch = () => {
+    setValidationError(null);
+
     switch (classified.kind) {
       case "empty":
-        setValidationError(null);
         break;
 
       case "railId":
-        setValidationError(null);
         router.push(`/${network}/rails/${classified.value}`);
         setSearchInput("");
+        break;
+
+      case "hexAddress":
+        resolveAddressSubmit();
         break;
 
       case "invalid":
@@ -54,18 +81,16 @@ const GlobalSearchBar = () => {
     handleSearch();
   };
 
-  const handleResultSelect = (result: LookupResult) => {
-    router.push(`/${network}/${result.type}s/${result.address}`);
-    setDropdownOpen(false);
-  };
-
   return (
     <PageSection backgroundVariant='light' paddingVariant='none'>
       <div className='pt-10 pb-5 w-full max-w-2xl'>
-        <Popover open={dropdownOpen} onOpenChange={setDropdownOpen}>
-          <form onSubmit={handleSubmit} className='flex items-center gap-3'>
+        {/* `canLookup` gates visibility on valid input (hex address with at least one byte) */}
+        <Popover open={dropdownOpen && canLookup} onOpenChange={setDropdownOpen}>
+          <form ref={formRef} onSubmit={handleSubmit} className='flex items-center gap-3'>
             <PopoverAnchor asChild>
-              <div className='flex-1'>
+              {/* Reopen the dropdown once SearchInput regains focus. */}
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: focus is observed on the wrapper because SearchInput exposes no onFocus. */}
+              <div className='flex-1' onFocus={() => isHexInput && setDropdownOpen(true)}>
                 <SearchInput
                   value={searchInput}
                   onChange={handleInputChange}
@@ -83,6 +108,11 @@ const GlobalSearchBar = () => {
             sideOffset={8}
             className='w-[var(--radix-popover-trigger-width)] max-h-72 overflow-y-auto p-0'
             onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={(e) => {
+              // Keep the dropdown open when the interaction lands on the form
+              const target = e.detail.originalEvent.target as Node | null;
+              if (target && formRef.current?.contains(target)) e.preventDefault();
+            }}
           >
             <AddressLookupDropdown results={results} isLoading={isLoading} onSelect={handleResultSelect} />
           </PopoverContent>
