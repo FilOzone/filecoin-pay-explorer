@@ -5,7 +5,7 @@ import { DEFAULT_NETWORK } from "@/utils/constants";
 
 const VALID_NETWORKS: readonly string[] = supportedChains.map((chain) => chain.slug);
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname === "/") {
