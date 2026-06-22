@@ -40,13 +40,19 @@ const GlobalSearchBar = () => {
 
   // Defer submit to lookup result rather than navigating to hardcoded path (account vs operator)
   const resolveAddressSubmit = useCallback(() => {
+    if (isLoading) {
+      // Results are still debouncing/pending, don't act on stale matches.
+      setDropdownOpen(true);
+      return;
+    }
+
     if (results.length === 1) {
       handleResultSelect(results[0]);
     } else {
       // Keep dropdown open for zero ('Not Found') or multiple results.
       setDropdownOpen(true);
     }
-  }, [results, handleResultSelect]);
+  }, [isLoading, results, handleResultSelect]);
 
   const handleInputChange = (value: string) => {
     setSearchInput(value);
