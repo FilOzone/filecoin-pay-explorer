@@ -82,7 +82,7 @@ const GlobalSearchBar = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     handleSearch();
   };
