@@ -37,7 +37,7 @@ const GlobalSearchBar = () => {
     options = results.map((result): SearchOption => ({ kind: "address", result }));
   }
 
-  // The dropdown is the only submit surface, so it opens for anything actionable.
+  // Open the dropdown for any actionable input — a Rail ID or a lookup-able address.
   const showDropdown = classified.kind === "railId" || canLookup;
   // The Search button only commits a highlighted row, so it is enabled only when
   // there is one (not while empty, loading, or with no matches).
