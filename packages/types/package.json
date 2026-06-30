@@ -21,7 +21,7 @@
     "type-check": "pnpm generate && tsc --noEmit"
   },
   "dependencies": {
-    "graphql": "^16.14.0"
+    "graphql": "^17.0.1"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
