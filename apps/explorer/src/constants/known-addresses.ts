@@ -7,5 +7,5 @@ export const knownAddresses: Record<string, string> = {
   "0x305025d07c1dee47f25a4990179eff2becddca0b": "DealBot",
   "0x8408502033c418e1bbc97ce9ac48e5528f371a9f": "FWSS",
   "0xa53bbc04a0a2b7a7e62a78a24dd6c9280f611b97": "Qave",
-  "0xF88c59cF5ba1e904079079c8CE03148490cB09f8": "Filosign",
+  "0xf88c59cf5ba1e904079079c8ce03148490cb09f8": "Filosign",
 };
