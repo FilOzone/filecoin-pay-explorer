@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Activity, CheckCircle, Shield, Zap } from "lucide-react";
-import React from "react";
+import type React from "react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
 import { formatCompactNumber } from "../utils/formatters";
 import { ErrorBoundary } from "./ErrorBoundary";

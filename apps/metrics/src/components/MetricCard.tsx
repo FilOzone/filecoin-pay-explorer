@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { DivideIcon as LucideIcon } from "lucide-react";
-import React from "react";
+import type { DivideIcon as LucideIcon } from "lucide-react";
+import type React from "react";
 
 interface MetricCardProps {
   title: string;

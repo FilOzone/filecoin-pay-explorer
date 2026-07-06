@@ -1,4 +1,11 @@
 {
   "root": false,
-  "extends": ["@filecoin-pay/configs/biome/next"]
+  "extends": ["@filecoin-pay/configs/biome/next"],
+  "linter": {
+    "rules": {
+      "a11y": {
+        "noSvgWithoutTitle": "off"
+      }
+    }
+  }
 }

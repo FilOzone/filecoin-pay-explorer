@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Activity, BarChart3, Crown, Users } from "lucide-react";
-import React from "react";
+import type React from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useOperatorMetrics, useTopOperatorTokens } from "../hooks/useMetrics";
 import { formatAddress, formatDate, YAxisTickFormatter } from "../utils/formatters";
@@ -66,15 +66,15 @@ export const TopOperatorCharts: React.FC = () => {
 
   // biome-ignore lint/suspicious/noExplicitAny: Tooltip props are of type any
   function CustomTooltip({ active, payload, label }: any) {
-    if (active && payload && payload.length) {
+    if (active && payload?.length) {
       return (
         <div className='bg-gray-800/95 backdrop-blur-sm border border-gray-600 rounded-lg p-4 shadow-xl'>
           <p className='text-gray-300 text-sm mb-2'>{label}</p>
-          {payload.map((entry: Record<string, string | number>, index: number) => {
+          {payload.map((entry: Record<string, string | number>) => {
             const [operator, metric] = (entry.dataKey as string).split("_");
             const metricName = metric.replace("-", " ");
             return (
-              <div key={index} className='flex items-center gap-2'>
+              <div key={metricName} className='flex items-center gap-2'>
                 <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color as string }} />
                 <span className='text-white text-sm'>
                   {operator} {metricName}: {entry.value.toLocaleString()}

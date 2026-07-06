@@ -15,6 +15,7 @@ const queryClient = new QueryClient({
   },
 });
 
+// biome-ignore lint/style/noNonNullAssertion: #root is always present in index.html
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
