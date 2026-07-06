@@ -212,6 +212,9 @@ importers:
       '@filecoin-pay/configs':
         specifier: workspace:*
         version: link:../configs
+      '@filecoin-pay/subgraph':
+        specifier: workspace:*
+        version: link:../subgraph
       '@graphql-codegen/cli':
         specifier: ^7.0.0
         version: 7.0.0(@types/node@25.9.1)(bufferutil@4.0.9)(crossws@0.3.5)(graphql@16.14.2)(typescript@6.0.3)(utf-8-validate@5.0.10)
