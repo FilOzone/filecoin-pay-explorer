@@ -55,7 +55,9 @@ export function ProgressBar({ height = "3px", color = "#0052CC" }: ProgressBarPr
 
     const handleMutation: MutationCallback = () => {
       const anchorElements = document.querySelectorAll("a");
-      anchorElements.forEach((anchor) => anchor.addEventListener("click", handleAnchorClick));
+      anchorElements.forEach((anchor) => {
+        anchor.addEventListener("click", handleAnchorClick);
+      });
     };
 
     const mutationObserver = new MutationObserver(handleMutation);

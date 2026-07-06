@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
   "root": true,
   "vcs": {
     "enabled": true,
@@ -22,7 +22,7 @@
     "expand": "auto",
     "useEditorconfig": true
   },
-  "linter": { "enabled": true, "rules": { "recommended": false } },
+  "linter": { "enabled": true, "rules": { "preset": "none" } },
   "javascript": {
     "formatter": {
       "jsxQuoteStyle": "single",

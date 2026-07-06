@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Activity, BarChart3, Calendar, Flame, Users } from "lucide-react";
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useDailyMetrics, useWeeklyMetrics } from "../hooks/useMetrics";
 import { formatDate, formatFIL, YAxisTickFormatter } from "../utils/formatters";
@@ -69,12 +70,12 @@ export const TrendChart: React.FC = () => {
 
   // biome-ignore lint/suspicious/noExplicitAny: Tooltip props are of type any
   function CustomTooltip({ active, payload, label }: any) {
-    if (active && payload && payload.length) {
+    if (active && payload?.length) {
       return (
         <div className='bg-gray-800/95 backdrop-blur-sm border border-gray-600 rounded-lg p-4 shadow-xl'>
           <p className='text-gray-300 text-sm mb-2'>{label}</p>
-          {payload.map((entry: ChartEntry, index: number) => (
-            <div key={index} className='flex items-center gap-2'>
+          {payload.map((entry: ChartEntry) => (
+            <div key={entry.name} className='flex items-center gap-2'>
               <div className='w-3 h-3 rounded-full' style={{ backgroundColor: entry.color as string }} />
               <span className='text-white text-sm'>
                 {entry.name}:{" "}
@@ -110,6 +111,7 @@ export const TrendChart: React.FC = () => {
         {/* Timeframe Toggle */}
         <div className='flex items-center gap-2 bg-gray-900/50 rounded-lg p-1'>
           <button
+            type='button'
             onClick={() => setTimeframe("daily")}
             className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
               timeframe === "daily"
@@ -121,6 +123,7 @@ export const TrendChart: React.FC = () => {
             Daily
           </button>
           <button
+            type='button'
             onClick={() => setTimeframe("weekly")}
             className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
               timeframe === "weekly"

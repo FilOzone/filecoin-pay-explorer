@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Activity, Coins, DollarSign, TrendingUp, Users, Zap } from "lucide-react";
-import React from "react";
+import type React from "react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
 import { formatCompactNumber, formatFIL } from "../utils/formatters";
 import { AnimatedCounter } from "./AnimatedCounter";

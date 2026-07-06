@@ -1,4 +1,4 @@
-import { BigInt, Bytes } from "../index.js";
+import type { BigInt, Bytes } from "../index.js";
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
