@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.1",
+    "@filecoin-pay/configs": "workspace:*",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "turbo": "^2.9.12"

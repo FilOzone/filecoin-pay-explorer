@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.1
         version: 2.5.1
+      '@filecoin-pay/configs':
+        specifier: workspace:*
+        version: link:packages/configs
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -190,6 +193,9 @@ importers:
         specifier: ^0.38.2
         version: 0.38.2
     devDependencies:
+      '@filecoin-pay/configs':
+        specifier: workspace:*
+        version: link:../configs
       assemblyscript:
         specifier: 0.19.23
         version: 0.19.23

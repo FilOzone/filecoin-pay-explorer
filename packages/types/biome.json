@@ -1,10 +1,8 @@
 {
   "root": false,
-  "extends": "//",
+  "extends": ["@filecoin-pay/configs/biome/base"],
   "linter": {
-    "enabled": true,
     "rules": {
-      "preset": "recommended",
       "suspicious": {
         "noShadowRestrictedNames": "off"
       }
