@@ -12,7 +12,7 @@ import {
   RailTerminated as RailTerminatedEvent,
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
-import { Account, FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import { FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
 import { TokenTemplate } from "../generated/templates";
 import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
@@ -35,7 +35,7 @@ import {
   updateOperatorTokenRate,
 } from "./utils/helpers";
 import { getIdFromTxHashAndLogIndex, getRailEntityId } from "./utils/keys";
-import { MetricsCollectionOrchestrator, MetricsEntityManager, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;

@@ -5,12 +5,6 @@
     "includes": ["**", "!node_modules", "!.next", "!dist", "!build"]
   },
   "linter": {
-    "rules": {
-      "suspicious": {
-        "noUnknownAtRules": "off",
-        "noArrayIndexKey": "off"
-      }
-    },
     "domains": {
       "next": "recommended",
       "react": "recommended"

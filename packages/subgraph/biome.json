@@ -3,7 +3,17 @@
   "extends": ["@filecoin-pay/configs/biome/base"],
   "linter": {
     "enabled": true,
-    "rules": { "preset": "none" },
-    "includes": ["**", "!dist", "!templates"]
+    "includes": ["**", "!dist", "!templates"],
+    "rules": {
+      "preset": "recommended",
+      "style": { "useImportType": "off", "noNonNullAssertion": "off" },
+      "suspicious": {
+        "noShadowRestrictedNames": "off",
+        "noDoubleEquals": "off"
+      },
+      "complexity": {
+        "noStaticOnlyClass": "off"
+      }
+    }
   }
 }

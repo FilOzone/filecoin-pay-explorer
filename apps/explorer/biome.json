@@ -3,6 +3,9 @@
   "extends": ["@filecoin-pay/configs/biome/base", "@filecoin-pay/configs/biome/next"],
   "linter": {
     "rules": {
+      "suspicious": {
+        "noArrayIndexKey": "off"
+      },
       "a11y": {
         "noSvgWithoutTitle": "off"
       }
