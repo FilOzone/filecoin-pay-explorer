@@ -1,2 +1,5 @@
 dist
 node_modules
+
+# Generated Files
+src/generated
