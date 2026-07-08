@@ -16,7 +16,7 @@
   "scripts": {
     "generate": "graphql-codegen --config codegen.yml",
     "build": "pnpm generate && tsc",
-    "clean": "rm -rf dist generated",
+    "clean": "rm -rf dist src/generated",
     "lint": "biome check --write",
     "type-check": "pnpm generate && tsc --noEmit"
   },
