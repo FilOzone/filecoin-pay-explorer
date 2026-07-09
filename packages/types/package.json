@@ -16,7 +16,7 @@
   "scripts": {
     "generate": "graphql-codegen --config codegen.yml",
     "build": "pnpm generate && tsc",
-    "clean": "rm -rf dist generated",
+    "clean": "rm -rf dist src/generated",
     "lint": "biome check --write",
     "type-check": "pnpm generate && tsc --noEmit"
   },
@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
+    "@filecoin-pay/subgraph": "workspace:*",
     "@graphql-codegen/cli": "^7.0.0",
     "@graphql-codegen/typescript": "^6.0.1",
     "@graphql-codegen/typescript-operations": "^6.0.2",
