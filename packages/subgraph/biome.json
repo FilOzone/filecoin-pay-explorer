@@ -1,11 +1,11 @@
 {
+  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
   "root": false,
   "extends": ["@filecoin-pay/configs/biome/base"],
   "linter": {
     "enabled": true,
     "includes": ["**", "!dist", "!templates"],
     "rules": {
-      "preset": "recommended",
       "style": { "useImportType": "off", "noNonNullAssertion": "off" },
       "suspicious": {
         "noShadowRestrictedNames": "off",
