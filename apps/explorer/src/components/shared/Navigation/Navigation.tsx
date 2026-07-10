@@ -18,7 +18,7 @@ function Navigation({ backgroundVariant }: NavigationProps) {
   return (
     <Section as='header' backgroundVariant={backgroundVariant}>
       <Container>
-        <nav className='flex flex-col gap-4 py-8 xl:flex-row xl:items-center xl:justify-between xl:gap-24'>
+        <nav className='flex flex-col gap-8 py-8 xl:flex-row xl:items-center xl:justify-between xl:gap-24'>
           <div className='flex w-full items-center justify-between xl:w-auto'>
             <HomeLogoIconLink />
 
@@ -27,7 +27,7 @@ function Navigation({ backgroundVariant }: NavigationProps) {
             </div>
           </div>
 
-          <div className='block w-full xl:hidden'>
+          <div className='block w-full -mb-12 xl:hidden'>
             <NetworkOptions />
           </div>
 
