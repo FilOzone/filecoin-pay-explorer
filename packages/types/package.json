@@ -26,9 +26,9 @@
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
     "@filecoin-pay/subgraph": "workspace:*",
-    "@graphql-codegen/cli": "^7.0.0",
-    "@graphql-codegen/typescript": "^6.0.1",
-    "@graphql-codegen/typescript-operations": "^6.0.2",
+    "@graphql-codegen/cli": "^7.2.0",
+    "@graphql-codegen/typescript": "^6.1.0",
+    "@graphql-codegen/typescript-operations": "^6.1.0",
     "typescript": "^6.0.3"
   }
 }
