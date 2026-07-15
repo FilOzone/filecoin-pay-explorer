@@ -4,19 +4,21 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import type { RailState } from "@filecoin-pay/types";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAddress } from "viem";
 import type { RailsFilter } from "@/hooks/useInfiniteRails";
 import useInfiniteRails from "@/hooks/useInfiniteRails";
-import { formatHexForSearch } from "@/utils/hexUtils";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
-const isIntegerInString = (str: string) => Number.isInteger(Number(str)) && String(Number(str)) === str;
+const isPositiveInteger = (value: string) => /^[1-9]\d*$/.test(value);
+const isNonNegativeInteger = (value: string) => /^\d+$/.test(value);
 
 const Rails = () => {
-  const [searchBy, setSearchBy] = useState<SearchByOption>("railId");
+  const [searchBy, setSearchBy] = useState<SearchByOption>("railIdOrAddress");
   const [searchInput, setSearchInput] = useState("");
   const [selectedState, setSelectedState] = useState<RailState | "">("");
   const [appliedFilters, setAppliedFilters] = useState<RailsFilter>({});
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
     useInfiniteRails(appliedFilters);
@@ -51,78 +53,79 @@ const Rails = () => {
 
   const handleSearch = () => {
     const newFilters: RailsFilter = {};
+    const trimmedInput = searchInput.trim();
+
+    if (!trimmedInput) {
+      setValidationError("Enter a value to search.");
+      return;
+    }
 
     switch (searchBy) {
-      case "railId": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+      case "railIdOrAddress": {
+        if (isPositiveInteger(trimmedInput)) {
+          newFilters.railId = trimmedInput;
+        } else if (isAddress(trimmedInput)) {
+          newFilters.address = trimmedInput.toLowerCase();
+        } else {
+          setValidationError("Enter a Rail ID greater than 0 or a valid address (0x...).");
           return;
         }
-        if (isIntegerInString(trimmedInput)) newFilters.railId = trimmedInput;
+        break;
+      }
+      case "railId": {
+        if (!isPositiveInteger(trimmedInput)) {
+          setValidationError("Enter a Rail ID greater than 0.");
+          return;
+        }
+        newFilters.railId = trimmedInput;
         break;
       }
       case "payer": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+        if (!isAddress(trimmedInput)) {
+          setValidationError("Enter a valid payer address (0x...).");
           return;
         }
-        const formattedHex = formatHexForSearch(trimmedInput);
-        if (formattedHex) newFilters.payer = formattedHex;
+        newFilters.payer = trimmedInput.toLowerCase();
         break;
       }
       case "payee": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+        if (!isAddress(trimmedInput)) {
+          setValidationError("Enter a valid payee address (0x...).");
           return;
         }
-        const formattedHex = formatHexForSearch(trimmedInput);
-        if (formattedHex) newFilters.payee = formattedHex;
+        newFilters.payee = trimmedInput.toLowerCase();
         break;
       }
       case "operator": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+        if (!isAddress(trimmedInput)) {
+          setValidationError("Enter a valid operator address (0x...).");
           return;
         }
-        const formattedHex = formatHexForSearch(trimmedInput);
-        if (formattedHex) newFilters.operator = formattedHex;
+        newFilters.operator = trimmedInput.toLowerCase();
         break;
       }
       case "totalSettlements": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+        if (!isNonNegativeInteger(trimmedInput)) {
+          setValidationError("Enter a non-negative number of settlements.");
           return;
         }
-        if (isIntegerInString(trimmedInput)) {
-          newFilters.totalSettlements = trimmedInput;
-        }
+        newFilters.totalSettlements = trimmedInput;
         break;
       }
       case "totalRateChanges": {
-        const trimmedInput = searchInput.trim();
-        if (!trimmedInput) {
-          setAppliedFilters({});
+        if (!isNonNegativeInteger(trimmedInput)) {
+          setValidationError("Enter a non-negative number of rate changes.");
           return;
         }
-        if (isIntegerInString(trimmedInput)) {
-          newFilters.totalRateChanges = trimmedInput;
-        }
+        newFilters.totalRateChanges = trimmedInput;
         break;
       }
-      case "state":
-        if (!selectedState) {
-          setAppliedFilters({});
-          return;
-        }
-        newFilters.state = selectedState;
-        break;
+      case "state": {
+        return;
+      }
     }
 
+    setValidationError(null);
     setAppliedFilters(newFilters);
   };
 
@@ -130,12 +133,30 @@ const Rails = () => {
     setSearchInput("");
     setSelectedState("");
     setAppliedFilters({});
+    setValidationError(null);
   };
 
   const handleSearchByValueChange = (value: SearchByOption) => {
     setSearchBy(value);
-    setSearchInput("");
-    setSelectedState("");
+    setAppliedFilters({});
+    setValidationError(null);
+
+    if (value === "state") {
+      setSearchInput("");
+    } else {
+      setSelectedState("");
+    }
+  };
+
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
+    setValidationError(null);
+  };
+
+  const handleSelectedStateChange = (value: RailState) => {
+    setSelectedState(value);
+    setValidationError(null);
+    setAppliedFilters({ state: value });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -157,12 +178,13 @@ const Rails = () => {
             hasActiveFilters={hasActiveFilters}
             isRefetching={isRefetching}
             onSearchByChange={handleSearchByValueChange}
-            onSearchInputChange={setSearchInput}
-            onSelectedStateChange={(value) => setSelectedState(value as RailState)}
+            onSearchInputChange={handleSearchInputChange}
+            onSelectedStateChange={handleSelectedStateChange}
             onSearch={handleSearch}
             onClear={handleClearFilters}
             onRefresh={refetch}
             onKeyDown={handleKeyDown}
+            validationError={validationError}
           />
 
           {isLoading && <LoadingStateCard message='Loading Rails...' />}

@@ -4,6 +4,7 @@ import { useGraphQLInfiniteQuery } from "./useGraphQLQuery";
 
 export interface RailsFilter {
   railId?: string;
+  address?: string;
   payer?: string;
   payee?: string;
   operator?: string;
@@ -27,6 +28,9 @@ const useInfiniteRails = (filters: RailsFilter = {}) => {
   const where: Record<string, unknown> = {};
   if (filters.railId) {
     where.railId = filters.railId;
+  }
+  if (filters.address) {
+    where.or = [{ payer: filters.address }, { payee: filters.address }, { operator: filters.address }];
   }
   if (filters.payer) {
     where.payer = filters.payer;
