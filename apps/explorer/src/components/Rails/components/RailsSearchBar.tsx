@@ -76,7 +76,7 @@ function RailsSearchBar({
       <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
         <div className='flex flex-1 flex-col gap-3 sm:flex-row'>
           <Select value={searchBy} onValueChange={onSearchByChange}>
-            <SelectTrigger aria-label='Search rails by' className='w-full data-[size=default]:h-[50px] sm:w-[220px]'>
+            <SelectTrigger aria-label='Search rails by' size='lg' className='w-full sm:w-[220px]'>
               <SelectValue>{SEARCH_BY_LABELS[searchBy]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -95,7 +95,7 @@ function RailsSearchBar({
             <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
             {isStateSearch ? (
               <Select value={selectedState} onValueChange={onSelectedStateChange}>
-                <SelectTrigger aria-label={searchPlaceholder} className='w-full pl-10 data-[size=default]:h-[50px]'>
+                <SelectTrigger aria-label={searchPlaceholder} size='lg' className='w-full pl-10'>
                   <SelectValue placeholder={searchPlaceholder} />
                 </SelectTrigger>
                 <SelectContent>
@@ -134,7 +134,11 @@ function RailsSearchBar({
         <RefreshButton onClick={onRefresh} disabled={isRefetching} />
       </div>
 
-      {validationError && <p className='text-sm text-destructive'>{validationError}</p>}
+      {validationError && (
+        <p role='alert' className='text-sm text-destructive'>
+          {validationError}
+        </p>
+      )}
     </div>
   );
 }
