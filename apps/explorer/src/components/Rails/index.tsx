@@ -11,7 +11,7 @@ import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar
 import type { SearchByOption } from "./components/RailsSearchBar";
 
 const isPositiveInteger = (value: string) => /^[1-9]\d*$/.test(value);
-const isNonNegativeInteger = (value: string) => /^\d+$/.test(value);
+const isNonNegativeInteger = (value: string) => /^(0|[1-9]\d*)$/.test(value);
 
 const Rails = () => {
   const [searchBy, setSearchBy] = useState<SearchByOption>("railIdOrAddress");
@@ -52,6 +52,11 @@ const Rails = () => {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const handleSearch = () => {
+    // State filters apply directly from the select via handleSelectedStateChange.
+    if (searchBy === "state") {
+      return;
+    }
+
     const newFilters: RailsFilter = {};
     const trimmedInput = searchInput.trim();
 
@@ -64,7 +69,7 @@ const Rails = () => {
       case "railIdOrAddress": {
         if (isPositiveInteger(trimmedInput)) {
           newFilters.railId = trimmedInput;
-        } else if (isAddress(trimmedInput)) {
+        } else if (isAddress(trimmedInput, { strict: false })) {
           newFilters.address = trimmedInput.toLowerCase();
         } else {
           setValidationError("Enter a Rail ID greater than 0 or a valid address (0x...).");
@@ -81,7 +86,7 @@ const Rails = () => {
         break;
       }
       case "payer": {
-        if (!isAddress(trimmedInput)) {
+        if (!isAddress(trimmedInput, { strict: false })) {
           setValidationError("Enter a valid payer address (0x...).");
           return;
         }
@@ -89,7 +94,7 @@ const Rails = () => {
         break;
       }
       case "payee": {
-        if (!isAddress(trimmedInput)) {
+        if (!isAddress(trimmedInput, { strict: false })) {
           setValidationError("Enter a valid payee address (0x...).");
           return;
         }
@@ -97,7 +102,7 @@ const Rails = () => {
         break;
       }
       case "operator": {
-        if (!isAddress(trimmedInput)) {
+        if (!isAddress(trimmedInput, { strict: false })) {
           setValidationError("Enter a valid operator address (0x...).");
           return;
         }
@@ -119,9 +124,6 @@ const Rails = () => {
         }
         newFilters.totalRateChanges = trimmedInput;
         break;
-      }
-      case "state": {
-        return;
       }
     }
 
