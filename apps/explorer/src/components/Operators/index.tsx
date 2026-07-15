@@ -3,9 +3,9 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAddress } from "viem";
 import type { OperatorsFilter } from "@/hooks/useInfiniteOperators";
 import useInfiniteOperators from "@/hooks/useInfiniteOperators";
-import { formatHexForSearch } from "@/utils/hexUtils";
 import {
   OperatorsEmptyInitial,
   OperatorsEmptyNoResults,
@@ -17,6 +17,7 @@ import {
 const Operators = () => {
   const [searchInput, setSearchInput] = useState("");
   const [appliedFilters, setAppliedFilters] = useState<OperatorsFilter>({});
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error, isRefetching, refetch } =
     useInfiniteOperators(appliedFilters);
@@ -51,20 +52,30 @@ const Operators = () => {
 
   const handleSearch = () => {
     const trimmedInput = searchInput.trim();
+
     if (!trimmedInput) {
-      setAppliedFilters({});
+      setValidationError("Enter a value to search.");
       return;
     }
 
-    const formattedHex = formatHexForSearch(trimmedInput);
-    if (formattedHex) {
-      setAppliedFilters({ address: formattedHex });
+    if (!isAddress(trimmedInput, { strict: false })) {
+      setValidationError("Enter a valid & complete address (0x...).");
+      return;
     }
+
+    setValidationError(null);
+    setAppliedFilters({ address: trimmedInput.toLowerCase() });
   };
 
   const handleClearFilters = () => {
     setSearchInput("");
     setAppliedFilters({});
+    setValidationError(null);
+  };
+
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
+    setValidationError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -83,11 +94,12 @@ const Operators = () => {
             searchInput={searchInput}
             hasActiveFilters={hasActiveFilters}
             isRefetching={isRefetching}
-            onSearchInputChange={setSearchInput}
+            onSearchInputChange={handleSearchInputChange}
             onSearch={handleSearch}
             onClear={handleClearFilters}
             onRefresh={refetch}
             onKeyDown={handleKeyDown}
+            validationError={validationError}
           />
 
           {isLoading && <LoadingStateCard message='Loading Operators...' />}

@@ -12,6 +12,7 @@ export type OperatorsSearchBarProps = {
   onClear: () => void;
   onRefresh: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  validationError: string | null;
 };
 
 function OperatorsSearchBar({
@@ -19,36 +20,52 @@ function OperatorsSearchBar({
   hasActiveFilters,
   isRefetching,
   onSearchInputChange,
+  onSearch,
   onClear,
   onRefresh,
   onKeyDown,
+  validationError,
 }: OperatorsSearchBarProps) {
   return (
-    <div className='flex md:items-center gap-6 flex-col md:flex-row md:justify-between'>
-      {/* Search Input */}
-      <div className='relative flex-1 max-w-[600px]'>
-        <Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
-        <Input
-          placeholder='Search by address (0x...)'
-          value={searchInput}
-          onChange={onSearchInputChange}
-          onKeyDown={onKeyDown}
-          className='pl-10'
-        />
-      </div>
+    <div className='flex flex-col gap-2'>
+      <div className='flex md:items-center gap-6 flex-col md:flex-row md:justify-between'>
+        {/* Search Input */}
+        <div className='flex flex-1 flex-col gap-3 sm:flex-row max-w-[600px]'>
+          <div className='relative min-w-0 flex-1'>
+            <Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+            <Input
+              placeholder='Search by address (0x...)'
+              value={searchInput}
+              onChange={onSearchInputChange}
+              onKeyDown={onKeyDown}
+              className='pl-10'
+            />
+          </div>
 
-      {/* Actions */}
-      <div className='flex items-center gap-6'>
-        {/* Clear Button */}
-        {hasActiveFilters && (
-          <Button variant='tertiary' onClick={onClear} size='compact'>
-            Clear
+          <Button variant='primary' onClick={onSearch} disabled={!searchInput.trim()} size='compact'>
+            Search
           </Button>
-        )}
+        </div>
 
-        {/* Refresh Button */}
-        <RefreshButton disabled={isRefetching} onClick={onRefresh} />
+        {/* Actions */}
+        <div className='flex items-center gap-6'>
+          {/* Clear Button */}
+          {hasActiveFilters && (
+            <Button variant='tertiary' onClick={onClear} size='compact'>
+              Clear
+            </Button>
+          )}
+
+          {/* Refresh Button */}
+          <RefreshButton disabled={isRefetching} onClick={onRefresh} />
+        </div>
       </div>
+
+      {validationError && (
+        <p role='alert' className='text-sm text-destructive'>
+          {validationError}
+        </p>
+      )}
     </div>
   );
 }
