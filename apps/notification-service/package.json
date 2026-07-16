@@ -8,7 +8,7 @@
     "type-check": "pnpm run types && tsc -p api/tsconfig.json && tsc -p alert-scheduler/tsconfig.json && tsc -p alert-processor/tsconfig.json",
     "lint": "biome check --write",
     "format": "biome format --write",
-    "build": "wrangler deploy -c api/wrangler.jsonc --dry-run --outdir dist/api && wrangler deploy -c alert-scheduler/wrangler.jsonc --dry-run --outdir dist/alert-scheduler && wrangler deploy -c alert-processor/wrangler.jsonc --dry-run --outdir dist/alert-processor",
+    "build": "wrangler deploy -c api/wrangler.jsonc --env staging --dry-run --outdir dist/api && wrangler deploy -c alert-scheduler/wrangler.jsonc --env staging --dry-run --outdir dist/alert-scheduler && wrangler deploy -c alert-processor/wrangler.jsonc --env staging --dry-run --outdir dist/alert-processor",
     "dev:api": "wrangler dev -c api/wrangler.jsonc",
     "db:migrate:staging": "wrangler d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --remote",
     "db:migrate:production": "wrangler d1 migrations apply filecoin-pay-notification-db-production -c api/wrangler.jsonc --env production --remote",
