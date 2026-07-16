@@ -1,0 +1,40 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "notification-alert-scheduler",
+  "main": "index.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "env": {
+    "staging": {
+      "name": "notification-alert-scheduler-staging",
+      "vars": { "NETWORK": "calibration" },
+      "triggers": { "crons": ["0 */12 * * *"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "filecoin-pay-notification-db-staging",
+          "database_id": "6631e190-0909-4ef2-9058-bf7f53f2f4d4"
+        }
+      ],
+      "queues": {
+        "producers": [{ "binding": "ALERT_QUEUE", "queue": "filecoin-pay-notification-alerts-staging" }]
+      }
+    },
+    "production": {
+      "name": "notification-alert-scheduler-production",
+      "vars": { "NETWORK": "mainnet" },
+      "triggers": { "crons": ["0 */12 * * *"] },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "filecoin-pay-notification-db-production",
+          "database_id": "2a5c8715-7363-428e-8125-64f5934d77de"
+        }
+      ],
+      "queues": {
+        "producers": [{ "binding": "ALERT_QUEUE", "queue": "filecoin-pay-notification-alerts-production" }]
+      }
+    }
+  }
+}

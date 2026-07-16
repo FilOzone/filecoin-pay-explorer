@@ -1,0 +1,27 @@
+{
+  "name": "@filecoin-pay/notification-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "wrangler types -c api/wrangler.jsonc api/worker-configuration.d.ts && wrangler types -c alert-scheduler/wrangler.jsonc alert-scheduler/worker-configuration.d.ts && wrangler types -c alert-processor/wrangler.jsonc alert-processor/worker-configuration.d.ts",
+    "type-check": "pnpm run types && tsc -p api/tsconfig.json && tsc -p alert-scheduler/tsconfig.json && tsc -p alert-processor/tsconfig.json",
+    "lint": "biome check --write",
+    "format": "biome format --write",
+    "build": "wrangler deploy -c api/wrangler.jsonc --dry-run --outdir dist/api && wrangler deploy -c alert-scheduler/wrangler.jsonc --dry-run --outdir dist/alert-scheduler && wrangler deploy -c alert-processor/wrangler.jsonc --dry-run --outdir dist/alert-processor",
+    "dev:api": "wrangler dev -c api/wrangler.jsonc",
+    "db:migrate:staging": "wrangler d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --remote",
+    "db:migrate:production": "wrangler d1 migrations apply filecoin-pay-notification-db-production -c api/wrangler.jsonc --env production --remote",
+    "deploy:staging": "wrangler deploy -c api/wrangler.jsonc --env staging && wrangler deploy -c alert-scheduler/wrangler.jsonc --env staging && wrangler deploy -c alert-processor/wrangler.jsonc --env staging",
+    "deploy:production": "wrangler deploy -c api/wrangler.jsonc --env production && wrangler deploy -c alert-scheduler/wrangler.jsonc --env production && wrangler deploy -c alert-processor/wrangler.jsonc --env production"
+  },
+  "dependencies": {
+    "@filoz/synapse-sdk": "^0.41.0",
+    "hono": "^4.12.27"
+  },
+  "devDependencies": {
+    "@filecoin-pay/configs": "workspace:^",
+    "typescript": "^6",
+    "wrangler": "^4.111.0"
+  }
+}
