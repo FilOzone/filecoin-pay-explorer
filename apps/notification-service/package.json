@@ -24,11 +24,14 @@
   "dependencies": {
     "@filoz/synapse-sdk": "^0.41.0",
     "drizzle-orm": "1.0.0-rc.4",
-    "hono": "^4.12.27"
+    "hono": "^4.12.27",
+    "jsx-email": "^3.2.1"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:^",
+    "@types/react": "^19.2.17",
     "drizzle-kit": "1.0.0-rc.4",
+    "react": "^19.2.6",
     "typescript": "^6",
     "wrangler": "^4.111.0"
   }
