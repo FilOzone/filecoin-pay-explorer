@@ -54,7 +54,7 @@ const ALERT_CONFIG = {
     title: "Urgent action required",
     previewText: "Your Filecoin Pay account will run out of funds in less than 7 days.",
     description:
-      "Your account is critically low. Without a top-up, your storage services will be interrupted and providers may begin removing your data.",
+      "Your account funding is critically low. Please top-up immediately to avoid disruption to your storage services. After ~7 days, service providers may begin removing your data due to lack of payment.",
   },
   emergency: {
     borderColor: "#DC2626",
