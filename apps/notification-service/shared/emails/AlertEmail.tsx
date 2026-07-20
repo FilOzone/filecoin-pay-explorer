@@ -44,7 +44,7 @@ const ALERT_CONFIG = {
     title: "Your account needs attention",
     previewText: "Heads up — your Filecoin Pay account is running low on funds.",
     description:
-      "Your storage services are funded, but your runway is shorter than recommended. Topping up now ensures uninterrupted service.",
+      "Your services are funded, but your runway is shorter than recommended. Topping up now ensures uninterrupted service.",
   },
   critical: {
     borderColor: "#F97316",
@@ -54,7 +54,7 @@ const ALERT_CONFIG = {
     title: "Urgent action required",
     previewText: "Your Filecoin Pay account will run out of funds in less than 7 days.",
     description:
-      "Your account funding is critically low. Please top-up immediately to avoid disruption to your storage services. After ~7 days, service providers may begin removing your data due to lack of payment.",
+      "Your account funding is critically low. Please top-up immediately to avoid disruption to your services. After ~7 days, service providers may begin removing your data due to lack of payment.",
   },
   emergency: {
     borderColor: "#DC2626",
@@ -62,9 +62,9 @@ const ALERT_CONFIG = {
     badgeColor: "#7F1D1D",
     badgeText: "Emergency",
     title: "Service terminating imminently",
-    previewText: "Emergency — your Filecoin Pay storage services will terminate in less than 3 days.",
+    previewText: "Emergency — your Filecoin Pay services will terminate in less than 3 days.",
     description:
-      "Your account has less than 3 days of available funding. Storage providers will begin terminating services imminently unless you add additional funds. Top up immediately to prevent data loss.",
+      "Your account has less than 3 days of available funding. Providers will begin terminating services imminently unless you add additional funds. Top up now to keep them running.",
   },
 } as const;
 
