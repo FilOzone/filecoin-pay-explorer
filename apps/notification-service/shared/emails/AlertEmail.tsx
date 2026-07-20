@@ -64,7 +64,7 @@ const ALERT_CONFIG = {
     title: "Service terminating imminently",
     previewText: "Emergency — your Filecoin Pay storage services will terminate in less than 3 days.",
     description:
-      "Your account has less than 3 days of runway. Storage providers will begin terminating services imminently. Top up immediately to prevent data loss.",
+      "Your account has less than 3 days of available funding. Storage providers will begin terminating services imminently unless you add additional funds. Top up immediately to prevent data loss.",
   },
 } as const;
 
