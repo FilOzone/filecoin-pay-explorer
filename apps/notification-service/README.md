@@ -27,5 +27,11 @@ pnpm run deploy:staging
 pnpm run deploy:production
 ```
 
-- `RPC_URL` is a secret (`wrangler secret put RPC_URL --env <env>`);
+- `RPC_URL` is a secret. Only `alert-processor` reads on-chain state, so it's set on that worker per environment:
+
+  ```bash
+  pnpm run secret:rpc-url:staging
+  pnpm run secret:rpc-url:production
+  ```
+
 - `NETWORK` is the only per-environment var in each `wrangler.jsonc`.
