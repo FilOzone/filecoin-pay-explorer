@@ -12,6 +12,8 @@
     "build:staging": "wrangler deploy -c api/wrangler.jsonc --env staging --dry-run --outdir dist/staging/api && wrangler deploy -c alert-scheduler/wrangler.jsonc --env staging --dry-run --outdir dist/staging/alert-scheduler && wrangler deploy -c alert-processor/wrangler.jsonc --env staging --dry-run --outdir dist/staging/alert-processor",
     "build:production": "wrangler deploy -c api/wrangler.jsonc --env production --dry-run --outdir dist/production/api && wrangler deploy -c alert-scheduler/wrangler.jsonc --env production --dry-run --outdir dist/production/alert-scheduler && wrangler deploy -c alert-processor/wrangler.jsonc --env production --dry-run --outdir dist/production/alert-processor",
     "dev:api": "wrangler dev -c api/wrangler.jsonc --env staging",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate:local": "wrangler d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --local",
     "db:migrate:staging": "wrangler d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --remote",
     "db:migrate:production": "wrangler d1 migrations apply filecoin-pay-notification-db-production -c api/wrangler.jsonc --env production --remote",
     "secret:rpc-url:staging": "wrangler secret put RPC_URL -c alert-processor/wrangler.jsonc --env staging",
@@ -21,10 +23,12 @@
   },
   "dependencies": {
     "@filoz/synapse-sdk": "^0.41.0",
+    "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.12.27"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:^",
+    "drizzle-kit": "1.0.0-rc.4",
     "typescript": "^6",
     "wrangler": "^4.111.0"
   }
