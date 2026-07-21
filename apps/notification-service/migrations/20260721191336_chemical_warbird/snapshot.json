@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "02334981-5763-4055-adbd-8e49d9562835",
+  "id": "b2dd9090-e74a-4606-b86b-ae2718887f67",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -245,6 +245,20 @@
       "table": "notification_log"
     },
     {
+      "columns": [
+        {
+          "value": "verified_email_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_wallet_subscriptions_verified_email_id",
+      "entityType": "indexes",
+      "table": "wallet_subscriptions"
+    },
+    {
       "columns": ["email"],
       "nameExplicit": false,
       "name": "verified_emails_email_unique",
@@ -256,6 +270,18 @@
       "nameExplicit": false,
       "name": "wallet_subscriptions_wallet_address_unique",
       "entityType": "uniques",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
+      "table": "notification_log"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
       "table": "wallet_subscriptions"
     }
   ],
