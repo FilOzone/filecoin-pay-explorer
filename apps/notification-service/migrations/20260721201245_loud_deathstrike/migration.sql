@@ -13,7 +13,8 @@ CREATE TABLE `verified_emails` (
 	`email` text NOT NULL UNIQUE,
 	`preferred_name` text NOT NULL,
 	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
+	`updated_at` integer NOT NULL,
+	CONSTRAINT "email_lower" CHECK("email" = lower("email"))
 );
 --> statement-breakpoint
 CREATE TABLE `wallet_subscriptions` (

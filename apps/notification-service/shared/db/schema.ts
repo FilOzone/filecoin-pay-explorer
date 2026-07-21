@@ -1,17 +1,17 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-// email is normalized to lowercase at the API boundary before every insert/lookup.
-// No schema-level CHECK — RFC 5321 allows case-sensitive local parts and a CHECK would
-// silently reject technically valid addresses. wallet_address uses a CHECK because
-// Ethereum addresses are hex and case carries no meaning beyond EIP-55 display.
-export const verifiedEmails = sqliteTable("verified_emails", {
-  id: text("id").notNull().primaryKey(),
-  email: text("email").notNull().unique(),
-  preferredName: text("preferred_name").notNull(),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-});
+export const verifiedEmails = sqliteTable(
+  "verified_emails",
+  {
+    id: text("id").notNull().primaryKey(),
+    email: text("email").notNull().unique(),
+    preferredName: text("preferred_name").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [check("email_lower", sql`${table.email} = lower(${table.email})`)],
+);
 
 export const walletSubscriptions = sqliteTable(
   "wallet_subscriptions",

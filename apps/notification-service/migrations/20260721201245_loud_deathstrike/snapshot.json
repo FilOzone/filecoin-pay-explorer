@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "b2dd9090-e74a-4606-b86b-ae2718887f67",
+  "id": "ae003242-9593-40f6-848d-650a367d0014",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -277,6 +277,12 @@
       "name": "wallet_address_lower",
       "entityType": "checks",
       "table": "notification_log"
+    },
+    {
+      "value": "\"email\" = lower(\"email\")",
+      "name": "email_lower",
+      "entityType": "checks",
+      "table": "verified_emails"
     },
     {
       "value": "\"wallet_address\" = lower(\"wallet_address\")",
