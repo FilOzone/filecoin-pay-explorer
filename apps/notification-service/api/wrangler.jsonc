@@ -17,7 +17,8 @@
           "migrations_dir": "../migrations"
         }
       ],
-      "kv_namespaces": [{ "binding": "KV", "id": "4f8ca72af8814ea396c71d477f695c26" }]
+      "kv_namespaces": [{ "binding": "KV", "id": "4f8ca72af8814ea396c71d477f695c26" }],
+      "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@filecoin.cloud"] }]
     },
     "production": {
       "name": "notification-api-production",
@@ -30,7 +31,8 @@
           "migrations_dir": "../migrations"
         }
       ],
-      "kv_namespaces": [{ "binding": "KV", "id": "e15916a00e004a3eb9d9fc24ac28b250" }]
+      "kv_namespaces": [{ "binding": "KV", "id": "e15916a00e004a3eb9d9fc24ac28b250" }],
+      "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@filecoin.cloud"] }]
     }
   }
 }
