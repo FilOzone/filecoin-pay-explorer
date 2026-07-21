@@ -19,6 +19,8 @@ Before you begin, ensure you have the following installed and set up:
     ```bash
     npm install -g @graphprotocol/graph-cli
     # or
+    pnpm install -g @graphprotocol/graph-cli
+    # or
     yarn global add @graphprotocol/graph-cli
     ```
     Refer to the [Graph CLI documentation](https://github.com/graphprotocol/graph-tooling/tree/main/packages/cli) for more details.
@@ -40,16 +42,14 @@ Follow these steps to build and deploy the subgraph:
     Install the necessary node modules:
 
     ```bash
-    npm install
-    # or
-    yarn install
+    pnpm install
     ```
 
 1.  **Generate Code and Build the Subgraph:**
     The Graph CLI uses the `subgraph.yaml` manifest and GraphQL schema (`schema.graphql`) to generate AssemblyScript types. Then compile your subgraph code into WebAssembly (WASM).
 
     ```bash
-    npm run build
+    pnpm build
     ```
 
 1.  **Authenticate with Goldsky:**

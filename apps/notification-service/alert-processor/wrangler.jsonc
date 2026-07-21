@@ -1,0 +1,56 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "notification-alert-processor",
+  "main": "index.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "env": {
+    "staging": {
+      "name": "notification-alert-processor-staging",
+      "vars": { "NETWORK": "calibration" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "filecoin-pay-notification-db-staging",
+          "database_id": "6631e190-0909-4ef2-9058-bf7f53f2f4d4"
+        }
+      ],
+      "kv_namespaces": [{ "binding": "KV", "id": "4f8ca72af8814ea396c71d477f695c26" }],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "filecoin-pay-notification-alerts-staging",
+            "max_batch_size": 10,
+            "max_batch_timeout": 30,
+            "max_retries": 3,
+            "dead_letter_queue": "filecoin-pay-notification-alerts-dlq-staging"
+          }
+        ]
+      }
+    },
+    "production": {
+      "name": "notification-alert-processor-production",
+      "vars": { "NETWORK": "mainnet" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "filecoin-pay-notification-db-production",
+          "database_id": "2a5c8715-7363-428e-8125-64f5934d77de"
+        }
+      ],
+      "kv_namespaces": [{ "binding": "KV", "id": "e15916a00e004a3eb9d9fc24ac28b250" }],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "filecoin-pay-notification-alerts-production",
+            "max_batch_size": 10,
+            "max_batch_timeout": 30,
+            "max_retries": 3,
+            "dead_letter_queue": "filecoin-pay-notification-alerts-dlq-production"
+          }
+        ]
+      }
+    }
+  }
+}

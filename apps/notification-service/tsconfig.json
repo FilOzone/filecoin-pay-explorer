@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@filecoin-pay/configs/typescript/base",
+  "compilerOptions": {
+    // Workers use the Web-standard/runtime types from worker-configuration.d.ts,
+    // NOT the DOM lib — including DOM double-declares Response/Request/etc.
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true
+  }
+}

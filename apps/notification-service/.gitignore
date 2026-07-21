@@ -1,0 +1,9 @@
+# wrangler-generated types (regenerated via `pnpm run types`)
+**/worker-configuration.d.ts
+
+# local dev secrets — never commit
+**/.dev.vars
+
+# wrangler local state & dry-run output
+.wrangler/
+dist/
