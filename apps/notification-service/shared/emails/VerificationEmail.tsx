@@ -5,15 +5,13 @@ interface TemplateProps {
   name: string;
   walletAddress: string;
   verificationUrl: string;
-  // TODO: replace with hosted PNG URLs once available — SVG is not rendered by Gmail/Outlook
   logoUrl?: string;
   logoIconUrl?: string;
 }
 
 const BLUE = "#0090FF";
-const DEFAULT_BASE_URL = "https://filecoin.cloud";
-const DEFAULT_LOGO_URL = `${DEFAULT_BASE_URL}/foc-logo-dark.png`;
-const DEFAULT_LOGO_ICON_URL = `${DEFAULT_BASE_URL}/foc-logo-icon.svg`;
+const DEFAULT_LOGO_URL = `https://docs.filecoin.cloud/cdn-cgi/imagedelivery/GFA1989xA6oUFzvDrgmDow/c9fbc841-a713-447a-11fc-e368b07b0d00/public`;
+const DEFAULT_LOGO_ICON_URL = `https://docs.filecoin.cloud/cdn-cgi/imagedelivery/GFA1989xA6oUFzvDrgmDow/d58cface-902c-485d-3e5b-7af570e77f00/public`;
 
 const styles = {
   body: {
@@ -56,6 +54,7 @@ const styles = {
     fontSize: "15px",
     lineHeight: "24px",
     margin: "0 0 24px",
+    textAlign: "justify" as const,
   },
   button: {
     fontWeight: "600",
@@ -80,8 +79,8 @@ export const previewProps: TemplateProps = {
   name: "Ada Lovelace",
   walletAddress: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
   verificationUrl: "https://example.com/verify?token=abc123",
-  logoUrl: "http://localhost:3000/foc-logo-dark.svg",
-  logoIconUrl: "http://localhost:3000/foc-logo-icon.svg",
+  logoUrl: DEFAULT_LOGO_URL,
+  logoIconUrl: DEFAULT_LOGO_ICON_URL,
 };
 
 export const templateName = "VerificationEmail";

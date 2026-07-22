@@ -31,9 +31,8 @@ interface TemplateProps {
 }
 
 const BLUE = "#0090FF";
-const DEFAULT_BASE_URL = "https://filecoin.cloud";
-const DEFAULT_LOGO_URL = `${DEFAULT_BASE_URL}/foc-logo-dark.png`;
-const DEFAULT_LOGO_ICON_URL = `${DEFAULT_BASE_URL}/foc-logo-icon.svg`;
+const DEFAULT_LOGO_URL = `https://docs.filecoin.cloud/cdn-cgi/imagedelivery/GFA1989xA6oUFzvDrgmDow/c9fbc841-a713-447a-11fc-e368b07b0d00/public`;
+const DEFAULT_LOGO_ICON_URL = `https://docs.filecoin.cloud/cdn-cgi/imagedelivery/GFA1989xA6oUFzvDrgmDow/d58cface-902c-485d-3e5b-7af570e77f00/public`;
 
 const ALERT_CONFIG = {
   warning: {
@@ -113,6 +112,7 @@ const styles = {
     fontSize: "15px",
     lineHeight: "24px",
     margin: "0 0 24px",
+    textAlign: "justify" as const,
   },
   infoBlock: {
     backgroundColor: "#f9fafb",
@@ -174,8 +174,8 @@ export const previewProps: TemplateProps = {
   daysRemaining: 6,
   topUpAmount: "10 USDFC",
   topUpUrl: "https://example.com/console",
-  logoUrl: "http://localhost:3000/foc-logo-dark.svg",
-  logoIconUrl: "http://localhost:3000/foc-logo-icon.svg",
+  logoUrl: DEFAULT_LOGO_URL,
+  logoIconUrl: DEFAULT_LOGO_ICON_URL,
 };
 
 export const templateName = "AlertEmail";

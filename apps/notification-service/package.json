@@ -19,7 +19,8 @@
     "secret:rpc-url:staging": "wrangler secret put RPC_URL -c alert-processor/wrangler.jsonc --env staging",
     "secret:rpc-url:production": "wrangler secret put RPC_URL -c alert-processor/wrangler.jsonc --env production",
     "deploy:staging": "wrangler deploy -c api/wrangler.jsonc --env staging && wrangler deploy -c alert-scheduler/wrangler.jsonc --env staging && wrangler deploy -c alert-processor/wrangler.jsonc --env staging",
-    "deploy:production": "wrangler deploy -c api/wrangler.jsonc --env production && wrangler deploy -c alert-scheduler/wrangler.jsonc --env production && wrangler deploy -c alert-processor/wrangler.jsonc --env production"
+    "deploy:production": "wrangler deploy -c api/wrangler.jsonc --env production && wrangler deploy -c alert-scheduler/wrangler.jsonc --env production && wrangler deploy -c alert-processor/wrangler.jsonc --env production",
+    "email:preview": "email preview shared/emails"
   },
   "dependencies": {
     "@filoz/synapse-sdk": "^0.41.0",
