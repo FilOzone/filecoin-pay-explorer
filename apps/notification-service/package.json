@@ -23,7 +23,7 @@
     "email:preview": "email preview shared/emails/templates"
   },
   "dependencies": {
-    "@filoz/synapse-sdk": "^0.41.0",
+    "@filoz/synapse-sdk": "^1.1.0",
     "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.12.27",
     "jsx-email": "^3.2.1"
