@@ -4,6 +4,7 @@
   "compilerOptions": {
     // Workers use the Web-standard/runtime types from worker-configuration.d.ts,
     // NOT the DOM lib — including DOM double-declares Response/Request/etc.
+    "jsx": "react-jsx",
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
