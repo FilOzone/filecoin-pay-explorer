@@ -19,7 +19,7 @@ export default defineConfig({
       defineProject({
         test: {
           name: "node",
-          include: [],
+          include: ["tests/shared/auth.test.ts", "tests/shared/email-validation.test.ts"],
           environment: "node",
           clearMocks: true,
           restoreMocks: true,
@@ -42,7 +42,7 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: [],
+          include: ["tests/api/**/*.test.ts", "tests/shared/db/**/*.test.ts", "tests/shared/kv.test.ts"],
           setupFiles: ["tests/apply-migrations.ts"],
           clearMocks: true,
           restoreMocks: true,
