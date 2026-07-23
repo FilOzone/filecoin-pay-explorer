@@ -8,7 +8,7 @@
   "env": {
     "staging": {
       "name": "notification-api-staging",
-      "vars": { "NETWORK": "calibration" },
+      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
       "d1_databases": [
         {
           "binding": "DB",
@@ -30,7 +30,7 @@
     },
     "production": {
       "name": "notification-api-production",
-      "vars": { "NETWORK": "mainnet" },
+      "vars": { "NETWORK": "mainnet", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
       "d1_databases": [
         {
           "binding": "DB",
