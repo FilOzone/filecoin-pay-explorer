@@ -173,10 +173,10 @@ cd ../..
 
 ### Deployments
 
-Static site and subgraph deployments are decoupled. See the [release process](.github/ISSUE_TEMPLATE/release.md) for the full checklist and more details.
+Static site and subgraph deployments are separate. See the [release checklist](.github/ISSUE_TEMPLATE/release.md) for post-deploy verification and production promotion.
 
 - Static site changes deploy automatically via the Vercel GitHub App on merge to `main`.
-- Subgraph changes are triggered by creating a GitHub release with a `vX.Y.Z` tag (see [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)).
+- Subgraph releases run through the [Release Please workflow](.github/workflows/release-please.yml). Merging its Release PR creates the tag and GitHub Release, deploys both Goldsky networks, and opens a tracking issue.
 
 ### Monitoring
 
@@ -184,11 +184,19 @@ Uptime monitoring for the static site and subgraph is managed via [FilOzone/infr
 
 ## Releasing
 
-To publish a new release, open a GitHub issue using the [Release template](.github/ISSUE_TEMPLATE/release.md). It walks through every step: creating the GitHub release, verifying the subgraph deployment, and promoting to production.
+Subgraph releases are automated with [Release Please](https://github.com/googleapis/release-please):
+
+1. Give every PR a [Conventional Commit](https://www.conventionalcommits.org/) title, such as `feat:`, `fix:`, or `chore:`. The [PR title check](.github/workflows/pr-title.yml) enforces this because squash merges use the PR title as the commit on `main`.
+2. When releasable subgraph changes reach `main`, Release Please opens or updates a Release PR. That PR bumps the subgraph version and updates `packages/subgraph/CHANGELOG.md`.
+3. Merge the Release PR to create the tag and GitHub Release, deploy calibration and mainnet to Goldsky, and open a [release tracking issue](.github/ISSUE_TEMPLATE/release.md). Do not create the release tag manually.
+4. Use the tracking issue to confirm indexing, test the Explorer, and promote both subgraphs to `prod`.
+
+See [`release-please-config.json`](release-please-config.json) and [`.release-please-manifest.json`](.release-please-manifest.json) for version tracking configuration.
 
 ## Contributing
 
 - Use Node/pnpm versions from root `package.json` engines.
+- Use [Conventional Commits](https://www.conventionalcommits.org/) for PR titles (e.g., `feat:`, `fix:`, `chore:`).
 - Run `pnpm lint`, `pnpm format`, and `pnpm type-check` before committing.
 - See per-package READMEs for details.
 
