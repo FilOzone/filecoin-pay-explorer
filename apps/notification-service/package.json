@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "types": "wrangler types -c api/wrangler.jsonc --env staging api/worker-configuration.d.ts && wrangler types -c alert-scheduler/wrangler.jsonc --env staging alert-scheduler/worker-configuration.d.ts && wrangler types -c alert-processor/wrangler.jsonc --env staging alert-processor/worker-configuration.d.ts",
-    "type-check": "pnpm run types && tsc -p api/tsconfig.json && tsc -p alert-scheduler/tsconfig.json && tsc -p alert-processor/tsconfig.json && tsc -p shared/emails/tsconfig.json",
+    "type-check": "pnpm run types && tsc -p api/tsconfig.json && tsc -p alert-scheduler/tsconfig.json && tsc -p alert-processor/tsconfig.json && tsc -p shared/emails/tsconfig.json && tsc -p tests/tsconfig.json",
     "lint": "biome check --write",
     "format": "biome format --write",
     "build": "pnpm run build:staging && pnpm run build:production",
@@ -20,20 +20,27 @@
     "secret:rpc-url:production": "wrangler secret put RPC_URL -c alert-processor/wrangler.jsonc --env production",
     "deploy:staging": "wrangler deploy -c api/wrangler.jsonc --env staging && wrangler deploy -c alert-scheduler/wrangler.jsonc --env staging && wrangler deploy -c alert-processor/wrangler.jsonc --env staging",
     "deploy:production": "wrangler deploy -c api/wrangler.jsonc --env production && wrangler deploy -c alert-scheduler/wrangler.jsonc --env production && wrangler deploy -c alert-processor/wrangler.jsonc --env production",
-    "email:preview": "email preview shared/emails/templates"
+    "email:preview": "email preview shared/emails/templates",
+    "test": "vitest run"
   },
   "dependencies": {
     "@filoz/synapse-sdk": "^0.41.0",
+    "@hono/zod-validator": "^0.9.0",
     "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.12.27",
-    "jsx-email": "^3.2.1"
+    "jsx-email": "^3.2.1",
+    "viem": "^2.48.11",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.7",
     "@filecoin-pay/configs": "workspace:^",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "drizzle-kit": "1.0.0-rc.4",
     "react": "^19.2.6",
     "typescript": "^6",
+    "vitest": "^4.1.0",
     "wrangler": "^4.111.0"
   }
 }
