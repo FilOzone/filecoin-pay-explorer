@@ -15,11 +15,11 @@ const migrations = (
 export default defineConfig({
   test: {
     projects: [
-      // Node environment — auth tests only (no CF bindings needed)
+      // Node environment — pure logic tests, no CF bindings needed
       defineProject({
         test: {
           name: "node",
-          include: ["tests/shared/auth.test.ts", "tests/shared/email-validation.test.ts"],
+          include: ["tests/api/auth.test.ts", "tests/api/email-validation.test.ts"],
           environment: "node",
           clearMocks: true,
           restoreMocks: true,
@@ -42,7 +42,7 @@ export default defineConfig({
         ],
         test: {
           name: "workers",
-          include: ["tests/api/**/*.test.ts", "tests/shared/db/**/*.test.ts", "tests/shared/kv.test.ts"],
+          include: ["tests/api/kv.test.ts", "tests/api/queries.test.ts", "tests/api/routes.test.ts"],
           setupFiles: ["tests/apply-migrations.ts"],
           clearMocks: true,
           restoreMocks: true,

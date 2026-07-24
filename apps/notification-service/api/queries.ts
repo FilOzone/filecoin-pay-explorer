@@ -1,7 +1,7 @@
 import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import type { VerifiedEmail, WalletSubscription } from "./schema";
-import { verifiedEmails, walletSubscriptions } from "./schema";
+import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
+import { verifiedEmails, walletSubscriptions } from "../shared/db/schema";
 
 export type DB = ReturnType<typeof drizzle>;
 

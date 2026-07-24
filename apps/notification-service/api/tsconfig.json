@@ -4,5 +4,5 @@
   "compilerOptions": {
     "types": ["./worker-configuration.d.ts"]
   },
-  "include": ["index.ts", "../shared/**/*.ts"]
+  "include": ["index.ts", "../shared/**/*.ts", "queries.ts", "auth.ts", "kv.ts", "email-validation.ts"]
 }

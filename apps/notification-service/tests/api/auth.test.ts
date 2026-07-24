@@ -1,7 +1,7 @@
 import { privateKeyToAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 import { describe, expect, it } from "vitest";
-import { verifySiwe } from "../../shared/auth";
+import { verifySiwe } from "../../api/auth";
 
 const DOMAIN = "pay.filecoin.cloud";
 const CHAIN_ID = 314159;

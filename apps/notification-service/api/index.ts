@@ -3,18 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
-import { verifySiwe } from "../shared/auth";
 import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
-import {
-  createDb,
-  createVerifiedSubscription,
-  deleteSubscription,
-  findSubscriptionByWallet,
-} from "../shared/db/queries";
-import { validateEmail } from "../shared/email-validation";
 import { renderVerificationEmail } from "../shared/emails/templates/VerificationEmail";
-import { deletePendingVerification, readPendingVerification, writePendingVerification } from "../shared/kv";
+import { verifySiwe } from "./auth";
+import { validateEmail } from "./email-validation";
+import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
+import { createDb, createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
 
 const FROM_EMAIL = "noreply@filecoin.cloud";
 const FROM_NAME = "Filecoin Onchain Cloud";

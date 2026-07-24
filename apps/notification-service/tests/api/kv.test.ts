@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { deletePendingVerification, readPendingVerification, writePendingVerification } from "../../shared/kv";
+import { deletePendingVerification, readPendingVerification, writePendingVerification } from "../../api/kv";
 
 const WALLET = "0xabcdef1234567890abcdef1234567890abcdef12";
 const TOKEN = "550e8400-e29b-41d4-a716-446655440000";

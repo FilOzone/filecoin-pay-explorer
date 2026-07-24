@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateEmailSyntax } from "../../shared/email-validation";
+import { validateEmailSyntax } from "../../api/email-validation";
 
 const validEmails = [
   "test@example.com",

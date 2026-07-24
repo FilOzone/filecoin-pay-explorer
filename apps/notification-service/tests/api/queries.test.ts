@@ -8,7 +8,7 @@ import {
   findVerifiedEmailByEmail,
   upsertVerifiedEmail,
   upsertWalletSubscription,
-} from "../../../shared/db/queries";
+} from "../../api/queries";
 
 const WALLET = "0xabcdef1234567890abcdef1234567890abcdef12";
 const WALLET2 = "0x1111111111111111111111111111111111111111";
