@@ -1,14 +1,7 @@
 import { count, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
+import type { DB } from "../shared/db/client";
 import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
 import { verifiedEmails, walletSubscriptions } from "../shared/db/schema";
-
-export type DB = ReturnType<typeof drizzle>;
-
-/** Creates a Drizzle DB instance bound to the given D1 database. */
-export function createDb(d1: D1Database): DB {
-  return drizzle(d1);
-}
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);

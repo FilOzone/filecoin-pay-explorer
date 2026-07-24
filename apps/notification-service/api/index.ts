@@ -5,11 +5,12 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
+import { createDb } from "../shared/db/client";
 import { renderVerificationEmail } from "../shared/emails/templates/VerificationEmail";
 import { verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
-import { createDb, createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
+import { createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
 
 const FROM_EMAIL = "noreply@filecoin.cloud";
 const FROM_NAME = "Filecoin Onchain Cloud";

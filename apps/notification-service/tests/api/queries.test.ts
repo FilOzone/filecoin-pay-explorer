@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  createDb,
   createVerifiedSubscription,
   deleteSubscription,
   findSubscriptionByWallet,
@@ -9,6 +8,7 @@ import {
   upsertVerifiedEmail,
   upsertWalletSubscription,
 } from "../../api/queries";
+import { createDb } from "../../shared/db/client";
 
 const WALLET = "0xabcdef1234567890abcdef1234567890abcdef12";
 const WALLET2 = "0x1111111111111111111111111111111111111111";
