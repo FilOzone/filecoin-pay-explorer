@@ -128,7 +128,7 @@ describe("POST /register", () => {
     const res = await post("/register", { message, signature, email: "Test@Example.COM", preferredName: "  Alice  " });
     expect(res.status).toBe(200);
     // Normalization is visible at the email dispatch boundary before any KV assertion
-    expect(emailSend.mock.calls[0]![0].to).toBe("test@example.com");
+    expect(emailSend.mock.calls.at(0)?.[0].to).toBe("test@example.com");
     // Use KV only to extract the token so we can drive /verify — not to assert the stored shape
     const { token } = JSON.parse((await env.KV.get(`verify:${WALLET}`)) ?? "{}");
     await get(`/verify?wallet=${WALLET}&token=${token}`);
@@ -148,8 +148,9 @@ describe("POST /register", () => {
     expect(await res.json()).toEqual({ ok: true });
     expect(emailSend).toHaveBeenCalledOnce();
     // EmailMessage only exposes from/to in the constructor-created form; raw is not readable back
-    expect(emailSend.mock.calls[0]![0].from).toBe("noreply@filecoin.cloud");
-    expect(emailSend.mock.calls[0]![0].to).toBe("test@example.com");
+    const emailMsg = emailSend.mock.calls.at(0)?.[0];
+    expect(emailMsg?.from).toBe("noreply@filecoin.cloud");
+    expect(emailMsg?.to).toBe("test@example.com");
   });
 });
 
