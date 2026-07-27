@@ -19,7 +19,7 @@ export default defineConfig({
       defineProject({
         test: {
           name: "node",
-          include: ["tests/api/auth.test.ts", "tests/api/email-validation.test.ts"],
+          include: ["tests/api/auth.test.ts", "tests/api/email-validation.test.ts","tests/alert-processor/account-health.test.ts"],
           environment: "node",
           clearMocks: true,
           restoreMocks: true,
