@@ -1,4 +1,3 @@
-import { EmailMessage } from "cloudflare:email";
 import { zValidator } from "@hono/zod-validator";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -6,14 +5,12 @@ import { z } from "zod";
 import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
 import { createDb } from "../shared/db/client";
+import { sendEmail } from "../shared/emails/send";
 import { renderVerificationEmail } from "../shared/emails/templates/VerificationEmail";
 import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
 import { createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
-
-const FROM_EMAIL = "noreply@filecoin.cloud";
-const FROM_NAME = "Filecoin Onchain Cloud";
 
 // --- Schemas ---
 
@@ -124,20 +121,7 @@ app.post(
       verificationUrl,
     });
 
-    await c.env.EMAIL.send(
-      new EmailMessage(
-        FROM_EMAIL,
-        email,
-        buildMimeEmail({
-          from: FROM_EMAIL,
-          fromName: FROM_NAME,
-          to: email,
-          subject: "Confirm your email address",
-          html,
-          text,
-        }),
-      ),
-    );
+    await sendEmail(c.env.EMAIL, { to: email, subject: "Confirm your email address", html, text });
 
     return c.json({ ok: true });
   },
@@ -217,42 +201,5 @@ app.post(
     return c.json({ ok: true });
   },
 );
-
-function buildMimeEmail({
-  from,
-  fromName,
-  to,
-  subject,
-  html,
-  text,
-}: {
-  from: string;
-  fromName: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}): string {
-  const boundary = `b${crypto.randomUUID().replace(/-/g, "")}`;
-  return [
-    `From: ${fromName} <${from}>`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    "",
-    text,
-    "",
-    `--${boundary}`,
-    'Content-Type: text/html; charset="UTF-8"',
-    "",
-    html,
-    "",
-    `--${boundary}--`,
-  ].join("\r\n");
-}
 
 export default app;
