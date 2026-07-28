@@ -1,6 +1,10 @@
 import { zValidator } from "@hono/zod-validator";
+import { parseError } from "evlog";
+import { type EvlogVariables, evlog } from "evlog/hono";
+import { initWorkersLogger } from "evlog/workers";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
@@ -11,6 +15,8 @@ import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
 import { createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
+
+initWorkersLogger({ env: { service: "notification-api" } });
 
 // --- Schemas ---
 
@@ -44,10 +50,14 @@ const statusQuery = z.object({
     .transform((s) => s.toLowerCase()),
 });
 
+// --- Types ---
+
+type AppEnv = { Bindings: Env } & EvlogVariables;
+
 // --- Helpers ---
 
 async function verifyRequestSiwe(
-  c: Context<{ Bindings: Env }>,
+  c: Context<AppEnv>,
   body: { message: string; signature: string },
   expectedStatement: string,
 ) {
@@ -58,7 +68,9 @@ async function verifyRequestSiwe(
 
 // --- App ---
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppEnv>();
+
+app.use("*", evlog());
 
 app.use("*", (c, next) =>
   cors({
@@ -69,14 +81,13 @@ app.use("*", (c, next) =>
 );
 
 app.onError((err, c) => {
-  console.error(
-    JSON.stringify({
-      route: c.req.path,
-      method: c.req.method,
-      error: err instanceof Error ? err.message : String(err),
-    }),
+  const log = c.get("log");
+  log.error(err);
+  const parsed = parseError(err);
+  return c.json(
+    { message: parsed.message, why: parsed.why, fix: parsed.fix, link: parsed.link },
+    parsed.status as ContentfulStatusCode,
   );
-  return c.json({ error: "Internal server error" }, 500);
 });
 
 app.get("/health", (c) => c.text("ok"));
@@ -90,25 +101,34 @@ app.post(
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
+    const log = c.get("log");
+    log.set({ route: "register" });
+
     const ip = c.req.header("cf-connecting-ip") ?? "unknown";
     const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
     if (!success) {
+      log.set({ outcome: "rate_limited" });
       return c.json({ error: "Too many requests" }, 429);
     }
 
     const { message, signature, email, preferredName } = c.req.valid("json");
+    log.set({ email });
 
     const emailResult = validateEmail(email);
     if (!emailResult.ok) {
+      log.set({ outcome: "invalid_email" });
       return c.json({ error: emailResult.error }, 400);
     }
 
     const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.subscribe(email));
     if (!siweResult.ok) {
+      log.set({ outcome: "auth_failed", reason: siweResult.error });
       return c.json({ error: siweResult.error }, 401);
     }
 
     const walletAddress = siweResult.walletAddress.toLowerCase();
+    log.set({ wallet: walletAddress });
+
     const token = crypto.randomUUID();
 
     await writePendingVerification(c.env.KV, walletAddress, { token, email, preferredName });
@@ -129,6 +149,7 @@ app.post(
       text,
     });
 
+    log.set({ outcome: "success" });
     return c.json({ ok: true });
   },
 );
@@ -142,10 +163,13 @@ app.get(
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
+    const log = c.get("log");
     const { wallet, token } = c.req.valid("query");
+    log.set({ route: "verify", wallet });
 
     const pending = await readPendingVerification(c.env.KV, wallet, token);
     if (!pending) {
+      log.set({ outcome: "token_invalid" });
       return c.json({ error: "Invalid or expired token" }, 404);
     }
 
@@ -160,6 +184,7 @@ app.get(
 
     await deletePendingVerification(c.env.KV, wallet);
 
+    log.set({ outcome: "success" });
     return c.json({ ok: true });
   },
 );
@@ -172,10 +197,13 @@ app.get(
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
+    const log = c.get("log");
     const { wallet } = c.req.valid("query");
     const db = createDb(c.env.DB);
     const sub = await findSubscriptionByWallet(db, wallet);
-    return c.json({ subscribed: sub !== null });
+    const subscribed = sub !== null;
+    log.set({ route: "status", wallet, subscribed });
+    return c.json({ subscribed });
   },
 );
 
@@ -188,9 +216,13 @@ app.post(
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
+    const log = c.get("log");
+    log.set({ route: "unsubscribe" });
+
     const ip = c.req.header("cf-connecting-ip") ?? "unknown";
     const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
     if (!success) {
+      log.set({ outcome: "rate_limited" });
       return c.json({ error: "Too many requests" }, 429);
     }
 
@@ -198,12 +230,17 @@ app.post(
 
     const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.unsubscribe);
     if (!siweResult.ok) {
+      log.set({ outcome: "auth_failed", reason: siweResult.error });
       return c.json({ error: siweResult.error }, 401);
     }
 
-    const db = createDb(c.env.DB);
-    await deleteSubscription(db, siweResult.walletAddress.toLowerCase());
+    const walletAddress = siweResult.walletAddress.toLowerCase();
+    log.set({ wallet: walletAddress });
 
+    const db = createDb(c.env.DB);
+    await deleteSubscription(db, walletAddress);
+
+    log.set({ outcome: "success" });
     return c.json({ ok: true });
   },
 );
