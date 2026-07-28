@@ -7,7 +7,7 @@ import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
 import { createDb } from "../shared/db/client";
 import { renderVerificationEmail } from "../shared/emails/templates/VerificationEmail";
-import { verifySiwe } from "./auth";
+import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
 import { createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
@@ -49,10 +49,14 @@ const statusQuery = z.object({
 
 // --- Helpers ---
 
-async function verifyRequestSiwe(c: Context<{ Bindings: Env }>, body: { message: string; signature: string }) {
+async function verifyRequestSiwe(
+  c: Context<{ Bindings: Env }>,
+  body: { message: string; signature: string },
+  expectedStatement: string,
+) {
   const domain = new URL(c.env.FRONTEND_ORIGIN).host;
   const chainId = getChain(c.env.NETWORK as Network).id;
-  return verifySiwe({ message: body.message, signature: body.signature, domain, chainId });
+  return verifySiwe({ message: body.message, signature: body.signature, domain, chainId, expectedStatement });
 }
 
 // --- App ---
@@ -102,7 +106,7 @@ app.post(
       return c.json({ error: emailResult.error }, 400);
     }
 
-    const siweResult = await verifyRequestSiwe(c, { message, signature });
+    const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.subscribe(email));
     if (!siweResult.ok) {
       return c.json({ error: siweResult.error }, 401);
     }
@@ -196,7 +200,7 @@ app.post(
   async (c) => {
     const { message, signature } = c.req.valid("json");
 
-    const siweResult = await verifyRequestSiwe(c, { message, signature });
+    const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.unsubscribe);
     if (!siweResult.ok) {
       return c.json({ error: siweResult.error }, 401);
     }

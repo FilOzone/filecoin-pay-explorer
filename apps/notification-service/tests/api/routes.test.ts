@@ -7,6 +7,7 @@ import { env } from "cloudflare:workers";
 import { privateKeyToAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SIWE_STATEMENTS } from "../../api/auth";
 import app from "../../api/index";
 import { writePendingVerification } from "../../api/kv";
 import { createVerifiedSubscription, findSubscriptionByWallet, findVerifiedEmailByEmail } from "../../api/queries";
@@ -114,7 +115,10 @@ describe("POST /register", () => {
   });
 
   it("returns 401 when SIWE verification fails", async () => {
-    const message = makeSiwe({ issuedAt: new Date(Date.now() - 10 * 60 * 1000) });
+    const message = makeSiwe({
+      issuedAt: new Date(Date.now() - 10 * 60 * 1000),
+      statement: SIWE_STATEMENTS.subscribe("test@example.com"),
+    });
     const signature = await account.signMessage({ message });
     const res = await post("/register", { message, signature, email: "test@example.com", preferredName: "Alice" });
     expect(res.status).toBe(401);
@@ -123,7 +127,8 @@ describe("POST /register", () => {
   });
 
   it("normalises email to lowercase and trims preferredName end-to-end", async () => {
-    const message = makeSiwe();
+    // Statement uses the normalised email — both frontend and backend normalise before signing/verifying
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.subscribe("test@example.com") });
     const signature = await account.signMessage({ message });
     const res = await post("/register", { message, signature, email: "Test@Example.COM", preferredName: "  Alice  " });
     expect(res.status).toBe(200);
@@ -141,7 +146,7 @@ describe("POST /register", () => {
   });
 
   it("sends a verification email to the correct recipient", async () => {
-    const message = makeSiwe();
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.subscribe("test@example.com") });
     const signature = await account.signMessage({ message });
     const res = await post("/register", { message, signature, email: "test@example.com", preferredName: "Alice" });
     expect(res.status).toBe(200);
@@ -236,7 +241,10 @@ describe("POST /unsubscribe", () => {
       subscriptionId: "sub-1",
       walletAddress: WALLET,
     });
-    const message = makeSiwe({ issuedAt: new Date(Date.now() - 10 * 60 * 1000) });
+    const message = makeSiwe({
+      issuedAt: new Date(Date.now() - 10 * 60 * 1000),
+      statement: SIWE_STATEMENTS.unsubscribe,
+    });
     const signature = await account.signMessage({ message });
     const res = await post("/unsubscribe", { message, signature });
     expect(res.status).toBe(401);
@@ -252,7 +260,7 @@ describe("POST /unsubscribe", () => {
       subscriptionId: "sub-1",
       walletAddress: WALLET,
     });
-    const message = makeSiwe();
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.unsubscribe });
     const signature = await account.signMessage({ message });
     const res = await post("/unsubscribe", { message, signature });
     expect(res.status).toBe(200);

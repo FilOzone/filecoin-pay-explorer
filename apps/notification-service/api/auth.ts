@@ -3,6 +3,11 @@ import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
 
 const FRESHNESS_WINDOW_MS = 5 * 60 * 1000;
 
+export const SIWE_STATEMENTS = {
+  subscribe: (email: string) => `Subscribe to Filecoin Pay notifications for ${email}`,
+  unsubscribe: "Unsubscribe from Filecoin Pay notifications",
+} as const;
+
 export type SiweVerifyResult = { ok: true; walletAddress: string } | { ok: false; error: string };
 
 interface SiweVerifyParams {
@@ -10,9 +15,16 @@ interface SiweVerifyParams {
   signature: string;
   domain: string;
   chainId: number;
+  expectedStatement: string;
 }
 
-export async function verifySiwe({ message, signature, domain, chainId }: SiweVerifyParams): Promise<SiweVerifyResult> {
+export async function verifySiwe({
+  message,
+  signature,
+  domain,
+  chainId,
+  expectedStatement,
+}: SiweVerifyParams): Promise<SiweVerifyResult> {
   let parsed: ReturnType<typeof parseSiweMessage>;
 
   try {
@@ -29,9 +41,19 @@ export async function verifySiwe({ message, signature, domain, chainId }: SiweVe
     return { ok: false, error: "Missing issuedAt in SIWE message" };
   }
 
-  const age = Date.now() - new Date(parsed.issuedAt).getTime();
+  const issuedAtMs = new Date(parsed.issuedAt).getTime();
+
+  if (Number.isNaN(issuedAtMs)) {
+    return { ok: false, error: "Invalid issuedAt format in SIWE message" };
+  }
+
+  const age = Date.now() - issuedAtMs;
   if (age < 0 || age > FRESHNESS_WINDOW_MS) {
     return { ok: false, error: "SIWE message expired or issued in the future" };
+  }
+
+  if (parsed.statement !== expectedStatement) {
+    return { ok: false, error: "SIWE statement mismatch" };
   }
 
   if (!validateSiweMessage({ message: parsed, domain })) {
