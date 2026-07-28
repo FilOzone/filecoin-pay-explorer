@@ -1,4 +1,17 @@
+import { getAccountSummary } from "@filoz/synapse-core/pay";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
+import { type Address, type Chain, createPublicClient, http, type PublicClient, type Transport } from "viem";
+import { getChain, type Network } from "../shared/chain";
+
+/** A read-only client bound to a concrete chain (viem widens `chain` to optional otherwise). */
+export type ReadClient = PublicClient<Transport, Chain>;
+
+/** The bindings `createReadClient` needs — a subset of the worker `Env`. */
+export type ReadClientConfig = {
+  /** JSON-RPC endpoint for the target network (a per-worker secret). */
+  rpcUrl: string;
+  network: Network;
+};
 
 /** Runway-based health tiers, ordered by urgency. */
 export type HealthTier = "healthy" | "warning" | "critical" | "emergency";
@@ -11,8 +24,7 @@ export type HealthThresholds = {
 };
 
 /**
- * The subset of the Synapse account summary (`synapse.payments.accountSummary`)
- * this derivation needs.
+ * The subset of the Synapse account summary the health derivation needs.
  */
 export type AccountSummary = {
   /** Epochs until the account enters deficit; `maxUint256` when nothing is spent, `0n` when already in deficit. */
@@ -75,4 +87,41 @@ export function deriveAccountHealth(summary: AccountSummary, thresholds: HealthT
   if (runway < BigInt(thresholds.critical) * EPOCHS_PER_DAY) return { tier: "critical", ...health };
   if (runway < BigInt(thresholds.warning) * EPOCHS_PER_DAY) return { tier: "warning", ...health };
   return { tier: "healthy", ...health };
+}
+
+/**
+ * A read-only viem client for the configured network. One client serves a whole
+ * queue batch — account reads need no signer, so no private key is involved.
+ */
+export function createReadClient({ rpcUrl, network }: ReadClientConfig): ReadClient {
+  return createPublicClient({ chain: getChain(network), transport: http(rpcUrl) });
+}
+
+/**
+ * Reads an arbitrary wallet's Filecoin Pay account summary and narrows it to the
+ * fields the health derivation needs. The network and FilecoinPay contract are
+ * resolved from the client's chain, so no separate network argument is needed.
+ */
+export async function readAccountSummary(client: ReadClient, walletAddress: string): Promise<AccountSummary> {
+  const summary = await getAccountSummary(client, { address: walletAddress as Address });
+  return {
+    runwayInEpochs: summary.runwayInEpochs,
+    lockupRatePerEpoch: summary.lockupRatePerEpoch,
+    debt: summary.debt,
+    epoch: summary.epoch,
+  };
+}
+
+/**
+ * Reads a wallet's account summary and derives its health tier in one call.
+ * Returns the raw summary alongside so the caller can compute burn-rate-derived
+ * values (top-up amount, funded-until) without a second read.
+ */
+export async function accountHealth(
+  client: ReadClient,
+  walletAddress: string,
+  thresholds: HealthThresholds = DEFAULT_HEALTH_THRESHOLDS,
+): Promise<AccountHealth> {
+  const summary = await readAccountSummary(client, walletAddress);
+  return deriveAccountHealth(summary, thresholds);
 }
