@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Network } from "../shared/chain";
 import { getChain } from "../shared/chain";
 import { createDb } from "../shared/db/client";
-import { sendEmail } from "../shared/emails/send";
+import { FROM_EMAIL, FROM_NAME } from "../shared/emails/config";
 import { renderVerificationEmail } from "../shared/emails/templates/VerificationEmail";
 import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
@@ -121,7 +121,13 @@ app.post(
       verificationUrl,
     });
 
-    await sendEmail(c.env.EMAIL, { to: email, subject: "Confirm your email address", html, text });
+    await c.env.EMAIL.send({
+      from: { name: FROM_NAME, email: FROM_EMAIL },
+      to: email,
+      subject: "Confirm your email address",
+      html,
+      text,
+    });
 
     return c.json({ ok: true });
   },

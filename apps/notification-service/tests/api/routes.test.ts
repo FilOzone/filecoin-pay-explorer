@@ -31,7 +31,7 @@ function makeSiwe(overrides: Partial<Parameters<typeof createSiweMessage>[0]> = 
   });
 }
 
-const emailSend = vi.fn<(message: EmailMessage) => Promise<void>>();
+const emailSend = vi.fn<(message: EmailMessage | EmailMessageBuilder) => Promise<void>>();
 const rateLimiterLimit = vi.fn<(opts: { key: string }) => Promise<{ success: boolean }>>();
 
 const testEnv = {
@@ -152,9 +152,8 @@ describe("POST /register", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(emailSend).toHaveBeenCalledOnce();
-    // EmailMessage only exposes from/to in the constructor-created form; raw is not readable back
     const emailMsg = emailSend.mock.calls.at(0)?.[0];
-    expect(emailMsg?.from).toBe("noreply@filecoin.cloud");
+    expect(emailMsg?.from).toEqual({ name: "Filecoin Onchain Cloud", email: "noreply@filecoin.cloud" });
     expect(emailMsg?.to).toBe("test@example.com");
   });
 });
