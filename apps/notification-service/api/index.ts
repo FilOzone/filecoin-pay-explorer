@@ -24,7 +24,7 @@ const registerBody = z.object({
     .string()
     .min(1)
     .transform((s) => s.toLowerCase()),
-  preferredName: z.string().trim().min(1, "Preferred name is required"),
+  preferredName: z.string().trim().min(1, "Preferred name is required").max(100),
 });
 
 const siweBody = z.object({
@@ -198,6 +198,12 @@ app.post(
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
+    const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+    const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
+    if (!success) {
+      return c.json({ error: "Too many requests" }, 429);
+    }
+
     const { message, signature } = c.req.valid("json");
 
     const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.unsubscribe);

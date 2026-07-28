@@ -232,6 +232,12 @@ describe("POST /unsubscribe", () => {
     expect(res.status).toBe(422);
   });
 
+  it("returns 429 when rate limit is exceeded", async () => {
+    rateLimiterLimit.mockResolvedValueOnce({ success: false });
+    const res = await post("/unsubscribe", { message: "m", signature: "s" });
+    expect(res.status).toBe(429);
+  });
+
   it("returns 401 when SIWE verification fails and leaves any existing subscription intact", async () => {
     const db = createDb(env.DB);
     await createVerifiedSubscription(db, {
