@@ -6,9 +6,9 @@ For a full end-to-end release walkthrough, use the [release issue template](../.
 
 ## CI/CD
 
-A GitHub release with a tag matching `vX.Y.Z` will deploy new subgraph versions per [deploy.yml](../../.github/workflows/deploy.yml).
+The [Release Please workflow](../../.github/workflows/release-please.yml) manages subgraph releases. When releasable subgraph changes land on `main`, it opens or updates a Release PR.
 
-CI/CD doesn't currently do any validation or subgraph tagging. 
+Merging the Release PR creates the `vX.Y.Z` tag and GitHub Release, deploys mainnet and calibration to Goldsky, and opens a release tracking issue. Indexing checks, smoke tests, and promotion to `prod` remain manual.
 
 ## Prerequisites
 

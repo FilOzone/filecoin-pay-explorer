@@ -1,0 +1,110 @@
+name: Release Please
+
+# Maintains the subgraph Release PR. Merging that PR creates the tag and GitHub
+# Release, deploys both networks, and opens a tracking issue.
+#
+# Deployment stays in this workflow because tags created with GITHUB_TOKEN do
+# not start another workflow.
+#
+# Requires the GOLDSKY_API_KEY repository secret.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs['packages/subgraph--release_created'] }}
+      version: ${{ steps.release.outputs['packages/subgraph--version'] }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy:
+    name: Deploy subgraph to Goldsky (${{ matrix.network }})
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/subgraph
+    strategy:
+      matrix:
+        network: [calibration, mainnet]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Goldsky CLI
+        run: curl -fsSL https://goldsky.com | sh -s -- -f
+        shell: bash
+
+      - name: Build subgraph (${{ matrix.network }})
+        run: NETWORK=${{ matrix.network }} pnpm run build
+
+      - name: Deploy to Goldsky (${{ matrix.network }})
+        env:
+          GOLDSKY_API_KEY: ${{ secrets.GOLDSKY_API_KEY }}
+          # VERSION is reserved for schema selection during the build.
+          GOLDSKY_VERSION: ${{ needs.release-please.outputs.version }}
+        run: goldsky subgraph deploy "filecoin-pay-${{ matrix.network }}/$GOLDSKY_VERSION" --path . --token "$GOLDSKY_API_KEY"
+
+  create-release-issue:
+    name: Create release tracking issue
+    needs: [release-please, deploy]
+    # Keep a record of recovery work when deployment fails.
+    if: |
+      always() &&
+      needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create release issue
+        uses: actions/github-script@v9
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        with:
+          script: |
+            const createReleaseIssue = require('./.github/scripts/create-release-issue.js');
+            await createReleaseIssue({
+              github,
+              context,
+              core,
+              version: process.env.RELEASE_VERSION,
+            });
