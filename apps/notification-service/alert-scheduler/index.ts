@@ -7,11 +7,6 @@ const DB_PAGE_SIZE = 500;
 // Cloudflare Queues caps sendBatch at 100 messages per call.
 const QUEUE_BATCH_SIZE = 100;
 
-/** UTC calendar date (`YYYY-MM-DD`) for a scheduler run timestamp. */
-function toUtcDate(epochMs: number): string {
-  return new Date(epochMs).toISOString().slice(0, 10);
-}
-
 /**
  * Cron worker: reads every wallet subscription from D1 and fans out one queue
  * message per wallet for the processor to evaluate. No HTTP interface.
@@ -22,27 +17,28 @@ function toUtcDate(epochMs: number): string {
  */
 export default {
   async scheduled(controller, env, _ctx): Promise<void> {
-    const scheduledDate = toUtcDate(controller.scheduledTime);
+    const scheduledAt = new Date(controller.scheduledTime).toISOString();
     const db = createDb(env.DB);
     let enqueued = 0;
 
     try {
       for await (const page of iterateSubscriptions(db, DB_PAGE_SIZE)) {
         const messages = page.map((row) => ({
-          body: { walletAddress: row.walletAddress, scheduledDate } satisfies AlertMessage,
+          body: { walletAddress: row.walletAddress } satisfies AlertMessage,
         }));
 
         for (let i = 0; i < messages.length; i += QUEUE_BATCH_SIZE) {
-          await env.ALERT_QUEUE.sendBatch(messages.slice(i, i + QUEUE_BATCH_SIZE));
+          const batch = messages.slice(i, i + QUEUE_BATCH_SIZE);
+          await env.ALERT_QUEUE.sendBatch(batch);
+          enqueued += batch.length;
         }
-        enqueued += messages.length;
       }
     } catch (error) {
       console.error(
         JSON.stringify({
           event: "scheduler.tick",
           status: "error",
-          scheduledDate,
+          scheduledAt,
           enqueued,
           error: error instanceof Error ? error.message : String(error),
         }),
@@ -50,6 +46,6 @@ export default {
       throw error;
     }
 
-    console.log(JSON.stringify({ event: "scheduler.tick", status: "ok", scheduledDate, enqueued }));
+    console.log(JSON.stringify({ event: "scheduler.tick", status: "ok", scheduledAt, enqueued }));
   },
 } satisfies ExportedHandler<Env>;

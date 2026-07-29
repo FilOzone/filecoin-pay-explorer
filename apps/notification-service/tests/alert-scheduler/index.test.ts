@@ -38,16 +38,6 @@ describe("scheduled", () => {
     expect(new Set(bodies.map((m) => m.walletAddress))).toEqual(new Set(wallets));
   });
 
-  it("stamps each message with the UTC date of the run", async () => {
-    await seedSubscriptions(db, 1);
-    const sendBatch = vi.spyOn(env.ALERT_QUEUE, "sendBatch");
-
-    // Late in the UTC day — proves the date is not shifted by local time.
-    await runScheduled(new Date("2026-07-24T23:30:00Z"));
-
-    expect(enqueuedBodies(sendBatch).map((m) => m.scheduledDate)).toEqual(["2026-07-24"]);
-  });
-
   it("never exceeds the 100-message batch limit and drops nothing", async () => {
     const wallets = await seedSubscriptions(db, 201);
     const sendBatch = vi.spyOn(env.ALERT_QUEUE, "sendBatch");
@@ -73,5 +63,18 @@ describe("scheduled", () => {
     vi.spyOn(env.ALERT_QUEUE, "sendBatch").mockRejectedValue(new Error("queue down"));
 
     await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("queue down");
+  });
+
+  it("reports the count already enqueued when a later batch fails mid-run", async () => {
+    await seedSubscriptions(db, 150); // one D1 page, two queue batches: 100 then 50
+    vi.spyOn(env.ALERT_QUEUE, "sendBatch")
+      .mockResolvedValueOnce({} as QueueSendBatchResponse)
+      .mockRejectedValueOnce(new Error("queue down"));
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("queue down");
+
+    const logged = JSON.parse(errorLog.mock.calls.at(-1)?.[0] as string);
+    expect(logged.enqueued).toBe(100); // the first batch, not 0 for the whole page
   });
 });
