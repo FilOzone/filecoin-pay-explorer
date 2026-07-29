@@ -61,6 +61,29 @@ export default defineConfig({
           },
         },
       }),
+      // Workers environment — alert-scheduler: D1 + ALERT_QUEUE only (no KV, no jsx-email)
+      defineProject({
+        plugins: [
+          cloudflareTest({
+            wrangler: {
+              configPath: "alert-scheduler/wrangler.jsonc",
+              environment: "staging",
+            },
+            miniflare: {
+              // Scheduler reads subscriptions from D1, so migrations must be applied.
+              // No KV: the scheduler has no KV binding.
+              bindings: { TEST_MIGRATIONS: migrations },
+            },
+          }),
+        ],
+        test: {
+          name: "alert-scheduler",
+          include: ["tests/alert-scheduler/**/*.test.ts"],
+          setupFiles: ["tests/apply-migrations.ts"],
+          clearMocks: true,
+          restoreMocks: true,
+        },
+      }),
     ],
   },
 });
