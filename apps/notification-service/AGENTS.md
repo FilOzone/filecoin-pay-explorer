@@ -57,6 +57,12 @@ Network is bound at deploy time via Wrangler environments, never in runtime logi
 
 Resource naming grammar: `filecoin-pay-<domain>-<type|purpose>-<env>` for account-global resources (e.g. `filecoin-pay-notification-db-staging`), generic stable names for in-code bindings (`DB`, `KV`, `ALERT_QUEUE`). Worker names follow `<domain>-[capability]-<role>`.
 
+## D1 transactions
+
+D1 does not support `BEGIN TRANSACTION` / `COMMIT` SQL. Drizzle's `db.transaction()` generates these and will fail at runtime (including in miniflare). Use `db.batch([...])` instead — D1 batch is atomic: if any statement fails, the whole batch rolls back.
+
+`db.batch()` requires all statements to be known upfront, so it only works when no statement depends on the result of a previous one. When there's a data dependency (e.g. you need a returned ID to construct the next query), do a pre-read first to resolve the unknown, then batch the writes.
+
 ## Workers practices
 
 `compatibility_date` is set and `nodejs_compat` is on. `observability` is enabled per worker. Use `crypto.randomUUID()` for tokens/IDs (never `Math.random()`). Await/`return`/`void`/`ctx.waitUntil()` every promise — no floating promises. Never store request-scoped state in module-level variables. Prefer in-process bindings over the Cloudflare REST API.
