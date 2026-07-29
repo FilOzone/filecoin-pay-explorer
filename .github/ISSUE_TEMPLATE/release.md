@@ -9,7 +9,7 @@ assignees: ""
 ## Release Checklist
 
 > [!IMPORTANT]
-> This issue tracks the status of this release. The subgraph deployment is automated via the [release-please workflow](../../actions/workflows/release-please.yml). Static site changes are automatically deployed via [Vercel](https://github.com/organizations/FilOzone/settings/installations/85630569).
+> This issue tracks the status of this release. The subgraph deployment is automated via the [release-please workflow](https://github.com/FilOzone/filecoin-pay-explorer/actions/workflows/release-please.yml). Static site changes are automatically deployed via [Vercel](https://github.com/organizations/FilOzone/settings/installations/85630569).
 >
 > For a breaking schema change, deploy a compatible Explorer before promoting the new subgraphs to `prod`.
 
@@ -20,7 +20,7 @@ assignees: ""
 - [ ] The `Deploy subgraph to Goldsky (calibration)` job succeeded
 - [ ] The `Deploy subgraph to Goldsky (mainnet)` job succeeded
 
-If either deploy job failed, fix and rerun it or follow the [manual deployment steps](../../packages/subgraph/README.md#manually-deploying-the-subgraph-to-goldsky).
+If either deploy job failed, fix and rerun it or follow the [manual deployment steps](https://github.com/FilOzone/filecoin-pay-explorer/blob/main/packages/subgraph/README.md#manually-deploying-the-subgraph-to-goldsky).
 
 ### 2. Await subgraph indexing
 
