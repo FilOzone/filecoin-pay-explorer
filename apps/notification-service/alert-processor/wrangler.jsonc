@@ -8,7 +8,8 @@
   "env": {
     "staging": {
       "name": "notification-alert-processor-staging",
-      "vars": { "NETWORK": "calibration" },
+      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
+      "secrets": { "required": ["RPC_URL"] },
       "d1_databases": [
         {
           "binding": "DB",
@@ -21,7 +22,7 @@
         "consumers": [
           {
             "queue": "filecoin-pay-notification-alerts-staging",
-            "max_batch_size": 10,
+            "max_batch_size": 100,
             "max_batch_timeout": 30,
             "max_retries": 3,
             "dead_letter_queue": "filecoin-pay-notification-alerts-dlq-staging"
@@ -32,7 +33,8 @@
     },
     "production": {
       "name": "notification-alert-processor-production",
-      "vars": { "NETWORK": "mainnet" },
+      "vars": { "NETWORK": "mainnet", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
+      "secrets": { "required": ["RPC_URL"] },
       "d1_databases": [
         {
           "binding": "DB",
@@ -45,7 +47,7 @@
         "consumers": [
           {
             "queue": "filecoin-pay-notification-alerts-production",
-            "max_batch_size": 10,
+            "max_batch_size": 100,
             "max_batch_timeout": 30,
             "max_retries": 3,
             "dead_letter_queue": "filecoin-pay-notification-alerts-dlq-production"
