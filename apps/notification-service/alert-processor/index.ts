@@ -1,13 +1,28 @@
+import type { AlertMessage } from "../shared/messages";
+import { createReadClient } from "./account";
+import { processMessage } from "./process-message";
+
 /**
- * notification-processor — queue consumer.
- * Per message: read account state via RPC, derive funded-until, pick tier,
- * dedupe (KV + D1), send alert, write notification_log.
- * Placeholder handler for the scaffold; processing lands in the processor issue.
+ * notification-alert-processor — queue consumer.
+ *
+ * For each wallet message: reads on-chain account state, classifies a health
+ * tier, dedupes against KV, sends a tiered alert email, and records it. One
+ * read-only client serves the whole batch (account reads need no signer).
+ *
+ * Each message is acked or retried individually — a per-message failure never
+ * throws out of the handler, so it can't force the whole batch to redeliver.
  */
 export default {
-  async queue(batch, _env, _ctx): Promise<void> {
+  async queue(batch, env, _ctx): Promise<void> {
+    const client = createReadClient({ rpcUrl: env.RPC_URL, network: env.NETWORK });
+
     for (const message of batch.messages) {
-      message.ack();
+      const action = await processMessage(env, client, message.body as AlertMessage);
+      if (action === "retry") {
+        message.retry();
+      } else {
+        message.ack();
+      }
     }
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<Env, AlertMessage>;
