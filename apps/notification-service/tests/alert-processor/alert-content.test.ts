@@ -53,4 +53,22 @@ describe("buildAlertContent", () => {
     // plus the 15-min drift buffer (30 epochs * 1e16 = 0.3 USDFC).
     expect(usdfc(content.topUpAmount)).toBeCloseTo(869.3, 5);
   });
+
+  it("keeps daysRemaining consistent with fundedUntil across a UTC midnight boundary", () => {
+    // 20:00 UTC with 12h of runway → funds run out at 08:00 the next UTC day.
+    const now = Math.floor(new Date("2026-01-15T20:00:00Z").getTime() / 1000);
+    const summary: AccountSummary = {
+      epoch: 1000n,
+      runwayInEpochs: EPOCHS_PER_DAY / 2n, // 0.5 day = 12h
+      lockupRatePerEpoch: RATE,
+      debt: 0n,
+    };
+    const health = deriveAccountHealth(summary, DEFAULT_HEALTH_THRESHOLDS);
+
+    const content = buildAlertContent(summary, health, DEFAULT_HEALTH_THRESHOLDS, now);
+
+    // Funds run out on the 16th, so the day count must match it — not floor(0.5) = 0.
+    expect(content.fundedUntil).toBe("January 16, 2026");
+    expect(content.daysRemaining).toBe(1);
+  });
 });

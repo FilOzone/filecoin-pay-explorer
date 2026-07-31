@@ -6,6 +6,7 @@ import { type AccountHealth, type AccountSummary, EPOCHS_PER_DAY, type HealthThr
 // USDFC, the Filecoin Pay settlement token, uses 18 decimals (the SDK's default).
 const USDFC_DECIMALS = 18;
 const EPOCH_DURATION_SEC = Number(TIME_CONSTANTS.EPOCH_DURATION);
+const SECONDS_PER_DAY = 86_400;
 
 // Rails keep draining between reading the summary and the user paying, so the
 // recommended top-up would otherwise be short by that drift. Cover a 15-minute
@@ -33,8 +34,8 @@ export type AlertContent = Pick<AlertEmailProps, "fundedUntil" | "daysRemaining"
 
 /**
  * Pure mapping from on-chain account state to the alert email's display values.
- * `daysRemaining` and `fundedUntil` are both derived from the same runway value
- * so they can never disagree (e.g. "0 days remaining" beside a future date).
+ * `fundedUntil` and `daysRemaining` are both derived from `fundedUntilSec` so
+ * the date and the day count always agree.
  */
 export function buildAlertContent(
   summary: AccountSummary,
@@ -49,9 +50,14 @@ export function buildAlertContent(
   return {
     fundedUntil: DATE_FORMAT.format(new Date(fundedUntilSec * 1000)),
     fundedUntilSec,
-    daysRemaining: health.runwayDays,
+    daysRemaining: utcDayIndex(fundedUntilSec) - utcDayIndex(nowSec),
     topUpAmount: recommendedTopUp(summary, runwayEpochs, thresholds),
   };
+}
+
+/** UTC calendar-day number for a Unix-seconds instant (whole days since the epoch). */
+function utcDayIndex(sec: number): number {
+  return Math.floor(sec / SECONDS_PER_DAY);
 }
 
 /**
