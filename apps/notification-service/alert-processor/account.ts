@@ -1,5 +1,5 @@
 import { getAccountSummary } from "@filoz/synapse-core/pay";
-import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
+import { TIME_CONSTANTS } from "@filoz/synapse-core/utils";
 import { type Address, type Chain, createPublicClient, http, type PublicClient, type Transport } from "viem";
 import { getChain, type Network } from "../shared/chain";
 
@@ -66,15 +66,16 @@ export const DEFAULT_HEALTH_THRESHOLDS: HealthThresholds = {
  * boundaries stay exact rather than being distorted by day truncation.
  */
 export function deriveAccountHealth(summary: AccountSummary, thresholds: HealthThresholds): AccountHealth {
+  // Already in deficit: funds no longer cover active rails, so a provider can
+  // terminate at any time even though the user can still top up. Most urgent.
+  // lockupRatePerEpoch can be 0, but debt > 0
+  if (summary.debt > 0n || summary.runwayInEpochs === 0n) {
+    return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
+  }
+
   // No active storage spend → nothing can run out.
   if (summary.lockupRatePerEpoch === 0n) {
     return { tier: "healthy", runwayDays: Number.POSITIVE_INFINITY, fundedUntilEpoch: null };
-  }
-
-  // Already in deficit: funds no longer cover active rails, so a provider can
-  // terminate at any time even though the user can still top up. Most urgent.
-  if (summary.debt > 0n || summary.runwayInEpochs === 0n) {
-    return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
   const runway = summary.runwayInEpochs;
@@ -114,8 +115,6 @@ export async function readAccountSummary(client: ReadClient, walletAddress: stri
 
 /**
  * Reads a wallet's account summary and derives its health tier in one call.
- * Returns the raw summary alongside so the caller can compute burn-rate-derived
- * values (top-up amount, funded-until) without a second read.
  */
 export async function accountHealth(
   client: ReadClient,
