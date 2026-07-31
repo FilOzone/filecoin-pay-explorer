@@ -40,10 +40,10 @@ export const defaultDeps: ProcessDeps = {
 };
 
 /**
- * Processes one already-validated alert message end to end and returns whether
- * to ack or retry. Never throws: transient failures (RPC read, email send)
- * return "retry" so the queue redelivers just this message, without disturbing
- * the rest of the batch. Body validation happens upstream in the queue handler.
+ * Processes one already-validated alert message and returns whether to ack or
+ * retry. Does not throw — every failure maps to an action: transient errors
+ * (RPC read, email send, or anything unexpected) return "retry"; a failure to
+ * record after the email is sent still acks, to avoid re-sending.
  */
 export async function processMessage(
   env: Env,
@@ -55,66 +55,73 @@ export async function processMessage(
   const wallet = body.walletAddress.toLowerCase();
   const nowSec = Math.floor(Date.now() / 1000);
 
-  let summary: AccountSummary;
   try {
-    summary = await deps.readSummary(client, wallet);
+    let summary: AccountSummary;
+    try {
+      summary = await deps.readSummary(client, wallet);
+    } catch (error) {
+      log("read_failed", { wallet, error });
+      return "retry";
+    }
+
+    const health = deriveAccountHealth(summary, DEFAULT_HEALTH_THRESHOLDS);
+
+    // Recovered (or never at risk): reset dedup so a later relapse alerts again.
+    if (health.tier === "healthy") {
+      await clearAlertState(env.KV, wallet);
+      return "ack";
+    }
+    const tier = health.tier;
+
+    // Suppress if we already alerted this incident within the tier's window.
+    if (!shouldSend(await getAlertState(env.KV, wallet), tier, nowSec)) {
+      return "ack";
+    }
+
+    // Unsubscribed between scheduling and now → nothing to send.
+    const subscriber = await findSubscriberEmail(db, wallet);
+    if (!subscriber) return "ack";
+
+    const content = buildAlertContent(summary, health, DEFAULT_HEALTH_THRESHOLDS, nowSec);
+    const props: AlertEmailProps = {
+      name: subscriber.name,
+      walletAddress: wallet,
+      alertLevel: tier,
+      fundedUntil: content.fundedUntil,
+      daysRemaining: content.daysRemaining,
+      topUpAmount: content.topUpAmount,
+      topUpUrl: `${env.FRONTEND_ORIGIN}/console`,
+    };
+    const { subject, html, text } = await renderAlertEmail(props);
+
+    try {
+      await deps.sendEmail(env, { to: subscriber.email, subject, html, text });
+    } catch (error) {
+      log("send_failed", { wallet, tier, error });
+      return "retry";
+    }
+
+    // Email is out; record it. A failure here can't un-send, so ack rather than
+    // retry (which would re-send). Worst case the next 12h tick re-alerts.
+    try {
+      await recordSent(env.KV, db, {
+        tier,
+        wallet,
+        fundedUntilSec: content.fundedUntilSec,
+        sentAtSec: nowSec,
+        emailSentTo: subscriber.email,
+      });
+    } catch (error) {
+      log("record_failed", { wallet, tier, error });
+    }
+
+    return "ack";
   } catch (error) {
-    log("read_failed", { wallet, error });
+    // Anything unhandled (KV, D1, template render) is transient → retry, so a
+    // single wallet's failure never throws out of the batch handler.
+    log("unexpected", { wallet, error });
     return "retry";
   }
-
-  const health = deriveAccountHealth(summary, DEFAULT_HEALTH_THRESHOLDS);
-
-  // Recovered (or never at risk): reset dedup so a later relapse alerts again.
-  if (health.tier === "healthy") {
-    await clearAlertState(env.KV, wallet);
-    return "ack";
-  }
-  const tier = health.tier;
-
-  // Suppress if we already alerted this incident within the tier's window.
-  if (!shouldSend(await getAlertState(env.KV, wallet), tier, nowSec)) {
-    return "ack";
-  }
-
-  // Unsubscribed between scheduling and now → nothing to send.
-  const subscriber = await findSubscriberEmail(db, wallet);
-  if (!subscriber) return "ack";
-
-  const content = buildAlertContent(summary, health, DEFAULT_HEALTH_THRESHOLDS, nowSec);
-  const props: AlertEmailProps = {
-    name: subscriber.name,
-    walletAddress: wallet,
-    alertLevel: tier,
-    fundedUntil: content.fundedUntil,
-    daysRemaining: content.daysRemaining,
-    topUpAmount: content.topUpAmount,
-    topUpUrl: `${env.FRONTEND_ORIGIN}/console`,
-  };
-  const { subject, html, text } = await renderAlertEmail(props);
-
-  try {
-    await deps.sendEmail(env, { to: subscriber.email, subject, html, text });
-  } catch (error) {
-    log("send_failed", { wallet, tier, error });
-    return "retry";
-  }
-
-  // Email is out; record it. A failure here can't un-send, so ack rather than
-  // retry (which would re-send). Worst case the next 12h tick re-alerts.
-  try {
-    await recordSent(env.KV, db, {
-      tier,
-      wallet,
-      fundedUntilSec: content.fundedUntilSec,
-      sentAtSec: nowSec,
-      emailSentTo: subscriber.email,
-    });
-  } catch (error) {
-    log("record_failed", { wallet, tier, error });
-  }
-
-  return "ack";
 }
 
 /** Sends via the Cloudflare Email binding using the shared from-address. */
