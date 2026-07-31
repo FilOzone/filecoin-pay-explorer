@@ -82,6 +82,11 @@ export function deriveAccountHealth(summary: AccountSummary, thresholds: HealthT
     return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
+  // No active storage spend → nothing can run out.
+  if (summary.lockupRatePerEpoch === 0n) {
+    return { tier: "healthy", runwayDays: Number.POSITIVE_INFINITY, fundedUntilEpoch: null };
+  }
+
   const runway = summary.runwayInEpochs;
   const health = {
     runwayDays: Number(runway / EPOCHS_PER_DAY),
