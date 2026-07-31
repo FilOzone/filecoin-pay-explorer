@@ -2,12 +2,16 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountSummary, ReadClient } from "../../alert-processor/account";
 import { getAlertState } from "../../alert-processor/dedup";
+import worker from "../../alert-processor/index";
 import { type ProcessDeps, processMessage } from "../../alert-processor/process-message";
+import { createDb } from "../../shared/db/client";
+import type { AlertMessage } from "../../shared/messages";
 
 const WALLET = "0xabcdef1234567890abcdef1234567890abcdef12";
 const EMAIL = "alice@example.com";
 // The read client is only ever passed to the (mocked) readSummary boundary.
 const CLIENT = {} as never as ReadClient;
+const DB = createDb(env.DB);
 const EPOCHS_PER_DAY = 2880n;
 const RATE = 10_000_000_000_000_000n;
 
@@ -57,7 +61,7 @@ describe("processMessage", () => {
     await subscribe(WALLET, EMAIL);
     const d = deps(WARNING);
 
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -68,10 +72,10 @@ describe("processMessage", () => {
 
   it("acks a healthy wallet without sending, and clears prior state", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, { walletAddress: WALLET }, deps(WARNING)); // arm state
+    await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, deps(WARNING)); // arm state
 
     const d = deps(HEALTHY);
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -80,10 +84,10 @@ describe("processMessage", () => {
 
   it("suppresses a repeat of the same tier within the window", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, { walletAddress: WALLET }, deps(WARNING));
+    await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, deps(WARNING));
 
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -92,10 +96,10 @@ describe("processMessage", () => {
 
   it("sends again on escalation to a more severe tier", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, { walletAddress: WALLET }, deps(WARNING));
+    await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, deps(WARNING));
 
     const d = deps(CRITICAL);
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -104,11 +108,11 @@ describe("processMessage", () => {
 
   it("re-alerts after a recovery clears the incident", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, { walletAddress: WALLET }, deps(WARNING)); // send #1
-    await processMessage(env, CLIENT, { walletAddress: WALLET }, deps(HEALTHY)); // recover
+    await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, deps(WARNING)); // send #1
+    await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, deps(HEALTHY)); // recover
 
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d); // relapse
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d); // relapse
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -116,7 +120,7 @@ describe("processMessage", () => {
 
   it("acks without sending when the wallet has no subscription", async () => {
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -132,7 +136,7 @@ describe("processMessage", () => {
       sendEmail: vi.fn(async () => {}),
     };
 
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("retry");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -147,10 +151,33 @@ describe("processMessage", () => {
       }),
     };
 
-    const action = await processMessage(env, CLIENT, { walletAddress: WALLET }, d);
+    const action = await processMessage(env, CLIENT, DB, { walletAddress: WALLET }, d);
 
     expect(action).toBe("retry");
     expect(await logCount()).toBe(0);
     expect(await getAlertState(env.KV, WALLET)).toBeNull();
+  });
+});
+
+describe("queue handler", () => {
+  function messageWith(body: unknown): {
+    body: unknown;
+    ack: ReturnType<typeof vi.fn>;
+    retry: ReturnType<typeof vi.fn>;
+  } {
+    return { body, ack: vi.fn(), retry: vi.fn() };
+  }
+
+  it("drops (acks) a structurally-invalid message instead of retrying it", async () => {
+    const message = messageWith({ walletAddress: "not-an-address" });
+    const batch = { messages: [message] } as unknown as MessageBatch<AlertMessage>;
+
+    expect(worker.queue).toBeDefined();
+    await worker.queue?.(batch, env, {} as ExecutionContext);
+
+    expect(message.ack).toHaveBeenCalledOnce();
+    expect(message.retry).not.toHaveBeenCalled();
+    // A poison message must never leave a durable trace.
+    expect(await logCount()).toBe(0);
   });
 });

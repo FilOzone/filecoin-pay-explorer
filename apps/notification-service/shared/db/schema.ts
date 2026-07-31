@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { ALERT_LEVELS } from "../alert-levels";
 
 export const verifiedEmails = sqliteTable(
   "verified_emails",
@@ -35,7 +36,7 @@ export const notificationLog = sqliteTable(
   {
     id: text("id").notNull().primaryKey(),
     walletAddress: text("wallet_address").notNull(),
-    alertLevel: text("alert_level", { enum: ["warning", "critical", "emergency"] }).notNull(),
+    alertLevel: text("alert_level", { enum: ALERT_LEVELS }).notNull(),
     fundedUntil: integer("funded_until").notNull(),
     sentAt: integer("sent_at").notNull(),
     emailSentTo: text("email_sent_to").notNull(),

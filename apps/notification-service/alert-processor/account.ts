@@ -1,6 +1,7 @@
 import { getAccountSummary } from "@filoz/synapse-core/pay";
 import { TIME_CONSTANTS } from "@filoz/synapse-core/utils";
 import { type Address, type Chain, createPublicClient, http, type PublicClient, type Transport } from "viem";
+import type { AlertLevel } from "../shared/alert-levels";
 import { getChain, type Network } from "../shared/chain";
 
 /** A read-only client bound to a concrete chain (viem widens `chain` to optional otherwise). */
@@ -13,8 +14,8 @@ export type ReadClientConfig = {
   network: Network;
 };
 
-/** Runway-based health tiers, ordered by urgency. */
-export type HealthTier = "healthy" | "warning" | "critical" | "emergency";
+/** Runway-based health tiers: "healthy" (no alert) plus the actionable alert levels. */
+export type HealthTier = "healthy" | AlertLevel;
 
 /** Runway thresholds in whole days. A tier fires when runway is strictly below its value. */
 export type HealthThresholds = {

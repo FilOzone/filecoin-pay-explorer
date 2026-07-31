@@ -135,7 +135,7 @@ app.post(
 
     const verificationUrl = `${c.env.FRONTEND_ORIGIN}/console/notifications/verify?wallet=${walletAddress}&token=${token}`;
 
-    const { html, text } = await renderVerificationEmail({
+    const { subject, html, text } = await renderVerificationEmail({
       name: preferredName,
       walletAddress,
       verificationUrl,
@@ -144,7 +144,7 @@ app.post(
     await c.env.EMAIL.send({
       from: { name: FROM_NAME, email: FROM_EMAIL },
       to: email,
-      subject: "Confirm your email address",
+      subject,
       html,
       text,
     });

@@ -1,4 +1,4 @@
-import { createDb } from "../shared/db/client";
+import type { DB } from "../shared/db/client";
 import type { AlertLevel } from "../shared/db/schema";
 import { FROM_EMAIL, FROM_NAME } from "../shared/emails/config";
 import { type AlertEmailProps, renderAlertEmail } from "../shared/emails/templates/AlertEmail";
@@ -39,26 +39,21 @@ export const defaultDeps: ProcessDeps = {
   sendEmail: sendAlertEmail,
 };
 
-const SUBJECTS: Record<AlertLevel, string> = {
-  warning: "Your Filecoin Pay account is running low",
-  critical: "Action required: your Filecoin Pay funds are critically low",
-  emergency: "Urgent: your Filecoin Pay services will stop soon",
-};
-
 /**
- * Processes one alert message end to end and returns whether to ack or retry.
- * Never throws: transient failures (RPC read, email send) return "retry" so the
- * queue redelivers just this message, without disturbing the rest of the batch.
+ * Processes one already-validated alert message end to end and returns whether
+ * to ack or retry. Never throws: transient failures (RPC read, email send)
+ * return "retry" so the queue redelivers just this message, without disturbing
+ * the rest of the batch. Body validation happens upstream in the queue handler.
  */
 export async function processMessage(
   env: Env,
   client: ReadClient,
+  db: DB,
   body: AlertMessage,
   deps: ProcessDeps = defaultDeps,
 ): Promise<MessageAction> {
   const wallet = body.walletAddress.toLowerCase();
   const nowSec = Math.floor(Date.now() / 1000);
-  const db = createDb(env.DB);
 
   let summary: AccountSummary;
   try {
@@ -96,10 +91,10 @@ export async function processMessage(
     topUpAmount: content.topUpAmount,
     topUpUrl: `${env.FRONTEND_ORIGIN}/console`,
   };
-  const { html, text } = await renderAlertEmail(props);
+  const { subject, html, text } = await renderAlertEmail(props);
 
   try {
-    await deps.sendEmail(env, { to: subscriber.email, subject: SUBJECTS[tier], html, text });
+    await deps.sendEmail(env, { to: subscriber.email, subject, html, text });
   } catch (error) {
     log("send_failed", { wallet, tier, error });
     return "retry";
