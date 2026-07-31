@@ -184,9 +184,12 @@ importers:
 
   apps/notification-service:
     dependencies:
+      '@filoz/synapse-core':
+        specifier: ^0.7.1
+        version: 0.7.1(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
       '@filoz/synapse-sdk':
-        specifier: ^0.41.0
-        version: 0.41.0(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+        specifier: ^1.1.1
+        version: 1.1.1(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
       '@hono/zod-validator':
         specifier: ^0.9.0
         version: 0.9.0(hono@4.12.27)(zod@4.4.3)
@@ -1619,8 +1622,18 @@ packages:
     peerDependencies:
       viem: 2.x
 
+  '@filoz/synapse-core@0.7.1':
+    resolution: {integrity: sha512-4vZZJbumv64ZKR+BjfhLJvP57ga/GhSHy/k2jIWuXInXGwM5qPmKvaCS7CkpzQwiSIXahO161DBNRLVH8SrVfQ==}
+    peerDependencies:
+      viem: 2.x
+
   '@filoz/synapse-sdk@0.41.0':
     resolution: {integrity: sha512-hbxV71Zjk1AExgghdP+LoYY1UqdnUMVB6Te1aJ5Af/e1lVDIOXIAHYm1WzSLCp6pU/a/+hLpGyl1CCu1IUPwYQ==}
+    peerDependencies:
+      viem: 2.x
+
+  '@filoz/synapse-sdk@1.1.1':
+    resolution: {integrity: sha512-m+DqCbjTID2VDBGa2iFQqmF7xjTVoANQjsdk54ikNSolZDLAvZK3TtoArlp0CKp9/L67bAw5ptm4SLJJPE+Rmw==}
     peerDependencies:
       viem: 2.x
 
@@ -4685,6 +4698,10 @@ packages:
   big.js@6.2.2:
     resolution: {integrity: sha512-y/ie+Faknx7sZA5MfGA2xKlu0GDv8RWrXGsmlteyJQ2lvoKv9GBK/fpRMc2qlSoBAgNxrixICFCBefIq8WCQpQ==}
 
+  bigint-mod-arith@3.3.1:
+    resolution: {integrity: sha512-pX/cYW3dCa87Jrzv6DAr8ivbbJRzEX5yGhdt8IutnX/PCIXfpx+mabWNK/M8qqh+zQ0J3thftUBHW0ByuUlG0w==}
+    engines: {node: '>=10.4.0'}
+
   binary-search@1.3.6:
     resolution: {integrity: sha512-nbE1WxOTTrUWIfsfZ4aHGYu5DOuNkbxGokjV6Z2kxfJK3uaAb8zNK1muzOeipoLHZjInT4Br88BHpzevc681xA==}
 
@@ -6450,8 +6467,14 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
+  iso-base@4.4.0:
+    resolution: {integrity: sha512-W4BJbRDBi66wcBFJ23ZlGnFOZ874CIut4y9PlsScMSYu7ckCX+MWNAaEoE0efTSYDoVEn1qy0FDVSjE8q0ieHw==}
+
   iso-kv@3.1.1:
     resolution: {integrity: sha512-yKTLmUCc8gl0MXJs3ZaTaNDgfG/2ROasZERKPa5aYY7Ks/eb8BvGfLHrC+t1cHxiRkogvaXulDP77ovwLKgLPg==}
+
+  iso-kv@3.2.0:
+    resolution: {integrity: sha512-rMVXO7zDEecXOJEiDnbDqjZ7gSe7VqDn2FTkUFWeqkcYMmgMdmB7pDgUaZxiEyiL1+gO7RnbqEI2Ce3xIW4UBQ==}
 
   iso-url@1.2.1:
     resolution: {integrity: sha512-9JPDgCN4B7QPkLtYAAOrEuAWvP9rWvR5offAr0/SeF046wIkglqH3VXgYYP6NcsKslH80UIVgmPqNe3j7tG2ng==}
@@ -6459,6 +6482,9 @@ packages:
 
   iso-web@2.2.1:
     resolution: {integrity: sha512-4pkaxMAK089Gt+ua046Y0vGu7V7V7+P/2fEzlxYK0ssMvQFufaqkETHhoid+422L/kjU7aw9j1BxorpG6jmtXw==}
+
+  iso-web@3.1.2:
+    resolution: {integrity: sha512-OpWz+KNH4vYNVvpc6T1z/zkZtT6iTQXYjc0sIbkPDwYEM5Qurg0LYESrEHloxb6xj5T/2rrnsTtaYlUSIzgicg==}
 
   isomorphic-ws@4.0.1:
     resolution: {integrity: sha512-BhBvN2MBpWTaSHdWRb/bwdZJ1WaehQ2L1KngkCkfLUGF0mAWAT1sQUQacEmQ0jXkFw/czDXPNQSL5u2/Krsz1w==}
@@ -6628,6 +6654,10 @@ packages:
   kysely@0.28.17:
     resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
     engines: {node: '>=20.0.0'}
+
+  kysely@0.29.4:
+    resolution: {integrity: sha512-y5mVgQNkMbs1eK9Xyc0pmNdabN2wHhRYY/5r4W5HrUT1rYCEPeVNSj1RUJeSDKT3U0p+mXCvLgkrFuIafYI6BA==}
+    engines: {node: '>=22.0.0'}
 
   leac@0.6.0:
     resolution: {integrity: sha512-y+SqErxb8h7nE/fiEX07jsbuhrpO9lL8eca7/Y1nuWV2moNlXhyd59iDGcRf6moVyDMbmTNzL40SUyrFU/yDpg==}
@@ -7121,6 +7151,9 @@ packages:
 
   multiformats@13.4.2:
     resolution: {integrity: sha512-eh6eHCrRi1+POZ3dA+Dq1C6jhP1GNtr9CRINMb67OKzqW9I5DUuZM/3jLPlzhgpGeiNUlEGEbkCYChXMCc/8DQ==}
+
+  multiformats@14.0.5:
+    resolution: {integrity: sha512-vbIm83F2yZ1pWJGS0yl0ysracIvv56LtbrIyiIQHoLdYDJOMoLfVFsXhh9DUH4SFdkdkFhucyWniihsNzVEjkQ==}
 
   multiformats@9.9.0:
     resolution: {integrity: sha512-HoMUjhH9T8DDBNT+6xzkrd9ga/XiBI4xLr58LJACwK6G3HTOPeMz4nB4KJs33L2BelrIJa7P0VuNaVF3hMYfjg==}
@@ -10589,16 +10622,16 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@filoz/synapse-core@0.5.2(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
+  '@filoz/synapse-core@0.7.1(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
     dependencies:
-      '@web3-storage/data-segment': 5.3.0
       dnum: 2.17.0
-      iso-web: 2.2.1
-      multiformats: 13.4.2
-      ox: 0.14.22(typescript@6.0.3)(zod@4.4.3)
+      iso-web: 3.1.2
+      multiformats: 14.0.5
+      ox: 0.14.30(typescript@6.0.3)(zod@4.4.3)
       p-locate: 7.0.0
       p-queue: 9.2.0
       p-some: 7.0.0
+      sync-multihash-sha2: 1.0.0
       viem: 2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
       zod: 4.4.3
     transitivePeerDependencies:
@@ -10612,10 +10645,10 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@filoz/synapse-sdk@0.41.0(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
+  '@filoz/synapse-sdk@1.1.1(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
     dependencies:
-      '@filoz/synapse-core': 0.5.2(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
-      multiformats: 13.4.2
+      '@filoz/synapse-core': 0.7.1(typescript@6.0.3)(viem@2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+      multiformats: 14.0.5
       viem: 2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     transitivePeerDependencies:
       - typescript
@@ -14921,6 +14954,8 @@ snapshots:
   big.js@6.2.2:
     optional: true
 
+  bigint-mod-arith@3.3.1: {}
+
   binary-search@1.3.6: {}
 
   binaryen@102.0.0-nightly.20211028: {}
@@ -16437,8 +16472,7 @@ snapshots:
 
   idb-keyval@6.2.2: {}
 
-  idb-keyval@6.2.6:
-    optional: true
+  idb-keyval@6.2.6: {}
 
   ieee754@1.2.1: {}
 
@@ -16621,11 +16655,22 @@ snapshots:
 
   isexe@2.0.0: {}
 
+  iso-base@4.4.0:
+    dependencies:
+      bigint-mod-arith: 3.3.1
+
   iso-kv@3.1.1:
     dependencies:
       conf: 15.1.0
       idb-keyval: 6.2.2
       kysely: 0.28.17
+
+  iso-kv@3.2.0:
+    dependencies:
+      conf: 15.1.0
+      idb-keyval: 6.2.6
+      iso-base: 4.4.0
+      kysely: 0.29.4
 
   iso-url@1.2.1: {}
 
@@ -16634,6 +16679,14 @@ snapshots:
       delay: 7.0.0
       is-network-error: 1.3.2
       iso-kv: 3.1.1
+      p-retry: 8.0.0
+
+  iso-web@3.1.2:
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      delay: 7.0.0
+      is-network-error: 1.3.2
+      iso-kv: 3.2.0
       p-retry: 8.0.0
 
   isomorphic-ws@4.0.1(ws@7.5.11(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
@@ -16931,6 +16984,8 @@ snapshots:
       - undici
 
   kysely@0.28.17: {}
+
+  kysely@0.29.4: {}
 
   leac@0.6.0: {}
 
@@ -17602,6 +17657,8 @@ snapshots:
   multiformats@13.1.3: {}
 
   multiformats@13.4.2: {}
+
+  multiformats@14.0.5: {}
 
   multiformats@9.9.0:
     optional: true
