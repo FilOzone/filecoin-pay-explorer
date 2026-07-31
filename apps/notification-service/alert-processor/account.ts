@@ -67,16 +67,19 @@ export const DEFAULT_HEALTH_THRESHOLDS: HealthThresholds = {
  * boundaries stay exact rather than being distorted by day truncation.
  */
 export function deriveAccountHealth(summary: AccountSummary, thresholds: HealthThresholds): AccountHealth {
-  // Already in deficit: funds no longer cover active rails, so a provider can
-  // terminate at any time even though the user can still top up. Most urgent.
-  // lockupRatePerEpoch can be 0, but debt > 0
-  if (summary.debt > 0n || summary.runwayInEpochs === 0n) {
+  // Debt means the account is already in deficit regardless of spend rate or runway.
+  if (summary.debt > 0n) {
     return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
-  // No active storage spend → nothing can run out.
+  // No active storage spend → nothing can run out; runway is irrelevant.
   if (summary.lockupRatePerEpoch === 0n) {
     return { tier: "healthy", runwayDays: Number.POSITIVE_INFINITY, fundedUntilEpoch: null };
+  }
+
+  // Active spend with no remaining runway → funds exhausted, termination imminent.
+  if (summary.runwayInEpochs === 0n) {
+    return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
   const runway = summary.runwayInEpochs;
