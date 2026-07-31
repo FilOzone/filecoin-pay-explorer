@@ -14,6 +14,12 @@ const SECONDS_PER_DAY = 86_400;
 const BUFFER_WINDOW_SEC = 15 * 60;
 const BUFFER_EPOCHS = BigInt(Math.ceil(BUFFER_WINDOW_SEC / EPOCH_DURATION_SEC));
 
+// Rails keep draining between reading the summary and the user paying, so the
+// recommended top-up would otherwise be short by that drift. Cover a 15-minute
+// window (pipeline + email delivery) as a safety margin, expressed in epochs.
+const BUFFER_WINDOW_SEC = 15 * 60;
+const BUFFER_EPOCHS = BigInt(Math.ceil(BUFFER_WINDOW_SEC / EPOCH_DURATION_SEC));
+
 // Month-day-year in UTC, e.g. "January 15, 2026" — matches the email template.
 const DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
