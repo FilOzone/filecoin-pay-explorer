@@ -29,8 +29,9 @@ describe("buildAlertContent", () => {
     // 20 days of epochs * 30s/epoch after 2026-01-15 → 2026-02-04.
     expect(content.fundedUntilSec).toBe(NOW + 20 * 24 * 60 * 60);
     expect(content.fundedUntil).toBe("February 4, 2026");
-    // Top up from 20d to the 30d warning threshold: 10 days * 2880 * 1e16 = 288 USDFC.
-    expect(usdfc(content.topUpAmount)).toBeCloseTo(288, 5);
+    // Top up from 20d to the 30d warning threshold (10 days * 2880 * 1e16 = 288 USDFC)
+    // plus the 15-min drift buffer (30 epochs * 1e16 = 0.3 USDFC).
+    expect(usdfc(content.topUpAmount)).toBeCloseTo(288.3, 5);
   });
 
   it("treats an in-deficit account as 0 days and includes debt in the top-up (emergency)", () => {
@@ -48,7 +49,8 @@ describe("buildAlertContent", () => {
     expect(content.daysRemaining).toBe(0);
     expect(content.fundedUntilSec).toBe(NOW);
     expect(content.fundedUntil).toBe("January 15, 2026");
-    // Full 30d of runway (30 * 2880 * 1e16 = 864 USDFC) plus the 5 USDFC debt.
-    expect(usdfc(content.topUpAmount)).toBeCloseTo(869, 5);
+    // Full 30d of runway (30 * 2880 * 1e16 = 864 USDFC) plus the 5 USDFC debt
+    // plus the 15-min drift buffer (30 epochs * 1e16 = 0.3 USDFC).
+    expect(usdfc(content.topUpAmount)).toBeCloseTo(869.3, 5);
   });
 });
