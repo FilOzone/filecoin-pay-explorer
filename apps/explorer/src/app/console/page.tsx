@@ -24,9 +24,11 @@ const UserConsoleContent = () => {
 
   return (
     <PageSection backgroundVariant='light'>
-      <div className='flex flex-col gap-20 -mt-20'>
-        <div className='flex justify-between items-center'>
-          <h2 className='text-4xl font-medium'>Filecoin Pay Console</h2>
+      <div className='flex flex-col gap-15'>
+        <div className='flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between'>
+          <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
+            Filecoin Pay Console
+          </h2>
           {isConnected && <CustomConnectButton />}
         </div>
 
