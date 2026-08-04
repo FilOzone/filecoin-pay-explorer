@@ -1,10 +1,9 @@
 import { Body, Button, Column, Container, Head, Hr, Html, Preview, Row, render, Section, Text } from "jsx-email";
 import type { JSX } from "react";
+import type { AlertLevel } from "../../alert-levels";
 import { BLUE, DEFAULT_LOGO_ICON_URL, DEFAULT_LOGO_URL, sharedStyles } from "../common/constants";
 import { EmailFooter } from "../common/EmailFooter";
 import { EmailHeader } from "../common/EmailHeader";
-
-export type AlertLevel = "warning" | "critical" | "emergency";
 
 export interface AlertEmailProps {
   name: string;
@@ -24,6 +23,7 @@ const ALERT_CONFIG = {
     badgeBg: "#FEF3C7",
     badgeColor: "#92400E",
     badgeText: "Warning",
+    subject: "Your Filecoin Pay account is running low",
     title: "Your account needs attention",
     previewText: "Heads up — your Filecoin Pay account is running low on funds.",
     description:
@@ -34,6 +34,7 @@ const ALERT_CONFIG = {
     badgeBg: "#FECAB5",
     badgeColor: "#9A3412",
     badgeText: "Critical",
+    subject: "Action required: your Filecoin Pay funds are critically low",
     title: "Urgent action required",
     previewText: "Your Filecoin Pay account will run out of funds in less than 7 days.",
     description:
@@ -44,6 +45,7 @@ const ALERT_CONFIG = {
     badgeBg: "#FEE2E2",
     badgeColor: "#7F1D1D",
     badgeText: "Emergency",
+    subject: "Urgent: your Filecoin Pay services will stop soon",
     title: "Service terminating imminently",
     previewText: "Emergency — your Filecoin Pay services will terminate in less than 3 days.",
     description:
@@ -240,10 +242,12 @@ export const Template = ({
   );
 };
 
-export async function renderAlertEmail(props: AlertEmailProps): Promise<{ html: string; text: string }> {
+export async function renderAlertEmail(
+  props: AlertEmailProps,
+): Promise<{ subject: string; html: string; text: string }> {
   const [html, text] = await Promise.all([
     render(<Template {...props} />),
     render(<Template {...props} />, { plainText: true }),
   ]);
-  return { html, text };
+  return { subject: ALERT_CONFIG[props.alertLevel].subject, html, text };
 }

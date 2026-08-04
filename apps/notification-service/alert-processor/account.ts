@@ -1,6 +1,7 @@
 import { getAccountSummary } from "@filoz/synapse-core/pay";
 import { TIME_CONSTANTS } from "@filoz/synapse-core/utils";
 import { type Address, type Chain, createPublicClient, http, type PublicClient, type Transport } from "viem";
+import type { AlertLevel } from "../shared/alert-levels";
 import { getChain, type Network } from "../shared/chain";
 
 /** A read-only client bound to a concrete chain (viem widens `chain` to optional otherwise). */
@@ -13,8 +14,8 @@ export type ReadClientConfig = {
   network: Network;
 };
 
-/** Runway-based health tiers, ordered by urgency. */
-export type HealthTier = "healthy" | "warning" | "critical" | "emergency";
+/** Runway-based health tiers: "healthy" (no alert) plus the actionable alert levels. */
+export type HealthTier = "healthy" | AlertLevel;
 
 /** Runway thresholds in whole days. A tier fires when runway is strictly below its value. */
 export type HealthThresholds = {
@@ -66,16 +67,19 @@ export const DEFAULT_HEALTH_THRESHOLDS: HealthThresholds = {
  * boundaries stay exact rather than being distorted by day truncation.
  */
 export function deriveAccountHealth(summary: AccountSummary, thresholds: HealthThresholds): AccountHealth {
-  // Already in deficit: funds no longer cover active rails, so a provider can
-  // terminate at any time even though the user can still top up. Most urgent.
-  // lockupRatePerEpoch can be 0, but debt > 0
-  if (summary.debt > 0n || summary.runwayInEpochs === 0n) {
+  // Debt means the account is already in deficit regardless of spend rate or runway.
+  if (summary.debt > 0n) {
     return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
-  // No active storage spend → nothing can run out.
+  // No active storage spend → nothing can run out; runway is irrelevant.
   if (summary.lockupRatePerEpoch === 0n) {
     return { tier: "healthy", runwayDays: Number.POSITIVE_INFINITY, fundedUntilEpoch: null };
+  }
+
+  // Active spend with no remaining runway → funds exhausted, termination imminent.
+  if (summary.runwayInEpochs === 0n) {
+    return { tier: "emergency", runwayDays: 0, fundedUntilEpoch: summary.epoch };
   }
 
   const runway = summary.runwayInEpochs;

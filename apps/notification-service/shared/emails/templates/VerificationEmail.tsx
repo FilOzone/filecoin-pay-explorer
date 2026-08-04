@@ -62,6 +62,9 @@ export const previewProps: VerificationEmailProps = {
 
 export const templateName = "VerificationEmail";
 
+/** The email subject — owned here so all of this email's copy lives in one place. */
+export const SUBJECT = "Confirm your email address";
+
 export const Template = ({
   name,
   walletAddress,
@@ -110,10 +113,12 @@ export const Template = ({
   </Html>
 );
 
-export async function renderVerificationEmail(props: VerificationEmailProps): Promise<{ html: string; text: string }> {
+export async function renderVerificationEmail(
+  props: VerificationEmailProps,
+): Promise<{ subject: string; html: string; text: string }> {
   const [html, text] = await Promise.all([
     render(<Template {...props} />),
     render(<Template {...props} />, { plainText: true }),
   ]);
-  return { html, text };
+  return { subject: SUBJECT, html, text };
 }
