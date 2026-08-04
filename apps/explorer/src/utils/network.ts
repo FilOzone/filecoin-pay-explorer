@@ -14,6 +14,11 @@ export function getNetworkFromChainId(chainId: number | undefined): Network {
   return chain?.slug || DEFAULT_NETWORK;
 }
 
+export function isNotificationsEligibleNetwork(network: Network): boolean {
+  if (network === "mainnet") return true;
+  return process.env.NODE_ENV === "development" && network === "calibration";
+}
+
 export function getSubgraphUrl(network: Network): string {
   const urls = {
     mainnet: process.env.NEXT_PUBLIC_SUBGRAPH_URL_MAINNET,

@@ -3,18 +3,30 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { Balance, ChainSwitcher } from "@/components/shared";
-import { BetaWarning, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
+import {
+  AlertsBanner,
+  BetaWarning,
+  FundsSection,
+  OperatorApprovalsSection,
+  RailsSection,
+} from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
+import { useNotificationStatus } from "@/hooks/useNotificationStatus";
+import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
 
 const UserConsoleContent = () => {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId } = useConnection();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isUnsupportedChain = isConnected && chainId && !isSupportedChainId(chainId);
+
+  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+
+  const { data: notificationStatus } = useNotificationStatus(address);
+  const subscribed = notificationStatus?.subscribed ?? false;
 
   const {
     data: account,
@@ -50,6 +62,13 @@ const UserConsoleContent = () => {
         {/* Beta Warning */}
         <BetaWarning />
 
+        {/* Alerts Banner — hidden once subscribed */}
+        {isConnected && !isUnsupportedChain && isNotificationsEligible && !subscribed && (
+          <div className='-mt-12'>
+            <AlertsBanner />
+          </div>
+        )}
+
         {/* Not Connected */}
         {(!isConnected || !address) && <NotConnected />}
 
@@ -67,7 +86,7 @@ const UserConsoleContent = () => {
 
             {!isLoading && address && account && (
               <>
-                <FundsSection account={account} />
+                <FundsSection account={account} subscribed={subscribed} />
                 <RailsSection account={account} userAddress={address} />
                 <OperatorApprovalsSection account={account} />
               </>
