@@ -23,6 +23,7 @@ interface DepositDialogProps {
   userToken?: UserToken | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  suggestedAmount?: string;
 }
 
 interface TokenDetails {
@@ -34,7 +35,7 @@ interface TokenDetails {
 
 type LoadingState = "idle" | "loading" | "success" | "error";
 
-export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange }) => {
+export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange, suggestedAmount }) => {
   const { address: userAddress } = useAccount();
 
   // Form state
@@ -378,9 +379,24 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   MAX
                 </Button>
               </div>
-              <p className='text-xs text-muted-foreground'>
-                Enter the amount of {currentToken.symbol} you want to deposit
-              </p>
+              {suggestedAmount ? (
+                <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground'>
+                  <Button
+                    type='button'
+                    variant='primary'
+                    size='compact'
+                    onClick={() => setAmount(suggestedAmount)}
+                    disabled={isExecuting}
+                  >
+                    Use suggested: {suggestedAmount} {currentToken.symbol}
+                  </Button>
+                  <span>keeps this account funded for about a year</span>
+                </div>
+              ) : (
+                <p className='text-xs text-muted-foreground'>
+                  Enter the amount of {currentToken.symbol} you want to deposit
+                </p>
+              )}
             </div>
           )}
 

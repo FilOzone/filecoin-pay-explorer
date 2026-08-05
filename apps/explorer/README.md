@@ -14,6 +14,7 @@ This app requires the following environment variables:
 | -------------------------------------- | --------------------------------------------- | -------- |
 | `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET`     | Subgraph URL for Filecoin Mainnet (chain 314) | Yes      |
 | `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` | Subgraph URL for Calibration testnet (314159) | Yes      |
+| `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`      | Squid integrator ID for read-only route quotes | Required for quotes |
 
 **Setup:**
 
