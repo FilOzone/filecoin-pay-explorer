@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { CustomConnectButton } from "@/components/shared";
 import { BetaWarning, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
+import ConsoleSidebar from "@/components/UserConsole/ConsoleSidebar";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
@@ -32,7 +33,6 @@ const UserConsoleContent = () => {
 
         {/* Beta Warning */}
         <BetaWarning />
-
         {/* Not Connected */}
         {(!isConnected || !address) && <NotConnected />}
 
@@ -41,24 +41,27 @@ const UserConsoleContent = () => {
 
         {/* Only show content if connected to supported chain */}
         {isConnected && !isUnsupportedChain && (
-          <>
-            {/* Loading */}
-            {isLoading && <LoadingStateCard message='Loading your account details...' />}
+          <div className='flex gap-12'>
+            <ConsoleSidebar />
+            <div className='flex flex-col gap-20 flex-1 min-w-0'>
+              {/* Loading */}
+              {isLoading && <LoadingStateCard message='Loading your account details...' />}
 
-            {/* Account Not Found */}
-            {!isError && !isLoading && !account && <AccountNotFound />}
+              {/* Account Not Found */}
+              {!isError && !isLoading && !account && <AccountNotFound />}
 
-            {!isLoading && address && account && (
-              <>
-                <FundsSection account={account} />
-                <RailsSection account={account} userAddress={address} />
-                <OperatorApprovalsSection account={account} />
-              </>
-            )}
+              {!isLoading && address && account && (
+                <>
+                  <FundsSection account={account} />
+                  <RailsSection account={account} userAddress={address} />
+                  <OperatorApprovalsSection account={account} />
+                </>
+              )}
 
-            {/* Error */}
-            {isError && <ErrorState error={error} />}
-          </>
+              {/* Error */}
+              {isError && <ErrorState error={error} />}
+            </div>
+          </div>
         )}
       </div>
     </PageSection>
