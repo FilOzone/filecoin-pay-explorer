@@ -1,6 +1,7 @@
 "use client";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
+import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
 import { useAccount } from "wagmi";
 import { Balance, ChainSwitcher } from "@/components/shared";
@@ -31,8 +32,17 @@ const UserConsoleContent = () => {
           </h2>
           {isConnected && (
             <div className='order-first w-full flex flex-col-reverse gap-2 sm:order-last sm:w-auto sm:flex-row sm:items-center sm:gap-4'>
-              <Balance />
-              <ChainSwitcher chainId={chainId ?? 314} />
+              {isUnsupportedChain ? (
+                <span className='inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700'>
+                  <AlertTriangle className='size-4' />
+                  Unsupported Network
+                </span>
+              ) : (
+                <>
+                  <Balance />
+                  {chainId && <ChainSwitcher chainId={chainId} />}
+                </>
+              )}
             </div>
           )}
         </div>
