@@ -62,7 +62,7 @@ describe("scheduled", () => {
     await seedSubscriptions(db, 1);
     vi.spyOn(env.ALERT_QUEUE, "sendBatch").mockRejectedValue(new Error("queue down"));
 
-    await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("queue down");
+    await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("Failed to enqueue alert batch");
   });
 
   it("reports the count already enqueued when a later batch fails mid-run", async () => {
@@ -72,9 +72,9 @@ describe("scheduled", () => {
       .mockRejectedValueOnce(new Error("queue down"));
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("queue down");
+    await expect(runScheduled(new Date("2026-07-24T00:00:00Z"))).rejects.toThrow("Failed to enqueue alert batch");
 
-    const logged = JSON.parse(errorLog.mock.calls.at(-1)?.[0] as string);
+    const logged = errorLog.mock.calls.at(-1)?.[0] as Record<string, unknown>;
     expect(logged.enqueued).toBe(100); // the first batch, not 0 for the whole page
   });
 });
