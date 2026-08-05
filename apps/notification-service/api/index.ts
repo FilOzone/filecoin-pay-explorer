@@ -82,7 +82,6 @@ app.use("*", (c, next) =>
 
 app.onError((err, c) => {
   const log = c.get("log");
-  log.set({ outcome: "error" });
   log.error(err);
   const parsed = parseError(err);
   return c.json(

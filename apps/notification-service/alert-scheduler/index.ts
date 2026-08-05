@@ -1,10 +1,6 @@
-import { createError, createLogger } from "evlog";
-import { initWorkersLogger } from "evlog/workers";
 import { createDb } from "../shared/db/client";
 import type { AlertMessage } from "../shared/messages";
 import { iterateSubscriptions } from "./queries";
-
-initWorkersLogger({ env: { service: "notification-alert-scheduler" } });
 
 // Rows read per D1 page. Keyset-paginated, so the table is never fully in memory.
 const DB_PAGE_SIZE = 500;
@@ -20,9 +16,8 @@ const QUEUE_BATCH_SIZE = 100;
  * (Queues is at-least-once with no infra-level dedup).
  */
 export default {
-  async scheduled(controller, env, ctx): Promise<void> {
+  async scheduled(controller, env, _ctx): Promise<void> {
     const scheduledAt = new Date(controller.scheduledTime).toISOString();
-    const log = createLogger({ event: "scheduler.tick", scheduledAt }, { waitUntil: ctx.waitUntil.bind(ctx) });
     const db = createDb(env.DB);
     let enqueued = 0;
 
@@ -34,27 +29,23 @@ export default {
 
         for (let i = 0; i < messages.length; i += QUEUE_BATCH_SIZE) {
           const batch = messages.slice(i, i + QUEUE_BATCH_SIZE);
-          try {
-            await env.ALERT_QUEUE.sendBatch(batch);
-            enqueued += batch.length;
-          } catch (cause) {
-            throw createError({
-              message: "Failed to enqueue alert batch",
-              why: "ALERT_QUEUE.sendBatch rejected — the queue binding may be misconfigured or the service is unavailable",
-              fix: "Check the ALERT_QUEUE binding in wrangler.jsonc and the Cloudflare Queue dashboard",
-              internal: { enqueued, batchSize: batch.length },
-              cause: cause instanceof Error ? cause : new Error(String(cause)),
-            });
-          }
+          await env.ALERT_QUEUE.sendBatch(batch);
+          enqueued += batch.length;
         }
       }
-      log.set({ outcome: "ok", enqueued });
     } catch (error) {
-      log.set({ outcome: "error", enqueued });
-      log.error(error instanceof Error ? error : new Error(String(error)));
+      console.error(
+        JSON.stringify({
+          event: "scheduler.tick",
+          status: "error",
+          scheduledAt,
+          enqueued,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
       throw error;
-    } finally {
-      log.emit();
     }
+
+    console.log(JSON.stringify({ event: "scheduler.tick", status: "ok", scheduledAt, enqueued }));
   },
 } satisfies ExportedHandler<Env>;

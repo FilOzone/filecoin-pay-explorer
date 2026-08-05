@@ -1,19 +1,11 @@
-import { createExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { createLogger } from "evlog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountSummary, ReadClient } from "../../alert-processor/account";
 import { getAlertState } from "../../alert-processor/dedup";
 import worker from "../../alert-processor/index";
-import { type ProcessDeps, type ProcessorFields, processMessage } from "../../alert-processor/process-message";
+import { type ProcessDeps, processMessage } from "../../alert-processor/process-message";
 import { createDb, type DB } from "../../shared/db/client";
 import type { AlertMessage } from "../../shared/messages";
-
-const noopLog = {
-  set: vi.fn(),
-  error: vi.fn(),
-  emit: vi.fn(),
-} as unknown as ReturnType<typeof createLogger<ProcessorFields>>;
 
 const WALLET = "0xabcdef1234567890abcdef1234567890abcdef12";
 const EMAIL = "alice@example.com";
@@ -69,7 +61,7 @@ describe("processMessage", () => {
     await subscribe(WALLET, EMAIL);
     const d = deps(WARNING);
 
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -80,10 +72,10 @@ describe("processMessage", () => {
 
   it("acks a healthy wallet without sending, and clears prior state", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, deps(WARNING)); // arm state
+    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, deps(WARNING)); // arm state
 
     const d = deps(HEALTHY);
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -92,10 +84,10 @@ describe("processMessage", () => {
 
   it("suppresses a repeat of the same tier within the window", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, deps(WARNING));
+    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, deps(WARNING));
 
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -104,10 +96,10 @@ describe("processMessage", () => {
 
   it("sends again on escalation to a more severe tier", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, deps(WARNING));
+    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, deps(WARNING));
 
     const d = deps(CRITICAL);
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -116,11 +108,11 @@ describe("processMessage", () => {
 
   it("re-alerts after a recovery clears the incident", async () => {
     await subscribe(WALLET, EMAIL);
-    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, deps(WARNING)); // send #1
-    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, deps(HEALTHY)); // recover
+    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, deps(WARNING)); // send #1
+    await processMessage(env, CLIENT, db, { walletAddress: WALLET }, deps(HEALTHY)); // recover
 
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d); // relapse
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d); // relapse
 
     expect(action).toBe("ack");
     expect(d.sendEmail).toHaveBeenCalledOnce();
@@ -128,7 +120,7 @@ describe("processMessage", () => {
 
   it("acks without sending when the wallet has no subscription", async () => {
     const d = deps(WARNING);
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("ack");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -144,7 +136,7 @@ describe("processMessage", () => {
       sendEmail: vi.fn(async () => {}),
     };
 
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("retry");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -155,11 +147,11 @@ describe("processMessage", () => {
     const d: ProcessDeps & { sendEmail: ReturnType<typeof vi.fn> } = {
       readSummary: vi.fn(async () => WARNING),
       sendEmail: vi.fn(async () => {
-        throw Object.assign(new Error("mailer down"), { code: "E_DELIVERY_FAILED" });
+        throw new Error("mailer down");
       }),
     };
 
-    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, d);
 
     expect(action).toBe("retry");
     expect(await logCount()).toBe(0);
@@ -175,7 +167,7 @@ describe("processMessage", () => {
     const d = deps(WARNING);
 
     // Must resolve to "retry", not reject — a thrown error would take down the batch.
-    const action = await processMessage(env, CLIENT, brokenDb, { walletAddress: WALLET }, noopLog, d);
+    const action = await processMessage(env, CLIENT, brokenDb, { walletAddress: WALLET }, d);
 
     expect(action).toBe("retry");
     expect(d.sendEmail).not.toHaveBeenCalled();
@@ -196,7 +188,7 @@ describe("queue handler", () => {
     const batch = { messages: [message] } as unknown as MessageBatch<AlertMessage>;
 
     expect(worker.queue).toBeDefined();
-    await worker.queue?.(batch, env, createExecutionContext());
+    await worker.queue?.(batch, env, {} as ExecutionContext);
 
     expect(message.ack).toHaveBeenCalledOnce();
     expect(message.retry).not.toHaveBeenCalled();
