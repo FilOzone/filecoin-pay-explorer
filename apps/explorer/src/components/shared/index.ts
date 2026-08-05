@@ -1,4 +1,6 @@
 import AllowanceDisplay from "./AllowanceDisplay";
+import Balance from "./Balance";
+import ChainSwitcher from "./ChainSwitcher";
 import CopyableText from "./CopyableText";
 import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
@@ -19,6 +21,8 @@ export { RailStateBadge } from "./RailStateBadge";
 export { RoleIndicator } from "./RoleIndicator";
 export {
   AllowanceDisplay,
+  Balance,
+  ChainSwitcher,
   CopyableText,
   CopyButton,
   CustomConnectButton,

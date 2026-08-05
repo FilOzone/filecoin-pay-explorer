@@ -67,57 +67,48 @@ const Balance = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline' className='h-full w-full'>
-          <div className='flex items-center gap-3 w-full'>
-            <Wallet color='var(--color-zinc-500)' className='size-4' />
+        <Button variant='outline' className='w-full justify-start sm:w-fit'>
+          <div className='flex items-center gap-3'>
+            <Wallet className='size-4 text-zinc-500' />
             {isLoading ? (
               "Loading..."
             ) : (
-              <div className='flex items-center gap-3 text-base'>
-                <span className='flex items-center gap-1.5'>
-                  {tFilBalanceFormatted} <FilecoinLogo className='size-4' />
+              <>
+                <span className='text-sm font-mono'>{address && formatAddress(address)}</span>
+                <span className='flex items-center gap-1.5 text-sm'>
+                  <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
                 </span>
-                <span className='flex items-center gap-1.5'>
-                  {usdfcBalanceFormatted}
-                  <USDFCLogo className='size-4' />
+                <span className='flex items-center gap-1.5 text-sm'>
+                  <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
                 </span>
-              </div>
+              </>
             )}
           </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className='w-64' align='start'>
-        <DropdownMenuLabel className='text-zinc-600 text-sm py-2'>Wallet</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}
           onClick={copyToClipboard}
           className='cursor-pointer py-2'
         >
-          <div className='flex items-center w-full gap-2'>
-            <div className='flex items-center gap-2'>
-              <Wallet className='size-4' />
-              <span className='text-base text-zinc-950'>{address && formatAddress(address)}</span>
-            </div>
-            {copied ? <Check className='text-green-500 size-4' /> : <Copy className='size-4' />}
-          </div>
+          <Copy />
+          <span className='text-base text-zinc-950 font-mono'>{address && formatAddress(address)}</span>
+          {copied && <Check className='text-green-500 ml-auto' />}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer py-2'>
-          <LogOut className='size-4' />
+          <LogOut />
           <span className='text-base text-zinc-950'>Disconnect</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className='text-zinc-600 text-sm py-2'>Tools</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-zinc-600 py-2'>Tools</DropdownMenuLabel>
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
         {constants.faucets?.map((faucet) => (
           <DropdownMenuItem asChild key={faucet.name} className='py-2'>
-            <a
-              href={faucet.url}
-              target='_blank'
-              rel='noopener noreferrer'
-              className='flex items-center w-full gap-2 cursor-pointer'
-            >
+            <a href={faucet.url} target='_blank' rel='noopener noreferrer' className='w-full cursor-pointer'>
               <span className='text-base text-zinc-950'>{faucet.name}</span>
               <ArrowUpRightIcon color='var(--color-zinc-400)' size={16} />
             </a>

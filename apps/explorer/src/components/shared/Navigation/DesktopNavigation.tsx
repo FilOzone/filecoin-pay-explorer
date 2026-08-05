@@ -2,10 +2,12 @@
 
 import { NavigationMainLink } from "@filecoin-foundation/ui-filecoin/Navigation/NavigationMainLink";
 import { useNavigationItems } from "@/hooks/useNavigationItems";
+import useShowNetworkOptions from "@/hooks/useShowNetworkOptions";
 import NetworkOptions from "./components/NetworkOptions";
 
 export function DesktopNavigation() {
   const { headerNavigationItems } = useNavigationItems();
+  const showNetworkOptions = useShowNetworkOptions();
 
   return (
     <div className='flex w-full items-center justify-end gap-4'>
@@ -15,9 +17,11 @@ export function DesktopNavigation() {
             <NavigationMainLink on='desktop' {...item} />
           </li>
         ))}
-        <div className='w-40'>
-          <NetworkOptions />
-        </div>
+        {showNetworkOptions && (
+          <div className='w-40'>
+            <NetworkOptions />
+          </div>
+        )}
       </ul>
     </div>
   );
