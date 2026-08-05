@@ -4,6 +4,7 @@ import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { MobileNavigation } from "@filecoin-foundation/ui-filecoin/Navigation/MobileNavigation";
 import { Section, type SectionProps } from "@filecoin-foundation/ui-filecoin/Section/Section";
 import { useNavigationItems } from "@/hooks/useNavigationItems";
+import useShowNetworkOptions from "@/hooks/useShowNetworkOptions";
 import { HomeLogoIconLink } from "./components/HomeLogoIconLink";
 import NetworkOptions from "./components/NetworkOptions";
 import { DesktopNavigation } from "./DesktopNavigation";
@@ -14,6 +15,7 @@ type NavigationProps = {
 
 function Navigation({ backgroundVariant }: NavigationProps) {
   const { mobileNavigationItems } = useNavigationItems();
+  const showNetworkOptions = useShowNetworkOptions();
 
   return (
     <Section as='header' backgroundVariant={backgroundVariant}>
@@ -27,9 +29,11 @@ function Navigation({ backgroundVariant }: NavigationProps) {
             </div>
           </div>
 
-          <div className='block w-full -mb-12 xl:hidden'>
-            <NetworkOptions />
-          </div>
+          {showNetworkOptions && (
+            <div className='block w-full -mb-12 xl:hidden'>
+              <NetworkOptions />
+            </div>
+          )}
 
           <div className='hidden xl:block xl:flex-1'>
             <DesktopNavigation />

@@ -1,9 +1,10 @@
 "use client";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
+import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
 import { useAccount } from "wagmi";
-import { CustomConnectButton } from "@/components/shared";
+import { Balance, ChainSwitcher } from "@/components/shared";
 import { BetaWarning, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
@@ -24,10 +25,26 @@ const UserConsoleContent = () => {
 
   return (
     <PageSection backgroundVariant='light'>
-      <div className='flex flex-col gap-20 -mt-20'>
-        <div className='flex justify-between items-center'>
-          <h2 className='text-4xl font-medium'>Filecoin Pay Console</h2>
-          {isConnected && <CustomConnectButton />}
+      <div className='flex flex-col gap-15 -mt-25 sm:mt-0'>
+        <div className='flex flex-col gap-15 sm:flex-row sm:gap-6 sm:items-center sm:justify-between'>
+          <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
+            Filecoin Pay Console
+          </h2>
+          {isConnected && (
+            <div className='order-first w-full flex flex-col-reverse gap-2 sm:order-last sm:w-auto sm:flex-row sm:items-center sm:gap-4'>
+              {isUnsupportedChain ? (
+                <span className='inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700'>
+                  <AlertTriangle className='size-4' />
+                  Unsupported Network
+                </span>
+              ) : (
+                <>
+                  <Balance />
+                  {chainId && <ChainSwitcher chainId={chainId} />}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Beta Warning */}
