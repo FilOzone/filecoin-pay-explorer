@@ -23,8 +23,8 @@ import { NotConnected } from "@/components/UserConsole/States";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
-const POLL_INTERVAL_MS = 5_000;
-const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
+const POLL_INTERVAL_MS = 10_000;
+const POLL_TIMEOUT_MS = 3 * 60 * 1_000;
 const RESEND_COOLDOWN_MS = 90_000;
 
 function pendingKey(wallet: string) {
