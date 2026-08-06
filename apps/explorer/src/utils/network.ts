@@ -1,6 +1,6 @@
 import { supportedChains } from "@/services/wagmi/config";
 import type { Network } from "@/types";
-import { DEFAULT_NETWORK } from "@/utils/constants";
+import { DEFAULT_NETWORK, SUPPORTED_NETWORKS } from "@/utils/constants";
 
 export function isSupportedChainId(chainId: number | undefined): boolean {
   if (!chainId) return false;
@@ -15,8 +15,15 @@ export function getNetworkFromChainId(chainId: number | undefined): Network {
 }
 
 export function isNotificationsEligibleNetwork(network: Network): boolean {
-  if (network === "mainnet") return true;
-  return process.env.NODE_ENV === "development" && network === "calibration";
+  const raw = process.env.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS;
+  if (!raw) return network === "mainnet";
+
+  const eligible = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is Network => SUPPORTED_NETWORKS.has(s as Network));
+
+  return eligible.includes(network);
 }
 
 export function getSubgraphUrl(network: Network): string {

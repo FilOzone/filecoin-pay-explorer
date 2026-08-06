@@ -6,7 +6,7 @@ import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId } from "@/utils/network";
+import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsTable } from "./components";
 
 interface FundsSectionProps {
@@ -21,6 +21,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
 
   const { chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
+  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
 
   // Fetch all tokens for this account (no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
@@ -67,7 +68,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Funds</h3>
-          <AlertsStatus subscribed={subscribed} />
+          {isNotificationsEligible && <AlertsStatus subscribed={subscribed} />}
         </div>
 
         <FundsTable data={tableData} />

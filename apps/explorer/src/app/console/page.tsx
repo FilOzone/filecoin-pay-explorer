@@ -25,7 +25,7 @@ const UserConsoleContent = () => {
 
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
 
-  const { data: notificationStatus } = useNotificationStatus(address);
+  const { data: notificationStatus, isError: notificationStatusError } = useNotificationStatus(address);
   const subscribed = notificationStatus?.subscribed ?? false;
 
   const {
@@ -63,7 +63,7 @@ const UserConsoleContent = () => {
         <BetaWarning />
 
         {/* Alerts Banner — hidden once subscribed */}
-        {isConnected && !isUnsupportedChain && isNotificationsEligible && !subscribed && (
+        {isConnected && !isUnsupportedChain && isNotificationsEligible && !subscribed && !notificationStatusError && (
           <div className='-mt-12'>
             <AlertsBanner />
           </div>
