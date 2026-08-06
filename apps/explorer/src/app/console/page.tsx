@@ -8,13 +8,19 @@ import { Balance, ChainSwitcher } from "@/components/shared";
 import { BetaWarning, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
+import { formatAddress } from "@/utils/formatter";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 
 const UserConsoleContent = () => {
   const { address, isConnected, chainId } = useAccount();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
-  const isUnsupportedChain = isConnected && chainId && !isSupportedChainId(chainId);
+  const isUnsupportedChain = Boolean(isConnected && chainId && !isSupportedChainId(chainId));
+  const externalSquidSourceChain = isUnsupportedChain
+    ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === chainId)
+    : undefined;
+  const isExternalSquidSourceChain = Boolean(externalSquidSourceChain);
 
   const {
     data: account,
@@ -32,7 +38,12 @@ const UserConsoleContent = () => {
           </h2>
           {isConnected && (
             <div className='order-first w-full flex flex-col-reverse gap-2 sm:order-last sm:w-auto sm:flex-row sm:items-center sm:gap-4'>
-              {isUnsupportedChain ? (
+              {externalSquidSourceChain ? (
+                <span className='inline-flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-1.5 text-sm'>
+                  <span>{externalSquidSourceChain.name}</span>
+                  {address && <span className='font-mono text-zinc-600'>{formatAddress(address)}</span>}
+                </span>
+              ) : isUnsupportedChain ? (
                 <span className='inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700'>
                   <AlertTriangle className='size-4' />
                   Unsupported Network
@@ -54,10 +65,10 @@ const UserConsoleContent = () => {
         {(!isConnected || !address) && <NotConnected />}
 
         {/* Unsupported Chain */}
-        {isUnsupportedChain && <UnsupportedChain />}
+        {isUnsupportedChain && !isExternalSquidSourceChain && <UnsupportedChain />}
 
-        {/* Only show content if connected to supported chain */}
-        {isConnected && !isUnsupportedChain && (
+        {/* External source chains retain only the guided top-up flow. */}
+        {isConnected && (!isUnsupportedChain || isExternalSquidSourceChain) && (
           <>
             {/* Loading */}
             {isLoading && <LoadingStateCard message='Loading your account details...' />}
@@ -67,9 +78,13 @@ const UserConsoleContent = () => {
 
             {!isLoading && address && account && (
               <>
-                <FundsSection account={account} />
-                <RailsSection account={account} userAddress={address} />
-                <OperatorApprovalsSection account={account} />
+                <FundsSection account={account} topUpOnly={isExternalSquidSourceChain} />
+                {!isExternalSquidSourceChain && (
+                  <>
+                    <RailsSection account={account} userAddress={address} />
+                    <OperatorApprovalsSection account={account} />
+                  </>
+                )}
               </>
             )}
 

@@ -1,14 +1,12 @@
 import { http } from "viem";
 import { createConfig } from "wagmi";
-import { calibration, mainnet } from "@/constants/chains";
+import { calibration, mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 
 export const supportedChains = [mainnet, calibration] as const;
+const walletChains = [calibration, ...SQUID_SOURCE_CHAINS] as const;
 
 export const config = createConfig({
-  chains: supportedChains,
+  chains: walletChains,
   ssr: true,
-  transports: {
-    [calibration.id]: http(),
-    [mainnet.id]: http(),
-  },
+  transports: Object.fromEntries(walletChains.map((chain) => [chain.id, http()])),
 });

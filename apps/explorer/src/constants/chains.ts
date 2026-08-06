@@ -1,4 +1,5 @@
 import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
+import { arbitrum, avalanche, base, bsc, mainnet as ethereum, optimism, polygon } from "viem/chains";
 
 import type { Network } from "@/types";
 
@@ -88,6 +89,17 @@ export const calibration: Chain = {
     payments: synapseCalibration.contracts.filecoinPay,
   },
 };
+
+export const SQUID_SOURCE_CHAINS = [
+  mainnet,
+  { ...arbitrum, name: "Arbitrum" },
+  ethereum,
+  base,
+  { ...optimism, name: "Optimism" },
+  polygon,
+  avalanche,
+  { ...bsc, name: "BNB Chain" },
+] as const;
 
 /**
  * Get a chain by network name
