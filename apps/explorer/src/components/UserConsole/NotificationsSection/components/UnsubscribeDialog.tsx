@@ -20,7 +20,7 @@ export const UnsubscribeDialog = ({ open, onCancel, onConfirm }: UnsubscribeDial
           <DialogTitle>Turn off email alerts?</DialogTitle>
         </DialogHeader>
         <p className='text-sm text-muted-foreground'>
-          You will no longer receive reminders when this account may need additional funds.
+          You will no longer receive alerts when this account has less than 30 days of service runway remaining.
         </p>
         <p className='text-sm text-muted-foreground'>This won&apos;t affect your funds or services.</p>
       </div>

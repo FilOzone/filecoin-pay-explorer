@@ -14,7 +14,7 @@ export const AlertsBanner = () => (
         <div className='flex-1'>
           <p className='font-semibold text-lg'>Stay ahead of low balances</p>
           <p className='text-muted-foreground text-sm mt-1'>
-            Receive email alerts before your account needs additional funds.
+            Receive alerts when your account has less than 30 days of service runway remaining.
           </p>
         </div>
       </div>

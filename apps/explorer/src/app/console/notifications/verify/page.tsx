@@ -107,9 +107,8 @@ const VerifyContent = () => {
               <div className='flex flex-col gap-2'>
                 <h1 className='text-2xl font-semibold'>Alerts are now on</h1>
                 <p className='text-sm text-muted-foreground'>
-                  Your email has been verified. We'll notify you when this account
-                  <br />
-                  may need additional funds.
+                  Your email has been verified. We'll notify you when this account has less than 30 days of service
+                  runway remaining.
                 </p>
               </div>
               <div className='flex w-full flex-col items-center gap-3'>

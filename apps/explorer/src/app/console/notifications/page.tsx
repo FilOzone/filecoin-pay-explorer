@@ -4,7 +4,8 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { WifiOff } from "lucide-react";
+import { ArrowLeft, WifiOff } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
@@ -160,7 +161,7 @@ const MainnetOnly = () => (
     titleTag='h2'
     icon={WarningCircleIcon}
     title='Mainnet Only'
-    description='Notifications are only available on Filecoin Mainnet. Switch your wallet to Mainnet to subscribe to solvency alerts.'
+    description='Notifications are only available on Filecoin Mainnet. Switch your wallet to Mainnet to subscribe to alerts.'
   />
 );
 
@@ -398,11 +399,19 @@ const NotificationsMain = () => {
     <PageSection backgroundVariant='light'>
       <div className='flex flex-col gap-15 -mt-25 sm:mt-0'>
         <div>
+          <Link
+            href='/console'
+            className='inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6'
+          >
+            <ArrowLeft className='h-4 w-4' />
+            Back to console
+          </Link>
           <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
             Email alerts
           </h2>
           <p className='mt-2 text-muted-foreground'>
-            Receive email alerts when your Filecoin Pay account may need additional funds.
+            Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
+            services are affected.
           </p>
         </div>
 
