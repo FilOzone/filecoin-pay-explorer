@@ -321,7 +321,9 @@ const NotificationsContent = ({ address, chainId }: { address: `0x${string}`; ch
       }
     } catch (err) {
       if (!cancelledRef.current) {
-        setUnsubscribeError(err instanceof Error ? err.message : "Failed to turn off alerts. Please try again.");
+        if (!isUserRejection(err)) {
+          setUnsubscribeError(err instanceof Error ? err.message : "Failed to turn off alerts. Please try again.");
+        }
         setView({ type: "subscribed" });
       }
     }

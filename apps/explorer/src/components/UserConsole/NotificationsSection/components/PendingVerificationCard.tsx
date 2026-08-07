@@ -27,12 +27,13 @@ export const PendingVerificationCard = ({
   const [resendError, setResendError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const id = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1));
-    }, 1000);
+    const tick = () => {
+      setSecondsLeft(Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [secondsLeft]);
+  }, [resendAvailableAt]);
 
   const handleCheckStatus = async () => {
     setIsChecking(true);
@@ -50,8 +51,7 @@ export const PendingVerificationCard = ({
     setIsResending(true);
     setResendError(null);
     try {
-      const sent = await onResend();
-      if (sent) setSecondsLeft(90);
+      await onResend();
     } catch (err) {
       setResendError(err instanceof Error ? err.message : "Failed to resend. Please try again.");
     } finally {

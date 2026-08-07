@@ -14,7 +14,7 @@ const markdownRule = {
 };
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["192.168.0.*", "localhost"],
+  allowedDevOrigins: ["192.168.0.*"],
   images: {
     qualities: [75, 100],
   },

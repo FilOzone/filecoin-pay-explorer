@@ -1,6 +1,6 @@
 import { supportedChains } from "@/services/wagmi/config";
 import type { Network } from "@/types";
-import { DEFAULT_NETWORK, SUPPORTED_NETWORKS } from "@/utils/constants";
+import { DEFAULT_NETWORK } from "@/utils/constants";
 
 export function isSupportedChainId(chainId: number | undefined): boolean {
   if (!chainId) return false;
@@ -21,7 +21,7 @@ export function isNotificationsEligibleNetwork(network: Network): boolean {
   const eligible = raw
     .split(",")
     .map((s) => s.trim())
-    .filter((s): s is Network => SUPPORTED_NETWORKS.has(s as Network));
+    .filter((s): s is Network => supportedChains.some((c) => c.slug === s));
 
   return eligible.includes(network);
 }
