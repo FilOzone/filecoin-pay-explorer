@@ -14,7 +14,7 @@ import type { Hex } from "viem";
 import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
 import type { SettleRailParams } from "@/hooks/useRailSettlements";
 import { formatAddress, formatEpochDuration, formatToken } from "@/utils/formatter";
-import { EpochTime, InlineTextLoader, RailStateBadge } from "../shared";
+import { EpochTimeCell, InlineTextLoader, RailStateBadge } from "../shared";
 
 interface SettleRailDialogProps {
   rail: Rail;
@@ -43,6 +43,9 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
   } = useRailSettlementCalculations(rail, userAddress);
 
   const canSettle = !isSettling && !isLoadingBlockNumber && epochsSinceLastSettlement > 0n;
+  const readyCurrentEpoch = isLoadingBlockNumber || currentEpoch === 0n ? undefined : currentEpoch;
+  const epochsToSettleText =
+    readyCurrentEpoch === undefined ? "Loading..." : formatEpochDuration(epochsSinceLastSettlement);
 
   const handleSettle = async () => {
     if (isLoadingBlockNumber || currentEpoch === 0n) {
@@ -89,53 +92,37 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
               <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Current Epoch:</span>
                 <div className='text-right'>
-                  {isLoadingBlockNumber || currentEpoch === 0n ? (
-                    <span className='font-mono font-medium'>Loading...</span>
-                  ) : (
-                    <>
-                      <div className='font-mono font-medium'>
-                        <EpochTime
-                          epoch={currentEpoch}
-                          currentEpoch={currentEpoch}
-                          granularity='datetime'
-                          showTooltip={false}
-                        />
-                      </div>
-                      <div className='text-xs text-muted-foreground'>Epoch {currentEpoch.toString()}</div>
-                    </>
+                  <EpochTimeCell
+                    epoch={currentEpoch}
+                    currentEpoch={readyCurrentEpoch}
+                    granularity='datetime'
+                    className='font-mono font-medium'
+                  />
+                  {readyCurrentEpoch !== undefined && (
+                    <div className='text-xs text-muted-foreground'>Epoch {currentEpoch.toString()}</div>
                   )}
                 </div>
               </div>
               <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Settled Up To:</span>
                 <div className='text-right'>
-                  {isLoadingBlockNumber || currentEpoch === 0n ? (
-                    <span className='font-mono font-medium'>Loading...</span>
-                  ) : (
-                    <>
-                      <div className='font-mono font-medium'>
-                        <EpochTime
-                          epoch={settledUptoEpoch}
-                          currentEpoch={currentEpoch}
-                          granularity='datetime'
-                          showTooltip={false}
-                        />
-                      </div>
-                      <div className='text-xs text-muted-foreground'>Epoch {settledUptoEpoch.toString()}</div>
-                    </>
+                  <EpochTimeCell
+                    epoch={settledUptoEpoch}
+                    currentEpoch={readyCurrentEpoch}
+                    granularity='datetime'
+                    className='font-mono font-medium'
+                  />
+                  {readyCurrentEpoch !== undefined && (
+                    <div className='text-xs text-muted-foreground'>Epoch {settledUptoEpoch.toString()}</div>
                   )}
                 </div>
               </div>
               <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Epochs to Settle:</span>
                 <div className='text-right'>
-                  {isLoadingBlockNumber || currentEpoch === 0n ? (
-                    <span className='font-mono font-medium'>Loading...</span>
-                  ) : (
-                    <>
-                      <div className='font-mono font-medium'>{formatEpochDuration(epochsSinceLastSettlement)}</div>
-                      <div className='text-xs text-muted-foreground'>{epochsSinceLastSettlement.toString()} epochs</div>
-                    </>
+                  <div className='font-mono font-medium'>{epochsToSettleText}</div>
+                  {readyCurrentEpoch !== undefined && (
+                    <div className='text-xs text-muted-foreground'>{epochsSinceLastSettlement.toString()} epochs</div>
                   )}
                 </div>
               </div>

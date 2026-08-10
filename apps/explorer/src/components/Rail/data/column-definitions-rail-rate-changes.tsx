@@ -1,6 +1,6 @@
 import type { RateChangeQueue } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { EpochTime } from "@/components/shared";
+import { EpochTimeCell } from "@/components/shared";
 import { formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<RateChangeQueue & { currentEpoch: bigint | undefined }>();
@@ -13,13 +13,7 @@ export const columns = [
       const epoch = info.getValue();
       return (
         <div className='flex flex-col gap-0.5'>
-          <div className='font-medium'>
-            {currentEpoch === undefined ? (
-              "Loading..."
-            ) : (
-              <EpochTime epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' showTooltip={false} />
-            )}
-          </div>
+          <EpochTimeCell epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' className='font-medium' />
           <div className='text-xs text-muted-foreground'>Epoch {epoch.toString()}</div>
         </div>
       );
@@ -32,13 +26,7 @@ export const columns = [
       const epoch = info.getValue();
       return (
         <div className='flex flex-col gap-0.5'>
-          <div className='font-medium'>
-            {currentEpoch === undefined ? (
-              "Loading..."
-            ) : (
-              <EpochTime epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' showTooltip={false} />
-            )}
-          </div>
+          <EpochTimeCell epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' className='font-medium' />
           <div className='text-xs text-muted-foreground'>Epoch {epoch.toString()}</div>
         </div>
       );
