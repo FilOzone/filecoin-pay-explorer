@@ -13,8 +13,8 @@ import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 import type { Hex } from "viem";
 import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
 import type { SettleRailParams } from "@/hooks/useRailSettlements";
-import { formatAddress, formatToken } from "@/utils/formatter";
-import { InlineTextLoader, RailStateBadge } from "../shared";
+import { formatAddress, formatEpochDuration, formatToken } from "@/utils/formatter";
+import { EpochTime, InlineTextLoader, RailStateBadge } from "../shared";
 
 interface SettleRailDialogProps {
   rail: Rail;
@@ -86,21 +86,58 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
           {/* Settlement Information */}
           <div className='grid gap-3 p-4 rounded-lg border'>
             <div className='grid gap-2 text-sm'>
-              <div className='flex justify-between items-center'>
+              <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Current Epoch:</span>
-                <span className='font-mono font-medium'>
-                  {isLoadingBlockNumber ? "Loading..." : currentEpoch.toString()}
-                </span>
+                <div className='text-right'>
+                  {isLoadingBlockNumber || currentEpoch === 0n ? (
+                    <span className='font-mono font-medium'>Loading...</span>
+                  ) : (
+                    <>
+                      <div className='font-mono font-medium'>
+                        <EpochTime
+                          epoch={currentEpoch}
+                          currentEpoch={currentEpoch}
+                          granularity='datetime'
+                          showTooltip={false}
+                        />
+                      </div>
+                      <div className='text-xs text-muted-foreground'>Epoch {currentEpoch.toString()}</div>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className='flex justify-between items-center'>
+              <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Settled Up To:</span>
-                <span className='font-mono font-medium'>{settledUptoEpoch.toString()}</span>
+                <div className='text-right'>
+                  {isLoadingBlockNumber || currentEpoch === 0n ? (
+                    <span className='font-mono font-medium'>Loading...</span>
+                  ) : (
+                    <>
+                      <div className='font-mono font-medium'>
+                        <EpochTime
+                          epoch={settledUptoEpoch}
+                          currentEpoch={currentEpoch}
+                          granularity='datetime'
+                          showTooltip={false}
+                        />
+                      </div>
+                      <div className='text-xs text-muted-foreground'>Epoch {settledUptoEpoch.toString()}</div>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className='flex justify-between items-center'>
+              <div className='flex justify-between items-start'>
                 <span className='text-muted-foreground'>Epochs to Settle:</span>
-                <span className='font-mono font-medium'>
-                  {isLoadingBlockNumber ? "Loading..." : epochsSinceLastSettlement.toString()}
-                </span>
+                <div className='text-right'>
+                  {isLoadingBlockNumber || currentEpoch === 0n ? (
+                    <span className='font-mono font-medium'>Loading...</span>
+                  ) : (
+                    <>
+                      <div className='font-mono font-medium'>{formatEpochDuration(epochsSinceLastSettlement)}</div>
+                      <div className='text-xs text-muted-foreground'>{epochsSinceLastSettlement.toString()} epochs</div>
+                    </>
+                  )}
+                </div>
               </div>
               <div className='h-px bg-border my-1' />
               <div className='flex justify-between items-center'>

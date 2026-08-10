@@ -1,13 +1,21 @@
 import type { OneTimePayment } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { formatToken } from "@/utils/formatter";
+import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<OneTimePayment>();
 
 export const columns = [
   columnHelper.accessor("blockNumber", {
-    header: "Block Number",
-    cell: (info) => <div className='font-medium'>Epoch {info.getValue().toString()}</div>,
+    header: "Payment Date",
+    cell: (info) => {
+      const payment = info.row.original;
+      return (
+        <div className='flex flex-col gap-0.5'>
+          <div className='font-medium'>{formatDate(payment.createdAt)}</div>
+          <div className='text-xs text-muted-foreground'>Block {info.getValue().toString()}</div>
+        </div>
+      );
+    },
   }),
   columnHelper.accessor(
     (row) => ({

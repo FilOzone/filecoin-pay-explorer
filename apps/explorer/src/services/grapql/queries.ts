@@ -236,6 +236,7 @@ export const GET_RAIL_SETTLEMENTS = gql`
   query GetRailSettlements($railId: Bytes!, $first: Int!, $skip: Int!) {
     settlements(where: { rail: $railId }, first: $first, skip: $skip, orderBy: settledUpto, orderDirection: desc) {
       id
+      createdAt
       totalSettledAmount
       totalNetPayeeAmount
       # filBurned
@@ -254,6 +255,7 @@ export const GET_RAIL_ONE_TIME_PAYMENTS = gql`
   query GetRailOneTimePayments($railId: Bytes!, $first: Int!, $skip: Int!) {
     oneTimePayments(where: { rail: $railId }, first: $first, skip: $skip, orderBy: blockNumber, orderDirection: desc) {
       id
+      createdAt
       totalAmount
       netPayeeAmount
       networkFee

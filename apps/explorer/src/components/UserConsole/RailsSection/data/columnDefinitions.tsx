@@ -1,7 +1,8 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText, RailStateBadge, RoleIndicator } from "@/components/shared";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { formatAddress, formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
 
@@ -87,7 +88,14 @@ export const columns = [
           <div className='flex items-center gap-2'>
             <RailStateBadge state={rail.state} />
           </div>
-          <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className='w-fit cursor-help text-xs text-muted-foreground'>
+                Lockup: {formatEpochDuration(rail.lockupPeriod)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side='top'>{rail.lockupPeriod.toString()} epochs</TooltipContent>
+          </Tooltip>
         </div>
       );
     },

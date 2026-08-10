@@ -1,4 +1,4 @@
-import { UNLIMITED_THRESHOLD } from "./constants";
+import { EPOCH_DURATION, UNLIMITED_THRESHOLD } from "./constants";
 
 export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
@@ -124,4 +124,16 @@ export const formatFutureTimestamp = (futureTimestamp: bigint | number): string 
   } else {
     return `${diffMinutes}m`;
   }
+};
+
+export const formatEpochDuration = (epochs: bigint | number, epochDuration: number = EPOCH_DURATION): string => {
+  const totalSeconds = Number(epochs) * epochDuration;
+  if (totalSeconds === 0) return "None";
+  if (totalSeconds < 60) return "<1m";
+  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days >= 1) return hours % 24 === 0 ? `${days}d` : `${days}d ${hours % 24}h`;
+  if (hours >= 1) return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`;
+  return `${minutes}m`;
 };
