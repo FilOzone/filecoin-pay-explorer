@@ -1,0 +1,28 @@
+name: Promotion PR
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  open-promotion-pr:
+    name: Open staging → main PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create promotion PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
+          if [ -z "$EXISTING" ]; then
+            gh pr create \
+              --base main \
+              --head staging \
+              --title "chore: promote staging to production" \
+              --body "Automated promotion PR. Merge when staging is validated."
+          fi
