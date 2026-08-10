@@ -16,6 +16,7 @@ interface NotificationsFormProps {
   submitError?: string | null;
   initialValues?: { preferredName?: string; email?: string };
   onSubmit: (values: NotificationsFormValues) => void;
+  onCancel?: () => void;
 }
 
 function validateEmailFormat(email: string): string | null {
@@ -31,6 +32,7 @@ export const NotificationsForm = ({
   submitError,
   initialValues,
   onSubmit,
+  onCancel,
 }: NotificationsFormProps) => {
   const [preferredName, setPreferredName] = useState(initialValues?.preferredName ?? "");
   const [email, setEmail] = useState(initialValues?.email ?? "");
@@ -105,6 +107,17 @@ export const NotificationsForm = ({
             "Enable alerts"
           )}
         </Button>
+
+        {onCancel && (
+          <button
+            type='button'
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className='text-sm text-muted-foreground hover:text-foreground disabled:opacity-50'
+          >
+            Cancel
+          </button>
+        )}
       </div>
     </NotificationsCard>
   );

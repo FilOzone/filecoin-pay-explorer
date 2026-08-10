@@ -4,8 +4,9 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, WifiOff } from "lucide-react";
+import { ArrowLeft, ChevronRight, WifiOff } from "lucide-react";
 import Link from "next/link";
+import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
@@ -74,7 +75,7 @@ function clearPending(wallet: string): void {
 type NotificationsView =
   | { type: "loading" }
   | { type: "status-error" }
-  | { type: "not-subscribed"; initialName?: string; initialEmail?: string }
+  | { type: "not-subscribed"; initialName?: string; initialEmail?: string; onCancel?: () => void }
   | { type: "pending-verification"; email: string; preferredName: string; resendAvailableAt: number }
   | { type: "subscribed" }
   | { type: "unsubscribing"; cancellable: boolean }
@@ -178,7 +179,17 @@ const StatusUnavailable = ({ onRetry }: { onRetry: () => void }) => (
   </EmptyStateCard>
 );
 
-const NotificationsContent = ({ address, chainId }: { address: `0x${string}`; chainId: number }) => {
+const NotificationsContent = ({
+  address,
+  chainId,
+  onViewChange,
+  updateEmailRef,
+}: {
+  address: `0x${string}`;
+  chainId: number;
+  onViewChange?: (type: NotificationsView["type"]) => void;
+  updateEmailRef?: React.RefObject<(() => void) | null>;
+}) => {
   const { mutateAsync: signMessageAsync } = useSignMessage();
   const queryClient = useQueryClient();
   const [view, setView] = useState<NotificationsView>({ type: "loading" });
@@ -219,6 +230,18 @@ const NotificationsContent = ({ address, chainId }: { address: `0x${string}`; ch
       loadIdRef.current++;
     };
   }, [loadStatus]);
+
+  useEffect(() => {
+    onViewChange?.(view.type);
+  }, [view.type, onViewChange]);
+
+  useEffect(() => {
+    if (!updateEmailRef) return;
+    updateEmailRef.current = () => {
+      clearPending(address);
+      setView({ type: "not-subscribed", onCancel: () => setView({ type: "subscribed" }) });
+    };
+  }, [updateEmailRef, address]);
 
   useEffect(() => {
     if (view.type !== "pending-verification") return;
@@ -357,6 +380,7 @@ const NotificationsContent = ({ address, chainId }: { address: `0x${string}`; ch
           submitError={submitError}
           initialValues={{ preferredName: view.initialName, email: view.initialEmail }}
           onSubmit={handleRegister}
+          onCancel={view.onCancel}
         />
       );
 
@@ -396,6 +420,10 @@ const NotificationsMain = () => {
   const { address, isConnected, chainId } = useConnection();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isEligibleNetwork = isSupportedChainId(chainId) && isNotificationsEligibleNetwork(walletNetwork);
+  const [viewType, setViewType] = useState<NotificationsView["type"]>("loading");
+  const updateEmailRef = useRef<(() => void) | null>(null);
+
+  const showUpdateEmail = viewType === "subscribed" && isConnected && !!address && isEligibleNetwork;
 
   return (
     <PageSection backgroundVariant='light'>
@@ -408,9 +436,21 @@ const NotificationsMain = () => {
             <ArrowLeft className='h-4 w-4' />
             Back to console
           </Link>
-          <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
-            Email alerts
-          </h2>
+          <div className='flex items-baseline justify-between'>
+            <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
+              Email alerts
+            </h2>
+            {showUpdateEmail && (
+              <button
+                type='button'
+                onClick={() => updateEmailRef.current?.()}
+                className='inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline'
+              >
+                Update email
+                <ChevronRight className='h-4 w-4' />
+              </button>
+            )}
+          </div>
           <p className='mt-2 text-muted-foreground'>
             Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
             services are affected.
@@ -421,7 +461,12 @@ const NotificationsMain = () => {
           {(!isConnected || !address) && <NotConnected />}
           {isConnected && address && !isEligibleNetwork && <MainnetOnly />}
           {isConnected && address && chainId !== undefined && isEligibleNetwork && (
-            <NotificationsContent address={address} chainId={chainId} />
+            <NotificationsContent
+              address={address}
+              chainId={chainId}
+              onViewChange={setViewType}
+              updateEmailRef={updateEmailRef}
+            />
           )}
         </div>
       </div>
