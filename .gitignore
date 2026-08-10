@@ -15,6 +15,9 @@ out
 # Turbo
 .turbo
 
+# Wrangler local dev state
+.wrangler/
+
 # Misc
 .DS_Store
 *.pem
