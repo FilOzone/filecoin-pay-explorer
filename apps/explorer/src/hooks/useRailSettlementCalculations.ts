@@ -19,6 +19,7 @@ export const useRailSettlementCalculations = (rail: Rail, userAddress: string): 
     const currentEpoch = blockNumber ? BigInt(blockNumber) : 0n;
     const settledUptoEpoch = BigInt(rail.settledUpto);
     const epochsSinceLastSettlement = currentEpoch > settledUptoEpoch ? currentEpoch - settledUptoEpoch : 0n;
+    // expectedSettleAmount won't be accurate if the rail rate has changed since the last settlement
     const expectedSettleAmount = blockNumber ? BigInt(rail.paymentRate) * epochsSinceLastSettlement : 0n;
 
     return {
