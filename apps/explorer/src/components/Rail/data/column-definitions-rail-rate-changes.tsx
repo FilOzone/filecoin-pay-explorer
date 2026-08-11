@@ -10,7 +10,7 @@ export const columns = [
     header: "Start Time",
     cell: (info) => {
       const { currentEpoch } = info.row.original;
-      const epoch = info.getValue() + 1n;
+      const epoch = BigInt(info.getValue()) + 1n;
       return (
         <div className='flex flex-col gap-0.5'>
           <EpochTimeCell epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' className='font-medium' />
@@ -23,7 +23,7 @@ export const columns = [
     header: "End Time",
     cell: (info) => {
       const { currentEpoch } = info.row.original;
-      const epoch = info.getValue();
+      const epoch = BigInt(info.getValue());
       return (
         <div className='flex flex-col gap-0.5'>
           <EpochTimeCell epoch={epoch} currentEpoch={currentEpoch} granularity='datetime' className='font-medium' />
