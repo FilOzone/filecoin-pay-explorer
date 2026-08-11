@@ -15,6 +15,8 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { RunwayCard, SUGGESTED_CHIP_CAPTION } from "@/components/UserConsole/FundsSection/components/RunwayCard";
+import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -37,6 +39,10 @@ type LoadingState = "idle" | "loading" | "success" | "error";
 
 export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange, suggestedAmount }) => {
   const { address: userAddress } = useAccount();
+  // Runway projection only makes sense for the USDFC funding position; other tokens
+  // (and the no-userToken custom-address path) have no rate-based spend to project.
+  const usdfcPosition = userToken?.token.symbol === "USDFC" ? userToken : null;
+  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
 
   // Form state
   const [amount, setAmount] = useState("");
@@ -390,12 +396,19 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   >
                     Use suggested: {suggestedAmount} {currentToken.symbol}
                   </Button>
-                  <span>keeps this account funded for about a year</span>
+                  <span>{SUGGESTED_CHIP_CAPTION}</span>
                 </div>
               ) : (
                 <p className='text-xs text-muted-foreground'>
                   Enter the amount of {currentToken.symbol} you want to deposit
                 </p>
+              )}
+              {usdfcPosition && (
+                <RunwayCard
+                  depositAmount={parseTopUpAmount(amount)}
+                  nowTimestamp={nowTimestamp}
+                  position={usdfcPosition}
+                />
               )}
             </div>
           )}

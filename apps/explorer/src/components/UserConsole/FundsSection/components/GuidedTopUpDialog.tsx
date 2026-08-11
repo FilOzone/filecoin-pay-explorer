@@ -18,14 +18,14 @@ import { toast } from "sonner";
 import { useAccount, useSwitchChain } from "wagmi";
 import { mainnet } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
-import { formatDate } from "@/utils/formatter";
 import {
   calculateFundingRunway,
   type FundingPosition,
   formatSuggestedTopUp,
   formatUsdfcAmount,
 } from "../data/funding-runway";
-import { calculateProjectedFundingRunway, parseTopUpAmount } from "../data/guided-top-up";
+import { parseTopUpAmount } from "../data/guided-top-up";
+import { RunwayCard, SUGGESTED_CHIP_CAPTION } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
@@ -88,9 +88,6 @@ export function GuidedTopUpDialog({
   const wasOpen = useRef(false);
   const parsedAmount = parseTopUpAmount(amount);
   const depositAmount = acquiredAmount ?? parsedAmount;
-  const current = calculateFundingRunway(position, nowTimestamp);
-  const projected =
-    depositAmount === null ? null : calculateProjectedFundingRunway(position, depositAmount, nowTimestamp);
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
 
   useEffect(() => {
@@ -127,11 +124,6 @@ export function GuidedTopUpDialog({
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const fundedThrough = (timestamp: bigint | null, status: typeof current.status) => {
-    if (timestamp === null) return status === "critical" ? "Underfunded" : "No active spend";
-    return timestamp <= nowTimestamp ? "Underfunded" : formatDate(timestamp);
   };
 
   const switchToFilecoin = async () => {
@@ -178,34 +170,27 @@ export function GuidedTopUpDialog({
               <p className='text-sm text-destructive'>Enter an amount greater than zero.</p>
             )}
             {chipAmount && acquiredAmount === null && (
-              <Button
-                className='w-fit'
-                disabled={acquisitionState !== "idle"}
-                onClick={() => setAmount(chipAmount)}
-                size='compact'
-                type='button'
-                variant='primary'
-              >
-                Use suggested: {chipAmount} USDFC
-              </Button>
+              <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground'>
+                <Button
+                  className='w-fit'
+                  disabled={acquisitionState !== "idle"}
+                  onClick={() => setAmount(chipAmount)}
+                  size='compact'
+                  type='button'
+                  variant='primary'
+                >
+                  Use suggested: {chipAmount} USDFC
+                </Button>
+                <span>{SUGGESTED_CHIP_CAPTION}</span>
+              </div>
             )}
           </div>
-          <div className='grid gap-2 rounded-md border p-3 text-sm'>
-            <p>
-              Current funded through:{" "}
-              <span className='font-medium'>{fundedThrough(current.fundedThroughTimestamp, current.status)}</span>
-            </p>
-            <p>
-              Projected funded through:{" "}
-              <span className='font-medium'>
-                {projected ? fundedThrough(projected.fundedThroughTimestamp, projected.status) : "—"}
-              </span>
-            </p>
+          <RunwayCard depositAmount={depositAmount} nowTimestamp={nowTimestamp} position={position}>
             <p className='text-muted-foreground'>
               {acquiredAmount === null ? "Target deposit" : "Ready to deposit"}:{" "}
               {depositAmount === null ? "—" : formatUsdfcAmount(depositAmount)} USDFC.
             </p>
-          </div>
+          </RunwayCard>
           <SquidQuoteReview
             acquisitionState={acquisitionState}
             destinationAmount={depositAmount}
