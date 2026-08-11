@@ -90,7 +90,8 @@ export const columns = [
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className='w-fit cursor-help text-xs text-muted-foreground'>
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
+              <span tabIndex={0} className='w-fit cursor-help text-xs text-muted-foreground'>
                 Lockup: {formatEpochDuration(rail.lockupPeriod)}
               </span>
             </TooltipTrigger>

@@ -8,35 +8,130 @@ import USDFCLogo from "@/assests/USDFCLogo";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
 import { formatFutureTimestamp, formatTimestampToTime, formatToken } from "@/utils/formatter";
 
+export type FundsTableRow = UserToken & {
+  currentEpoch: bigint | undefined;
+  onDeposit: (token: UserToken) => void;
+  onWithdraw: (token: UserToken) => void;
+};
+
+type FundingStatus = "infinity" | "expired" | "warning" | "funded";
+
+type FundedUntilPresentation = {
+  detail: string | null;
+  showWarningIcon: boolean;
+  timeColor: string;
+};
+
 // Helper function to calculate funded until data
-const calculateFundedUntil = (userToken: UserToken) => {
-  const availableFunds = BigInt(userToken.funds) - BigInt(userToken.lockupCurrent);
+const calculateFundedUntil = (userToken: FundsTableRow) => {
+  const funds = BigInt(userToken.funds);
+  const lockupCurrent = BigInt(userToken.lockupCurrent);
+  const availableFunds = funds - lockupCurrent;
   const lockupRate = BigInt(userToken.lockupRate);
-  const fundedUntil = availableFunds > 0 && lockupRate > 0 ? availableFunds / lockupRate : 0n;
+  let fundedUntil = 0n;
+  if (availableFunds > 0n && lockupRate > 0n) {
+    fundedUntil = availableFunds / lockupRate;
+  }
+
   const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
 
-  const isInfinity = lockupRate === 0n;
-  const fundedUntilTime = isInfinity ? "Infinity" : formatFutureTimestamp(Number(fundedUntilTimestamp));
-  const isExpired = !isInfinity && fundedUntilTime === "Expired";
+  const lastSettledEpoch = BigInt(userToken.lockupLastSettledUntilEpoch);
+  let elapsedEpochs = 0n;
+  if (userToken.currentEpoch !== undefined && userToken.currentEpoch > lastSettledEpoch) {
+    elapsedEpochs = userToken.currentEpoch - lastSettledEpoch;
+  }
+
+  const totalOwed = lockupCurrent + lockupRate * elapsedEpochs;
+  let debt: bigint | undefined;
+  if (userToken.currentEpoch !== undefined) {
+    debt = 0n;
+    if (totalOwed > funds) {
+      debt = totalOwed - funds;
+    }
+  }
+
+  let fundedUntilTime = "Infinity";
+  if (lockupRate > 0n) {
+    fundedUntilTime = formatFutureTimestamp(Number(fundedUntilTimestamp));
+  }
 
   const timeUntilExpiry = Number(fundedUntilTimestamp) - Date.now() / 1000;
-  const isWarning =
-    !isInfinity && !isExpired && timeUntilExpiry > 0 && timeUntilExpiry <= FUNDING_WARNING_THRESHOLD_SECONDS;
+  let fundingStatus: FundingStatus = "funded";
+  if (lockupRate === 0n) {
+    fundingStatus = "infinity";
+  } else if (fundedUntilTime === "Expired") {
+    fundingStatus = "expired";
+  } else if (timeUntilExpiry > 0 && timeUntilExpiry <= FUNDING_WARNING_THRESHOLD_SECONDS) {
+    fundingStatus = "warning";
+  }
 
   return {
     availableFunds,
+    debt,
+    fundingStatus,
     fundedUntilTime,
     fundedUntilTimestamp,
-    isInfinity,
-    isExpired,
-    isWarning,
   };
 };
 
+function TokenIcon({ token }: { token: UserToken["token"] }) {
+  if (token.symbol === "USDFC") {
+    return <USDFCLogo className='w-6 h-6' />;
+  }
+
+  return (
+    <div className='h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center'>
+      <span className='text-sm font-semibold text-amber-700 dark:text-amber-400'>{token.symbol.charAt(0)}</span>
+    </div>
+  );
+}
+
+function formatDebtDetail(userToken: FundsTableRow, debt: bigint | undefined) {
+  if (debt === undefined) {
+    return "Debt: Loading...";
+  }
+
+  return `Debt: ${formatToken(debt, userToken.token.decimals, userToken.token.symbol, 6)}`;
+}
+
+function getFundedUntilPresentation(
+  fundingStatus: FundingStatus,
+  userToken: FundsTableRow,
+  fundedUntilTimestamp: bigint,
+  debt: bigint | undefined,
+): FundedUntilPresentation {
+  const fundedUntilDetail = formatTimestampToTime(fundedUntilTimestamp);
+
+  switch (fundingStatus) {
+    case "infinity":
+      return {
+        detail: null,
+        showWarningIcon: false,
+        timeColor: "text-green-600 dark:text-green-400",
+      };
+    case "expired":
+      return {
+        detail: formatDebtDetail(userToken, debt),
+        showWarningIcon: false,
+        timeColor: "text-red-600 dark:text-red-400",
+      };
+    case "warning":
+      return {
+        detail: fundedUntilDetail,
+        showWarningIcon: true,
+        timeColor: "text-amber-600 dark:text-amber-400",
+      };
+    case "funded":
+      return {
+        detail: fundedUntilDetail,
+        showWarningIcon: false,
+        timeColor: "text-foreground",
+      };
+  }
+}
+
 // Create column helper
-const columnHelper = createColumnHelper<
-  UserToken & { onDeposit: (token: UserToken) => void; onWithdraw: (token: UserToken) => void }
->();
+const columnHelper = createColumnHelper<FundsTableRow>();
 
 export const columns = [
   columnHelper.accessor("token.symbol", {
@@ -45,15 +140,7 @@ export const columns = [
       const userToken = info.row.original;
       return (
         <div className='flex items-center gap-2.5'>
-          {userToken.token.symbol === "USDFC" ? (
-            <USDFCLogo className='w-6 h-6' />
-          ) : (
-            <div className='h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center'>
-              <span className='text-sm font-semibold text-amber-700 dark:text-amber-400'>
-                {userToken.token.symbol.charAt(0)}
-              </span>
-            </div>
-          )}
+          <TokenIcon token={userToken.token} />
           <span className='font-medium'>{userToken.token.symbol}</span>
         </div>
       );
@@ -139,26 +226,16 @@ export const columns = [
     header: () => <div className='text-right'>Funded until</div>,
     cell: (info) => {
       const userToken = info.row.original;
-      const { fundedUntilTime, fundedUntilTimestamp, isInfinity, isExpired, isWarning } =
-        calculateFundedUntil(userToken);
-
-      const timeColor = isInfinity
-        ? "text-green-600 dark:text-green-400"
-        : isExpired
-          ? "text-red-600 dark:text-red-400"
-          : isWarning
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-foreground";
+      const { debt, fundingStatus, fundedUntilTime, fundedUntilTimestamp } = calculateFundedUntil(userToken);
+      const presentation = getFundedUntilPresentation(fundingStatus, userToken, fundedUntilTimestamp, debt);
 
       return (
         <div className='text-right'>
-          <div className={`font-medium ${timeColor} flex items-center justify-end gap-1`}>
-            {isWarning && <AlertCircle className='h-3.5 w-3.5' />}
+          <div className={`font-medium ${presentation.timeColor} flex items-center justify-end gap-1`}>
+            {presentation.showWarningIcon && <AlertCircle className='h-3.5 w-3.5' />}
             {fundedUntilTime}
           </div>
-          {!isInfinity && (
-            <div className='text-xs text-muted-foreground'>{formatTimestampToTime(fundedUntilTimestamp)}</div>
-          )}
+          {presentation.detail && <div className='text-xs text-muted-foreground'>{presentation.detail}</div>}
         </div>
       );
     },

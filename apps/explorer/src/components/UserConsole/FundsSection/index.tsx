@@ -1,7 +1,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useMemo, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useBlockNumber } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
@@ -18,6 +18,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
 
   const { chainId } = useAccount();
+  const { data: currentEpoch } = useBlockNumber({ watch: true });
   const walletNetwork = getNetworkFromChainId(chainId);
 
   // Fetch all tokens for this account (no pagination for console view)
@@ -42,10 +43,11 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
     () =>
       data?.userTokens.map((token) => ({
         ...token,
+        currentEpoch,
         onDeposit: handleDeposit,
         onWithdraw: handleWithdraw,
       })) || [],
-    [data?.userTokens, handleDeposit, handleWithdraw],
+    [currentEpoch, data?.userTokens, handleDeposit, handleWithdraw],
   );
 
   if (isLoading) {

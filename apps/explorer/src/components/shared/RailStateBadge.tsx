@@ -42,7 +42,8 @@ export function RailStateBadge({ state, className }: RailStateBadgeProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className={cn("inline-flex items-center gap-2.5 cursor-help", className)}>
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
+        <div tabIndex={0} className={cn("inline-flex items-center gap-2.5 cursor-help", className)}>
           <div className='relative'>
             {/* Outer glow ring */}
             <div className={cn("absolute inset-0 rounded-full blur-sm opacity-40", config.dotColor)} />
