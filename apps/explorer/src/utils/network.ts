@@ -14,16 +14,17 @@ export function getNetworkFromChainId(chainId: number | undefined): Network {
   return chain?.slug || DEFAULT_NETWORK;
 }
 
+function parseEligibleNetwork(): Network {
+  const raw = (process.env.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS ?? "mainnet").trim();
+  return supportedChains.some((c) => c.slug === raw) ? (raw as Network) : "mainnet";
+}
+
 export function isNotificationsEligibleNetwork(network: Network): boolean {
-  const raw = process.env.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS;
-  if (!raw) return network === "mainnet";
+  return network === parseEligibleNetwork();
+}
 
-  const eligible = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s): s is Network => supportedChains.some((c) => c.slug === s));
-
-  return eligible.includes(network);
+export function getNotificationsEligibleNetwork(): Network {
+  return parseEligibleNetwork();
 }
 
 export function getSubgraphUrl(network: Network): string {

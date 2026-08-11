@@ -3,6 +3,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Lock } from "lucide-react";
+import type React from "react";
 import { useState } from "react";
 import { NotificationsCard } from "./NotificationsCard";
 
@@ -48,14 +49,15 @@ export const NotificationsForm = ({
     setEmailTouched(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!isValid || isSubmitting) return;
     onSubmit({ preferredName: trimmedName, email: lowercaseEmail });
   };
 
   return (
     <NotificationsCard>
-      <div className='flex flex-col gap-6'>
+      <form onSubmit={handleSubmit} className='flex flex-col gap-6'>
         <div className='grid gap-4'>
           <div className='grid gap-2'>
             <Label htmlFor='preferredName'>Preferred name</Label>
@@ -93,8 +95,8 @@ export const NotificationsForm = ({
         {submitError && <p className='text-sm text-destructive'>{submitError}</p>}
 
         <Button
+          type='submit'
           variant='primary'
-          onClick={handleSubmit}
           disabled={!isValid || isSubmitting}
           className='border-0 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/50'
         >
@@ -118,7 +120,7 @@ export const NotificationsForm = ({
             Cancel
           </button>
         )}
-      </div>
+      </form>
     </NotificationsCard>
   );
 };
