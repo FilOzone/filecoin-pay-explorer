@@ -26,7 +26,12 @@ type FundedUntilPresentation = {
 const calculateFundedUntil = (userToken: FundsTableRow) => {
   const funds = BigInt(userToken.funds);
   const lockupCurrent = BigInt(userToken.lockupCurrent);
-  const availableFunds = funds - lockupCurrent;
+  // A sub-epoch remainder can stay available while debt represents the additional amount required.
+  let availableFunds = 0n;
+  if (funds > lockupCurrent) {
+    availableFunds = funds - lockupCurrent;
+  }
+
   const lockupRate = BigInt(userToken.lockupRate);
   let fundedUntil = 0n;
   if (availableFunds > 0n && lockupRate > 0n) {

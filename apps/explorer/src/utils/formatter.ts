@@ -127,14 +127,20 @@ export const formatFutureTimestamp = (futureTimestamp: bigint | number): string 
 };
 
 export const formatEpochDuration = (epochs: bigint | number, epochDuration: number = EPOCH_DURATION): string => {
-  const totalSeconds = Number(epochs) * epochDuration;
-  if (totalSeconds === 0) return "None";
-  if (totalSeconds < 60) return "<1m";
-  const minutes = Math.floor(totalSeconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  if (days >= 1) return hours % 24 === 0 ? `${days}d` : `${days}d ${hours % 24}h`;
-  if (hours >= 1) return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`;
+  const totalSeconds = BigInt(epochs) * BigInt(epochDuration);
+  if (totalSeconds === 0n) return "None";
+  if (totalSeconds < 60n) return "<1m";
+  const minutes = totalSeconds / 60n;
+  const hours = minutes / 60n;
+  const days = hours / 24n;
+  if (days >= 1n) {
+    if (hours % 24n === 0n) return `${days}d`;
+    return `${days}d ${hours % 24n}h`;
+  }
+  if (hours >= 1n) {
+    if (minutes % 60n === 0n) return `${hours}h`;
+    return `${hours}h ${minutes % 60n}m`;
+  }
   return `${minutes}m`;
 };
 
