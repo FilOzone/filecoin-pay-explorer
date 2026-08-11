@@ -80,7 +80,7 @@ export const isUnlimitedValue = (value: number | string | bigint): boolean => {
 export const epochToDate = (
   futureEpoch: bigint | number,
   currentEpoch: bigint | number,
-  epochDuration: number = 30,
+  epochDuration: number = EPOCH_DURATION,
 ): Date => {
   const future = BigInt(futureEpoch);
   const current = BigInt(currentEpoch);
@@ -117,7 +117,7 @@ export const formatFutureTimestamp = (futureTimestamp: bigint | number): string 
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: diffDays > 365 ? "numeric" : undefined,
+      year: "numeric",
     });
   } else if (diffHours > 1) {
     return `${diffHours}h ${diffMinutes % 60}m`;
@@ -137,3 +137,9 @@ export const formatEpochDuration = (epochs: bigint | number, epochDuration: numb
   if (hours >= 1) return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`;
   return `${minutes}m`;
 };
+
+export const formatTimestampToTime = (timestamp: bigint | number): string =>
+  new Date(Number(timestamp) * 1000).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });

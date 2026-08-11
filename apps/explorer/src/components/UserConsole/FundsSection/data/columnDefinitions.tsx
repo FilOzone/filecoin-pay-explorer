@@ -6,7 +6,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { AlertCircle, Info } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
-import { formatCompactNumber, formatFutureTimestamp, formatToken } from "@/utils/formatter";
+import { formatFutureTimestamp, formatTimestampToTime, formatToken } from "@/utils/formatter";
 
 // Helper function to calculate funded until data
 const calculateFundedUntil = (userToken: UserToken) => {
@@ -14,7 +14,6 @@ const calculateFundedUntil = (userToken: UserToken) => {
   const lockupRate = BigInt(userToken.lockupRate);
   const fundedUntil = availableFunds > 0 && lockupRate > 0 ? availableFunds / lockupRate : 0n;
   const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
-  const fundedUntilEpoch = BigInt(userToken.lockupLastSettledUntilEpoch) + fundedUntil;
 
   const isInfinity = lockupRate === 0n;
   const fundedUntilTime = isInfinity ? "Infinity" : formatFutureTimestamp(Number(fundedUntilTimestamp));
@@ -27,7 +26,7 @@ const calculateFundedUntil = (userToken: UserToken) => {
   return {
     availableFunds,
     fundedUntilTime,
-    fundedUntilEpoch,
+    fundedUntilTimestamp,
     isInfinity,
     isExpired,
     isWarning,
@@ -140,7 +139,8 @@ export const columns = [
     header: () => <div className='text-right'>Funded until</div>,
     cell: (info) => {
       const userToken = info.row.original;
-      const { fundedUntilTime, fundedUntilEpoch, isInfinity, isExpired, isWarning } = calculateFundedUntil(userToken);
+      const { fundedUntilTime, fundedUntilTimestamp, isInfinity, isExpired, isWarning } =
+        calculateFundedUntil(userToken);
 
       const timeColor = isInfinity
         ? "text-green-600 dark:text-green-400"
@@ -157,12 +157,7 @@ export const columns = [
             {fundedUntilTime}
           </div>
           {!isInfinity && (
-            <div className='text-xs text-muted-foreground'>
-              Epoch:{" "}
-              {fundedUntilEpoch > 1_000_000n
-                ? formatCompactNumber(fundedUntilEpoch)
-                : fundedUntilEpoch.toLocaleString()}
-            </div>
+            <div className='text-xs text-muted-foreground'>{formatTimestampToTime(fundedUntilTimestamp)}</div>
           )}
         </div>
       );
