@@ -1,7 +1,14 @@
 "use client";
+import { useMutation } from "@tanstack/react-query";
 import { Info, Loader2, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NotificationsCard } from "./NotificationsCard";
+
+const CHECK_MESSAGES = {
+  subscribed: null,
+  pending: "Still pending — check back in a moment.",
+  unavailable: "Could not check status. Try again later.",
+} as const;
 
 interface PendingVerificationCardProps {
   email: string;
@@ -21,10 +28,6 @@ export const PendingVerificationCard = ({
   onUseAnotherEmail,
 }: PendingVerificationCardProps) => {
   const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000)));
-  const [isChecking, setIsChecking] = useState(false);
-  const [checkMessage, setCheckMessage] = useState<string | null>(null);
-  const [isResending, setIsResending] = useState(false);
-  const [resendError, setResendError] = useState<string | null>(null);
 
   useEffect(() => {
     const tick = () => {
@@ -35,29 +38,15 @@ export const PendingVerificationCard = ({
     return () => clearInterval(id);
   }, [resendAvailableAt]);
 
-  const handleCheckStatus = async () => {
-    setIsChecking(true);
-    setCheckMessage(null);
-    try {
-      const result = await onCheckStatus();
-      if (result === "pending") setCheckMessage("Still pending — check back in a moment.");
-      if (result === "unavailable") setCheckMessage("Could not check status. Try again later.");
-    } finally {
-      setIsChecking(false);
-    }
-  };
+  // onCheckStatus is a status read (never throws); onResend can throw. Both are
+  // one-shot imperative actions, so React Query owns their pending/result state.
+  const checkMutation = useMutation({ mutationFn: () => onCheckStatus() });
+  const resendMutation = useMutation({ mutationFn: () => onResend() });
 
-  const handleResend = async () => {
-    setIsResending(true);
-    setResendError(null);
-    try {
-      await onResend();
-    } catch (err) {
-      setResendError(err instanceof Error ? err.message : "Failed to resend. Please try again.");
-    } finally {
-      setIsResending(false);
-    }
-  };
+  const checkMessage = checkMutation.data ? CHECK_MESSAGES[checkMutation.data] : null;
+  const resendError = resendMutation.error
+    ? resendMutation.error.message || "Failed to resend. Please try again."
+    : null;
 
   return (
     <div className='mx-auto flex max-w-md flex-col gap-3'>
@@ -82,11 +71,11 @@ export const PendingVerificationCard = ({
             {secondsLeft === 0 && (
               <button
                 type='button'
-                onClick={handleCheckStatus}
-                disabled={isChecking}
+                onClick={() => checkMutation.mutate()}
+                disabled={checkMutation.isPending}
                 className='w-full rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:hover:bg-blue-950/20'
               >
-                {isChecking ? (
+                {checkMutation.isPending ? (
                   <span className='flex items-center justify-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' />
                     Checking...
@@ -106,11 +95,11 @@ export const PendingVerificationCard = ({
               ) : (
                 <button
                   type='button'
-                  onClick={handleResend}
-                  disabled={isResending}
+                  onClick={() => resendMutation.mutate()}
+                  disabled={resendMutation.isPending}
                   className='text-primary hover:underline disabled:opacity-50'
                 >
-                  {isResending ? "Resending..." : "Resend email"}
+                  {resendMutation.isPending ? "Resending..." : "Resend email"}
                 </button>
               )}
             </p>
