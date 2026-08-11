@@ -104,7 +104,7 @@ export async function processMessage(
       return "ack";
     }
 
-    const content = buildAlertContent(summary, health, DEFAULT_HEALTH_THRESHOLDS, nowSec);
+    const content = buildAlertContent(summary, health, nowSec);
     log.set({ alert: { tier, daysRemaining: content.daysRemaining, fundedUntilSec: content.fundedUntilSec } });
     const props: AlertEmailProps = {
       name: subscriber.name,
@@ -112,7 +112,6 @@ export async function processMessage(
       alertLevel: tier,
       fundedUntil: content.fundedUntil,
       daysRemaining: content.daysRemaining,
-      topUpAmount: content.topUpAmount,
       topUpUrl: `${env.FRONTEND_ORIGIN}/console`,
     };
     const { subject, html, text } = await renderAlertEmail(props);
