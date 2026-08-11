@@ -15,16 +15,17 @@ import { createDb } from "../../shared/db/client";
 
 const account = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
 const WALLET = account.address.toLowerCase();
-const DOMAIN = "pay.filecoin.cloud"; // must match FRONTEND_ORIGIN in wrangler staging vars
 const CHAIN_ID = 314159; // calibration
 
 function makeSiwe(overrides: Partial<Parameters<typeof createSiweMessage>[0]> = {}) {
+  const origin = env.FRONTEND_ORIGIN;
+  const domain = new URL(origin).host;
   return createSiweMessage({
     address: account.address,
     chainId: CHAIN_ID,
-    domain: DOMAIN,
+    domain,
     nonce: "testonce1",
-    uri: `https://${DOMAIN}/verify`,
+    uri: `${origin}/verify`,
     version: "1",
     issuedAt: new Date(Date.now() - 1000),
     ...overrides,
