@@ -24,7 +24,7 @@ jobs:
       - name: Generate commit list
         id: commits
         run: |
-          git log origin/main..HEAD --pretty=format:"%s" > /tmp/commits.txt
+          git log origin/main..HEAD --pretty=format:"%s (%h)" > /tmp/commits.txt
 
           if [ ! -s /tmp/commits.txt ]; then
             echo "Staging is up to date with main — nothing to promote."
