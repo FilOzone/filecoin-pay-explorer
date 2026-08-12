@@ -8,7 +8,9 @@ export type TransactionType =
   | "approveOperator"
   | "increaseApproval"
   | "settleRail"
-  | "terminateRail";
+  | "terminateRail"
+  | "createSessionKey"
+  | "revokeSessionKey";
 
 export type Network = "calibration" | "mainnet";
 
