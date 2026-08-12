@@ -8,21 +8,59 @@ jobs:
   open-promotion-pr:
     name: Open staging → main PR
     runs-on: ubuntu-latest
+    # Serializes concurrent pushes so the second run sees the PR the first created.
+    # Prevents the race that required continue-on-error on the create/update step.
+    concurrency:
+      group: promote-staging
+      cancel-in-progress: false
     permissions:
       pull-requests: write
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: Create promotion PR if none exists
+      - name: Generate commit list
+        id: commits
+        run: |
+          git log origin/main..HEAD --pretty=format:"%s" > /tmp/commits.txt
+
+          if [ ! -s /tmp/commits.txt ]; then
+            echo "Staging is up to date with main — nothing to promote."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update promotion PR
+        if: steps.commits.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          EXISTING=$(gh pr list --base main --head staging --state open --json number --jq '.[0].number')
+          # Use REST API with owner:staging to exclude fork PRs that happen to use a staging branch.
+          OWNER="${REPO%/*}"
+          EXISTING=$(gh api "repos/$REPO/pulls?base=main&head=${OWNER}:staging&state=open" --jq '.[0].number // empty')
+
+          # Build body using printf to avoid heredoc delimiter injection via commit messages.
+          # Note: updating the body overwrites any manual edits made to the PR description.
+          # Escape # to \# so GitHub doesn't interpret closing keywords (Fixes #N, Closes #N)
+          # in commit subjects and silently close issues when the promotion PR is merged.
+          CHANGES=$(sed 's/^/- /; s/#/\\#/g' /tmp/commits.txt)
+          {
+            printf '%s\n' "## Changes" ""
+            printf '%s\n' "$CHANGES" ""
+            printf '%s\n' "---"
+            printf '%s\n' "_Auto-generated — merge when staging is validated._"
+          } > /tmp/pr-body.md
+
           if [ -z "$EXISTING" ]; then
             gh pr create \
               --base main \
               --head staging \
               --title "chore: promote staging to production" \
-              --body "Automated promotion PR. Merge when staging is validated."
+              --body-file /tmp/pr-body.md
+          else
+            gh pr edit "$EXISTING" --body-file /tmp/pr-body.md
           fi
