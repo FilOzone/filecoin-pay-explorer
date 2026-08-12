@@ -9,7 +9,7 @@ import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/const
 import { formatFutureTimestamp, formatTimestampToTime, formatToken } from "@/utils/formatter";
 
 export type FundsTableRow = UserToken & {
-  currentEpoch: bigint | undefined;
+  currentTimestamp: bigint;
   onDeposit: (token: UserToken) => void;
   onWithdraw: (token: UserToken) => void;
 };
@@ -40,33 +40,34 @@ const calculateFundedUntil = (userToken: FundsTableRow) => {
 
   const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
 
-  const lastSettledEpoch = BigInt(userToken.lockupLastSettledUntilEpoch);
+  const lastSettledTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp);
   let elapsedEpochs = 0n;
-  if (userToken.currentEpoch !== undefined && userToken.currentEpoch > lastSettledEpoch) {
-    elapsedEpochs = userToken.currentEpoch - lastSettledEpoch;
+  if (userToken.currentTimestamp > lastSettledTimestamp) {
+    elapsedEpochs = (userToken.currentTimestamp - lastSettledTimestamp) / BigInt(EPOCH_DURATION);
   }
 
   const totalOwed = lockupCurrent + lockupRate * elapsedEpochs;
-  let debt: bigint | undefined;
-  if (userToken.currentEpoch !== undefined) {
-    debt = 0n;
-    if (totalOwed > funds) {
-      debt = totalOwed - funds;
-    }
+  let debt = 0n;
+  if (totalOwed > funds) {
+    debt = totalOwed - funds;
   }
 
   let fundedUntilTime = "Infinity";
   if (lockupRate > 0n) {
-    fundedUntilTime = formatFutureTimestamp(Number(fundedUntilTimestamp));
+    if (fundedUntilTimestamp <= userToken.currentTimestamp) {
+      fundedUntilTime = "Expired";
+    } else {
+      fundedUntilTime = formatFutureTimestamp(fundedUntilTimestamp, userToken.currentTimestamp);
+    }
   }
 
-  const timeUntilExpiry = Number(fundedUntilTimestamp) - Date.now() / 1000;
+  const timeUntilExpiry = fundedUntilTimestamp - userToken.currentTimestamp;
   let fundingStatus: FundingStatus = "funded";
   if (lockupRate === 0n) {
     fundingStatus = "infinity";
   } else if (fundedUntilTime === "Expired") {
     fundingStatus = "expired";
-  } else if (timeUntilExpiry > 0 && timeUntilExpiry <= FUNDING_WARNING_THRESHOLD_SECONDS) {
+  } else if (timeUntilExpiry > 0n && timeUntilExpiry <= BigInt(FUNDING_WARNING_THRESHOLD_SECONDS)) {
     fundingStatus = "warning";
   }
 
@@ -91,11 +92,7 @@ function TokenIcon({ token }: { token: UserToken["token"] }) {
   );
 }
 
-function formatDebtDetail(userToken: FundsTableRow, debt: bigint | undefined) {
-  if (debt === undefined) {
-    return "Debt: Loading...";
-  }
-
+function formatDebtDetail(userToken: FundsTableRow, debt: bigint) {
   return `Debt: ${formatToken(debt, userToken.token.decimals, userToken.token.symbol, 6)}`;
 }
 
@@ -103,7 +100,7 @@ function getFundedUntilPresentation(
   fundingStatus: FundingStatus,
   userToken: FundsTableRow,
   fundedUntilTimestamp: bigint,
-  debt: bigint | undefined,
+  debt: bigint,
 ): FundedUntilPresentation {
   const fundedUntilDetail = formatTimestampToTime(fundedUntilTimestamp);
 

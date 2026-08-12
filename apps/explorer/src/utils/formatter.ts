@@ -90,9 +90,12 @@ export const epochToDate = (
   return new Date(futureTimestamp);
 };
 
-export const formatFutureTimestamp = (futureTimestamp: bigint | number): string => {
+export const formatFutureTimestamp = (
+  futureTimestamp: bigint | number,
+  currentTimestamp: bigint | number = Date.now() / 1_000,
+): string => {
   const date = new Date(Number(futureTimestamp) * 1_000);
-  const now = Date.now();
+  const now = Number(currentTimestamp) * 1_000;
   const futureTime = date.getTime();
   const diffMs = futureTime - now;
 
