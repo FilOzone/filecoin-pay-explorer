@@ -40,6 +40,12 @@ function formatCountdown(seconds: number) {
   return `${minutes}:${remainder.toString().padStart(2, "0")}`;
 }
 
+export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boolean) {
+  if (!isConfigured) return "Squid funding is not configured for this deployment.";
+  if (hasError) return "Could not load tokens from Squid. Check the configuration or try again.";
+  return "No supported tokens on this network.";
+}
+
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
@@ -67,11 +73,17 @@ export function SquidQuoteReview({
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
   const nativeSymbol = sourceChainMeta?.nativeCurrency?.symbol ?? "the native token";
-  const { data: tokens = [], isFetching: isLoadingTokens } = useQuery({
+  const {
+    data: tokens = [],
+    isError: isTokenLoadError,
+    isFetching: isLoadingTokens,
+    refetch: refetchTokens,
+  } = useQuery({
     enabled: !quotesUnavailable && SQUID_SOURCE_CHAINS.some((chain) => chain.id === sourceChain),
     queryFn: () => fetchSourceTokens(sourceChain, { integratorId }),
     queryKey: ["squid", "source-tokens", sourceChain],
   });
+  const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
   const source = tokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
   const quote = plan?.quotes[0];
   const secondsLeft = quote ? quote.expiresAt - nowSeconds : 0;
@@ -180,9 +192,7 @@ export function SquidQuoteReview({
       <p className='font-medium'>Acquire USDFC with Squid</p>
 
       {quotesUnavailable && (
-        <p className='rounded-md bg-muted/50 p-2 text-muted-foreground'>
-          Cross-chain quotes are not configured for this deployment.
-        </p>
+        <p className='rounded-md bg-muted/50 p-2 text-muted-foreground'>{sourceTokenCatalogMessage(false, false)}</p>
       )}
 
       <div className='grid gap-1'>
@@ -211,7 +221,7 @@ export function SquidQuoteReview({
       <div className='grid gap-1'>
         <Label htmlFor='squid-source-token'>Source token</Label>
         <Select
-          disabled={isBusy || sourceChainId === "" || isLoadingTokens}
+          disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
           onValueChange={setSourceTokenAddress}
           value={sourceTokenAddress || undefined}
         >
@@ -220,7 +230,9 @@ export function SquidQuoteReview({
           </SelectTrigger>
           <SelectContent>
             {tokens.length === 0 && !isLoadingTokens ? (
-              <div className='px-2 py-1.5 text-sm text-muted-foreground'>No supported tokens on this network.</div>
+              <div className='px-2 py-1.5 text-sm text-muted-foreground'>
+                {sourceTokenCatalogMessage(!quotesUnavailable, isTokenLoadError)}
+              </div>
             ) : (
               tokens.map((token) => (
                 <SelectItem key={token.token} value={token.token}>
@@ -230,6 +242,20 @@ export function SquidQuoteReview({
             )}
           </SelectContent>
         </Select>
+        {tokenLoadFailed && (
+          <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+            <span>{sourceTokenCatalogMessage(true, true)}</span>
+            <Button
+              disabled={isLoadingTokens}
+              onClick={() => void refetchTokens()}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              Retry
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className='grid gap-1'>
