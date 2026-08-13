@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { AlertCircle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 import type { Hex } from "viem";
 import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
@@ -130,7 +131,12 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
               <div className='flex justify-between items-center'>
                 <span className='text-muted-foreground'>Payment Rate:</span>
                 <span className='font-mono font-medium'>
-                  {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+                  {formatToken(
+                    BigInt(rail.paymentRate) * TIME_CONSTANTS.EPOCHS_PER_DAY,
+                    rail.token.decimals,
+                    `${rail.token.symbol}/day`,
+                    12,
+                  )}
                 </span>
               </div>
               <div className='flex justify-between items-center'>
