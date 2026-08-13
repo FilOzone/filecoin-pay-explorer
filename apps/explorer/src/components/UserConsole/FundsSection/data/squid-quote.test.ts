@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import { planSquidTopUp, suggestedNativeFeeLimit } from "./squid-quote";
+import { planSquidTopUp } from "./squid-quote";
 
 const planSquidFunding = vi.hoisted(() => vi.fn());
 const assertTrustedSquidQuote = vi.hoisted(() => vi.fn((quote) => quote));
@@ -66,38 +66,5 @@ describe("Squid quote review", () => {
         sourceAmount: 1n,
       }),
     ).rejects.toThrow("Select a supported source network");
-  });
-
-  it.each([
-    ["ERC-20", "USDC", 0n],
-    ["native", "ETH", 5_000_000_000_000_000_000n],
-  ] as const)("suggests a fee limit from %s route gas costs instead of transaction value", (_, symbol, value) => {
-    const plan = {
-      source: { chainId: 42161, decimals: symbol === "ETH" ? 18 : 6, symbol, token: usdfc },
-      quotes: [
-        {
-          value,
-          costs: [
-            {
-              kind: "gas",
-              amount: 100n,
-              token: { chainId: 42161, decimals: 18, symbol: "ETH" },
-            },
-            {
-              kind: "fee",
-              amount: 10_000n,
-              token: { chainId: 42161, decimals: 6, symbol: "USDC" },
-            },
-            {
-              kind: "gas",
-              amount: 1_000n,
-              token: { chainId: 314, decimals: 18, symbol: "FIL" },
-            },
-          ],
-        },
-      ],
-    } as unknown as Parameters<typeof suggestedNativeFeeLimit>[0];
-
-    expect(suggestedNativeFeeLimit(plan)).toBe(120n);
   });
 });

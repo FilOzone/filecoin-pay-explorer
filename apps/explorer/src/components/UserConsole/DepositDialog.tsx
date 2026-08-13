@@ -18,6 +18,14 @@ import { useAccount, usePublicClient, useReadContract, useReadContracts, useWall
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
+import {
+  calculateFundingRunway,
+  calculateProjectedFundingRunway,
+  FUNDING_ESTIMATE_DISCLAIMER,
+  formatFundedThrough,
+  parseFundingAmount,
+  SUGGESTED_TOP_UP_CAPTION,
+} from "./FundsSection/data/funding-runway";
 
 interface DepositDialogProps {
   userToken?: UserToken | null;
@@ -230,6 +238,14 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
       }
     : tokenDetails;
 
+  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
+  const parsedFundingAmount = currentToken ? parseFundingAmount(amount, currentToken.decimals) : null;
+  const currentRunway = userToken ? calculateFundingRunway(userToken, nowTimestamp) : null;
+  const projectedRunway =
+    userToken && parsedFundingAmount !== null
+      ? calculateProjectedFundingRunway(userToken, parsedFundingAmount, nowTimestamp)
+      : null;
+
   const canDeposit = currentToken && amount && !isExecuting;
 
   return (
@@ -390,12 +406,27 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   >
                     Use suggested: {suggestedAmount} {currentToken.symbol}
                   </Button>
-                  <span>keeps this account funded for about a year</span>
+                  <span>{SUGGESTED_TOP_UP_CAPTION}</span>
                 </div>
               ) : (
                 <p className='text-xs text-muted-foreground'>
                   Enter the amount of {currentToken.symbol} you want to deposit
                 </p>
+              )}
+              {currentRunway && (
+                <div className='grid gap-2 rounded-md border p-3 text-sm'>
+                  <p>
+                    Current funded through:{" "}
+                    <span className='font-medium'>{formatFundedThrough(currentRunway, nowTimestamp)}</span>
+                  </p>
+                  <p>
+                    Projected funded through:{" "}
+                    <span className='font-medium'>
+                      {projectedRunway ? formatFundedThrough(projectedRunway, nowTimestamp, true) : "—"}
+                    </span>
+                  </p>
+                  <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
+                </div>
               )}
             </div>
           )}

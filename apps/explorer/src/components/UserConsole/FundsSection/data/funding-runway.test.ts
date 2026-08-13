@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateFundingRunway,
+  calculateProjectedFundingRunway,
   EPOCHS_PER_DAY,
   type FundingPosition,
+  formatFundedThrough,
   formatSuggestedTopUp,
   formatUsdfcAmount,
   ONE_YEAR_EPOCHS,
+  parseFundingAmount,
   roundUpUnits,
 } from "./funding-runway";
 
@@ -60,6 +63,14 @@ describe("calculateFundingRunway", () => {
       suggestedTopUp: 0n,
     });
   });
+
+  it("projects deposits and labels future dates as estimates", () => {
+    const current = position(EPOCHS_PER_DAY);
+    const projected = calculateProjectedFundingRunway(current, rate * EPOCHS_PER_DAY, now);
+
+    expect(projected.fundedThroughTimestamp).toBe(now + 2n * EPOCHS_PER_DAY * 30n);
+    expect(formatFundedThrough(projected, now, true)).toMatch(/^~/);
+  });
 });
 
 describe("suggested top-up formatting", () => {
@@ -79,5 +90,11 @@ describe("suggested top-up formatting", () => {
 
   it("caps display precision without changing the deposited amount", () => {
     expect(formatUsdfcAmount(1_562_290_695_640_047_227n)).toBe("1.562291");
+  });
+
+  it("parses only positive funding amounts at the token precision", () => {
+    expect(parseFundingAmount("1.25", 6)).toBe(1_250_000n);
+    expect(parseFundingAmount("0", 18)).toBeNull();
+    expect(parseFundingAmount("not-a-number", 18)).toBeNull();
   });
 });

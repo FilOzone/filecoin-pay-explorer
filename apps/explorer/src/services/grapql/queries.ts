@@ -436,6 +436,27 @@ export const GET_ACCOUNT_TOKENS = gql`
   }
 `;
 
+export const GET_ACCOUNT_TOKEN = gql`
+  query GetAccountToken($accountId: Bytes!, $tokenId: Bytes!) {
+    userTokens(where: { account: $accountId, token: $tokenId }, first: 1) {
+      id
+      funds
+      lockupCurrent
+      lockupRate
+      lockupLastSettledUntilEpoch
+      lockupLastSettledUntilTimestamp
+      payout
+      fundsCollected
+      token {
+        id
+        name
+        symbol
+        decimals
+      }
+    }
+  }
+`;
+
 export const GET_ACCOUNT_RAILS = gql`
   query GetAccountRails($accountId: Bytes!, $first: Int!, $skip: Int!) {
     rails(

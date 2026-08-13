@@ -15,17 +15,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { Address } from "viem";
 import { useAccount, useSwitchChain } from "wagmi";
-import { mainnet } from "@/constants/chains";
+import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
-import { formatDate } from "@/utils/formatter";
 import {
   calculateFundingRunway,
+  calculateProjectedFundingRunway,
+  FUNDING_ESTIMATE_DISCLAIMER,
   type FundingPosition,
+  formatFundedThrough,
   formatSuggestedTopUp,
   formatUsdfcAmount,
+  SUGGESTED_TOP_UP_CAPTION,
 } from "../data/funding-runway";
-import { calculateProjectedFundingRunway, parseTopUpAmount } from "../data/guided-top-up";
+import { parseTopUpAmount } from "../data/guided-top-up";
+import {
+  clearSquidAcquisition,
+  loadSquidAcquisition,
+  markSquidAcquired,
+  markSquidDepositPending,
+  type SquidAcquisition,
+} from "../data/squid-acquisition";
+import { isUserRejectedRequest } from "../data/squid-execution";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
@@ -74,7 +86,7 @@ export function GuidedTopUpDialog({
   position,
 }: GuidedTopUpDialogProps) {
   const { synapse } = useSynapse();
-  const { chainId } = useAccount();
+  const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
   const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
@@ -84,14 +96,47 @@ export function GuidedTopUpDialog({
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
+  const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
+  const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const wasOpen = useRef(false);
+  const latestAddress = useRef(address);
+  latestAddress.current = address;
   const parsedAmount = parseTopUpAmount(amount);
   const depositAmount = acquiredAmount ?? parsedAmount;
   const current = calculateFundingRunway(position, nowTimestamp);
   const projected =
     depositAmount === null ? null : calculateProjectedFundingRunway(position, depositAmount, nowTimestamp);
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
+  const acquisitionOwnerMatches =
+    acquisitionOwner === null || (address !== undefined && acquisitionOwner.toLowerCase() === address.toLowerCase());
+  const savedSourceChain = SQUID_SOURCE_CHAINS.find(
+    (sourceChain) => sourceChain.id === savedAcquisition?.sourceChainId,
+  );
+
+  useEffect(() => {
+    setIsSubmitting(false);
+    if (!address) {
+      setAcquiredAmount(null);
+      setAcquisitionOwner(null);
+      setSavedAcquisition(null);
+      setAcquisitionState("idle");
+      return;
+    }
+
+    try {
+      const saved = loadSquidAcquisition(window.localStorage, address);
+      setSavedAcquisition(saved);
+      setAcquisitionOwner(saved?.owner ?? null);
+      setAcquiredAmount(saved?.status === "acquired" ? saved.destinationAmount : null);
+      setAcquisitionState(saved?.status === "acquired" ? "acquired" : saved ? "blocked" : "idle");
+    } catch {
+      setAcquiredAmount(null);
+      setAcquisitionOwner(null);
+      setSavedAcquisition(null);
+      setAcquisitionState("blocked");
+    }
+  }, [address]);
 
   useEffect(() => {
     // Reset to an empty amount on open; the user fills it (or taps the suggested chip) so nothing is pre-entered.
@@ -102,13 +147,43 @@ export function GuidedTopUpDialog({
   }, [acquiredAmount, open]);
 
   const handleConfirm = async () => {
-    if (!synapse || acquiredAmount === null || isSubmitting) return;
+    if (
+      !synapse ||
+      acquiredAmount === null ||
+      isSubmitting ||
+      !acquisitionOwner ||
+      !acquisitionOwnerMatches ||
+      !savedAcquisition
+    )
+      return;
 
+    let pendingAcquisition: SquidAcquisition;
+    try {
+      pendingAcquisition = markSquidDepositPending(window.localStorage, savedAcquisition);
+      setSavedAcquisition(pendingAcquisition);
+    } catch {
+      toast.error("Browser storage is unavailable. The deposit cannot start safely without recovery state.");
+      return;
+    }
+    const depositOwner = acquisitionOwner;
+    const isCurrentDepositOwner = () => latestAddress.current?.toLowerCase() === depositOwner.toLowerCase();
+    let didBroadcast = false;
     setIsSubmitting(true);
     try {
       const { receipt } = await synapse.payments.fundSync({
         amount: acquiredAmount,
-        onHash: () => toast.info("Top-up transaction submitted"),
+        onHash: (hash) => {
+          didBroadcast = true;
+          try {
+            pendingAcquisition = markSquidDepositPending(window.localStorage, pendingAcquisition, hash);
+            if (isCurrentDepositOwner()) setSavedAcquisition(pendingAcquisition);
+          } catch {
+            if (isCurrentDepositOwner()) {
+              toast.error("The transaction was submitted, but its recovery state could not be updated.");
+            }
+          }
+          if (isCurrentDepositOwner()) toast.info("Top-up transaction submitted");
+        },
       });
       if (receipt.status !== "success") throw new Error("Top-up transaction reverted");
       await Promise.all([
@@ -116,22 +191,97 @@ export function GuidedTopUpDialog({
         queryClient.invalidateQueries({ queryKey: ["balance"] }),
         queryClient.invalidateQueries({ queryKey: ["readContract"] }),
       ]);
-      toast.success("USDFC top-up confirmed");
-      setAcquiredAmount(null);
-      setAcquisitionState("idle");
-      onOpenChange(false);
+      try {
+        clearSquidAcquisition(window.localStorage, depositOwner);
+      } catch {
+        if (isCurrentDepositOwner()) {
+          toast.warning("Top-up succeeded, but the saved acquisition could not be cleared.");
+        }
+      }
+      if (isCurrentDepositOwner()) {
+        toast.success("USDFC top-up confirmed");
+        setAcquiredAmount(null);
+        setAcquisitionOwner(null);
+        setSavedAcquisition(null);
+        setAcquisitionState("idle");
+        onOpenChange(false);
+      }
     } catch (error) {
-      toast.error("USDFC top-up failed", {
-        description: error instanceof Error ? error.message : "Your wallet did not complete the request.",
-      });
+      if (!didBroadcast && isUserRejectedRequest(error)) {
+        try {
+          const acquired = markSquidAcquired(window.localStorage, pendingAcquisition);
+          if (isCurrentDepositOwner()) {
+            setSavedAcquisition(acquired);
+            setAcquisitionState("acquired");
+          }
+        } catch {
+          if (isCurrentDepositOwner()) {
+            setAcquiredAmount(null);
+            setAcquisitionState("blocked");
+          }
+        }
+      } else if (isCurrentDepositOwner()) {
+        setAcquiredAmount(null);
+        setAcquisitionState("blocked");
+      }
+      if (isCurrentDepositOwner()) {
+        toast.error("USDFC top-up failed", {
+          description: error instanceof Error ? error.message : "Your wallet did not complete the request.",
+        });
+      }
     } finally {
-      setIsSubmitting(false);
+      if (isCurrentDepositOwner()) setIsSubmitting(false);
     }
   };
 
-  const fundedThrough = (timestamp: bigint | null, status: typeof current.status) => {
-    if (timestamp === null) return status === "critical" ? "Underfunded" : "No active spend";
-    return timestamp <= nowTimestamp ? "Underfunded" : formatDate(timestamp);
+  const clearBlockedAcquisition = () => {
+    if (!address) return;
+    const clearMessage =
+      savedAcquisition?.status === "depositing"
+        ? "Only clear this after confirming the Filecoin deposit completed."
+        : "Only clear this after confirming USDFC did not arrive and no source transaction is pending.";
+    if (!window.confirm(clearMessage)) {
+      return;
+    }
+    try {
+      clearSquidAcquisition(window.localStorage, address);
+    } catch {
+      toast.error("Browser storage is unavailable. The saved acquisition could not be cleared.");
+      return;
+    }
+    setAcquiredAmount(null);
+    setAcquisitionOwner(null);
+    const completedDeposit = savedAcquisition?.status === "depositing";
+    setSavedAcquisition(null);
+    setAcquisitionState("idle");
+    if (completedDeposit) onOpenChange(false);
+  };
+
+  const continueWithAcquiredUsdfc = () => {
+    if (savedAcquisition?.status !== "processing") return;
+    try {
+      const acquired = markSquidAcquired(window.localStorage, savedAcquisition);
+      setSavedAcquisition(acquired);
+      setAcquisitionOwner(acquired.owner);
+      setAcquiredAmount(acquired.destinationAmount);
+      setAcquisitionState("acquired");
+    } catch {
+      toast.error("Browser storage is unavailable. The acquisition could not be recovered safely.");
+    }
+  };
+
+  const retryFilecoinDeposit = () => {
+    if (savedAcquisition?.status !== "depositing") return;
+    if (!window.confirm("Retry only after confirming the saved Filecoin transaction did not complete.")) return;
+    try {
+      const acquired = markSquidAcquired(window.localStorage, savedAcquisition);
+      setSavedAcquisition(acquired);
+      setAcquisitionOwner(acquired.owner);
+      setAcquiredAmount(acquired.destinationAmount);
+      setAcquisitionState("acquired");
+    } catch {
+      toast.error("Browser storage is unavailable. The deposit could not be recovered safely.");
+    }
   };
 
   const switchToFilecoin = async () => {
@@ -189,29 +339,94 @@ export function GuidedTopUpDialog({
                 Use suggested: {chipAmount} USDFC
               </Button>
             )}
+            {chipAmount && acquiredAmount === null && (
+              <p className='text-xs text-muted-foreground'>{SUGGESTED_TOP_UP_CAPTION}</p>
+            )}
           </div>
           <div className='grid gap-2 rounded-md border p-3 text-sm'>
             <p>
-              Current funded through:{" "}
-              <span className='font-medium'>{fundedThrough(current.fundedThroughTimestamp, current.status)}</span>
+              Current funded through: <span className='font-medium'>{formatFundedThrough(current, nowTimestamp)}</span>
             </p>
             <p>
               Projected funded through:{" "}
               <span className='font-medium'>
-                {projected ? fundedThrough(projected.fundedThroughTimestamp, projected.status) : "—"}
+                {projected ? formatFundedThrough(projected, nowTimestamp, true) : "—"}
               </span>
             </p>
             <p className='text-muted-foreground'>
               {acquiredAmount === null ? "Target deposit" : "Ready to deposit"}:{" "}
               {depositAmount === null ? "—" : formatUsdfcAmount(depositAmount)} USDFC.
             </p>
+            <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
           </div>
-          <SquidQuoteReview
-            acquisitionState={acquisitionState}
-            destinationAmount={depositAmount}
-            onAcquired={setAcquiredAmount}
-            onAcquisitionStateChange={setAcquisitionState}
-          />
+          {acquisitionState === "blocked" && (
+            <div className='grid gap-2 rounded-md border border-destructive/30 p-3 text-sm'>
+              {savedAcquisition ? (
+                <>
+                  <p className='font-medium text-destructive'>A saved transaction needs verification.</p>
+                  {savedAcquisition.status === "depositing" ? (
+                    <p>
+                      Check the Filecoin deposit transaction before retrying or clearing it:
+                      {savedAcquisition.depositTransactionHash ? (
+                        <code className='mt-1 block break-all'>{savedAcquisition.depositTransactionHash}</code>
+                      ) : (
+                        <span className='mt-1 block'>The wallet request may not have returned a transaction hash.</span>
+                      )}
+                    </p>
+                  ) : (
+                    <>
+                      <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for USDFC.</p>
+                      {savedAcquisition.transactionHashes.map((hash) => (
+                        <code className='block break-all' key={hash}>
+                          {hash}
+                        </code>
+                      ))}
+                      {savedAcquisition.transactionHashes.length === 0 && (
+                        <p>The wallet request may have been submitted without returning a transaction hash.</p>
+                      )}
+                    </>
+                  )}
+                  <div className='flex flex-wrap gap-2'>
+                    {savedAcquisition.status === "processing" && (
+                      <Button onClick={continueWithAcquiredUsdfc} size='compact' type='button' variant='tertiary'>
+                        USDFC arrived, continue to deposit
+                      </Button>
+                    )}
+                    {savedAcquisition.status === "depositing" && (
+                      <Button onClick={retryFilecoinDeposit} size='compact' type='button' variant='tertiary'>
+                        Deposit failed, retry
+                      </Button>
+                    )}
+                    <Button onClick={clearBlockedAcquisition} size='compact' type='button' variant='tertiary'>
+                      {savedAcquisition.status === "depositing"
+                        ? "Deposit completed, clear"
+                        : "USDFC did not arrive, clear"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className='text-destructive'>Browser storage is unavailable, so funding cannot continue safely.</p>
+              )}
+            </div>
+          )}
+          {acquiredAmount === null && acquisitionState !== "blocked" && (
+            <SquidQuoteReview
+              acquisitionState={acquisitionState}
+              destinationAmount={depositAmount}
+              onAcquired={(acquired) => {
+                setSavedAcquisition(acquired);
+                setAcquiredAmount(acquired.destinationAmount);
+                setAcquisitionOwner(acquired.owner);
+              }}
+              onAcquisitionStateChange={setAcquisitionState}
+              onBlocked={setSavedAcquisition}
+            />
+          )}
+          {acquiredAmount !== null && !acquisitionOwnerMatches && (
+            <p className='text-sm text-destructive' role='alert'>
+              Switch back to {acquisitionOwner} before depositing the acquired USDFC.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button
@@ -228,14 +443,18 @@ export function GuidedTopUpDialog({
             </Button>
           ) : acquisitionState === "blocked" ? (
             <Button disabled variant='primary'>
-              Verify acquisition below to continue
+              Check the saved acquisition above to continue
             </Button>
           ) : acquiredAmount !== null && chainId !== mainnet.id ? (
             <Button disabled={isSubmitting} onClick={switchToFilecoin} variant='primary'>
               Switch to Filecoin to deposit
             </Button>
           ) : acquiredAmount !== null ? (
-            <Button disabled={!synapse || isSubmitting} onClick={handleConfirm} variant='primary'>
+            <Button
+              disabled={!synapse || isSubmitting || !acquisitionOwnerMatches}
+              onClick={handleConfirm}
+              variant='primary'
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className='mr-2 h-4 w-4 animate-spin' />

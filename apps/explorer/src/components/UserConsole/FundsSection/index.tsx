@@ -1,11 +1,12 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import type { Account, UserToken } from "@filecoin-pay/types";
+import type { UserToken } from "@filecoin-pay/types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
-import { useAccountTokens } from "@/hooks/useAccountDetails";
+import { getChain } from "@/constants/chains";
+import { useAccountToken, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId } from "@/utils/network";
 import {
   AddFundsDialog,
@@ -16,15 +17,23 @@ import {
   FundsTable,
   GuidedTopUpDialog,
 } from "./components";
-import { calculateFundingRunway, formatSuggestedTopUp } from "./data/funding-runway";
+import { calculateFundingRunway, type FundingPosition, formatSuggestedTopUp } from "./data/funding-runway";
 import { withoutTopUpSearchParam } from "./data/guided-top-up";
 
 interface FundsSectionProps {
-  account: Account;
+  accountId: string;
   topUpOnly?: boolean;
 }
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly = false }) => {
+const EMPTY_FUNDING_POSITION: FundingPosition = {
+  funds: 0n,
+  lockupCurrent: 0n,
+  lockupLastSettledUntilEpoch: 0n,
+  lockupLastSettledUntilTimestamp: 0n,
+  lockupRate: 0n,
+};
+
+export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, topUpOnly = false }) => {
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
@@ -32,14 +41,19 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
   const [guidedTopUpAmount, setGuidedTopUpAmount] = useState("");
 
   const { chainId } = useAccount();
-  const walletNetwork = getNetworkFromChainId(chainId);
+  const walletNetwork = topUpOnly ? "mainnet" : getNetworkFromChainId(chainId);
+  const usdfcAddress = getChain(walletNetwork).contracts.usdfc.address;
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [guidedTopUpOpen, setGuidedTopUpOpen] = useState(false);
 
-  const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
-  const usdfcToken = data?.userTokens.find((token) => token.token.symbol === "USDFC");
+  const { data, isLoading, isError } = useAccountTokens(accountId, 1, { networkOverride: walletNetwork });
+  const { data: usdfcToken } = useAccountToken(accountId, usdfcAddress, { networkOverride: walletNetwork });
+  const isUsdfcToken = useCallback(
+    (token: UserToken) => token.token.id.toLowerCase() === usdfcAddress.toLowerCase(),
+    [usdfcAddress],
+  );
 
   const handleWithdraw = useCallback((userToken: UserToken) => {
     setSelectedToken(userToken);
@@ -47,6 +61,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
   }, []);
 
   const handleOpenDeposit = useCallback(() => {
+    setSelectedToken(null);
     setDepositDialogOpen(true);
   }, []);
 
@@ -62,19 +77,21 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
 
   // Squid funding acquires USDFC and lands it on Filecoin, so it only applies to the USDFC row on mainnet.
   const canFundWithAnotherToken = useCallback(
-    (token: UserToken) => walletNetwork === "mainnet" && token.token.symbol === "USDFC",
-    [walletNetwork],
+    (token: UserToken) => walletNetwork === "mainnet" && isUsdfcToken(token),
+    [isUsdfcToken, walletNetwork],
   );
 
-  const handleAddFunds = useCallback((token: UserToken) => {
-    setSelectedToken(token);
-    // USDFC always opens the chooser (Squid is shown, but disabled off mainnet); other tokens deposit directly.
-    if (token.token.symbol === "USDFC") {
-      setAddFundsOpen(true);
-    } else {
-      setDepositDialogOpen(true);
-    }
-  }, []);
+  const handleAddFunds = useCallback(
+    (token: UserToken) => {
+      setSelectedToken(token);
+      if (isUsdfcToken(token)) {
+        setAddFundsOpen(true);
+      } else {
+        setDepositDialogOpen(true);
+      }
+    },
+    [isUsdfcToken],
+  );
 
   const handleChooseMethod = useCallback(
     (method: AddFundsMethod) => {
@@ -111,16 +128,18 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
   );
 
   useEffect(() => {
-    if (searchParams.get("topUp") !== "1" || !usdfcToken) return;
+    if (searchParams.get("topUp") !== "1") return;
 
-    const suggestedTopUp = calculateFundingRunway(usdfcToken, BigInt(Math.floor(Date.now() / 1_000))).suggestedTopUp;
-    if (suggestedTopUp <= 0n) return;
+    const suggestedTopUp = usdfcToken
+      ? calculateFundingRunway(usdfcToken, BigInt(Math.floor(Date.now() / 1_000))).suggestedTopUp
+      : 0n;
 
     if (walletNetwork === "mainnet") {
       handleOpenGuidedTopUp(formatSuggestedTopUp(suggestedTopUp));
       return;
     }
 
+    if (!usdfcToken || suggestedTopUp <= 0n) return;
     setSelectedToken(usdfcToken);
     setDepositDialogOpen(true);
   }, [handleOpenGuidedTopUp, searchParams, usdfcToken, walletNetwork]);
@@ -159,7 +178,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
           open={depositDialogOpen}
           onOpenChange={handleDepositOpenChange}
           suggestedAmount={
-            selectedToken?.token.symbol === "USDFC" ? suggestedTopUpFor(selectedToken) || undefined : undefined
+            selectedToken && isUsdfcToken(selectedToken) ? suggestedTopUpFor(selectedToken) || undefined : undefined
           }
         />
 
@@ -186,21 +205,18 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, topUpOnly =
           tokenSymbol={selectedToken.token.symbol}
         />
       )}
-      {usdfcToken && (
-        <GuidedTopUpDialog
-          accountId={account.id}
-          amount={guidedTopUpAmount}
-          onOpenChange={handleGuidedTopUpOpenChange}
-          open={guidedTopUpOpen}
-          position={usdfcToken}
-        />
-      )}
+      <GuidedTopUpDialog
+        accountId={accountId}
+        amount={guidedTopUpAmount}
+        onOpenChange={handleGuidedTopUpOpenChange}
+        open={guidedTopUpOpen}
+        position={usdfcToken ?? EMPTY_FUNDING_POSITION}
+      />
       {topUpOnly ? (
         <div className='flex justify-center'>
           <Button
-            disabled={!usdfcToken}
             onClick={() => {
-              if (usdfcToken) handleOpenGuidedTopUp(suggestedTopUpFor(usdfcToken));
+              handleOpenGuidedTopUp(usdfcToken ? suggestedTopUpFor(usdfcToken) : "");
             }}
             variant='primary'
           >

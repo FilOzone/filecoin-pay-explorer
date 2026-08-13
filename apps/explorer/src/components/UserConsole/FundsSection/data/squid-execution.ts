@@ -6,6 +6,7 @@ import {
   type SquidPublicClient,
   type SquidWalletClient,
 } from "squid-evm-funding";
+import type { Hash } from "viem";
 
 const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
@@ -15,6 +16,8 @@ export async function executeSquidTopUp({
   destinationClient,
   integratorId,
   maxNativeFee,
+  onBroadcast,
+  onTransactionAttempt,
   plan,
   sourcePublicClient,
   sourceWalletClient,
@@ -22,10 +25,22 @@ export async function executeSquidTopUp({
   destinationClient: SquidPublicClient;
   integratorId: string;
   maxNativeFee: bigint;
+  onBroadcast?: (transactionHash: Hash) => void;
+  onTransactionAttempt?: () => void;
   plan: SquidFundingPlan;
   sourcePublicClient: SquidPublicClient;
   sourceWalletClient: SquidWalletClient;
 }): Promise<SquidExecutionResult> {
+  const trackedWalletClient = {
+    ...sourceWalletClient,
+    sendTransaction: async (...args: Parameters<SquidWalletClient["sendTransaction"]>) => {
+      onTransactionAttempt?.();
+      const transactionHash = await sourceWalletClient.sendTransaction(...args);
+      onBroadcast?.(transactionHash);
+      return transactionHash;
+    },
+  } as SquidWalletClient;
+
   return executeSquidFunding(
     {
       feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
@@ -43,7 +58,21 @@ export async function executeSquidTopUp({
       destinationClient,
       publicClient: sourcePublicClient,
       squid: { integratorId },
-      walletClient: sourceWalletClient,
+      walletClient: trackedWalletClient,
     },
   );
+}
+
+export function isUserRejectedRequest(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth += 1) {
+    if (
+      ("code" in current && current.code === 4001) ||
+      ("name" in current && current.name === "UserRejectedRequestError")
+    ) {
+      return true;
+    }
+    current = "cause" in current ? current.cause : null;
+  }
+  return false;
 }

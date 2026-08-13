@@ -19,14 +19,22 @@ import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 import { USDFC_DECIMALS } from "../data/funding-runway";
-import { executeSquidTopUp } from "../data/squid-execution";
-import { planSquidTopUp, suggestedNativeFeeLimit } from "../data/squid-quote";
+import {
+  beginSquidAcquisition,
+  clearSquidAcquisition,
+  markSquidAcquired,
+  markSquidBroadcast,
+  type SquidAcquisition,
+} from "../data/squid-acquisition";
+import { executeSquidTopUp, isUserRejectedRequest } from "../data/squid-execution";
+import { planSquidTopUp } from "../data/squid-quote";
 
 type SquidQuoteReviewProps = {
   acquisitionState: "acquired" | "blocked" | "idle" | "processing";
   destinationAmount: bigint | null;
-  onAcquired: (amount: bigint) => void;
+  onAcquired: (acquisition: SquidAcquisition) => void;
   onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
+  onBlocked: (acquisition: SquidAcquisition) => void;
 };
 
 function displayAmount(amount: bigint, decimals: number, symbol: string) {
@@ -51,25 +59,31 @@ export function SquidQuoteReview({
   destinationAmount,
   onAcquired,
   onAcquisitionStateChange,
+  onBlocked,
 }: SquidQuoteReviewProps) {
+  // The flow is deliberately split into read-only route review and wallet execution.
+  // Any execution that may have broadcast remains blocked until it is recovered or explicitly cleared.
   const { address, chainId } = useAccount();
   const { constants } = useSynapse();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [sourceAmount, setSourceAmount] = useState("");
   const [plan, setPlan] = useState<SquidFundingPlan | null>(null);
+  const [planQuoteKey, setPlanQuoteKey] = useState("");
   const [maximumNativeFee, setMaximumNativeFee] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1_000));
   const quoteKey = `${address}:${chainId}:${destinationAmount}:${sourceAmount}:${sourceChainId}:${sourceTokenAddress}`;
   const latestQuoteKey = useRef(quoteKey);
+  const latestAddress = useRef(address);
   latestQuoteKey.current = quoteKey;
+  latestAddress.current = address;
   const sourceChain = Number(sourceChainId);
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
   const { data: sourceWalletClient } = useWalletClient({ chainId: sourceChain || undefined });
   const destinationClient = usePublicClient({ chainId: 314 });
-  const integratorId = process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID ?? "";
+  const integratorId = process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() ?? "";
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
   const nativeSymbol = sourceChainMeta?.nativeCurrency?.symbol ?? "the native token";
@@ -93,6 +107,7 @@ export function SquidQuoteReview({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the dependencies intentionally invalidate the displayed quote.
   useEffect(() => {
     setPlan(null);
+    setPlanQuoteKey("");
   }, [quoteKey]);
 
   useEffect(() => {
@@ -128,9 +143,8 @@ export function SquidQuoteReview({
         throw new Error("Funding details or wallet changed while requesting the quote.");
       }
       setPlan(result);
-      const suggestedFeeLimit = suggestedNativeFeeLimit(result);
-      const nativeDecimals = sourceChainMeta?.nativeCurrency.decimals ?? 18;
-      setMaximumNativeFee(suggestedFeeLimit > 0n ? formatUnits(suggestedFeeLimit, nativeDecimals) : "");
+      setPlanQuoteKey(reviewedQuoteKey);
+      setMaximumNativeFee("");
     } catch (quoteError) {
       setError(quoteError instanceof Error ? quoteError.message : "Squid could not provide a route.");
     } finally {
@@ -143,7 +157,7 @@ export function SquidQuoteReview({
     if (acquisitionState === "blocked")
       return setError("Check your source wallet activity before starting another acquisition.");
     if (acquisitionState !== "idle") return setError("This acquisition is already complete or in progress.");
-    if (!address || !source || !plan || destinationAmount === null)
+    if (!address || !source || !plan || planQuoteKey !== quoteKey || destinationAmount === null)
       return setError("Review a route before acquiring USDFC.");
     if (chainId !== source.chainId)
       return setError("Switch your wallet to the selected source network before confirming.");
@@ -169,21 +183,58 @@ export function SquidQuoteReview({
               estimateTotalFee(sourcePublicClient, request),
           }
         : sourcePublicClient;
+    let acquisition: ReturnType<typeof beginSquidAcquisition>;
+    try {
+      acquisition = beginSquidAcquisition(window.localStorage, address, destinationAmount, source.chainId);
+    } catch {
+      return setError("Browser storage is unavailable. Squid funding cannot start safely without recovery state.");
+    }
+
+    const isCurrentExecutionOwner = () => latestAddress.current?.toLowerCase() === address.toLowerCase();
+    let didAttemptTransaction = false;
+    let didBroadcast = false;
     onAcquisitionStateChange("processing");
     try {
       await executeSquidTopUp({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
         maxNativeFee,
+        onBroadcast: (hash) => {
+          didBroadcast = true;
+          acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
+        },
+        onTransactionAttempt: () => {
+          didAttemptTransaction = true;
+        },
         plan,
         sourcePublicClient: publicClient as unknown as SquidPublicClient,
         sourceWalletClient: sourceWalletClient as SquidWalletClient,
       });
-      onAcquisitionStateChange("acquired");
-      onAcquired(destinationAmount);
+      const acquired = markSquidAcquired(window.localStorage, acquisition);
+      if (isCurrentExecutionOwner()) {
+        onAcquisitionStateChange("acquired");
+        onAcquired(acquired);
+      }
     } catch (executionError) {
-      onAcquisitionStateChange("blocked");
-      setError(executionError instanceof Error ? executionError.message : "Squid could not complete the acquisition.");
+      if (!didAttemptTransaction || (!didBroadcast && isUserRejectedRequest(executionError))) {
+        try {
+          clearSquidAcquisition(window.localStorage, address);
+          if (isCurrentExecutionOwner()) onAcquisitionStateChange("idle");
+        } catch {
+          if (isCurrentExecutionOwner()) {
+            onBlocked(acquisition);
+            onAcquisitionStateChange("blocked");
+          }
+        }
+      } else if (isCurrentExecutionOwner()) {
+        onBlocked(acquisition);
+        onAcquisitionStateChange("blocked");
+      }
+      if (isCurrentExecutionOwner()) {
+        setError(
+          executionError instanceof Error ? executionError.message : "Squid could not complete the acquisition.",
+        );
+      }
     }
   };
 
@@ -298,7 +349,7 @@ export function SquidQuoteReview({
         </div>
       )}
 
-      {quote && (
+      {quote && planQuoteKey === quoteKey && (
         <div className='grid gap-2 border-t pt-3'>
           <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
             <span className='text-muted-foreground'>Spend</span>
@@ -342,8 +393,8 @@ export function SquidQuoteReview({
               value={maximumNativeFee}
             />
             <p className='text-muted-foreground'>
-              Caps source-chain transaction fees. Prefilled from Squid's gas estimate when available; execution stops if
-              actual fees exceed it.
+              Enter a total source-chain fee cap. Approval and route transactions all count toward it, and execution
+              stops before exceeding it.
             </p>
           </div>
 
@@ -362,12 +413,6 @@ export function SquidQuoteReview({
                 "Acquire USDFC"
               )}
             </Button>
-          )}
-
-          {acquisitionState === "blocked" && (
-            <p className='text-destructive'>
-              The acquisition needs verification. Check your source wallet activity before starting another one.
-            </p>
           )}
         </div>
       )}

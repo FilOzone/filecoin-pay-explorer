@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EPOCHS_PER_DAY } from "./funding-runway";
-import { calculateProjectedFundingRunway, parseTopUpAmount } from "./guided-top-up";
+import { calculateProjectedFundingRunway, EPOCHS_PER_DAY } from "./funding-runway";
+import { parseTopUpAmount } from "./guided-top-up";
 
 const rate = 10_000_000_000_000n;
 const now = 1_767_225_600n;

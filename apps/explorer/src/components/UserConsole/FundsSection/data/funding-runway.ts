@@ -1,11 +1,17 @@
-import { formatUnits } from "viem";
+import { formatUnits, parseUnits } from "viem";
+import { EPOCH_DURATION } from "@/utils/constants";
+import { formatDate } from "@/utils/formatter";
 
-export const EPOCH_DURATION_SECONDS = 30n;
+export const EPOCH_DURATION_SECONDS = BigInt(EPOCH_DURATION);
 export const ONE_YEAR_DAYS = 365n;
 export const USDFC_DECIMALS = 18;
 export const SECONDS_PER_DAY = 24n * 60n * 60n;
 export const EPOCHS_PER_DAY = SECONDS_PER_DAY / EPOCH_DURATION_SECONDS;
 export const ONE_YEAR_EPOCHS = ONE_YEAR_DAYS * EPOCHS_PER_DAY;
+export const FUNDING_ESTIMATE_DISCLAIMER =
+  "Estimates assume your current recurring spend rate; one-time charges are not included.";
+export const SUGGESTED_TOP_UP_CAPTION =
+  "Keeps this account funded for about a year at your current recurring spend rate.";
 
 export type FundingStatus = "long-term-funded" | "funded" | "low" | "urgent" | "critical" | "no-active-spend";
 
@@ -59,6 +65,35 @@ export function calculateFundingRunway(position: FundingPosition, nowTimestamp: 
     status: fundingStatus(runwayInEpochs, currentFunds),
     suggestedTopUp: suggestedTopUp > 0n ? suggestedTopUp : 0n,
   };
+}
+
+export function calculateProjectedFundingRunway(
+  position: FundingPosition,
+  amount: bigint,
+  nowTimestamp: bigint,
+): FundingRunway {
+  return calculateFundingRunway({ ...position, funds: BigInt(position.funds) + amount }, nowTimestamp);
+}
+
+export function parseFundingAmount(amount: string, decimals: number): bigint | null {
+  try {
+    const parsedAmount = parseUnits(amount, decimals);
+    return parsedAmount > 0n ? parsedAmount : null;
+  } catch {
+    return null;
+  }
+}
+
+export function formatFundedThrough(
+  runway: Pick<FundingRunway, "fundedThroughTimestamp" | "status">,
+  nowTimestamp: bigint,
+  approximate = false,
+): string {
+  if (runway.fundedThroughTimestamp === null) {
+    return runway.status === "critical" ? "Underfunded" : "No active spend";
+  }
+  if (runway.fundedThroughTimestamp <= nowTimestamp) return "Underfunded";
+  return `${approximate ? "~" : ""}${formatDate(runway.fundedThroughTimestamp)}`;
 }
 
 function fundingStatus(runwayInEpochs: bigint, currentFunds: bigint): FundingStatus {

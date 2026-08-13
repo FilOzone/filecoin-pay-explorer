@@ -16,11 +16,15 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 const UserConsoleContent = () => {
   const { address, isConnected, chainId } = useAccount();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
-  const isUnsupportedChain = Boolean(isConnected && chainId && !isSupportedChainId(chainId));
-  const externalSquidSourceChain = isUnsupportedChain
-    ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === chainId)
-    : undefined;
-  const isExternalSquidSourceChain = Boolean(externalSquidSourceChain);
+  const externalSquidSourceChain = SQUID_SOURCE_CHAINS.find((chain) => chain.id === chainId);
+  const consoleView =
+    !isConnected || !address
+      ? "disconnected"
+      : isSupportedChainId(chainId)
+        ? "filecoin"
+        : externalSquidSourceChain
+          ? "squid-source"
+          : "unsupported";
 
   const {
     data: account,
@@ -38,12 +42,12 @@ const UserConsoleContent = () => {
           </h2>
           {isConnected && (
             <div className='order-first w-full flex flex-col-reverse gap-2 sm:order-last sm:w-auto sm:flex-row sm:items-center sm:gap-4'>
-              {externalSquidSourceChain ? (
+              {consoleView === "squid-source" ? (
                 <span className='inline-flex items-center gap-3 rounded-md border border-zinc-200 px-3 py-1.5 text-sm'>
-                  <span>{externalSquidSourceChain.name}</span>
+                  <span>{externalSquidSourceChain?.name}</span>
                   {address && <span className='font-mono text-zinc-600'>{formatAddress(address)}</span>}
                 </span>
-              ) : isUnsupportedChain ? (
+              ) : consoleView === "unsupported" ? (
                 <span className='inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700'>
                   <AlertTriangle className='size-4' />
                   Unsupported Network
@@ -62,29 +66,31 @@ const UserConsoleContent = () => {
         <BetaWarning />
 
         {/* Not Connected */}
-        {(!isConnected || !address) && <NotConnected />}
+        {consoleView === "disconnected" && <NotConnected />}
 
         {/* Unsupported Chain */}
-        {isUnsupportedChain && !isExternalSquidSourceChain && <UnsupportedChain />}
+        {consoleView === "unsupported" && <UnsupportedChain />}
 
-        {/* External source chains retain only the guided top-up flow. */}
-        {isConnected && (!isUnsupportedChain || isExternalSquidSourceChain) && (
+        {consoleView === "squid-source" && address && <FundsSection accountId={account?.id ?? address} topUpOnly />}
+
+        {consoleView === "filecoin" && address && (
           <>
             {/* Loading */}
             {isLoading && <LoadingStateCard message='Loading your account details...' />}
 
             {/* Account Not Found */}
-            {!isError && !isLoading && !account && <AccountNotFound />}
-
-            {!isLoading && address && account && (
+            {!isError && !isLoading && !account && (
               <>
-                <FundsSection account={account} topUpOnly={isExternalSquidSourceChain} />
-                {!isExternalSquidSourceChain && (
-                  <>
-                    <RailsSection account={account} userAddress={address} />
-                    <OperatorApprovalsSection account={account} />
-                  </>
-                )}
+                <AccountNotFound />
+                {walletNetwork === "mainnet" && <FundsSection accountId={address} topUpOnly />}
+              </>
+            )}
+
+            {!isLoading && account && (
+              <>
+                <FundsSection accountId={account.id} />
+                <RailsSection account={account} userAddress={address} />
+                <OperatorApprovalsSection account={account} />
               </>
             )}
 

@@ -1,17 +1,7 @@
-import { parseUnits } from "viem";
-import { calculateFundingRunway, type FundingPosition, USDFC_DECIMALS } from "./funding-runway";
+import { parseFundingAmount, USDFC_DECIMALS } from "./funding-runway";
 
 export function parseTopUpAmount(amount: string): bigint | null {
-  try {
-    const parsedAmount = parseUnits(amount, USDFC_DECIMALS);
-    return parsedAmount > 0n ? parsedAmount : null;
-  } catch {
-    return null;
-  }
-}
-
-export function calculateProjectedFundingRunway(position: FundingPosition, amount: bigint, nowTimestamp: bigint) {
-  return calculateFundingRunway({ ...position, funds: BigInt(position.funds) + amount }, nowTimestamp);
+  return parseFundingAmount(amount, USDFC_DECIMALS);
 }
 
 export function withoutTopUpSearchParam(searchParams: URLSearchParams): string {

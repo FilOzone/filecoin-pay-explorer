@@ -3,6 +3,7 @@ import {
   GET_ACCOUNT_APPROVALS,
   GET_ACCOUNT_DETAILS,
   GET_ACCOUNT_RAILS,
+  GET_ACCOUNT_TOKEN,
   GET_ACCOUNT_TOKENS,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
@@ -54,6 +55,16 @@ export const useAccountTokens = (accountId: string, page: number = 1, options?: 
       hasMore: data.userTokens.length === PAGE_SIZE,
     }),
     enabled: !!accountId,
+    networkOverride: options?.networkOverride,
+  });
+
+export const useAccountToken = (accountId: string, tokenId: string, options?: AccountDetailsOptions) =>
+  useGraphQLQuery<AccountTokensResponse, UserToken | null>({
+    queryKey: ["account", accountId, "tokens", "token", tokenId],
+    query: GET_ACCOUNT_TOKEN,
+    variables: { accountId, tokenId },
+    select: (data) => data.userTokens[0] ?? null,
+    enabled: !!accountId && !!tokenId,
     networkOverride: options?.networkOverride,
   });
 
