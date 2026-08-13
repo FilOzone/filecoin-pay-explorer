@@ -33,9 +33,15 @@ vi.mock("@/components/UserConsole/States", () => ({
 }));
 vi.mock("@/components/UserConsole", () => ({
   BetaWarning: () => null,
-  FundsSection: ({ accountId, topUpOnly }: { accountId: string; topUpOnly?: boolean }) => (
-    <div data-account-id={accountId}>{topUpOnly ? "Fund with another token" : "Funds"}</div>
-  ),
+  FundsSection: ({
+    accountId,
+    contentHidden,
+    topUpOnly,
+  }: {
+    accountId: string;
+    contentHidden?: boolean;
+    topUpOnly?: boolean;
+  }) => <div data-account-id={accountId}>{contentHidden ? null : topUpOnly ? "Fund with another token" : "Funds"}</div>,
   OperatorApprovalsSection: () => <div>Approvals</div>,
   RailsSection: () => <div>Rails</div>,
 }));
@@ -52,13 +58,12 @@ describe("UserConsole", () => {
     accountState.isLoading = false;
   });
 
-  it("shows the external funding entry but hides Filecoin-only dashboard sections on a Squid source chain", () => {
+  it("keeps the unsupported-network console state on a Squid source chain", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
-    expect(markup).toContain("Fund with another token");
-    expect(markup).toContain("Arbitrum");
-    expect(markup).toContain("0x1111...1111");
-    expect(markup).not.toContain("Unsupported network");
+    expect(markup).toContain("Unsupported network");
+    expect(markup).toContain('data-account-id="0x1111111111111111111111111111111111111111"');
+    expect(markup).not.toContain("Fund with another token");
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");
     expect(markup).not.toContain("Rails");
@@ -77,11 +82,6 @@ describe("UserConsole", () => {
 
   it("allows an unindexed account to start Squid funding", () => {
     accountState.data = null;
-    const sourceChainMarkup = renderToStaticMarkup(<UserConsole />);
-
-    expect(sourceChainMarkup).toContain("Fund with another token");
-    expect(sourceChainMarkup).not.toContain("Account not found");
-
     wallet.chainId = 314;
     const filecoinMarkup = renderToStaticMarkup(<UserConsole />);
 

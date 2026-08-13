@@ -22,6 +22,7 @@ import { withoutTopUpSearchParam } from "./data/guided-top-up";
 
 interface FundsSectionProps {
   accountId: string;
+  contentHidden?: boolean;
   topUpOnly?: boolean;
 }
 
@@ -33,7 +34,7 @@ const EMPTY_FUNDING_POSITION: FundingPosition = {
   lockupRate: 0n,
 };
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, topUpOnly = false }) => {
+export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHidden = false, topUpOnly = false }) => {
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
@@ -191,7 +192,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, topUpOnly
 
   return (
     <div className='flex flex-col gap-4'>
-      {selectedToken && (
+      {!contentHidden && selectedToken && (
         <AddFundsDialog
           onOpenChange={setAddFundsOpen}
           onSelect={handleChooseMethod}
@@ -212,7 +213,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, topUpOnly
         open={guidedTopUpOpen}
         position={usdfcToken ?? EMPTY_FUNDING_POSITION}
       />
-      {topUpOnly ? (
+      {contentHidden ? null : topUpOnly ? (
         <div className='flex justify-center'>
           <Button
             onClick={() => {
