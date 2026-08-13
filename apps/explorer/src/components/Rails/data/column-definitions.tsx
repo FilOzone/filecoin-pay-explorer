@@ -1,5 +1,6 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { Rail } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
 import { formatDate, formatToken } from "@/utils/formatter";
@@ -76,10 +77,10 @@ export const columns = [
     }),
     {
       id: "paymentRate",
-      header: "Payment Rate",
+      header: "Payment Rate/day",
       cell: (info) => {
         const { paymentRate, token } = info.getValue();
-        return formatToken(paymentRate, token.decimals, token.symbol, 8);
+        return formatToken(BigInt(paymentRate) * TIME_CONSTANTS.EPOCHS_PER_DAY, token.decimals, token.symbol, 8);
       },
     },
   ),

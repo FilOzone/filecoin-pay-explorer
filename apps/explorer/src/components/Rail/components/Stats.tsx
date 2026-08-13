@@ -3,6 +3,7 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail, RailState } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import {
   CalendarCheckIcon,
   CalendarPlusIcon,
@@ -23,7 +24,6 @@ import {
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
-import { EPOCH_DURATION } from "@/utils/constants";
 import { formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
 import { CopyableText, EpochTime, MetricItem, RailStateBadge } from "../../shared";
 
@@ -141,7 +141,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               <MetricItem
                 title='Payment Rate'
                 value={formatToken(
-                  (Number(rail.paymentRate) / EPOCH_DURATION) * 60 * 60 * 24,
+                  BigInt(rail.paymentRate) * TIME_CONSTANTS.EPOCHS_PER_DAY,
                   rail.token.decimals,
                   `${rail.token.symbol}/day`,
                   12,

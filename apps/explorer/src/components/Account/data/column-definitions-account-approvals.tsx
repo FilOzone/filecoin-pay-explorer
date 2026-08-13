@@ -1,5 +1,6 @@
 import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import type { OperatorApproval } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AllowanceDisplay, ExplorerLink } from "@/components/shared";
 import { EPOCH_DURATION } from "@/utils/constants";
@@ -58,12 +59,12 @@ export const columns = [
       token: row.token,
     }),
     {
-      header: "Rate Allowance",
+      header: "Rate Allowance/day",
       cell: (info) => {
         const { rateAllowance, token } = info.getValue();
         return (
           <AllowanceDisplay
-            value={rateAllowance}
+            value={BigInt(rateAllowance) * TIME_CONSTANTS.EPOCHS_PER_DAY}
             tokenDecimals={token.decimals}
             symbol={token.symbol}
             formatValue={formatToken}
@@ -92,10 +93,11 @@ export const columns = [
       token: row.token,
     }),
     {
-      header: "Rate Usage",
+      header: "Rate Usage/day",
       cell: (info) => {
         const { rateUsage, token } = info.getValue();
-        return formatToken(rateUsage, token.decimals, token.symbol, 8);
+        const rateUsagePerDay = BigInt(rateUsage) * TIME_CONSTANTS.EPOCHS_PER_DAY;
+        return formatToken(rateUsagePerDay, token.decimals, token.symbol, 8);
       },
     },
   ),

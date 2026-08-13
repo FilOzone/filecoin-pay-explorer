@@ -1,4 +1,5 @@
 import type { RateChangeQueue } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
 import { EpochTimeCell } from "@/components/shared";
 import { formatToken } from "@/utils/formatter";
@@ -38,10 +39,10 @@ export const columns = [
       token: row.rail.token,
     }),
     {
-      header: "Rate",
+      header: "Rate/day",
       cell: (info) => {
         const { rate, token } = info.getValue();
-        return formatToken(rate, token.decimals, token.symbol, 8);
+        return formatToken(BigInt(rate) * TIME_CONSTANTS.EPOCHS_PER_DAY, token.decimals, token.symbol, 8);
       },
     },
   ),
