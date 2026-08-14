@@ -8,7 +8,7 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { useMemo, useState } from "react";
-import { useChainId } from "wagmi";
+import { useBlockNumber, useChainId } from "wagmi";
 import { getChain } from "@/constants/chains";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
@@ -40,12 +40,15 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     };
   }, [chainId]);
 
+  const { data: currentEpoch } = useBlockNumber({ chainId, watch: true });
+
   const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     explorerUrl: chain.blockExplorers?.default.url,
+    currentEpoch,
   });
 
   const handleSettle = (rail: Rail) => {
@@ -89,11 +92,12 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     () =>
       filteredRails.map((rail) => ({
         ...rail,
+        currentEpoch,
         userAddress,
         isPayer: rail.payer.address.toLowerCase() === userAddress.toLowerCase(),
         isSettling: settlements.has(rail.railId.toString()),
       })),
-    [filteredRails, userAddress, settlements],
+    [filteredRails, currentEpoch, userAddress, settlements],
   );
 
   const totalPages = account.totalRails ? Math.ceil(Number(account.totalRails) / 10) : 1;
@@ -173,6 +177,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
         <SettleRailDialog
           rail={selectedRail}
           userAddress={userAddress}
+          currentEpoch={currentEpoch}
           open={settleDialogOpen}
           onOpenChange={setSettleDialogOpen}
           isSettling={isSettling(selectedRail.railId.toString())}

@@ -455,6 +455,10 @@ export const GET_ACCOUNT_RAILS = gql`
       totalOneTimePaymentAmount
       lockupPeriod
       settledUpto
+      rateChangeQueue(first: 1, orderBy: untilEpoch, orderDirection: desc) {
+        rate
+        untilEpoch
+      }
       createdAt
       payer {
         id

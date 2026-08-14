@@ -15,11 +15,13 @@ import type { Hex } from "viem";
 import { useRailSettlementCalculations } from "@/hooks/useRailSettlementCalculations";
 import type { SettleRailParams } from "@/hooks/useRailSettlements";
 import { formatAddress, formatEpochDuration, formatToken } from "@/utils/formatter";
+import { isRailSettlementAllowed } from "@/utils/railSettlement";
 import { EpochTimeCell, InlineTextLoader, RailStateBadge } from "../shared";
 
 interface SettleRailDialogProps {
   rail: Rail;
   userAddress: string;
+  currentEpoch?: bigint;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isSettling?: boolean;
@@ -29,6 +31,7 @@ interface SettleRailDialogProps {
 export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
   rail,
   userAddress,
+  currentEpoch: latestCurrentEpoch,
   open,
   onOpenChange,
   isSettling = false,
@@ -41,17 +44,16 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
     epochsSinceLastSettlement,
     expectedSettleAmount,
     isLoadingBlockNumber,
-  } = useRailSettlementCalculations(rail, userAddress);
+  } = useRailSettlementCalculations(rail, userAddress, latestCurrentEpoch);
 
-  const canSettle = !isSettling && !isLoadingBlockNumber && epochsSinceLastSettlement > 0n;
+  const canSettle = isRailSettlementAllowed(rail, latestCurrentEpoch) && !isSettling && !isLoadingBlockNumber;
   const readyCurrentEpoch = isLoadingBlockNumber || currentEpoch === 0n ? undefined : currentEpoch;
   const epochsToSettleText =
     readyCurrentEpoch === undefined ? "Loading..." : formatEpochDuration(epochsSinceLastSettlement);
 
   const handleSettle = async () => {
-    if (isLoadingBlockNumber || currentEpoch === 0n) {
-      return;
-    }
+    if (!canSettle) return;
+
     try {
       await settleRail({
         railId: rail.railId,
