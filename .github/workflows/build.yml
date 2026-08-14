@@ -2,7 +2,7 @@ name: Build
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main, staging]
     paths:
       - "apps/**"
       - "packages/**"
@@ -11,7 +11,7 @@ on:
       - "turbo.json"
       - ".github/workflows/build.yml"
   push:
-    branches: [main, develop]
+    branches: [main, staging]
     paths:
       - "apps/**"
       - "packages/**"

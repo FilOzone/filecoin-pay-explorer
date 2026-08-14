@@ -1,0 +1,153 @@
+name: Notification Service
+
+on:
+  pull_request:
+    branches: [main, staging]
+    paths:
+      - "apps/notification-service/**"
+      - ".github/workflows/notification-service.yml"
+  push:
+    branches: [main, staging]
+    paths:
+      - "apps/notification-service/**"
+      - ".github/workflows/notification-service.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --filter @filecoin-pay/notification-service run type-check
+
+      - name: Test
+        run: pnpm --filter @filecoin-pay/notification-service run test
+
+  deploy-staging:
+    name: Deploy (staging)
+    needs: ci
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --remote
+
+      - name: Deploy API worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c api/wrangler.jsonc --env staging
+
+      - name: Deploy processor worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c alert-processor/wrangler.jsonc --env staging
+
+      - name: Deploy scheduler worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c alert-scheduler/wrangler.jsonc --env staging
+
+  deploy-production:
+    name: Deploy (production)
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: d1 migrations apply filecoin-pay-notification-db-production -c api/wrangler.jsonc --env production --remote
+
+      - name: Deploy API worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c api/wrangler.jsonc --env production
+
+      - name: Deploy processor worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c alert-processor/wrangler.jsonc --env production
+
+      - name: Deploy scheduler worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: deploy -c alert-scheduler/wrangler.jsonc --env production
