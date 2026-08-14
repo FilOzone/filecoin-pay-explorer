@@ -24,12 +24,17 @@ jobs:
       - name: Generate commit list
         id: commits
         run: |
-          git log origin/main..HEAD --pretty=format:"%s (%h)" > /tmp/commits.txt
-
-          if [ ! -s /tmp/commits.txt ]; then
+          # Use file diff (not commit reachability) for the skip check so that
+          # back-merges via squash or cherry-pick — which produce new SHAs with
+          # identical content — don't trigger a no-op promotion PR.
+          if git diff --quiet origin/main HEAD; then
             echo "Staging is up to date with main — nothing to promote."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
+            # Commit list is history-based (best effort). In squash/cherry-pick
+            # back-merge edge cases it may include commits already on main, but
+            # the PR diff will be empty and reviewers will notice.
+            git log origin/main..HEAD --pretty=format:"%s (%h)" > /tmp/commits.txt
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 

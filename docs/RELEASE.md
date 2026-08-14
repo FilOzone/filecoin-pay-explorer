@@ -37,7 +37,7 @@ flowchart TD
       C --> D{checks pass?}
       D -->|no| E[Fix & push]
       E --> C
-      D -->|yes| F[CODEOWNERS review & approve]
+      D -->|yes| F[review & approve]
       F --> G[Squash merge into staging]
 
       B -->|main directly| H[guard-main posts routing warning]
@@ -45,7 +45,7 @@ flowchart TD
       I --> J{checks pass?}
       J -->|no| K[Fix & push]
       K --> I
-      J -->|yes| L[CODEOWNERS review & approve]
+      J -->|yes| L[review & approve]
       L --> M[Merge into main\nskips staging validation]
 
       G --> N[promote-staging.yml triggers]
@@ -79,8 +79,8 @@ CODEOWNERS are notified for review. Squash merge when approved.
 
 Every push to `staging` triggers `.github/workflows/promote-staging.yml`, which:
 
-- Compares `staging` against `main` using `git log`
-- Skips if staging is already up to date with main
+- Skips if `staging` and `main` have identical file content (`git diff`) — content-based, not commit-based, so back-merges via squash or cherry-pick don't trigger no-op PRs
+- Generates the commit list using `git log` — history-based and best effort; in squash/cherry-pick back-merge edge cases it may list commits already on `main`, but the PR diff will be empty and reviewers will notice
 - Opens a `staging → main` PR titled `chore: promote staging to production` if none exists
 - Updates the PR body with the current commit list if the PR already exists
 
@@ -128,6 +128,8 @@ The subgraph release cycle is managed by [release-please](https://github.com/goo
 3. Opens a release tracking issue for post-deploy verification
 
 Deployment requires the `GOLDSKY_API_KEY` repository secret.
+
+**Back-merge required after each subgraph release.** When the release-please Release PR is merged, it commits a `CHANGELOG.md` update and version bump directly to `main`. These commits are not on `staging`, causing the two branches to diverge. After every subgraph release, back-merge `main` into `staging`.
 
 ---
 
