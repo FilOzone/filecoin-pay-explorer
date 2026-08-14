@@ -7,6 +7,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
+import { SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useChainId } from "wagmi";
 import { getChain } from "@/constants/chains";
@@ -28,6 +29,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
+  const [showFilters, setShowFilters] = useState(false);
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
 
@@ -62,6 +64,10 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const handleClearSearch = () => {
     setSearchQuery("");
     setPage(1);
+  };
+
+  const handleToggleFilters = () => {
+    setShowFilters((prev) => !prev);
   };
 
   // Filter rails based on search
@@ -113,12 +119,22 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   return (
     <>
       <div className='flex flex-col gap-4'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
-          <h3 className='text-2xl font-medium'>Payment Rails</h3>
+        <div className='flex items-center justify-between'>
+          <h3 className='text-2xl font-medium'>Your services</h3>
+          <button
+            type='button'
+            onClick={handleToggleFilters}
+            className={`relative rounded-lg p-2 transition-colors ${
+              showFilters ? "bg-zinc-100 text-zinc-800" : "text-zinc-400 hover:bg-zinc-50 hover:text-zinc-600"
+            }`}
+          >
+            <SlidersHorizontal className='size-5' />
+            {searchQuery && <span className='absolute -top-0.5 -right-0.5 size-2 rounded-full bg-blue-500' />}
+          </button>
         </div>
 
-        {/* Search */}
-        <RailsSearch onSearch={handleSearch} onClear={handleClearSearch} />
+        {/* Collapsible filters */}
+        {showFilters && <RailsSearch onSearch={handleSearch} onClear={handleClearSearch} />}
 
         {/* Results */}
         {filteredRails.length === 0 ? (

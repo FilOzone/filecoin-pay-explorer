@@ -2,7 +2,7 @@
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertTriangle } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useConnection } from "wagmi";
 import { Balance, ChainSwitcher } from "@/components/shared";
 import {
@@ -13,6 +13,7 @@ import {
   RailsSection,
 } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
+import { ConsoleSidebar, type ConsoleTab } from "@/components/UserConsole/ConsoleSidebar";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
@@ -22,6 +23,7 @@ const UserConsoleContent = () => {
   const { address, isConnected, chainId } = useConnection();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isUnsupportedChain = isConnected && chainId && !isSupportedChainId(chainId);
+  const [activeTab, setActiveTab] = useState<ConsoleTab>("dashboard");
 
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
 
@@ -59,7 +61,6 @@ const UserConsoleContent = () => {
           )}
         </div>
 
-        {/* Beta Warning */}
         <BetaWarning />
 
         {/* Alerts Banner — hidden once subscribed */}
@@ -71,30 +72,40 @@ const UserConsoleContent = () => {
 
         {/* Not Connected */}
         {(!isConnected || !address) && <NotConnected />}
-
-        {/* Unsupported Chain */}
         {isUnsupportedChain && <UnsupportedChain />}
 
-        {/* Only show content if connected to supported chain */}
         {isConnected && !isUnsupportedChain && (
-          <>
-            {/* Loading */}
-            {isLoading && <LoadingStateCard message='Loading your account details...' />}
+          <div className='flex gap-8'>
+            <ConsoleSidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-            {/* Account Not Found */}
-            {!isError && !isLoading && !account && <AccountNotFound />}
+            <div className='flex-1 min-w-0 flex flex-col gap-15'>
+              {isLoading && <LoadingStateCard message='Loading your account details...' />}
 
-            {!isLoading && address && account && (
+          {/* TODO: handle this merge conflict */}
+            {/* {!isLoading && address && account && (
               <>
                 <FundsSection account={account} subscribed={subscribed} />
                 <RailsSection account={account} userAddress={address} />
                 <OperatorApprovalsSection account={account} />
               </>
-            )}
+            )} */}
+              {!isError && !isLoading && !account && <AccountNotFound />}
 
-            {/* Error */}
-            {isError && <ErrorState error={error} />}
-          </>
+              {!isLoading && address && account && (
+                <>
+                  {activeTab === "dashboard" && (
+                    <>
+                      <FundsSection account={account} />
+                      <RailsSection account={account} userAddress={address} />
+                    </>
+                  )}
+                  {activeTab === "authorizations" && <OperatorApprovalsSection account={account} />}
+                </>
+              )}
+
+              {isError && <ErrorState error={error} />}
+            </div>
+          </div>
         )}
       </div>
     </PageSection>
