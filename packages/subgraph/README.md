@@ -6,9 +6,11 @@ For a full end-to-end release walkthrough, use the [release issue template](../.
 
 ## CI/CD
 
-The [Release Please workflow](../../.github/workflows/release-please.yml) manages subgraph releases. When releasable subgraph changes land on `main`, it opens or updates a Release PR.
+The [Release Please workflow](../../.github/workflows/release-please.yml) manages subgraph releases. When releasable subgraph changes land on `staging`, it opens or updates a Release PR targeting `staging`.
 
-Merging the Release PR creates the `vX.Y.Z` tag and GitHub Release, deploys mainnet and calibration to Goldsky, and opens a release tracking issue. Indexing checks, smoke tests, and promotion to `prod` remain manual.
+Merging the Release PR creates the `vX.Y.Z` tag and GitHub Release, deploys mainnet and calibration to Goldsky, tags both as `staging` on Goldsky, and opens a release tracking issue. Indexing checks and smoke tests remain manual.
+
+Once indexing is confirmed and the Explorer is verified on staging, merge the promotion PR (`staging → main`). This triggers the [tag-subgraph-prod workflow](../../.github/workflows/tag-subgraph-prod.yml), which applies the `prod` tag on Goldsky and switches pay.filecoin.cloud to the new subgraph version automatically.
 
 ## Prerequisites
 

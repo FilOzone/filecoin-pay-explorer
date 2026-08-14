@@ -121,15 +121,20 @@ Skipping the back-merge causes `staging` to diverge from `main`. The next promot
 
 Subgraph PRs follow the same flow as everything else: target `staging`, get reviewed, squash merge. The subgraph and the explorer are tightly coupled, schema changes require regenerating `packages/types` and updating explorer queries, so they should land together.
 
-The subgraph release cycle is managed by [release-please](https://github.com/googleapis/release-please) and triggers automatically when `staging` is promoted to `main`. Every push to `main` triggers `.github/workflows/release-please.yml`, which maintains a Release PR. Merging that PR:
+The subgraph release cycle is managed by [release-please](https://github.com/googleapis/release-please). Every push to `staging` triggers `.github/workflows/release-please.yml`, which maintains a Release PR targeting `staging`. Merging that Release PR:
 
 1. Creates a git tag and GitHub Release at the new version
 2. Deploys the subgraph to Goldsky on both `calibration` and `mainnet` networks
-3. Opens a release tracking issue for post-deploy verification
+3. Tags both deployments as `staging` on Goldsky — the staging Explorer switches to the new version immediately (data may be partially indexed)
+4. Opens a release tracking issue to track indexing and verification
 
 Deployment requires the `GOLDSKY_API_KEY` repository secret.
 
-**Back-merge required after each subgraph release.** When the release-please Release PR is merged, it commits a `CHANGELOG.md` update and version bump directly to `main`. These commits are not on `staging`, causing the two branches to diverge. After every subgraph release, back-merge `main` into `staging`.
+The version bump and `CHANGELOG.md` update land on `staging` first and travel to `main` via the normal promotion PR — no back-merge needed.
+
+**Promoting to production.** After the subgraph finishes indexing and the Explorer is verified on staging, merge the promotion PR. This triggers `.github/workflows/tag-subgraph-prod.yml`, which reads the version from `packages/subgraph/package.json` and applies the `prod` tag on Goldsky. The production Explorer at `pay.filecoin.cloud` switches to the new fully-indexed subgraph automatically.
+
+The release tracking issue checklist guides the verification steps between deploy and promotion.
 
 ---
 

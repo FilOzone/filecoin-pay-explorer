@@ -1,0 +1,43 @@
+name: Tag subgraph as prod
+
+# Runs when the promotion PR merges a subgraph version bump into main.
+# Reads the version from packages/subgraph/package.json and applies the `prod`
+# tag on Goldsky, switching pay.filecoin.cloud to the new fully-indexed version.
+#
+# The paths filter limits this to pushes that actually change the subgraph
+# version — skipping unrelated merges.
+#
+# Requires the GOLDSKY_API_KEY repository secret.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/subgraph/package.json
+
+concurrency:
+  group: tag-subgraph-prod
+  cancel-in-progress: false
+
+jobs:
+  tag-subgraph-prod:
+    name: Tag subgraph as prod (${{ matrix.network }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        network: [calibration, mainnet]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Goldsky CLI
+        run: curl -fsSL https://goldsky.com | sh -s -- -f
+        shell: bash
+
+      - name: Tag as prod (${{ matrix.network }})
+        env:
+          GOLDSKY_API_KEY: ${{ secrets.GOLDSKY_API_KEY }}
+        run: |
+          VERSION=$(node -p "require('./packages/subgraph/package.json').version")
+          goldsky subgraph tag create "filecoin-pay-${{ matrix.network }}/$VERSION" --tag prod --token "$GOLDSKY_API_KEY"

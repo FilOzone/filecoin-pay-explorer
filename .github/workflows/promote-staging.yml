@@ -56,6 +56,18 @@ jobs:
           {
             printf '%s\n' "## Changes" ""
             printf '%s\n' "$CHANGES" ""
+            # Warn reviewers when a subgraph release is included — merging this PR
+            # triggers tag-subgraph-prod.yml which applies the `prod` tag on Goldsky
+            # and switches pay.filecoin.cloud to the new subgraph version.
+            if ! git diff --quiet origin/main HEAD -- packages/subgraph/package.json; then
+              printf '%s\n' ""
+              printf '%s\n' "> [!WARNING]"
+              printf '%s\n' "> **This promotion includes a subgraph release.** Merging will apply the \`prod\` tag on Goldsky and switch pay.filecoin.cloud to the new subgraph version."
+              printf '%s\n' "> Before merging, confirm:"
+              printf '%s\n' "> - The release tracking issue confirms indexing is complete on both networks"
+              printf '%s\n' "> - The Explorer has been smoke-tested on staging against the new subgraph"
+            fi
+            printf '%s\n' ""
             printf '%s\n' "---"
             printf '%s\n' "_Auto-generated — merge when staging is validated._"
           } > /tmp/pr-body.md
