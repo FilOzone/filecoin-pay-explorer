@@ -58,6 +58,7 @@ const calculateFundedUntil = (userToken: FundsTableRow) => {
     availableFunds,
     debt,
     fundedUntilTimestamp,
+    simulatedLockupCurrent,
   };
 };
 
@@ -160,9 +161,10 @@ export const columns = [
     header: () => <div className='text-right'>Locked</div>,
     cell: (info) => {
       const userToken = info.row.original;
+      const { simulatedLockupCurrent } = calculateFundedUntil(userToken);
       return (
         <div className='text-right font-medium tabular-nums'>
-          {formatToken(userToken.lockupCurrent, userToken.token.decimals, "", 6)}
+          {formatToken(simulatedLockupCurrent, userToken.token.decimals, "", 6)}
         </div>
       );
     },
