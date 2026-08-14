@@ -1,7 +1,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { InlineTextLoader } from "@/components/shared";
-import { isRailSettlementAllowed } from "@/utils/railSettlement";
+import { getRailSettlementEligibility, getRailSettlementUnavailableReason } from "@/utils/railSettlement";
 import { useSettleRail } from "../context/SettleRailContext";
 import type { RailTableRow } from "../types";
 
@@ -10,24 +10,13 @@ type RailActionsProps = {
 };
 
 const RailActions = ({ rail }: RailActionsProps) => {
-  const { openSettleDialog } = useSettleRail();
-  const isFinalized = rail.state === "FINALIZED";
-  const isPaused = rail.state === "ZERORATE";
-  const isSettlementAllowed = isRailSettlementAllowed(rail, rail.currentEpoch);
-  const isPausedWithoutSettlement = isPaused && !isSettlementAllowed;
-  const isDisabled = !isSettlementAllowed || rail.isSettling;
+  const { currentEpoch, openSettleDialog } = useSettleRail();
+  const settlementEligibility = getRailSettlementEligibility(rail, currentEpoch);
+  const isDisabled = settlementEligibility.status !== "allowed" || rail.isSettling;
 
-  let tooltipContent = "";
-  if (isFinalized) {
-    tooltipContent = "Rail is finalized and cannot be settled";
-  } else if (rail.isSettling) {
+  let tooltipContent = getRailSettlementUnavailableReason(settlementEligibility);
+  if (settlementEligibility.status === "allowed" && rail.isSettling) {
     tooltipContent = "Settlement in progress...";
-  } else if (rail.currentEpoch === undefined) {
-    tooltipContent = "Loading the current epoch...";
-  } else if (isPausedWithoutSettlement) {
-    tooltipContent = "Paused rail has no unsettled payments";
-  } else if (!isSettlementAllowed) {
-    tooltipContent = "Rail is already settled up to the current epoch";
   }
 
   const button = (

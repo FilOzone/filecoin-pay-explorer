@@ -5,7 +5,6 @@ import type { Abi, Hex, TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import type { TransactionMetadata } from "@/types";
 import { formatToken } from "@/utils/formatter";
-import { getUnsettledEpochs } from "@/utils/railSettlement";
 import { getToastContent } from "@/utils/toast";
 
 interface RailSettlementState {
@@ -19,21 +18,20 @@ interface UseRailSettlementsOptions {
   contractAddress: Hex;
   abi: Abi;
   explorerUrl?: string;
-  currentEpoch?: bigint;
   onSettlementSuccess?: (railId: string, receipt: TransactionReceipt) => void;
   onSettlementError?: (railId: string, error: Error) => void;
 }
 
 export interface SettleRailParams {
   railId: bigint;
-  paymentRate: bigint;
+  untilEpoch: bigint;
+  settlementAmount: bigint;
   tokenSymbol: string;
   tokenDecimals: number;
-  settledUpto: bigint;
 }
 
 export const useRailSettlements = (options: UseRailSettlementsOptions) => {
-  const { contractAddress, abi, explorerUrl, currentEpoch, onSettlementSuccess, onSettlementError } = options;
+  const { contractAddress, abi, explorerUrl, onSettlementSuccess, onSettlementError } = options;
 
   const [settlements, setSettlements] = useState<Map<string, RailSettlementState>>(new Map());
   const [pendingTxHashes, setPendingTxHashes] = useState<Set<Hex>>(new Set());
@@ -125,23 +123,13 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
 
   const settleRail = useCallback(
     async (params: SettleRailParams) => {
-      const { railId, paymentRate, tokenSymbol, tokenDecimals, settledUpto } = params;
+      const { railId, untilEpoch, settlementAmount, tokenSymbol, tokenDecimals } = params;
       const railIdStr = railId.toString();
-
-      if (currentEpoch === undefined) {
-        toast.error("Unable to settle", {
-          description: "Failed to fetch current block number. Please try again.",
-        });
-        return;
-      }
-
-      const epochsSinceLastSettlement = getUnsettledEpochs({ settledUpto }, currentEpoch);
-      const expectedAmount = paymentRate * epochsSinceLastSettlement;
 
       const metadata: TransactionMetadata = {
         type: "settleRail",
         railId: railIdStr,
-        amount: formatToken(expectedAmount, tokenDecimals),
+        amount: formatToken(settlementAmount, tokenDecimals),
         token: tokenSymbol,
       };
 
@@ -163,7 +151,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
           address: contractAddress,
           abi,
           functionName: "settleRail",
-          args: [railId, currentEpoch],
+          args: [railId, untilEpoch],
         });
 
         setSettlements((prev) => {
@@ -214,7 +202,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         throw err;
       }
     },
-    [currentEpoch, contractAddress, abi, writeContractAsync],
+    [contractAddress, abi, writeContractAsync],
   );
 
   const isSettling = useCallback(

@@ -7,8 +7,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { useMemo, useState } from "react";
-import { useBlockNumber, useChainId } from "wagmi";
+import { useCallback, useMemo, useState } from "react";
+import { useChainId } from "wagmi";
 import { getChain } from "@/constants/chains";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
@@ -30,6 +30,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
+  const [settlementEpoch, setSettlementEpoch] = useState<bigint>();
 
   const chainId = useChainId();
   const { chain, walletNetwork } = useMemo(() => {
@@ -40,21 +41,19 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     };
   }, [chainId]);
 
-  const { data: currentEpoch } = useBlockNumber({ chainId, watch: true });
-
   const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     explorerUrl: chain.blockExplorers?.default.url,
-    currentEpoch,
   });
 
-  const handleSettle = (rail: Rail) => {
+  const handleSettle = useCallback((rail: Rail, currentEpoch: bigint | undefined) => {
     setSelectedRail(rail);
+    setSettlementEpoch(currentEpoch);
     setSettleDialogOpen(true);
-  };
+  }, []);
 
   const handleSearch = (query: string, filterType: SearchFilterType) => {
     setSearchQuery(query.toLowerCase());
@@ -87,17 +86,15 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     });
   }, [data, searchQuery, searchFilter]);
 
-  // Prepare table data with userAddress, settlement state, and isPayer calculation
+  // Prepare table data with settlement state and the user's role.
   const tableData = useMemo<RailTableRow[]>(
     () =>
       filteredRails.map((rail) => ({
         ...rail,
-        currentEpoch,
-        userAddress,
         isPayer: rail.payer.address.toLowerCase() === userAddress.toLowerCase(),
         isSettling: settlements.has(rail.railId.toString()),
       })),
-    [filteredRails, currentEpoch, userAddress, settlements],
+    [filteredRails, userAddress, settlements],
   );
 
   const totalPages = account.totalRails ? Math.ceil(Number(account.totalRails) / 10) : 1;
@@ -129,7 +126,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <RailsEmptyNoResults searchFilter={searchFilter} />
         ) : (
           <>
-            <SettleRailProvider onSettle={handleSettle}>
+            <SettleRailProvider chainId={chainId} onSettle={handleSettle}>
               <RailsTable data={tableData} />
             </SettleRailProvider>
 
@@ -177,7 +174,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
         <SettleRailDialog
           rail={selectedRail}
           userAddress={userAddress}
-          currentEpoch={currentEpoch}
+          settlementEpoch={settlementEpoch}
           open={settleDialogOpen}
           onOpenChange={setSettleDialogOpen}
           isSettling={isSettling(selectedRail.railId.toString())}
