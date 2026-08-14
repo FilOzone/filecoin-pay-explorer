@@ -66,6 +66,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: d1 migrations apply filecoin-pay-notification-db-staging -c api/wrangler.jsonc --env staging --remote
+
       - name: Deploy API worker
         uses: cloudflare/wrangler-action@v4
         with:
@@ -111,6 +119,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/notification-service
+          command: d1 migrations apply filecoin-pay-notification-db-production -c api/wrangler.jsonc --env production --remote
 
       - name: Deploy API worker
         uses: cloudflare/wrangler-action@v4
