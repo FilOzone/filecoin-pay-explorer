@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { ArrowDownLeftIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AlertCircle, Info } from "lucide-react";
+import { maxUint256 } from "viem";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
 import { formatFutureTimestamp, formatTimestampToTime, formatToken } from "@/utils/formatter";
@@ -26,25 +27,26 @@ type FundedUntilPresentation = {
 const calculateFundedUntil = (userToken: FundsTableRow) => {
   const funds = BigInt(userToken.funds);
   const lockupCurrent = BigInt(userToken.lockupCurrent);
-  // A sub-epoch remainder can stay available while debt represents the additional amount required.
-  let availableFunds = 0n;
-  if (funds > lockupCurrent) {
-    availableFunds = funds - lockupCurrent;
-  }
-
-  const lockupRate = BigInt(userToken.lockupRate);
-  let fundedUntil = 0n;
-  if (availableFunds > 0n && lockupRate > 0n) {
-    fundedUntil = availableFunds / lockupRate;
-  }
-
-  const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
-
+  const lastSettledAt = BigInt(userToken.lockupLastSettledUntilEpoch);
   const lastSettledTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp);
+  const lockupRate = BigInt(userToken.lockupRate);
+
   let elapsedEpochs = 0n;
   if (userToken.currentTimestamp > lastSettledTimestamp) {
     elapsedEpochs = (userToken.currentTimestamp - lastSettledTimestamp) / BigInt(EPOCH_DURATION);
   }
+
+  const currentEpoch = lastSettledAt + elapsedEpochs;
+
+  const fundedUntilEpoch = lockupRate === 0n ? maxUint256 : lastSettledAt + (funds - lockupCurrent) / lockupRate;
+  const simulatedSettledAt = fundedUntilEpoch < currentEpoch ? fundedUntilEpoch : currentEpoch;
+  const simulatedLockupCurrent = lockupCurrent + lockupRate * (simulatedSettledAt - lastSettledAt);
+
+  const rawAvailable = funds - simulatedLockupCurrent;
+  const availableFunds = rawAvailable > 0n ? rawAvailable : 0n;
+
+  const fundedUntilTimestamp =
+    lockupRate === 0n ? maxUint256 : lastSettledTimestamp + (fundedUntilEpoch - lastSettledAt) * BigInt(EPOCH_DURATION);
 
   const totalOwed = lockupCurrent + lockupRate * elapsedEpochs;
   let debt = 0n;
@@ -52,32 +54,26 @@ const calculateFundedUntil = (userToken: FundsTableRow) => {
     debt = totalOwed - funds;
   }
 
-  let fundedUntilTime = "Infinity";
-  if (lockupRate > 0n) {
-    if (fundedUntilTimestamp <= userToken.currentTimestamp) {
-      fundedUntilTime = "Expired";
-    } else {
-      fundedUntilTime = formatFutureTimestamp(fundedUntilTimestamp, userToken.currentTimestamp);
-    }
-  }
-
-  const timeUntilExpiry = fundedUntilTimestamp - userToken.currentTimestamp;
-  let fundingStatus: FundingStatus = "funded";
-  if (lockupRate === 0n) {
-    fundingStatus = "infinity";
-  } else if (fundedUntilTime === "Expired") {
-    fundingStatus = "expired";
-  } else if (timeUntilExpiry > 0n && timeUntilExpiry <= BigInt(FUNDING_WARNING_THRESHOLD_SECONDS)) {
-    fundingStatus = "warning";
-  }
-
   return {
     availableFunds,
     debt,
-    fundingStatus,
-    fundedUntilTime,
     fundedUntilTimestamp,
   };
+};
+
+/** Checks whether the account is funded, running low, expired, or has no ongoing spending. */
+const getFundingStatus = (fundedUntilTimestamp: bigint, currentTimestamp: bigint) => {
+  if (fundedUntilTimestamp === maxUint256) return "infinity";
+  else if (fundedUntilTimestamp <= currentTimestamp) return "expired";
+  else if (fundedUntilTimestamp - currentTimestamp <= BigInt(FUNDING_WARNING_THRESHOLD_SECONDS)) return "warning";
+
+  return "funded";
+};
+
+/** Formats when the account's funds are expected to run out. */
+const formatFundedUntilTimestamp = (fundedUntilTimestamp: bigint, currentTimestamp: bigint) => {
+  if (fundedUntilTimestamp === maxUint256) return "Infinity";
+  return formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp);
 };
 
 function TokenIcon({ token }: { token: UserToken["token"] }) {
@@ -228,14 +224,15 @@ export const columns = [
     header: () => <div className='text-right'>Funded until</div>,
     cell: (info) => {
       const userToken = info.row.original;
-      const { debt, fundingStatus, fundedUntilTime, fundedUntilTimestamp } = calculateFundedUntil(userToken);
+      const { debt, fundedUntilTimestamp } = calculateFundedUntil(userToken);
+      const fundingStatus = getFundingStatus(fundedUntilTimestamp, userToken.currentTimestamp);
       const presentation = getFundedUntilPresentation(fundingStatus, userToken, fundedUntilTimestamp, debt);
 
       return (
         <div className='text-right'>
           <div className={`font-medium ${presentation.timeColor} flex items-center justify-end gap-1`}>
             {presentation.showWarningIcon && <AlertCircle className='h-3.5 w-3.5' />}
-            {fundedUntilTime}
+            {formatFundedUntilTimestamp(fundedUntilTimestamp, userToken.currentTimestamp)}
           </div>
           {presentation.detail && <div className='text-xs text-muted-foreground'>{presentation.detail}</div>}
         </div>

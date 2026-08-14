@@ -99,7 +99,7 @@ export const formatFutureTimestamp = (
   const futureTime = date.getTime();
   const diffMs = futureTime - now;
 
-  if (diffMs < 0) {
+  if (diffMs <= 0) {
     return "Expired";
   }
 

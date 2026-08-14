@@ -17,19 +17,19 @@ const RAIL_STATE_CONFIG = {
     description: "Payment is streaming at a non-zero rate.",
   },
   ZERORATE: {
-    label: "Idle",
+    label: "Paused",
     dotColor: "bg-amber-500",
     textColor: "text-slate-800 dark:text-slate-200",
     description: "Payment rate is 0; nothing is currently accruing.",
   },
   TERMINATED: {
-    label: "Terminated",
+    label: "Cancelled",
     dotColor: "bg-red-500",
     textColor: "text-slate-800 dark:text-slate-200",
     description: "Rail has ended; any remaining locked funds still need to be settled.",
   },
   FINALIZED: {
-    label: "Finalized",
+    label: "Closed",
     dotColor: "bg-gray-500",
     textColor: "text-slate-800 dark:text-slate-200",
     description: "Rail is fully settled and closed.",
