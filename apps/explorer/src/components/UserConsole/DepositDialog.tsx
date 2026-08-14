@@ -39,9 +39,6 @@ type LoadingState = "idle" | "loading" | "success" | "error";
 
 export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange, suggestedAmount }) => {
   const { address: userAddress } = useAccount();
-  // Runway projection only makes sense for the USDFC funding position; other tokens
-  // (and the no-userToken custom-address path) have no rate-based spend to project.
-  const usdfcPosition = userToken?.token.symbol === "USDFC" ? userToken : null;
   const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
 
   // Form state
@@ -49,6 +46,11 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
   const [tokenAddress, setTokenAddress] = useState("");
 
   const { synapse, constants } = useSynapse();
+  // TODO: runway projection currently only supports USDFC; support other tokens later
+  // (needs decimals-aware amount parsing/formatting — e.g. axlUSDC is 6 decimals, not 18).
+  // Matched by contract address (not symbol) so an unrelated token can't spoof it.
+  const usdfcPosition =
+    userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase() ? userToken : null;
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
