@@ -54,3 +54,5 @@ jobs:
           # CI/CD validation only - uses placeholder URLs if secrets not set
           NEXT_PUBLIC_SUBGRAPH_URL_MAINNET: ${{ secrets.NEXT_PUBLIC_SUBGRAPH_URL_MAINNET || 'https://placeholder.invalid/mainnet' }}
           NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION: ${{ secrets.NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION || 'https://placeholder.invalid/calibration' }}
+          NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS: ${{ vars.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS || 'mainnet' }}
+          NEXT_PUBLIC_NOTIFICATIONS_API_URL: ${{ secrets.NEXT_PUBLIC_NOTIFICATIONS_API_URL || 'https://placeholder.invalid/notifications' }}
