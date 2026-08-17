@@ -161,13 +161,21 @@ describe("inventory file", () => {
 });
 
 describe("env snippet", () => {
-  it("contains SESSION_KEY_PRIVATE, SESSION_KEY_ADDRESS, ACCOUNT_WALLET_ADDRESS and no SDK naming", () => {
+  it("is byte-compatible with ~/.filecoin-session-key.env: SESSION_KEY, WALLET_ADDRESS, session-address comment", () => {
     const pk = `0x${"ab".repeat(32)}`;
     const snippet = buildEnvSnippet(pk, SIGNER, ACCOUNT);
-    assert.match(snippet, new RegExp(`SESSION_KEY_PRIVATE=${pk}`));
-    assert.match(snippet, new RegExp(`SESSION_KEY_ADDRESS=${SIGNER}`));
-    assert.match(snippet, new RegExp(`ACCOUNT_WALLET_ADDRESS=${ACCOUNT}`));
+    assert.match(snippet, new RegExp(`^SESSION_KEY=${pk}$`, "m"));
+    assert.match(snippet, new RegExp(`^WALLET_ADDRESS=${ACCOUNT}$`, "m"));
+    assert.match(snippet, new RegExp(`^# session address: ${SIGNER}$`, "m"));
+    // old names gone — filecoin-pin's reader only understands the new ones
+    assert.doesNotMatch(snippet, /SESSION_KEY_PRIVATE|SESSION_KEY_ADDRESS|ACCOUNT_WALLET_ADDRESS/);
     assert.doesNotMatch(snippet, /Synapse SDK/);
+    // every non-comment line is KEY=VALUE so the CLI parser never throws
+    for (const line of snippet.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed === "" || trimmed.startsWith("#")) continue;
+      assert.match(trimmed, /^[A-Z_]+=\S+$/);
+    }
   });
 });
 

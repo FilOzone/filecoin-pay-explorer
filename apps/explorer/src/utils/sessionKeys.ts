@@ -140,14 +140,19 @@ export function parseInventoryFile(
   });
 }
 
-/** .env download offered on the reveal screen. */
+/**
+ * .env download offered on the reveal screen. Byte-compatible with
+ * filecoin-pin's `~/.filecoin-session-key.env` (SESSION_KEY + WALLET_ADDRESS,
+ * session address as a comment), so the downloaded file can be saved there
+ * as-is and picked up by the CLI.
+ */
 export function buildEnvSnippet(privateKey: string, sessionKeyAddress: string, accountWalletAddress: string): string {
   return [
-    "# Session key for Filecoin Warm Storage",
-    "# Treat SESSION_KEY_PRIVATE like a password: anyone holding it can use its scopes until expiry.",
-    `SESSION_KEY_PRIVATE=${privateKey}`,
-    `SESSION_KEY_ADDRESS=${sessionKeyAddress}`,
-    `ACCOUNT_WALLET_ADDRESS=${accountWalletAddress}`,
+    "# Session key for Filecoin Warm Storage — save as ~/.filecoin-session-key.env (chmod 600).",
+    "# Treat SESSION_KEY like a password: anyone holding it can use its scopes until expiry.",
+    `# session address: ${sessionKeyAddress}`,
+    `SESSION_KEY=${privateKey}`,
+    `WALLET_ADDRESS=${accountWalletAddress}`,
     "",
   ].join("\n");
 }

@@ -11,7 +11,7 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
@@ -35,6 +35,8 @@ interface CreateKeyFlowProps {
   network: Network;
   account: Hex;
   registry: { address: Hex; abi: Abi };
+  /** Validated CLI pairing address (?authorize=) — prefills the bring-your-own-address field, never auto-submits. */
+  prefillAddress?: Hex | null;
   onCreated: (record: SessionKeyRecord) => void;
   /** Fires when the login tx is confirmed onchain (used to refresh chain-read statuses). */
   onConfirmed?: () => void;
@@ -67,6 +69,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   network,
   account,
   registry,
+  prefillAddress,
   onCreated,
   onConfirmed,
   onFailed,
@@ -88,6 +91,17 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // when the dialog is closed mid-flight so late receipts don't mutate a fresh
   // form; the row-removal on failure runs regardless (the row exists either way).
   const inFlightRef = useRef<{ address: Hex; uiActive: boolean } | null>(null);
+
+  // CLI pairing (?authorize=): each time the dialog opens while a request is
+  // pending, switch to the bring-your-own-address mode with the requested
+  // address filled in. Prefill ONLY — the user still reviews scopes, expiry,
+  // and the address itself, and must click to sign.
+  useEffect(() => {
+    if (open && prefillAddress) {
+      setSignerMode("own");
+      setOwnAddress(prefillAddress);
+    }
+  }, [open, prefillAddress]);
 
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: registry.address,
@@ -376,6 +390,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     {signerMode === "own" && ownAddress.length > 0 && !isAddress(ownAddress) && (
                       <span className='block text-xs text-red-600 mt-1'>Not a valid address.</span>
                     )}
+                    {signerMode === "own" && prefillAddress != null && ownAddress === prefillAddress && (
+                      <span className='block text-xs text-amber-700 dark:text-amber-400 mt-1'>
+                        Only approve if this matches the address your CLI printed.
+                      </span>
+                    )}
                   </span>
                 </label>
               </div>
@@ -431,7 +450,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             <div className='rounded-lg border border-zinc-200 dark:border-zinc-700 p-3'>
               <p className='text-xs uppercase tracking-wider text-zinc-500 mb-2'>Use your session key</p>
               <code className='block rounded-md bg-zinc-50 dark:bg-zinc-900 p-3 text-xs break-all whitespace-pre-wrap'>
-                {`SESSION_KEY_PRIVATE=${generated ? `${generated.privateKey.slice(0, 10)}…` : ""}\nSESSION_KEY_ADDRESS=${generated?.address ?? ""}\nACCOUNT_WALLET_ADDRESS=${account}`}
+                {`# session address: ${generated?.address ?? ""}\nSESSION_KEY=${generated ? `${generated.privateKey.slice(0, 10)}…` : ""}\nWALLET_ADDRESS=${account}`}
               </code>
               <p className='text-xs text-zinc-500 mt-2'>docs → “Using session keys”</p>
             </div>

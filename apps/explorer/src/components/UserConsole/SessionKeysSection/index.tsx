@@ -17,6 +17,8 @@ import { RevokeDialog } from "./RevokeDialog";
 interface SessionKeysSectionProps {
   network: Network;
   account: Hex;
+  /** Validated `?authorize=` address from the filecoin-pin CLI pairing flow (already checksummed or null). */
+  prefillAddress?: Hex | null;
 }
 
 const STATUS_STYLES: Record<SessionKeyWithStatus["status"], string> = {
@@ -47,7 +49,7 @@ const SOURCE_CODE_URL = "https://github.com/FilOzone/SessionKeyRegistry";
  * dialogs, not routes. List = local inventory (created here, file imports,
  * chain scans); status = live chain reads.
  */
-const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
+const SessionKeysSection = ({ network, account, prefillAddress }: SessionKeysSectionProps) => {
   const {
     keys,
     addKey,
@@ -65,6 +67,12 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const visibleKeys = activeOnly ? keys.filter((k) => k.status === "active") : keys;
+
+  // CLI pairing request (?authorize=). Requesting the connected wallet's own
+  // address as a session key is always a mistake — the whole point is a
+  // separate, scoped keypair — so that case warns and never prefills.
+  const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
+  const cliPrefill = prefillAddress != null && !isSelfAuthRequest ? prefillAddress : null;
 
   const handleExport = () =>
     download(`filecoin-pay-session-keys-${network}.json`, exportInventory(), "application/json");
@@ -108,6 +116,29 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
 
   return (
     <div className='flex flex-col gap-4'>
+      {cliPrefill && (
+        <div className='rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start justify-between gap-4 flex-wrap'>
+          <div>
+            <p className='font-semibold'>
+              Authorization requested by filecoin-pin CLI for <span className='font-mono break-all'>{cliPrefill}</span>
+            </p>
+            <p className='text-xs mt-1'>Only approve if this matches the address your CLI printed.</p>
+          </div>
+          <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
+            Review &amp; authorize
+          </Button>
+        </div>
+      )}
+      {isSelfAuthRequest && (
+        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+          <p className='font-semibold'>Authorization request ignored: it names your connected wallet address.</p>
+          <p className='text-xs mt-1'>
+            A session key must be a separate keypair — nothing was prefilled. Re-run the CLI pairing and check the
+            session address it prints.
+          </p>
+        </div>
+      )}
+
       <div className='flex items-start justify-between gap-4 flex-wrap'>
         <div>
           <h3 className='text-2xl font-medium'>Session keys</h3>
@@ -289,6 +320,7 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
         network={network}
         account={account}
         registry={registry}
+        prefillAddress={cliPrefill}
         onCreated={addKey}
         onConfirmed={refetchStatuses}
         onFailed={removeKey}
