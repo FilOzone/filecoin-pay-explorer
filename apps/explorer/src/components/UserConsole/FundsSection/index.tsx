@@ -1,26 +1,37 @@
-import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Account, UserToken } from "@filecoin-pay/types";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
+import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { EPOCH_DURATION } from "@/utils/constants";
-import { getNetworkFromChainId } from "@/utils/network";
+import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsTable } from "./components";
 
 interface FundsSectionProps {
   account: Account;
+  subscribed: boolean;
 }
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
+export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed }) => {
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { chainId } = useAccount();
+  const { chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
+  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
+    }, EPOCH_DURATION * 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -76,12 +87,20 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Funds</h3>
-          <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
-            Deposit
-          </Button>
+          {isNotificationsEligible && <AlertsStatus subscribed={subscribed} />}
         </div>
 
         <FundsTable data={tableData} />
+
+        <button
+          type='button'
+          onClick={handleOpenDeposit}
+          title='Deposit any supported token to your account'
+          className='flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-sm text-muted-foreground/60 transition-colors hover:border-muted-foreground/40 hover:text-muted-foreground'
+        >
+          <Plus className='size-3.5' />
+          Add token
+        </button>
       </div>
 
       {/* Deposit Dialogs */}

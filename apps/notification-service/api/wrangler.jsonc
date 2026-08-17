@@ -8,7 +8,7 @@
   "env": {
     "staging": {
       "name": "notification-api-staging",
-      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
+      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://filecoin-pay-explorer-staging.vercel.app" },
       "d1_databases": [
         {
           "binding": "DB",

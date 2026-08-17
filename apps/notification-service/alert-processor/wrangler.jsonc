@@ -8,7 +8,7 @@
   "env": {
     "staging": {
       "name": "notification-alert-processor-staging",
-      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
+      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://filecoin-pay-explorer-staging.vercel.app" },
       "secrets": { "required": ["RPC_URL"] },
       "d1_databases": [
         {

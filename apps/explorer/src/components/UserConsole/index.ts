@@ -1,4 +1,6 @@
 export { AccountInfo, AccountInfoSkeleton } from "./AccountInfo";
+export { AlertsBanner } from "./AlertsBanner";
+export { AlertsStatus } from "./AlertsStatus";
 export { ApproveOperatorDialog } from "./ApproveOperatorDialog";
 export { BetaWarning } from "./BetaWarning";
 export { DepositDialog } from "./DepositDialog";
