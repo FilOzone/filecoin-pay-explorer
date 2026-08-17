@@ -17,6 +17,8 @@ import Providers from "./Providers";
 import SiteLayout from "./SiteLayout";
 import StyledLink from "./StyledLink";
 
+export { EpochTime } from "./EpochTime";
+export { EpochTimeCell } from "./EpochTimeCell";
 export { RailStateBadge } from "./RailStateBadge";
 export { RoleIndicator } from "./RoleIndicator";
 export {

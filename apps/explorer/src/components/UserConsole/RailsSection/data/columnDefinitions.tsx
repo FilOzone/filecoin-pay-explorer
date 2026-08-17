@@ -1,7 +1,9 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText, RailStateBadge, RoleIndicator } from "@/components/shared";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { formatAddress, formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
 
@@ -62,13 +64,14 @@ export const columns = [
   }),
   columnHelper.display({
     id: "payment",
-    header: () => <div className='text-right'>Payment Rate</div>,
+    header: () => <div className='text-right'>Payment Rate/day</div>,
     cell: (info) => {
       const rail = info.row.original;
+      const railRatePerDay = BigInt(rail.paymentRate) * TIME_CONSTANTS.EPOCHS_PER_DAY;
       return (
         <div className='flex flex-col gap-1 text-right'>
           <div className='font-medium text-sm tabular-nums'>
-            {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+            {formatToken(railRatePerDay, rail.token.decimals, rail.token.symbol, 12)}
           </div>
           <div className='text-xs text-muted-foreground'>
             Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
@@ -87,7 +90,15 @@ export const columns = [
           <div className='flex items-center gap-2'>
             <RailStateBadge state={rail.state} />
           </div>
-          <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
+              <span tabIndex={0} className='w-fit cursor-help text-xs text-muted-foreground'>
+                Lockup: {formatEpochDuration(rail.lockupPeriod)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side='top'>{rail.lockupPeriod.toString()} epochs</TooltipContent>
+          </Tooltip>
         </div>
       );
     },

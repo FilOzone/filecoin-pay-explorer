@@ -1,13 +1,21 @@
 import type { Settlement } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { formatToken } from "@/utils/formatter";
+import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Settlement>();
 
 export const columns = [
   columnHelper.accessor("settledUpto", {
-    header: "Settled Upto",
-    cell: (info) => <div className='font-medium'>Epoch {info.getValue().toString()}</div>,
+    header: "Settlement Date",
+    cell: (info) => {
+      const settlement = info.row.original;
+      return (
+        <div className='flex flex-col gap-0.5'>
+          <div className='font-medium'>{formatDate(settlement.createdAt)}</div>
+          <div className='text-xs text-muted-foreground'>Epoch {info.getValue().toString()}</div>
+        </div>
+      );
+    },
   }),
   columnHelper.accessor(
     (row) => ({

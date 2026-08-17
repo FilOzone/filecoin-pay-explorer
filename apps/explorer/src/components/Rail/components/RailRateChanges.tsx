@@ -13,7 +13,8 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { AlertCircle, Info } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useBlockNumber } from "@/hooks/useBlockNumber";
 import { useRailRateChanges } from "@/hooks/useRailDetails";
 import RailRateChangesTable from "./RailRateChangesTable";
 
@@ -64,6 +65,12 @@ interface RailRateChangesProps {
 export const RailRateChanges: React.FC<RailRateChangesProps> = ({ rail }) => {
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error, refetch } = useRailRateChanges(rail.id, page);
+  const { data: currentEpoch } = useBlockNumber();
+
+  const rateChangesData = useMemo(
+    () => data?.rateChanges.map((rateChange) => ({ ...rateChange, currentEpoch })) || [],
+    [data?.rateChanges, currentEpoch],
+  );
 
   const totalRateChanges = Number(rail.totalRateChanges);
   const totalPages = Math.ceil(totalRateChanges / 10);
@@ -80,7 +87,7 @@ export const RailRateChanges: React.FC<RailRateChangesProps> = ({ rail }) => {
         <div className='flex flex-col gap-4'>
           <span className='text-sm text-muted-foreground'>{rail.totalRateChanges.toString()} total</span>
 
-          <RailRateChangesTable data={data.rateChanges} />
+          <RailRateChangesTable data={rateChangesData} />
 
           {totalPages > 1 && (
             <Pagination>

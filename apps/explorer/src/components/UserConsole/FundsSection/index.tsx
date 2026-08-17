@@ -1,11 +1,12 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useConnection } from "wagmi";
 import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
+import { EPOCH_DURATION } from "@/utils/constants";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsTable } from "./components";
 
@@ -18,10 +19,19 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
+  const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
   const { chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
+    }, EPOCH_DURATION * 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // Fetch all tokens for this account (no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
@@ -45,10 +55,11 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
     () =>
       data?.userTokens.map((token) => ({
         ...token,
+        currentTimestamp,
         onDeposit: handleDeposit,
         onWithdraw: handleWithdraw,
       })) || [],
-    [data?.userTokens, handleDeposit, handleWithdraw],
+    [currentTimestamp, data?.userTokens, handleDeposit, handleWithdraw],
   );
 
   if (isLoading) {

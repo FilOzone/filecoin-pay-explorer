@@ -1,4 +1,4 @@
-import { UNLIMITED_THRESHOLD } from "./constants";
+import { EPOCH_DURATION, UNLIMITED_THRESHOLD } from "./constants";
 
 export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
@@ -80,7 +80,7 @@ export const isUnlimitedValue = (value: number | string | bigint): boolean => {
 export const epochToDate = (
   futureEpoch: bigint | number,
   currentEpoch: bigint | number,
-  epochDuration: number = 30,
+  epochDuration: number = EPOCH_DURATION,
 ): Date => {
   const future = BigInt(futureEpoch);
   const current = BigInt(currentEpoch);
@@ -90,13 +90,16 @@ export const epochToDate = (
   return new Date(futureTimestamp);
 };
 
-export const formatFutureTimestamp = (futureTimestamp: bigint | number): string => {
+export const formatFutureTimestamp = (
+  futureTimestamp: bigint | number,
+  currentTimestamp: bigint | number = Date.now() / 1_000,
+): string => {
   const date = new Date(Number(futureTimestamp) * 1_000);
-  const now = Date.now();
+  const now = Number(currentTimestamp) * 1_000;
   const futureTime = date.getTime();
   const diffMs = futureTime - now;
 
-  if (diffMs < 0) {
+  if (diffMs <= 0) {
     return "Expired";
   }
 
@@ -117,7 +120,7 @@ export const formatFutureTimestamp = (futureTimestamp: bigint | number): string 
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: diffDays > 365 ? "numeric" : undefined,
+      year: "numeric",
     });
   } else if (diffHours > 1) {
     return `${diffHours}h ${diffMinutes % 60}m`;
@@ -125,3 +128,27 @@ export const formatFutureTimestamp = (futureTimestamp: bigint | number): string 
     return `${diffMinutes}m`;
   }
 };
+
+export const formatEpochDuration = (epochs: bigint | number, epochDuration: number = EPOCH_DURATION): string => {
+  const totalSeconds = BigInt(epochs) * BigInt(epochDuration);
+  if (totalSeconds === 0n) return "None";
+  if (totalSeconds < 60n) return "<1m";
+  const minutes = totalSeconds / 60n;
+  const hours = minutes / 60n;
+  const days = hours / 24n;
+  if (days >= 1n) {
+    if (hours % 24n === 0n) return `${days}d`;
+    return `${days}d ${hours % 24n}h`;
+  }
+  if (hours >= 1n) {
+    if (minutes % 60n === 0n) return `${hours}h`;
+    return `${hours}h ${minutes % 60n}m`;
+  }
+  return `${minutes}m`;
+};
+
+export const formatTimestampToTime = (timestamp: bigint | number): string =>
+  new Date(Number(timestamp) * 1000).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
