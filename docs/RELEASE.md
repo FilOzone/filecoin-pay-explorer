@@ -50,7 +50,7 @@ flowchart TD
 
       G --> N[promote-staging.yml triggers]
       N --> O{Promotion PR\nalready open?}
-      O -->|no| P[Open staging → main PR\nCODEOWNERS notified]
+      O -->|no| P[Open staging → main PR]
       O -->|yes| Q[PR already open\nno duplicate created]
 
       P --> R[CI runs on promotion PR\nbuild · typecheck · biome · pr-title]
@@ -85,6 +85,10 @@ Every push to `staging` triggers `.github/workflows/promote-staging.yml`, which:
 - Updates the PR body with the current commit list if the PR already exists
 
 The promotion PR body lists all commits on `staging` not yet on `main`, so reviewers have full context on what is being deployed. Concurrent pushes to `staging` are serialized via a concurrency group, runs queue rather than race.
+
+When subgraph changes are detected, the body also includes one of two warnings:
+- `CAUTION` — subgraph code changed but no version bump yet. The Release Please PR has not been merged. **Do not merge the promotion PR until the Release Please PR is merged first.**
+- `WARNING` — version bumped and Goldsky deployment is done. Confirm indexing is complete before merging.
 
 **3. Promoting to production**
 
@@ -135,6 +139,82 @@ The version bump and `CHANGELOG.md` update land on `staging` first and travel to
 **Promoting to production.** After the subgraph finishes indexing and the Explorer is verified on staging, merge the promotion PR. This triggers `.github/workflows/tag-subgraph-prod.yml`, which reads the version from `packages/subgraph/package.json` and applies the `prod` tag on Goldsky. The production Explorer at `pay.filecoin.cloud` switches to the new fully-indexed subgraph automatically.
 
 The release tracking issue checklist guides the verification steps between deploy and promotion.
+
+### Flow
+
+```mermaid
+flowchart TD
+    A([Subgraph PR]) -->|squash merge into staging| B[push to staging]
+
+    B --> C[release-please.yml triggers]
+    B --> D[promote-staging.yml triggers]
+
+    C --> E{Release PR\nalready open?}
+    E -->|no| F[Open Release PR\ntargeting staging]
+    E -->|yes| G[Update Release PR]
+
+    D --> H[Update promotion PR body\nCAUTION: merge Release Please PR first]
+
+    F --> I[Team merges Release Please PR\ninto staging]
+    G --> I
+
+    I --> J[release-please creates\nvX.Y.Z tag + GitHub Release]
+    I --> K[release-please.yml triggers again\nreleased == true]
+
+    K --> L[Deploy to Goldsky\ncalibration + mainnet]
+    L --> M[Tag both as staging on Goldsky\nindexing starts]
+    M --> N[Open release tracking issue]
+
+    I --> O[promote-staging.yml triggers\nUpdates promotion PR body\nWARNING: confirm indexing before merging]
+
+    N --> P[Team awaits indexing\nsmoke-tests staging Explorer]
+    P --> Q[Team merges promotion PR\nstaging → main]
+
+    Q --> R[tag-subgraph-prod.yml triggers]
+    R --> S[Tags prod on Goldsky\ncalibration + mainnet]
+    S --> T([pay.filecoin.cloud switches\nto new subgraph version])
+```
+
+### Step by step
+
+**1. Subgraph PR**
+
+Open a PR targeting `staging` as usual. CI runs, get it reviewed, squash merge.
+
+**2. Release Please PR**
+
+Every push to `staging` triggers `release-please.yml`. It opens or updates a Release PR targeting `staging` that bumps `packages/subgraph/package.json` and updates `CHANGELOG.md`. Subsequent subgraph commits keep accumulating in the same Release PR until it is merged.
+
+At the same time, `promote-staging.yml` updates the promotion PR body with a `CAUTION` block: subgraph code has changed but the version is not bumped yet — do not merge the promotion PR.
+
+**3. Merge the Release Please PR**
+
+When ready to release, merge the Release Please PR into `staging`. This triggers `release-please.yml` again, this time with `released == true`, which:
+
+- Creates the git tag `vX.Y.Z` and GitHub Release
+- Deploys to Goldsky on both `calibration` and `mainnet`
+- Tags both deployments as `staging` — the staging Explorer switches to the new version (data may be partially indexed while Goldsky catches up)
+- Opens a release tracking issue
+
+`promote-staging.yml` also runs and updates the promotion PR body to replace the `CAUTION` with a `WARNING`: deployment is done, confirm indexing before merging.
+
+**4. Await indexing and verify**
+
+Follow the release tracking issue checklist:
+- Monitor the [Goldsky dashboard](https://app.goldsky.com) until both networks finish indexing
+- Smoke-test the Explorer on staging using the versioned subgraph URL from the tracking issue
+
+**5. Merge the promotion PR**
+
+Once indexing is confirmed and staging is verified, merge the promotion PR (`staging → main`). This triggers `tag-subgraph-prod.yml`, which applies the `prod` tag on Goldsky for both networks. The production Explorer at `pay.filecoin.cloud` switches to the new fully-indexed subgraph automatically.
+
+### Known limitations
+
+**Merge the Release Please PR before the promotion PR.**
+When a subgraph PR merges into `staging`, two things happen simultaneously: the promotion PR is updated and the Release Please PR is created or updated. The promotion PR body detects this state and shows a `CAUTION` block warning reviewers not to merge yet. However, the warning is advisory — branch protection does not block the merge. The Release Please PR must always be merged into `staging` first so the Goldsky deployment and `staging` tag are applied before the code reaches `main`.
+
+**Breaking schema changes require extra care.**
+When the promotion PR merges into `main`, Vercel (Explorer) and `tag-subgraph-prod` both trigger at the same time. There is a brief window where the new Explorer and the new subgraph are not yet both live simultaneously. For non-breaking changes this is harmless. For breaking schema changes — where the new Explorer is incompatible with the old subgraph schema or vice versa — this window can cause a brief outage. The release tracking issue includes a callout for this case. The mitigation is to ensure the Explorer change is backwards-compatible with the previous subgraph version, or to coordinate the timing manually if that is not possible.
 
 ---
 
