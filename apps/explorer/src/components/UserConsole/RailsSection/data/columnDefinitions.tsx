@@ -1,7 +1,7 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, RailStateBadge, RoleIndicator } from "@/components/shared";
-import { formatAddress, formatDate, formatToken } from "@/utils/formatter";
+import { CopyableText, RailStateBadge } from "@/components/shared";
+import { formatDate, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
 
@@ -20,19 +20,6 @@ export const columns = [
       );
     },
   }),
-  columnHelper.display({
-    id: "type",
-    header: "Type",
-    cell: (info) => {
-      const { isPayer } = info.row.original;
-
-      return (
-        <div className='flex justify-start'>
-          <RoleIndicator role={isPayer ? "payer" : "payee"} />
-        </div>
-      );
-    },
-  }),
   columnHelper.accessor("createdAt", {
     header: "Date",
     cell: (info) => formatDate(info.getValue()),
@@ -41,22 +28,19 @@ export const columns = [
     id: "counterparty",
     header: "Counterparty",
     cell: (info) => {
-      const { isPayer, payee, payer, operator } = info.row.original;
+      const { isPayer, payee, payer } = info.row.original;
       const counterparty = isPayer ? payee : payer;
 
       return (
-        <div className='flex flex-col gap-1'>
-          <CopyableText
-            className='text-sm font-medium'
-            value={counterparty.address}
-            to={`/accounts/${counterparty.address}`}
-            monospace={true}
-            label='Account address'
-            truncate={true}
-            truncateLength={8}
-          />
-          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(operator.address)}</div>
-        </div>
+        <CopyableText
+          className='text-sm font-medium'
+          value={counterparty.address}
+          to={`/accounts/${counterparty.address}`}
+          monospace={true}
+          label='Account address'
+          truncate={true}
+          truncateLength={8}
+        />
       );
     },
   }),
