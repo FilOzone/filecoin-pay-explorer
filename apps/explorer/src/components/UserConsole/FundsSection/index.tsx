@@ -1,12 +1,10 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
-import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useConnection } from "wagmi";
-import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
+import { getNetworkFromChainId } from "@/utils/network";
 import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsOverviewCards } from "./components";
 import FundsSectionLayout from "./components/FundsSectionLayout";
 
@@ -21,8 +19,6 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account }) => {
 
   const { chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
-  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
-  // {isNotificationsEligible && <AlertsStatus subscribed={subscribed} />}
 
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
 

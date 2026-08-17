@@ -1,17 +1,14 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, WifiOff } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, WifiOff } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BaseError, UserRejectedRequestError } from "viem";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
-import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import {
   AlertsActiveCard,
   AlertsOffCard,
@@ -22,7 +19,6 @@ import {
   PendingVerificationCard,
   UnsubscribeDialog,
 } from "@/components/UserConsole/NotificationsSection/components";
-import { NotConnected } from "@/components/UserConsole/States";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import {
   getNetworkFromChainId,
@@ -88,15 +84,12 @@ type NotificationsView =
   | { type: "unsubscribing"; cancellable: boolean }
   | { type: "unsubscribed-success" };
 
-// Local, in-flight states that the shared /status query cannot tell us about.
-// When an overlay is set it takes precedence over the query-derived baseline.
 type Overlay =
   | { type: "not-subscribed"; initialName?: string; initialEmail?: string; onCancel?: () => void }
   | { type: "pending-verification"; email: string; preferredName: string; resendAvailableAt: number }
   | { type: "unsubscribing"; cancellable: boolean }
   | { type: "unsubscribed-success" };
 
-// Baseline view derived purely from the shared /status query.
 function deriveBaseView(status: ReturnType<typeof useNotificationStatus>): NotificationsView {
   if (!API_URL) return { type: "status-error" };
   if (status.isPending) return { type: "loading" };
@@ -142,7 +135,6 @@ async function callUnsubscribe(body: { message: string; signature: string }): Pr
   }
 }
 
-// Statements must match api/auth.ts SIWE_STATEMENTS exactly.
 function buildSiweMessage(action: "register", address: `0x${string}`, chainId: number, email: string): string;
 function buildSiweMessage(action: "unsubscribe", address: `0x${string}`, chainId: number): string;
 function buildSiweMessage(
@@ -167,9 +159,6 @@ function buildSiweMessage(
   });
 }
 
-// wagmi/viem usually wraps the rejection, so walk the cause chain rather than
-// matching the top-level error (UserRejectedRequestError extends BaseError, so a
-// direct throw is covered too).
 function isUserRejection(err: unknown): boolean {
   return err instanceof BaseError && Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
 }
@@ -218,16 +207,12 @@ const NotificationsContent = ({
   const cancelledRef = useRef(false);
   const initedRef = useRef(false);
 
-  // Poll the shared /status query only while awaiting verification.
   const isPolling = overlay?.type === "pending-verification" && pollingActive;
   const status = useNotificationStatus(address, { refetchInterval: isPolling ? POLL_INTERVAL_MS : false });
   const subscribed = status.data?.subscribed === true;
 
-  // An active local flow wins; otherwise fall through to the query-derived view.
   const view: NotificationsView = overlay ?? deriveBaseView(status);
 
-  // Sign + register, then enter the pending-verification flow. Shared by the
-  // initial submit (via the mutation below) and the resend action.
   const register = useCallback(
     async (email: string, preferredName: string) => {
       const message = buildSiweMessage("register", address, chainId, email);
@@ -240,8 +225,6 @@ const NotificationsContent = ({
     [address, chainId, signMessageAsync],
   );
 
-  // The form submit is a one-shot write; React Query owns its pending/error state.
-  // Resend does NOT go through here (see handleResend) so its failures stay out of submitError.
   const registerMutation = useMutation({
     mutationFn: ({ email, preferredName }: NotificationsFormValues) => register(email, preferredName),
   });
@@ -250,8 +233,6 @@ const NotificationsContent = ({
       ? registerMutation.error.message || "Something went wrong. Please try again."
       : null;
 
-  // First non-pending status for this wallet: resume the "check your email" flow
-  // if a prior registration is still stored and we're not already subscribed.
   useEffect(() => {
     if (initedRef.current || status.isPending) return;
     initedRef.current = true;
@@ -261,17 +242,12 @@ const NotificationsContent = ({
     }
   }, [status.isPending, subscribed, address]);
 
-  // Server confirms subscribed (initial load or a successful poll): drop the
-  // pending overlay so `view` falls through to "subscribed".
   useEffect(() => {
     if (!subscribed) return;
     clearPending(address);
     setOverlay((current) => (current?.type === "pending-verification" ? null : current));
   }, [subscribed, address]);
 
-  // Each submit/resend opens a fresh POLL_TIMEOUT_MS window to auto-check for
-  // verification. Keyed on resendAvailableAt (which changes on every resend), so a
-  // resend restarts polling — including after a prior window has already expired.
   const pendingResendKey = overlay?.type === "pending-verification" ? overlay.resendAvailableAt : null;
   useEffect(() => {
     if (pendingResendKey === null) {
@@ -283,7 +259,6 @@ const NotificationsContent = ({
     return () => clearTimeout(id);
   }, [pendingResendKey]);
 
-  // Keep the heading's "Update email" button in sync with the current view.
   useEffect(() => {
     onViewChange?.(view.type);
   }, [view.type, onViewChange]);
@@ -292,15 +267,14 @@ const NotificationsContent = ({
     if (!updateEmailRef) return;
     updateEmailRef.current = () => {
       clearPending(address);
-      registerMutation.reset(); // drop any stale error from a prior update-email attempt
-      // Cancelling clears the overlay → view derives back to "subscribed".
+      registerMutation.reset();
       setOverlay({ type: "not-subscribed", onCancel: () => setOverlay(null) });
     };
   }, [updateEmailRef, address, registerMutation.reset]);
 
   const handleCheckStatus = useCallback(async (): Promise<"subscribed" | "pending" | "unavailable"> => {
     const { data, isError } = await status.refetch();
-    if (data?.subscribed) return "subscribed"; // the subscribed effect clears the overlay
+    if (data?.subscribed) return "subscribed";
     return isError ? "unavailable" : "pending";
   }, [status.refetch]);
 
@@ -339,14 +313,14 @@ const NotificationsContent = ({
       if (!cancelledRef.current) {
         clearPending(address);
         setOverlay({ type: "unsubscribed-success" });
-        void status.refetch(); // sync the shared cache so the console banner updates too
+        void status.refetch();
       }
     } catch (err) {
       if (!cancelledRef.current) {
         if (!isUserRejection(err)) {
           setUnsubscribeError(err instanceof Error ? err.message : "Failed to turn off alerts. Please try again.");
         }
-        setOverlay(null); // back to subscribed
+        setOverlay(null);
       }
     }
   }, [address, chainId, signMessageAsync, status.refetch]);
@@ -368,10 +342,8 @@ const NotificationsContent = ({
   switch (view.type) {
     case "loading":
       return <NotificationSkeleton />;
-
     case "status-error":
       return <StatusUnavailable onRetry={handleRetryStatus} />;
-
     case "not-subscribed":
       return (
         <NotificationsForm
@@ -382,7 +354,6 @@ const NotificationsContent = ({
           onCancel={view.onCancel}
         />
       );
-
     case "pending-verification":
       return (
         <PendingVerificationCard
@@ -394,7 +365,6 @@ const NotificationsContent = ({
           onUseAnotherEmail={handleUseAnotherEmail}
         />
       );
-
     case "subscribed":
       return (
         <>
@@ -406,27 +376,24 @@ const NotificationsContent = ({
           />
         </>
       );
-
     case "unsubscribing":
       return <AlertsUnsubscribingCard onCancel={view.cancellable ? handleCancelUnsubscribing : undefined} />;
-
     case "unsubscribed-success":
       return <AlertsOffCard onEnableAgain={handleEnableAgain} />;
   }
 };
 
-const NotificationsMain = () => {
-  const { address, isConnected, chainId } = useConnection();
+const NotificationsPage = () => {
+  const { address, chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
   const isEligibleNetwork = isSupportedChainId(chainId) && isNotificationsEligibleNetwork(walletNetwork);
   const [viewType, setViewType] = useState<NotificationsView["type"]>("loading");
   const updateEmailRef = useRef<(() => void) | null>(null);
 
-  const showUpdateEmail = viewType === "subscribed" && isConnected && !!address && isEligibleNetwork;
+  const showUpdateEmail = viewType === "subscribed" && !!address && isEligibleNetwork;
 
   function renderContent() {
-    if (!isConnected || !address) return <NotConnected />;
-    if (chainId === undefined) return null;
+    if (!address || chainId === undefined) return null;
     if (!isEligibleNetwork) return <IneligibleNetwork />;
     return (
       <NotificationsContent
@@ -440,47 +407,31 @@ const NotificationsMain = () => {
   }
 
   return (
-    <PageSection backgroundVariant='light'>
-      <div className='flex flex-col gap-15 -mt-25 sm:mt-0'>
-        <div>
-          <Link
-            href='/console'
-            className='inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6'
-          >
-            <ArrowLeft className='h-4 w-4' />
-            Back to console
-          </Link>
-          <div className='flex items-baseline justify-between'>
-            <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
-              Email alerts
-            </h2>
-            {showUpdateEmail && (
-              <button
-                type='button'
-                onClick={() => updateEmailRef.current?.()}
-                className='inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline'
-              >
-                Update email
-                <ChevronRight className='h-4 w-4' />
-              </button>
-            )}
-          </div>
-          <p className='mt-2 text-muted-foreground'>
-            Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
-            services are affected.
-          </p>
+    <div className='flex flex-col gap-15'>
+      <div>
+        <div className='flex items-baseline justify-between'>
+          <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
+            Email alerts
+          </h2>
+          {showUpdateEmail && (
+            <button
+              type='button'
+              onClick={() => updateEmailRef.current?.()}
+              className='inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline'
+            >
+              Update email
+              <ChevronRight className='h-4 w-4' />
+            </button>
+          )}
         </div>
-
-        <div>{renderContent()}</div>
+        <p className='mt-2 text-muted-foreground'>
+          Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
+          services are affected.
+        </p>
       </div>
-    </PageSection>
+      <div>{renderContent()}</div>
+    </div>
   );
 };
-
-const NotificationsPage = () => (
-  <ConsoleProviders>
-    <NotificationsMain />
-  </ConsoleProviders>
-);
 
 export default NotificationsPage;

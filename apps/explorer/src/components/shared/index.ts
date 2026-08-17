@@ -12,6 +12,9 @@ import InlineTextLoader from "./InlineTextLoader";
 import MetricItem from "./MetricItem";
 import Navigation from "./Navigation/Navigation";
 import NetworkIndicator from "./NetworkIndicator";
+
+export { ConditionalNavigation } from "./ConditionalNavigation";
+
 import NetworkLink from "./NetworkLink";
 import Providers from "./Providers";
 import SiteLayout from "./SiteLayout";
