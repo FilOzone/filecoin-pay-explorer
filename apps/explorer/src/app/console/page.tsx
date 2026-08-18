@@ -3,21 +3,33 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { Balance, ChainSwitcher } from "@/components/shared";
-import { BetaWarning, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
+import {
+  AlertsBanner,
+  BetaWarning,
+  FundsSection,
+  OperatorApprovalsSection,
+  RailsSection,
+} from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
+import { useNotificationStatus } from "@/hooks/useNotificationStatus";
+import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
 
 const UserConsoleContent = () => {
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId } = useConnection();
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isSquidSourceChain = SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
   const consoleView =
     !isConnected || !address ? "disconnected" : isSupportedChainId(chainId) ? "filecoin" : "unsupported";
+
+  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+
+  const { data: notificationStatus, isError: notificationStatusError } = useNotificationStatus(address);
+  const subscribed = notificationStatus?.subscribed ?? false;
 
   const {
     data: account,
@@ -53,6 +65,13 @@ const UserConsoleContent = () => {
         {/* Beta Warning */}
         <BetaWarning />
 
+        {/* Alerts Banner — hidden once subscribed */}
+        {consoleView === "filecoin" && isNotificationsEligible && !subscribed && !notificationStatusError && (
+          <div className='-mt-12'>
+            <AlertsBanner />
+          </div>
+        )}
+
         {/* Not Connected */}
         {consoleView === "disconnected" && <NotConnected />}
 
@@ -76,6 +95,7 @@ const UserConsoleContent = () => {
               accountId={account?.id ?? address}
               contentHidden={consoleView === "unsupported"}
               key={address}
+              subscribed={subscribed}
               topUpOnly={!account || consoleView === "unsupported"}
             />
           )}

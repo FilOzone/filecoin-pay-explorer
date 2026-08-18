@@ -1,10 +1,9 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
-import type { UserToken } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { columns } from "../data/columnDefinitions";
+import { columns, type FundsTableRow } from "../data/columnDefinitions";
 
 export type FundsTableProps = {
-  data: Array<UserToken & { onAddFunds: (token: UserToken) => void; onWithdraw: (token: UserToken) => void }>;
+  data: FundsTableRow[];
 };
 
 function FundsTable({ data }: FundsTableProps) {

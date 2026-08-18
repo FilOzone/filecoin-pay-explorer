@@ -16,7 +16,7 @@ const accountState = vi.hoisted(() => ({
 
 vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
-  useAccount: () => wallet,
+  useConnection: () => wallet,
 }));
 vi.mock("@/components/shared", () => ({
   Balance: () => <div>Filecoin balance</div>,
@@ -32,6 +32,7 @@ vi.mock("@/components/UserConsole/States", () => ({
   UnsupportedChain: () => <div>Unsupported network</div>,
 }));
 vi.mock("@/components/UserConsole", () => ({
+  AlertsBanner: () => null,
   BetaWarning: () => null,
   FundsSection: ({
     accountId,
@@ -47,6 +48,9 @@ vi.mock("@/components/UserConsole", () => ({
 }));
 vi.mock("@/hooks/useAccountDetails", () => ({
   useAccountDetails: () => accountState,
+}));
+vi.mock("@/hooks/useNotificationStatus", () => ({
+  useNotificationStatus: () => ({ data: undefined, isError: false }),
 }));
 
 describe("UserConsole", () => {

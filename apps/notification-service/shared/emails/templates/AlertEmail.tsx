@@ -11,7 +11,6 @@ export interface AlertEmailProps {
   alertLevel: AlertLevel;
   fundedUntil: string; // formatted date, e.g. "January 15, 2026"
   daysRemaining: number;
-  topUpAmount: string; // e.g. "120 USDFC"
   topUpUrl: string;
   logoUrl?: string;
   logoIconUrl?: string;
@@ -97,6 +96,7 @@ const styles = {
     fontWeight: "600",
     letterSpacing: "0.05em",
     textTransform: "uppercase" as const,
+    textAlign: "center" as const,
     margin: "0 0 4px",
     lineHeight: "16px",
   },
@@ -104,6 +104,7 @@ const styles = {
     color: "#111827",
     fontSize: "15px",
     fontWeight: "600",
+    textAlign: "center" as const,
     margin: "0",
     lineHeight: "22px",
   },
@@ -111,6 +112,7 @@ const styles = {
     color: "#5AAAD6",
     fontSize: "13px",
     fontFamily: "monospace",
+    textAlign: "center" as const,
     margin: "0",
     lineHeight: "20px",
   },
@@ -135,8 +137,7 @@ export const previewProps: AlertEmailProps = {
   walletAddress: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
   alertLevel: "emergency",
   fundedUntil: "January 15, 2026",
-  daysRemaining: 6,
-  topUpAmount: "10 USDFC",
+  daysRemaining: 3,
   topUpUrl: "https://example.com/console",
   logoUrl: DEFAULT_LOGO_URL,
   logoIconUrl: DEFAULT_LOGO_ICON_URL,
@@ -150,7 +151,6 @@ export const Template = ({
   alertLevel,
   fundedUntil,
   daysRemaining,
-  topUpAmount,
   topUpUrl,
   logoUrl = DEFAULT_LOGO_URL,
   logoIconUrl = DEFAULT_LOGO_ICON_URL,
@@ -196,7 +196,7 @@ export const Template = ({
                 </Column>
               </Row>
               <Row>
-                <Column style={{ paddingRight: "16px" }}>
+                <Column>
                   <Text style={styles.infoLabel}>Funded until</Text>
                   <Text style={styles.infoValue}>{fundedUntil}</Text>
                   <Text
@@ -204,16 +204,15 @@ export const Template = ({
                       color: config.badgeColor,
                       fontSize: "12px",
                       fontWeight: "600",
+                      textAlign: "center",
                       margin: "3px 0 0",
                       lineHeight: "18px",
                     }}
                   >
-                    {daysRemaining} {daysRemaining === 1 ? "day" : "days"} remaining
+                    {daysRemaining === 0
+                      ? "Termination imminent. Providers may stop your service at any time."
+                      : `${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} remaining`}
                   </Text>
-                </Column>
-                <Column>
-                  <Text style={styles.infoLabel}>Recommended top-up</Text>
-                  <Text style={styles.infoValue}>{topUpAmount}</Text>
                 </Column>
               </Row>
             </Section>

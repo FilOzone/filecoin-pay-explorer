@@ -15,12 +15,14 @@ assignees: ""
 
 ### 1. Confirm the release
 
-- [ ] The Release Please PR for `vX.Y.Z` was merged
+- [ ] The Release Please PR for `vX.Y.Z` was merged into `staging`
 - [ ] The `vX.Y.Z` tag and GitHub Release were created
 - [ ] The `Deploy subgraph to Goldsky (calibration)` job succeeded
 - [ ] The `Deploy subgraph to Goldsky (mainnet)` job succeeded
+- [ ] The `Tag as staging (calibration)` job succeeded
+- [ ] The `Tag as staging (mainnet)` job succeeded
 
-If either deploy job failed, fix and rerun it or follow the [manual deployment steps](https://github.com/FilOzone/filecoin-pay-explorer/blob/main/packages/subgraph/README.md#manually-deploying-the-subgraph-to-goldsky).
+If either deploy or tag job failed, fix and rerun it or follow the [manual deployment steps](https://github.com/FilOzone/filecoin-pay-explorer/blob/main/packages/subgraph/README.md#manually-deploying-the-subgraph-to-goldsky).
 
 ### 2. Await subgraph indexing
 
@@ -42,17 +44,13 @@ NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_
 - [ ] Explorer loads without errors on calibration
 - [ ] Changes included in this release were smoke-tested
 
-### 4. Promote the subgraphs to `prod`
+### 4. Promote to production
 
 > [!NOTE]
-> Tagging as `prod` below causes [pay.filecoin.cloud](https://pay.filecoin.cloud) to switch over to the new version. Do this when you're ready to update the production site.
+> Merging the promotion PR triggers the [tag-subgraph-prod workflow](https://github.com/FilOzone/filecoin-pay-explorer/actions/workflows/tag-subgraph-prod.yml), which applies the `prod` tag on Goldsky and switches [pay.filecoin.cloud](https://pay.filecoin.cloud) to the new version. Do this only after indexing is confirmed and staging has been verified.
 
-```bash
-for network in mainnet calibration; do
-  goldsky subgraph tag create filecoin-pay-$network/X.Y.Z --tag prod
-done
-```
-
+- [ ] Merge the `staging → main` promotion PR
+- [ ] The `tag-subgraph-prod` workflow succeeded
 - [ ] `filecoin-pay-mainnet/X.Y.Z` is tagged as `prod`
 - [ ] `filecoin-pay-calibration/X.Y.Z` is tagged as `prod`
 

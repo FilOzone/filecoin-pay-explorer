@@ -186,10 +186,11 @@ Uptime monitoring for the static site and subgraph is managed via [FilOzone/infr
 
 Subgraph releases are automated with [Release Please](https://github.com/googleapis/release-please):
 
-1. Give every PR a [Conventional Commit](https://www.conventionalcommits.org/) title, such as `feat:`, `fix:`, or `chore:`. The [PR title check](.github/workflows/pr-title.yml) enforces this because squash merges use the PR title as the commit on `main`.
-2. When releasable subgraph changes reach `main`, Release Please opens or updates a Release PR. That PR bumps the subgraph version and updates `packages/subgraph/CHANGELOG.md`.
-3. Merge the Release PR to create the tag and GitHub Release, deploy calibration and mainnet to Goldsky, and open a [release tracking issue](.github/ISSUE_TEMPLATE/release.md). Do not create the release tag manually.
-4. Use the tracking issue to confirm indexing, test the Explorer, and promote both subgraphs to `prod`.
+1. Give every PR a [Conventional Commit](https://www.conventionalcommits.org/) title, such as `feat:`, `fix:`, or `chore:`. The [PR title check](.github/workflows/pr-title.yml) enforces this because squash merges use the PR title as the commit on `staging`.
+2. When releasable subgraph changes reach `staging`, Release Please opens or updates a Release PR targeting `staging`. That PR bumps the subgraph version and updates `packages/subgraph/CHANGELOG.md`.
+3. Merge the Release PR to create the tag and GitHub Release, deploy calibration and mainnet to Goldsky, tag both as `staging`, and open a [release tracking issue](.github/ISSUE_TEMPLATE/release.md). Do not create the release tag manually.
+4. Use the tracking issue to confirm indexing and smoke-test the Explorer on staging.
+5. Merge the promotion PR (`staging → main`). This applies the `prod` tag on Goldsky automatically, switching pay.filecoin.cloud to the new fully-indexed subgraph.
 
 See [`release-please-config.json`](release-please-config.json) and [`.release-please-manifest.json`](.release-please-manifest.json) for version tracking configuration.
 

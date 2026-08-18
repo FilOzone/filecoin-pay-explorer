@@ -1,15 +1,18 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { UserToken } from "@filecoin-pay/types";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
+import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { getChain } from "@/constants/chains";
 import { useAccountToken, useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
-import { getNetworkFromChainId } from "@/utils/network";
+import { EPOCH_DURATION } from "@/utils/constants";
+import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 import {
   AddFundsDialog,
   type AddFundsMethod,
@@ -24,24 +27,40 @@ import { withoutTopUpSearchParam } from "./data/guided-top-up";
 interface FundsSectionProps {
   accountId: string;
   contentHidden?: boolean;
+  subscribed: boolean;
   topUpOnly?: boolean;
 }
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHidden = false, topUpOnly = false }) => {
+export const FundsSection: React.FC<FundsSectionProps> = ({
+  accountId,
+  contentHidden = false,
+  subscribed,
+  topUpOnly = false,
+}) => {
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
+  const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { address, chainId } = useAccount();
+  const { address, chainId } = useConnection();
   const { synapse } = useSynapse();
   const walletNetwork = topUpOnly ? "mainnet" : getNetworkFromChainId(chainId);
   const targetChain = getChain(walletNetwork);
   const usdfcAddress = targetChain.contracts.usdfc.address;
+  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [guidedTopUpOpen, setGuidedTopUpOpen] = useState(false);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
+    }, EPOCH_DURATION * 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const { data, isLoading, isError } = useAccountTokens(accountId, 1, { networkOverride: walletNetwork });
   const { data: usdfcToken } = useAccountToken(accountId, usdfcAddress, { networkOverride: walletNetwork });
@@ -134,16 +153,17 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
     setDepositDialogOpen(true);
   }, [handleOpenGuidedTopUp, searchParams, usdfcToken, walletNetwork]);
 
-  // Prepare data with action handlers
   const tableData = useMemo(
     () =>
       data?.userTokens.map((token) => ({
         ...token,
+        currentTimestamp,
         onAddFunds: handleAddFunds,
         onWithdraw: handleWithdraw,
       })) || [],
-    [data?.userTokens, handleAddFunds, handleWithdraw],
+    [currentTimestamp, data?.userTokens, handleAddFunds, handleWithdraw],
   );
+
   let fundsContent: ReactNode;
   if (isLoading) {
     fundsContent = <FundsLoadingState onDeposit={handleOpenDeposit} />;
@@ -156,18 +176,19 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
       <>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Funds</h3>
-          <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
-            Deposit
-          </Button>
+          {isNotificationsEligible && <AlertsStatus subscribed={subscribed} />}
         </div>
         <FundsTable data={tableData} />
 
-        {/* Deposit Dialogs */}
-        <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={handleDepositOpenChange} />
-
-        {selectedToken && (
-          <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
-        )}
+        <button
+          type='button'
+          onClick={handleOpenDeposit}
+          title='Deposit any supported token to your account'
+          className='flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-sm text-muted-foreground/60 transition-colors hover:border-muted-foreground/40 hover:text-muted-foreground'
+        >
+          <Plus className='size-3.5' />
+          Add token
+        </button>
       </>
     );
   }
@@ -195,6 +216,14 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
         onOpenChange={handleGuidedTopUpOpenChange}
         open={guidedTopUpOpen}
       />
+      {!contentHidden && !topUpOnly && (
+        <>
+          <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={handleDepositOpenChange} />
+          {selectedToken && (
+            <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
+          )}
+        </>
+      )}
       {contentHidden ? null : topUpOnly ? (
         <div className='flex justify-center'>
           <Button onClick={handleOpenGuidedTopUp} variant='primary'>

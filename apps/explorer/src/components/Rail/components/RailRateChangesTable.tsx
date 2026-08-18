@@ -4,7 +4,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { columns } from "../data/column-definitions-rail-rate-changes";
 
 export type RailRateChangesTableProps = {
-  data: Array<RateChangeQueue>;
+  data: Array<RateChangeQueue & { currentEpoch: bigint | undefined }>;
 };
 
 function RailRateChangesTable({ data }: RailRateChangesTableProps) {

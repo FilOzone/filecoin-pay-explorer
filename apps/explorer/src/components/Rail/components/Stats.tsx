@@ -3,6 +3,7 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Rail, RailState } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import {
   CalendarCheckIcon,
   CalendarPlusIcon,
@@ -23,9 +24,8 @@ import {
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
-import { EPOCH_DURATION } from "@/utils/constants";
-import { epochToDate, formatToken } from "@/utils/formatter";
-import { CopyableText, MetricItem, RailStateBadge } from "../../shared";
+import { formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
+import { CopyableText, EpochTime, MetricItem, RailStateBadge } from "../../shared";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
@@ -141,7 +141,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               <MetricItem
                 title='Payment Rate'
                 value={formatToken(
-                  (Number(rail.paymentRate) / EPOCH_DURATION) * 60 * 60 * 24,
+                  BigInt(rail.paymentRate) * TIME_CONSTANTS.EPOCHS_PER_DAY,
                   rail.token.decimals,
                   `${rail.token.symbol}/day`,
                   12,
@@ -164,7 +164,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               {BigInt(rail.paymentRate) > 0n && BigInt(rail.lockupPeriod) > 0n && (
                 <MetricItem
                   title='Lockup Period'
-                  value={`${Math.ceil((Number(rail.lockupPeriod) * EPOCH_DURATION) / 60 / 60 / 24)} days`}
+                  value={formatEpochDuration(rail.lockupPeriod)}
                   tooltip={`${Number(rail.lockupPeriod)} epochs`}
                   Icon={HourglassIcon}
                 />
@@ -176,11 +176,14 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             <>
               <MetricItem
                 title='Settled Upto'
-                value={epochToDate(rail.settledUpto, currentBlock).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                value={
+                  <EpochTime
+                    epoch={rail.settledUpto}
+                    currentEpoch={currentBlock}
+                    granularity='date'
+                    showTooltip={false}
+                  />
+                }
                 tooltip={`Epoch ${rail.settledUpto}`}
                 Icon={CalendarCheckIcon}
               />
@@ -248,23 +251,13 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
               Icon={GavelIcon}
             />
           )}
-          <MetricItem
-            title='Created At'
-            value={new Date(Number(rail.createdAt) * 1000).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-            Icon={CalendarPlusIcon}
-          />
+          <MetricItem title='Created At' value={formatDate(rail.createdAt)} Icon={CalendarPlusIcon} />
           {Number(rail.endEpoch) > 0 && !isOneTimePaymentOnly && (
             <MetricItem
               title='Ends At'
-              value={epochToDate(rail.endEpoch, currentBlock).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
+              value={
+                <EpochTime epoch={rail.endEpoch} currentEpoch={currentBlock} granularity='date' showTooltip={false} />
+              }
               tooltip={`Epoch ${rail.endEpoch}`}
               Icon={CalendarSlashIcon}
             />

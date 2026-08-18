@@ -4,40 +4,133 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { ArrowDownLeftIcon, ArrowUpRightIcon } from "@phosphor-icons/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { AlertCircle, Info } from "lucide-react";
+import { maxUint256 } from "viem";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { EPOCH_DURATION, FUNDING_WARNING_THRESHOLD_SECONDS } from "@/utils/constants";
-import { formatCompactNumber, formatFutureTimestamp, formatToken } from "@/utils/formatter";
+import { formatFutureTimestamp, formatTimestampToTime, formatToken } from "@/utils/formatter";
+
+export type FundsTableRow = UserToken & {
+  currentTimestamp: bigint;
+  onAddFunds: (token: UserToken) => void;
+  onWithdraw: (token: UserToken) => void;
+};
+
+type FundingStatus = "infinity" | "expired" | "warning" | "funded";
+
+type FundedUntilPresentation = {
+  detail: string | null;
+  showWarningIcon: boolean;
+  timeColor: string;
+};
 
 // Helper function to calculate funded until data
-const calculateFundedUntil = (userToken: UserToken) => {
-  const availableFunds = BigInt(userToken.funds) - BigInt(userToken.lockupCurrent);
+const calculateFundedUntil = (userToken: FundsTableRow) => {
+  const funds = BigInt(userToken.funds);
+  const lockupCurrent = BigInt(userToken.lockupCurrent);
+  const lastSettledAt = BigInt(userToken.lockupLastSettledUntilEpoch);
+  const lastSettledTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp);
   const lockupRate = BigInt(userToken.lockupRate);
-  const fundedUntil = availableFunds > 0 && lockupRate > 0 ? availableFunds / lockupRate : 0n;
-  const fundedUntilTimestamp = BigInt(userToken.lockupLastSettledUntilTimestamp) + fundedUntil * BigInt(EPOCH_DURATION);
-  const fundedUntilEpoch = BigInt(userToken.lockupLastSettledUntilEpoch) + fundedUntil;
 
-  const isInfinity = lockupRate === 0n;
-  const fundedUntilTime = isInfinity ? "Infinity" : formatFutureTimestamp(Number(fundedUntilTimestamp));
-  const isExpired = !isInfinity && fundedUntilTime === "Expired";
+  let elapsedEpochs = 0n;
+  if (userToken.currentTimestamp > lastSettledTimestamp) {
+    elapsedEpochs = (userToken.currentTimestamp - lastSettledTimestamp) / BigInt(EPOCH_DURATION);
+  }
 
-  const timeUntilExpiry = Number(fundedUntilTimestamp) - Date.now() / 1000;
-  const isWarning =
-    !isInfinity && !isExpired && timeUntilExpiry > 0 && timeUntilExpiry <= FUNDING_WARNING_THRESHOLD_SECONDS;
+  const currentEpoch = lastSettledAt + elapsedEpochs;
+
+  const fundedUntilEpoch = lockupRate === 0n ? maxUint256 : lastSettledAt + (funds - lockupCurrent) / lockupRate;
+  const simulatedSettledAt = fundedUntilEpoch < currentEpoch ? fundedUntilEpoch : currentEpoch;
+  const simulatedLockupCurrent = lockupCurrent + lockupRate * (simulatedSettledAt - lastSettledAt);
+
+  const rawAvailable = funds - simulatedLockupCurrent;
+  const availableFunds = rawAvailable > 0n ? rawAvailable : 0n;
+
+  const fundedUntilTimestamp =
+    lockupRate === 0n ? maxUint256 : lastSettledTimestamp + (fundedUntilEpoch - lastSettledAt) * BigInt(EPOCH_DURATION);
+
+  const totalOwed = lockupCurrent + lockupRate * elapsedEpochs;
+  let debt = 0n;
+  if (totalOwed > funds) {
+    debt = totalOwed - funds;
+  }
 
   return {
     availableFunds,
-    fundedUntilTime,
-    fundedUntilEpoch,
-    isInfinity,
-    isExpired,
-    isWarning,
+    debt,
+    fundedUntilTimestamp,
+    simulatedLockupCurrent,
   };
 };
 
+/** Checks whether the account is funded, running low, expired, or has no ongoing spending. */
+const getFundingStatus = (fundedUntilTimestamp: bigint, currentTimestamp: bigint) => {
+  if (fundedUntilTimestamp === maxUint256) return "infinity";
+  else if (fundedUntilTimestamp <= currentTimestamp) return "expired";
+  else if (fundedUntilTimestamp - currentTimestamp <= BigInt(FUNDING_WARNING_THRESHOLD_SECONDS)) return "warning";
+
+  return "funded";
+};
+
+/** Formats when the account's funds are expected to run out. */
+const formatFundedUntilTimestamp = (fundedUntilTimestamp: bigint, currentTimestamp: bigint) => {
+  if (fundedUntilTimestamp === maxUint256) return "Infinity";
+  return formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp);
+};
+
+function TokenIcon({ token }: { token: UserToken["token"] }) {
+  if (token.symbol === "USDFC") {
+    return <USDFCLogo className='w-6 h-6' />;
+  }
+
+  return (
+    <div className='h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center'>
+      <span className='text-sm font-semibold text-amber-700 dark:text-amber-400'>{token.symbol.charAt(0)}</span>
+    </div>
+  );
+}
+
+function formatDebtDetail(userToken: FundsTableRow, debt: bigint) {
+  return `Debt: ${formatToken(debt, userToken.token.decimals, userToken.token.symbol, 6)}`;
+}
+
+function getFundedUntilPresentation(
+  fundingStatus: FundingStatus,
+  userToken: FundsTableRow,
+  fundedUntilTimestamp: bigint,
+  debt: bigint,
+): FundedUntilPresentation {
+  const fundedUntilDetail = formatTimestampToTime(fundedUntilTimestamp);
+
+  switch (fundingStatus) {
+    case "infinity":
+      return {
+        detail: null,
+        showWarningIcon: false,
+        timeColor: "text-green-600 dark:text-green-400",
+      };
+    case "expired":
+      return {
+        detail: formatDebtDetail(userToken, debt),
+        showWarningIcon: false,
+        timeColor: "text-red-600 dark:text-red-400",
+      };
+    case "warning":
+      return {
+        detail: fundedUntilDetail,
+        showWarningIcon: true,
+        timeColor: "text-amber-600 dark:text-amber-400",
+      };
+    case "funded":
+      return {
+        detail: fundedUntilDetail,
+        showWarningIcon: false,
+        timeColor: "text-foreground",
+      };
+  }
+}
+
 // Create column helper
-const columnHelper = createColumnHelper<
-  UserToken & { onAddFunds: (token: UserToken) => void; onWithdraw: (token: UserToken) => void }
->();
+const columnHelper = createColumnHelper<FundsTableRow>();
 
 export const columns = [
   columnHelper.accessor("token.symbol", {
@@ -46,15 +139,7 @@ export const columns = [
       const userToken = info.row.original;
       return (
         <div className='flex items-center gap-2.5'>
-          {userToken.token.symbol === "USDFC" ? (
-            <USDFCLogo className='w-6 h-6' />
-          ) : (
-            <div className='h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center'>
-              <span className='text-sm font-semibold text-amber-700 dark:text-amber-400'>
-                {userToken.token.symbol.charAt(0)}
-              </span>
-            </div>
-          )}
+          <TokenIcon token={userToken.token} />
           <span className='font-medium'>{userToken.token.symbol}</span>
         </div>
       );
@@ -76,9 +161,10 @@ export const columns = [
     header: () => <div className='text-right'>Locked</div>,
     cell: (info) => {
       const userToken = info.row.original;
+      const { simulatedLockupCurrent } = calculateFundedUntil(userToken);
       return (
         <div className='text-right font-medium tabular-nums'>
-          {formatToken(userToken.lockupCurrent, userToken.token.decimals, "", 6)}
+          {formatToken(simulatedLockupCurrent, userToken.token.decimals, "", 6)}
         </div>
       );
     },
@@ -140,30 +226,17 @@ export const columns = [
     header: () => <div className='text-right'>Funded until</div>,
     cell: (info) => {
       const userToken = info.row.original;
-      const { fundedUntilTime, fundedUntilEpoch, isInfinity, isExpired, isWarning } = calculateFundedUntil(userToken);
-
-      const timeColor = isInfinity
-        ? "text-green-600 dark:text-green-400"
-        : isExpired
-          ? "text-red-600 dark:text-red-400"
-          : isWarning
-            ? "text-amber-600 dark:text-amber-400"
-            : "text-foreground";
+      const { debt, fundedUntilTimestamp } = calculateFundedUntil(userToken);
+      const fundingStatus = getFundingStatus(fundedUntilTimestamp, userToken.currentTimestamp);
+      const presentation = getFundedUntilPresentation(fundingStatus, userToken, fundedUntilTimestamp, debt);
 
       return (
         <div className='text-right'>
-          <div className={`font-medium ${timeColor} flex items-center justify-end gap-1`}>
-            {isWarning && <AlertCircle className='h-3.5 w-3.5' />}
-            {fundedUntilTime}
+          <div className={`font-medium ${presentation.timeColor} flex items-center justify-end gap-1`}>
+            {presentation.showWarningIcon && <AlertCircle className='h-3.5 w-3.5' />}
+            {formatFundedUntilTimestamp(fundedUntilTimestamp, userToken.currentTimestamp)}
           </div>
-          {!isInfinity && (
-            <div className='text-xs text-muted-foreground'>
-              Epoch:{" "}
-              {fundedUntilEpoch > 1_000_000n
-                ? formatCompactNumber(fundedUntilEpoch)
-                : fundedUntilEpoch.toLocaleString()}
-            </div>
-          )}
+          {presentation.detail && <div className='text-xs text-muted-foreground'>{presentation.detail}</div>}
         </div>
       );
     },
