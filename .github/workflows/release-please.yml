@@ -1,7 +1,11 @@
 name: Release Please
 
 # Maintains the subgraph Release PR. Merging that PR creates the tag and GitHub
-# Release, deploys both networks, and opens a tracking issue.
+# Release, deploys both networks, tags them as `staging`, and opens a tracking
+# issue.
+#
+# The Release PR targets `staging` so the version bump travels to `main` via the
+# normal promotion PR — no back-merge needed.
 #
 # Deployment stays in this workflow because tags created with GITHUB_TOKEN do
 # not start another workflow.
@@ -10,7 +14,7 @@ name: Release Please
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
 
 permissions:
   contents: write
@@ -35,6 +39,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          target-branch: staging
 
   deploy:
     name: Deploy subgraph to Goldsky (${{ matrix.network }})
@@ -80,6 +85,12 @@ jobs:
           # VERSION is reserved for schema selection during the build.
           GOLDSKY_VERSION: ${{ needs.release-please.outputs.version }}
         run: goldsky subgraph deploy "filecoin-pay-${{ matrix.network }}/$GOLDSKY_VERSION" --path . --token "$GOLDSKY_API_KEY"
+
+      - name: Tag as staging (${{ matrix.network }})
+        env:
+          GOLDSKY_API_KEY: ${{ secrets.GOLDSKY_API_KEY }}
+          GOLDSKY_VERSION: ${{ needs.release-please.outputs.version }}
+        run: goldsky subgraph tag create "filecoin-pay-${{ matrix.network }}/$GOLDSKY_VERSION" --tag staging --token "$GOLDSKY_API_KEY"
 
   create-release-issue:
     name: Create release tracking issue

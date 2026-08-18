@@ -53,9 +53,46 @@ jobs:
           # Escape # to \# so GitHub doesn't interpret closing keywords (Fixes #N, Closes #N)
           # in commit subjects and silently close issues when the promotion PR is merged.
           CHANGES=$(sed 's/^/- /; s/#/\\#/g' /tmp/commits.txt)
+
+          # Two-state subgraph warning:
+          #
+          # State 1 — subgraph code changed but version not yet bumped:
+          #   The Release Please PR has not been merged into staging yet. Merging the
+          #   promotion PR now would carry subgraph code changes without a version bump
+          #   or Goldsky deployment. The Release Please PR must be merged first.
+          #
+          # State 2 — version bumped (Release Please PR already merged):
+          #   Goldsky deployment and staging tag are done. Merging this PR triggers
+          #   tag-subgraph-prod.yml which applies the `prod` tag. Confirm indexing first.
+          #
+          # Subgraph code is any change under packages/subgraph/ excluding CHANGELOG.md,
+          # which release-please writes as part of the version bump itself.
+          SUBGRAPH_CODE_CHANGED=false
+          SUBGRAPH_VERSION_BUMPED=false
+          if ! git diff --quiet origin/main HEAD -- packages/subgraph/ ':(exclude)packages/subgraph/CHANGELOG.md'; then
+            SUBGRAPH_CODE_CHANGED=true
+          fi
+          if ! git diff --quiet origin/main HEAD -- packages/subgraph/package.json; then
+            SUBGRAPH_VERSION_BUMPED=true
+          fi
+
           {
             printf '%s\n' "## Changes" ""
             printf '%s\n' "$CHANGES" ""
+            if $SUBGRAPH_CODE_CHANGED && ! $SUBGRAPH_VERSION_BUMPED; then
+              printf '%s\n' ""
+              printf '%s\n' "> [!CAUTION]"
+              printf '%s\n' "> **This promotion includes subgraph changes without a version bump.** The Release Please PR has not been merged into \`staging\` yet."
+              printf '%s\n' "> **Do not merge this PR until the Release Please PR is merged first.** Merging now would carry subgraph code to \`main\` without a Goldsky deployment."
+            elif $SUBGRAPH_VERSION_BUMPED; then
+              printf '%s\n' ""
+              printf '%s\n' "> [!WARNING]"
+              printf '%s\n' "> **This promotion includes a subgraph release.** Merging will apply the \`prod\` tag on Goldsky and switch pay.filecoin.cloud to the new subgraph version."
+              printf '%s\n' "> Before merging, confirm:"
+              printf '%s\n' "> - The release tracking issue confirms indexing is complete on both networks"
+              printf '%s\n' "> - The Explorer has been smoke-tested on staging against the new subgraph"
+            fi
+            printf '%s\n' ""
             printf '%s\n' "---"
             printf '%s\n' "_Auto-generated — merge when staging is validated._"
           } > /tmp/pr-body.md
