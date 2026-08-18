@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { ApproveOperatorDialog } from "@/components/UserConsole/ApproveOperatorDialog";
+import { DecreaseApprovalDialog } from "@/components/UserConsole/DecreaseApprovalDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId } from "@/utils/network";
@@ -16,6 +17,7 @@ interface OperatorApprovalsSectionProps {
 export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> = ({ account }) => {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [increaseDialogOpen, setIncreaseDialogOpen] = useState(false);
+  const [decreaseDialogOpen, setDecreaseDialogOpen] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<OperatorApproval | null>(null);
 
   const { chainId } = useAccount();
@@ -28,14 +30,24 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     setIncreaseDialogOpen(true);
   }, []);
 
+  const handleDecrease = useCallback((approval: OperatorApproval) => {
+    setSelectedApproval(approval);
+    setDecreaseDialogOpen(true);
+  }, []);
+
   const handleOpenApprove = useCallback(() => {
     setApproveDialogOpen(true);
   }, []);
 
-  // Prepare table data with onIncrease handler
+  // Prepare table data with row action handlers
   const tableData = useMemo(
-    () => data?.operatorApprovals.map((approval) => ({ ...approval, onIncrease: handleIncrease })) || [],
-    [data, handleIncrease],
+    () =>
+      data?.operatorApprovals.map((approval) => ({
+        ...approval,
+        onIncrease: handleIncrease,
+        onDecrease: handleDecrease,
+      })) || [],
+    [data, handleIncrease, handleDecrease],
   );
 
   if (isLoading) {
@@ -59,11 +71,11 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     <>
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
-          <h3 className='text-2xl font-medium'>Authorized Services</h3>
+          <h3 className='text-2xl font-medium'>Manage Services</h3>
           <Button variant='primary' onClick={handleOpenApprove} className='py-2'>
             <span className='flex items-center gap-2'>
               <Plus className='h-4 w-4' />
-              Approve Service
+              Add Service
             </span>
           </Button>
         </div>
@@ -83,6 +95,13 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
           approval={selectedApproval}
           open={increaseDialogOpen}
           onOpenChange={setIncreaseDialogOpen}
+        />
+      )}
+      {selectedApproval && (
+        <DecreaseApprovalDialog
+          approval={selectedApproval}
+          open={decreaseDialogOpen}
+          onOpenChange={setDecreaseDialogOpen}
         />
       )}
     </>

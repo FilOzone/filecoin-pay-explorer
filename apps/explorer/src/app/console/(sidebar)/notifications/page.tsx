@@ -411,7 +411,7 @@ const NotificationsPage = () => {
       <div>
         <div className='flex items-baseline justify-between'>
           <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
-            Email alerts
+            Email notifications
           </h2>
           {showUpdateEmail && (
             <button

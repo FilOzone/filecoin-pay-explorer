@@ -452,8 +452,13 @@ export const GET_ACCOUNT_RAILS = gql`
       totalSettledAmount
       totalOneTimePaymentAmount
       lockupPeriod
+      lockupFixed
       settledUpto
       createdAt
+      oneTimePayments(first: 200, orderBy: createdAt, orderDirection: desc) {
+        totalAmount
+        createdAt
+      }
       payer {
         id
         address

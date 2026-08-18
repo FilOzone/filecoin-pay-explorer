@@ -1,7 +1,7 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText, RailStateBadge } from "@/components/shared";
-import { formatDate, formatToken } from "@/utils/formatter";
+import { formatDate, formatEpochsAsDuration, formatRatePerMonth, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
 
@@ -52,7 +52,7 @@ export const columns = [
       return (
         <div className='flex flex-col gap-1 text-right'>
           <div className='font-medium text-sm tabular-nums'>
-            {formatToken(rail.paymentRate, rail.token.decimals, `${rail.token.symbol}/epoch`, 12)}
+            {formatRatePerMonth(rail.paymentRate, rail.token.decimals, rail.token.symbol)}
           </div>
           <div className='text-xs text-muted-foreground'>
             Settled: {formatToken(rail.totalSettledAmount, rail.token.decimals, rail.token.symbol, 8)}
@@ -71,7 +71,7 @@ export const columns = [
           <div className='flex items-center gap-2'>
             <RailStateBadge state={rail.state} />
           </div>
-          <div className='text-xs text-muted-foreground'>Lockup: {rail.lockupPeriod.toString()} epochs</div>
+          <div className='text-xs text-muted-foreground'>Lockup: {formatEpochsAsDuration(rail.lockupPeriod)}</div>
         </div>
       );
     },

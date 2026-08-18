@@ -4,7 +4,12 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { columns } from "../data/columnDefinitions";
 
 export type ApprovalsTableProps = {
-  data: Array<OperatorApproval & { onIncrease: (approval: OperatorApproval) => void }>;
+  data: Array<
+    OperatorApproval & {
+      onIncrease: (approval: OperatorApproval) => void;
+      onDecrease: (approval: OperatorApproval) => void;
+    }
+  >;
 };
 
 function ApprovalsTable({ data }: ApprovalsTableProps) {

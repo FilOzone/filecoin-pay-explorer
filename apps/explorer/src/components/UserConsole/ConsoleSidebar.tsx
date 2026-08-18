@@ -5,7 +5,7 @@ export type ConsoleTab = "dashboard" | "authorizations" | "notifications";
 
 const navItems = [
   { id: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
-  { id: "authorizations" as const, label: "Authorizations", icon: ShieldCheck },
+  { id: "authorizations" as const, label: "Manage", icon: ShieldCheck },
 ];
 
 interface ConsoleSidebarProps {
@@ -66,7 +66,7 @@ export function ConsoleSidebar({
             }`}
           >
             {subscribed ? <Bell className='size-4 shrink-0 text-green-500' /> : <BellOff className='size-4 shrink-0' />}
-            <span>Alerts</span>
+            <span>Email notifications</span>
             {subscribed ? (
               <span className='text-xs font-medium text-green-500'>ON</span>
             ) : (

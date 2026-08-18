@@ -7,6 +7,7 @@ export type TransactionType =
   | "withdraw"
   | "approveOperator"
   | "increaseApproval"
+  | "decreaseApproval"
   | "settleRail"
   | "terminateRail";
 

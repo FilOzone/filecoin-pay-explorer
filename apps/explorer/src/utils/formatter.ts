@@ -28,6 +28,36 @@ export function formatToken(
   const unitValue = Number(value) / divisor;
   return `${formatCompactNumber(unitValue, decimals)} ${symbol}`;
 }
+// Filecoin epoch = 30s: 2,880 epochs/day, 86,400 epochs per 30-day month.
+export const EPOCHS_PER_DAY = 2880n;
+export const EPOCHS_PER_MONTH = 86400n;
+
+/**
+ * Renders a per-epoch streaming rate as a monthly amount. Per-epoch values
+ * are protocol plumbing; monthly is the only denomination payers reason in.
+ */
+export function formatRatePerMonth(
+  ratePerEpoch: number | string | bigint,
+  tokenDecimals: number | bigint = 18,
+  symbol: string = "",
+): string {
+  const perMonth = BigInt(ratePerEpoch) * EPOCHS_PER_MONTH;
+  const unitValue = Number(perMonth) / 10 ** Number(tokenDecimals);
+  if (unitValue === 0) return `0 ${symbol}/mo`;
+  const rendered = unitValue < 0.01 ? unitValue.toPrecision(2) : formatCompactNumber(unitValue, 2);
+  return `~${rendered} ${symbol}/mo`.replace("  ", " ");
+}
+
+/** Renders an epoch count as days/hours instead of raw epochs. */
+export function formatEpochsAsDuration(epochs: number | string | bigint): string {
+  const count = BigInt(epochs);
+  if (count < EPOCHS_PER_DAY) {
+    const hours = Number((count * 24n) / EPOCHS_PER_DAY);
+    return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+  const days = Number(count / EPOCHS_PER_DAY);
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
 
 export const formatFIL = (attoFil: string | bigint) => {
   if (!attoFil || attoFil === "0") return "0 FIL";

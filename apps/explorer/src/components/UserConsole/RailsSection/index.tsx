@@ -18,12 +18,12 @@ import { getNetworkFromChainId } from "@/utils/network";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import {
-  OperatorList,
   RailsEmptyInitial,
   RailsEmptyNoResults,
   RailsErrorState,
   RailsLoadingState,
   RailsTable,
+  ServiceRollup,
 } from "./components";
 import { SettleRailProvider } from "./context/SettleRailContext";
 import type { RailTableRow } from "./types";
@@ -62,6 +62,21 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const handleSettle = (rail: Rail) => {
     setSelectedRail(rail);
     setSettleDialogOpen(true);
+  };
+
+  // Settlement is normally the payee's job; the payer-facing action is one
+  // aggregate settle per service. Transactions are submitted per rail and the
+  // hook processes them sequentially.
+  const handleSettleAll = (railsToSettle: Rail[]) => {
+    for (const rail of railsToSettle) {
+      settleRail({
+        railId: rail.railId,
+        paymentRate: rail.paymentRate,
+        tokenSymbol: rail.token.symbol,
+        tokenDecimals: Number(rail.token.decimals),
+        settledUpto: rail.settledUpto,
+      });
+    }
   };
 
   const handleSearch = (query: string, filterType: SearchFilterType) => {
@@ -228,7 +243,12 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     <>
       <div className='flex flex-col gap-4'>
         <h3 className='text-2xl font-medium'>Your services</h3>
-        <OperatorList rails={data.rails} onManage={handleManage} />
+        <ServiceRollup
+          rails={data.rails}
+          onViewRails={handleManage}
+          onSettleAll={handleSettleAll}
+          isSettling={isSettling}
+        />
       </div>
 
       {selectedRail && (
