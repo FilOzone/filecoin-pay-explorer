@@ -39,7 +39,6 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
-  const [guidedTopUpAmount, setGuidedTopUpAmount] = useState("");
 
   const { chainId } = useAccount();
   const walletNetwork = topUpOnly ? "mainnet" : getNetworkFromChainId(chainId);
@@ -66,8 +65,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
     setDepositDialogOpen(true);
   }, []);
 
-  const handleOpenGuidedTopUp = useCallback((amount: string) => {
-    setGuidedTopUpAmount(amount);
+  const handleOpenGuidedTopUp = useCallback(() => {
     setGuidedTopUpOpen(true);
   }, []);
 
@@ -101,9 +99,9 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
         setDepositDialogOpen(true);
         return;
       }
-      handleOpenGuidedTopUp(selectedToken ? suggestedTopUpFor(selectedToken) : "");
+      handleOpenGuidedTopUp();
     },
-    [handleOpenGuidedTopUp, selectedToken, suggestedTopUpFor],
+    [handleOpenGuidedTopUp],
   );
 
   const removeTopUpSearchParam = useCallback(() => {
@@ -136,7 +134,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
       : 0n;
 
     if (walletNetwork === "mainnet") {
-      handleOpenGuidedTopUp(formatSuggestedTopUp(suggestedTopUp));
+      handleOpenGuidedTopUp();
       return;
     }
 
@@ -208,19 +206,13 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, contentHi
       )}
       <GuidedTopUpDialog
         accountId={accountId}
-        amount={guidedTopUpAmount}
         onOpenChange={handleGuidedTopUpOpenChange}
         open={guidedTopUpOpen}
         position={usdfcToken ?? EMPTY_FUNDING_POSITION}
       />
       {contentHidden ? null : topUpOnly ? (
         <div className='flex justify-center'>
-          <Button
-            onClick={() => {
-              handleOpenGuidedTopUp(usdfcToken ? suggestedTopUpFor(usdfcToken) : "");
-            }}
-            variant='primary'
-          >
+          <Button onClick={handleOpenGuidedTopUp} variant='primary'>
             Fund with another token
           </Button>
         </div>

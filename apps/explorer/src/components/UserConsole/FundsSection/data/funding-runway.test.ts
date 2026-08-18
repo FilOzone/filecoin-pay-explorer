@@ -3,6 +3,7 @@ import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
   EPOCHS_PER_DAY,
+  FUNDING_TARGETS,
   type FundingPosition,
   formatFundedThrough,
   formatSuggestedTopUp,
@@ -45,6 +46,17 @@ describe("calculateFundingRunway", () => {
 
     expect(result.fundedThroughTimestamp).toBe(now + runwayInEpochs * 30n);
     expect(result.suggestedTopUp).toBe(rate * (ONE_YEAR_EPOCHS - runwayInEpochs));
+  });
+
+  it("calculates suggestions for the selected funding target", () => {
+    const current = position(EPOCHS_PER_DAY);
+
+    expect(calculateFundingRunway(current, now, FUNDING_TARGETS.month.epochs).suggestedTopUp).toBe(
+      rate * (FUNDING_TARGETS.month.epochs - EPOCHS_PER_DAY),
+    );
+    expect(calculateFundingRunway(current, now, FUNDING_TARGETS.year.epochs).suggestedTopUp).toBe(
+      rate * (FUNDING_TARGETS.year.epochs - EPOCHS_PER_DAY),
+    );
   });
 
   it("accounts for time since settlement and accounts without active spend", () => {

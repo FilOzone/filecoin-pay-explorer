@@ -23,11 +23,12 @@ import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
   FUNDING_ESTIMATE_DISCLAIMER,
+  FUNDING_TARGETS,
   type FundingPosition,
+  type FundingTarget,
   formatFundedThrough,
   formatSuggestedTopUp,
   formatUsdfcAmount,
-  SUGGESTED_TOP_UP_CAPTION,
 } from "../data/funding-runway";
 import { parseTopUpAmount } from "../data/guided-top-up";
 import {
@@ -72,28 +73,22 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
 
 type GuidedTopUpDialogProps = {
   accountId: string;
-  amount: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   position: FundingPosition;
 };
 
-export function GuidedTopUpDialog({
-  accountId,
-  amount: initialAmount,
-  onOpenChange,
-  open,
-  position,
-}: GuidedTopUpDialogProps) {
+export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: GuidedTopUpDialogProps) {
   const { synapse } = useSynapse();
   const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
-  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
-  const suggestedTopUp = calculateFundingRunway(position, nowTimestamp).suggestedTopUp;
-  const suggestedAmount = formatSuggestedTopUp(suggestedTopUp);
-  const chipAmount = initialAmount || suggestedAmount;
   const [amount, setAmount] = useState("");
+  const [fundingTarget, setFundingTarget] = useState<FundingTarget>("year");
+  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
+  const target = FUNDING_TARGETS[fundingTarget];
+  const suggestedTopUp = calculateFundingRunway(position, nowTimestamp, target.epochs).suggestedTopUp;
+  const suggestedAmount = formatSuggestedTopUp(suggestedTopUp);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
@@ -104,9 +99,11 @@ export function GuidedTopUpDialog({
   latestAddress.current = address;
   const parsedAmount = parseTopUpAmount(amount);
   const depositAmount = acquiredAmount ?? parsedAmount;
-  const current = calculateFundingRunway(position, nowTimestamp);
+  const current = calculateFundingRunway(position, nowTimestamp, target.epochs);
   const projected =
-    depositAmount === null ? null : calculateProjectedFundingRunway(position, depositAmount, nowTimestamp);
+    depositAmount === null
+      ? null
+      : calculateProjectedFundingRunway(position, depositAmount, nowTimestamp, target.epochs);
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
   const acquisitionOwnerMatches =
     acquisitionOwner === null || (address !== undefined && acquisitionOwner.toLowerCase() === address.toLowerCase());
@@ -142,6 +139,7 @@ export function GuidedTopUpDialog({
     // Reset to an empty amount on open; the user fills it (or taps the suggested chip) so nothing is pre-entered.
     if (open && !wasOpen.current && acquiredAmount === null) {
       setAmount("");
+      setFundingTarget("year");
     }
     wasOpen.current = open;
   }, [acquiredAmount, open]);
@@ -314,6 +312,24 @@ export function GuidedTopUpDialog({
         <StepIndicator step={step} />
         <div className='grid gap-4'>
           <div className='grid gap-2'>
+            {acquiredAmount === null && (
+              <div className='flex items-center gap-2'>
+                <span className='text-sm font-medium'>Suggested runway</span>
+                {(Object.keys(FUNDING_TARGETS) as FundingTarget[]).map((option) => (
+                  <Button
+                    aria-pressed={fundingTarget === option}
+                    disabled={acquisitionState !== "idle"}
+                    key={option}
+                    onClick={() => setFundingTarget(option)}
+                    size='compact'
+                    type='button'
+                    variant={fundingTarget === option ? "primary" : "tertiary"}
+                  >
+                    {FUNDING_TARGETS[option].label}
+                  </Button>
+                ))}
+              </div>
+            )}
             <Label htmlFor='guided-top-up-amount'>USDFC to receive and deposit</Label>
             <Input
               disabled={acquiredAmount !== null || acquisitionState !== "idle"}
@@ -327,20 +343,22 @@ export function GuidedTopUpDialog({
             {amount !== "" && parsedAmount === null && acquiredAmount === null && (
               <p className='text-sm text-destructive'>Enter an amount greater than zero.</p>
             )}
-            {chipAmount && acquiredAmount === null && (
+            {suggestedAmount && acquiredAmount === null && (
               <Button
                 className='w-fit'
                 disabled={acquisitionState !== "idle"}
-                onClick={() => setAmount(chipAmount)}
+                onClick={() => setAmount(suggestedAmount)}
                 size='compact'
                 type='button'
                 variant='primary'
               >
-                Use suggested: {chipAmount} USDFC
+                Use suggested: {suggestedAmount} USDFC
               </Button>
             )}
-            {chipAmount && acquiredAmount === null && (
-              <p className='text-xs text-muted-foreground'>{SUGGESTED_TOP_UP_CAPTION}</p>
+            {suggestedAmount && acquiredAmount === null && (
+              <p className='text-xs text-muted-foreground'>
+                Keeps this account funded for about {target.label} at your current recurring spend rate.
+              </p>
             )}
           </div>
           <div className='grid gap-2 rounded-md border p-3 text-sm'>

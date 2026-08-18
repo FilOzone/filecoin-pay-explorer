@@ -7,6 +7,11 @@ export const ONE_YEAR_DAYS = 365n;
 export const USDFC_DECIMALS = 18;
 export const EPOCHS_PER_DAY = TIME_CONSTANTS.EPOCHS_PER_DAY;
 export const ONE_YEAR_EPOCHS = ONE_YEAR_DAYS * EPOCHS_PER_DAY;
+export const FUNDING_TARGETS = {
+  month: { epochs: TIME_CONSTANTS.EPOCHS_PER_MONTH, label: "1 month" },
+  year: { epochs: ONE_YEAR_EPOCHS, label: "1 year" },
+} as const;
+export type FundingTarget = keyof typeof FUNDING_TARGETS;
 export const FUNDING_ESTIMATE_DISCLAIMER =
   "Estimates assume your current recurring spend rate; one-time charges are not included.";
 export const SUGGESTED_TOP_UP_CAPTION =
@@ -30,7 +35,11 @@ export type FundingRunway = {
   suggestedTopUp: bigint;
 };
 
-export function calculateFundingRunway(position: FundingPosition, nowTimestamp: bigint): FundingRunway {
+export function calculateFundingRunway(
+  position: FundingPosition,
+  nowTimestamp: bigint,
+  targetEpochs = ONE_YEAR_EPOCHS,
+): FundingRunway {
   const availableFunds = BigInt(position.funds) - BigInt(position.lockupCurrent);
   const lockupRate = BigInt(position.lockupRate);
 
@@ -55,7 +64,7 @@ export function calculateFundingRunway(position: FundingPosition, nowTimestamp: 
   const elapsedEpochs = elapsedSeconds > 0n ? elapsedSeconds / EPOCH_DURATION_SECONDS : 0n;
   const currentFunds = availableFunds - elapsedEpochs * lockupRate;
   const runwayInEpochs = currentFunds > 0n ? currentFunds / lockupRate : 0n;
-  const suggestedTopUp = lockupRate * ONE_YEAR_EPOCHS - currentFunds;
+  const suggestedTopUp = lockupRate * targetEpochs - currentFunds;
 
   return {
     availableFunds,
@@ -70,8 +79,9 @@ export function calculateProjectedFundingRunway(
   position: FundingPosition,
   amount: bigint,
   nowTimestamp: bigint,
+  targetEpochs = ONE_YEAR_EPOCHS,
 ): FundingRunway {
-  return calculateFundingRunway({ ...position, funds: BigInt(position.funds) + amount }, nowTimestamp);
+  return calculateFundingRunway({ ...position, funds: BigInt(position.funds) + amount }, nowTimestamp, targetEpochs);
 }
 
 export function parseFundingAmount(amount: string, decimals: number): bigint | null {
