@@ -14,10 +14,6 @@ export function useNavigationItems() {
   const headerNavigationItems = useMemo(
     () => [
       {
-        label: PATHS.CONSOLE.label,
-        href: PATHS.CONSOLE.path,
-      },
-      {
         label: PATHS.RAILS.label,
         href: `/${network}${PATHS.RAILS.path}`,
       },
@@ -41,8 +37,13 @@ export function useNavigationItems() {
     [network],
   );
 
+  // Mobile has no room for the header account button, so the console keeps a
+  // plain nav entry there.
   const mobileNavigationItems = useMemo(
-    () => headerNavigationItems.filter((item): item is NavItem => "href" in item),
+    () =>
+      [{ label: PATHS.CONSOLE.label, href: PATHS.CONSOLE.path }, ...headerNavigationItems].filter(
+        (item): item is NavItem => "href" in item,
+      ),
     [headerNavigationItems],
   );
 

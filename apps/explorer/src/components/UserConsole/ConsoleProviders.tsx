@@ -1,11 +1,10 @@
 import { midnightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
+import WalletProviders from "@/components/shared/WalletProviders";
 import { SynapseProvider } from "@/context/Synapse";
-import { config } from "@/services/wagmi/config";
 
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
   return (
-    <WagmiProvider config={config}>
+    <WalletProviders>
       <RainbowKitProvider
         theme={midnightTheme({
           borderRadius: "small",
@@ -14,7 +13,7 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
       >
         <SynapseProvider>{children}</SynapseProvider>
       </RainbowKitProvider>
-    </WagmiProvider>
+    </WalletProviders>
   );
 };
 

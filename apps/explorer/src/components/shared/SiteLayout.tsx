@@ -3,7 +3,7 @@ import localFont from "next/font/local";
 import Script from "next/script";
 import type { ReactNode } from "react";
 
-import { Footer, Navigation, Providers } from "@/components/shared";
+import { Footer, Providers } from "@/components/shared";
 
 const funnelSans = localFont({
   src: "../../fonts/Funnel_Sans/FunnelSans[wght].woff2",
@@ -42,7 +42,6 @@ function SiteLayout({ children }: SiteLayoutProps) {
         )}
       >
         <Providers>
-          <Navigation backgroundVariant='light' />
           <main className='flex-1'>{children}</main>
           <Footer />
         </Providers>
