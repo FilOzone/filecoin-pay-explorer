@@ -1,12 +1,11 @@
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { formatUnits, parseUnits } from "viem";
-import { EPOCH_DURATION } from "@/utils/constants";
 import { formatDate } from "@/utils/formatter";
 
-export const EPOCH_DURATION_SECONDS = BigInt(EPOCH_DURATION);
+export const EPOCH_DURATION_SECONDS = BigInt(TIME_CONSTANTS.EPOCH_DURATION);
 export const ONE_YEAR_DAYS = 365n;
 export const USDFC_DECIMALS = 18;
-export const SECONDS_PER_DAY = 24n * 60n * 60n;
-export const EPOCHS_PER_DAY = SECONDS_PER_DAY / EPOCH_DURATION_SECONDS;
+export const EPOCHS_PER_DAY = TIME_CONSTANTS.EPOCHS_PER_DAY;
 export const ONE_YEAR_EPOCHS = ONE_YEAR_DAYS * EPOCHS_PER_DAY;
 export const FUNDING_ESTIMATE_DISCLAIMER =
   "Estimates assume your current recurring spend rate; one-time charges are not included.";

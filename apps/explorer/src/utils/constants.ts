@@ -1,9 +1,10 @@
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { calibration, mainnet } from "@/constants/chains";
 import type { supportedChains } from "@/services/wagmi/config";
 import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
-export const EPOCH_DURATION = 30;
+export const EPOCH_DURATION = TIME_CONSTANTS.EPOCH_DURATION;
 
 export const FUNDING_WARNING_THRESHOLD_SECONDS = 7 * 24 * 60 * 60;
 
