@@ -18,20 +18,11 @@ import { useAccount, usePublicClient, useReadContract, useReadContracts, useWall
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
-import {
-  calculateFundingRunway,
-  calculateProjectedFundingRunway,
-  FUNDING_ESTIMATE_DISCLAIMER,
-  formatFundedThrough,
-  parseFundingAmount,
-  SUGGESTED_TOP_UP_CAPTION,
-} from "./FundsSection/data/funding-runway";
 
 interface DepositDialogProps {
   userToken?: UserToken | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  suggestedAmount?: string;
 }
 
 interface TokenDetails {
@@ -43,7 +34,7 @@ interface TokenDetails {
 
 type LoadingState = "idle" | "loading" | "success" | "error";
 
-export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange, suggestedAmount }) => {
+export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange }) => {
   const { address: userAddress } = useAccount();
 
   // Form state
@@ -238,14 +229,6 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
       }
     : tokenDetails;
 
-  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
-  const parsedFundingAmount = currentToken ? parseFundingAmount(amount, currentToken.decimals) : null;
-  const currentRunway = userToken ? calculateFundingRunway(userToken, nowTimestamp) : null;
-  const projectedRunway =
-    userToken && parsedFundingAmount !== null
-      ? calculateProjectedFundingRunway(userToken, parsedFundingAmount, nowTimestamp)
-      : null;
-
   const canDeposit = currentToken && amount && !isExecuting;
 
   return (
@@ -395,39 +378,9 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   MAX
                 </Button>
               </div>
-              {suggestedAmount ? (
-                <div className='flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground'>
-                  <Button
-                    type='button'
-                    variant='primary'
-                    size='compact'
-                    onClick={() => setAmount(suggestedAmount)}
-                    disabled={isExecuting}
-                  >
-                    Use suggested: {suggestedAmount} {currentToken.symbol}
-                  </Button>
-                  <span>{SUGGESTED_TOP_UP_CAPTION}</span>
-                </div>
-              ) : (
-                <p className='text-xs text-muted-foreground'>
-                  Enter the amount of {currentToken.symbol} you want to deposit
-                </p>
-              )}
-              {currentRunway && (
-                <div className='grid gap-2 rounded-md border p-3 text-sm'>
-                  <p>
-                    Current funded through:{" "}
-                    <span className='font-medium'>{formatFundedThrough(currentRunway, nowTimestamp)}</span>
-                  </p>
-                  <p>
-                    Projected funded through:{" "}
-                    <span className='font-medium'>
-                      {projectedRunway ? formatFundedThrough(projectedRunway, nowTimestamp, true) : "—"}
-                    </span>
-                  </p>
-                  <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
-                </div>
-              )}
+              <p className='text-xs text-muted-foreground'>
+                Enter the amount of {currentToken.symbol} you want to deposit
+              </p>
             </div>
           )}
 

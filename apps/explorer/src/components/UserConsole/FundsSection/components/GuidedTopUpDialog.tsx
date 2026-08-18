@@ -24,7 +24,7 @@ import {
   calculateProjectedFundingRunway,
   FUNDING_ESTIMATE_DISCLAIMER,
   FUNDING_TARGETS,
-  type FundingPosition,
+  type FundingAccountSummary,
   type FundingTarget,
   formatFundedThrough,
   formatSuggestedTopUp,
@@ -73,22 +73,25 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
 
 type GuidedTopUpDialogProps = {
   accountId: string;
+  accountSummary?: FundingAccountSummary;
+  isAccountSummaryLoading: boolean;
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  position: FundingPosition;
 };
 
-export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: GuidedTopUpDialogProps) {
-  const { synapse } = useSynapse();
+export function GuidedTopUpDialog({
+  accountId,
+  accountSummary,
+  isAccountSummaryLoading,
+  onOpenChange,
+  open,
+}: GuidedTopUpDialogProps) {
+  const { constants, synapse } = useSynapse();
   const { address, chainId } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
   const [fundingTarget, setFundingTarget] = useState<FundingTarget>("year");
-  const nowTimestamp = BigInt(Math.floor(Date.now() / 1_000));
-  const target = FUNDING_TARGETS[fundingTarget];
-  const suggestedTopUp = calculateFundingRunway(position, nowTimestamp, target.epochs).suggestedTopUp;
-  const suggestedAmount = formatSuggestedTopUp(suggestedTopUp);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
@@ -97,13 +100,17 @@ export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: G
   const wasOpen = useRef(false);
   const latestAddress = useRef(address);
   latestAddress.current = address;
+  const target = FUNDING_TARGETS[fundingTarget];
+  const current = accountSummary
+    ? calculateFundingRunway(accountSummary, target.epochs, constants.chain.genesisTimestamp)
+    : null;
+  const suggestedAmount = current ? formatSuggestedTopUp(current.suggestedTopUp) : "";
   const parsedAmount = parseTopUpAmount(amount);
   const depositAmount = acquiredAmount ?? parsedAmount;
-  const current = calculateFundingRunway(position, nowTimestamp, target.epochs);
   const projected =
-    depositAmount === null
-      ? null
-      : calculateProjectedFundingRunway(position, depositAmount, nowTimestamp, target.epochs);
+    accountSummary && depositAmount !== null
+      ? calculateProjectedFundingRunway(accountSummary, depositAmount, target.epochs, constants.chain.genesisTimestamp)
+      : null;
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
   const acquisitionOwnerMatches =
     acquisitionOwner === null || (address !== undefined && acquisitionOwner.toLowerCase() === address.toLowerCase());
@@ -186,6 +193,7 @@ export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: G
       if (receipt.status !== "success") throw new Error("Top-up transaction reverted");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["account", accountId, "tokens"] }),
+        queryClient.invalidateQueries({ queryKey: ["payments", "account-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["balance"] }),
         queryClient.invalidateQueries({ queryKey: ["readContract"] }),
       ]);
@@ -312,7 +320,7 @@ export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: G
         <StepIndicator step={step} />
         <div className='grid gap-4'>
           <div className='grid gap-2'>
-            {acquiredAmount === null && (
+            {accountSummary && acquiredAmount === null && (
               <div className='flex items-center gap-2'>
                 <span className='text-sm font-medium'>Suggested runway</span>
                 {(Object.keys(FUNDING_TARGETS) as FundingTarget[]).map((option) => (
@@ -360,23 +368,30 @@ export function GuidedTopUpDialog({ accountId, onOpenChange, open, position }: G
                 Keeps this account funded for about {target.label} at your current recurring spend rate.
               </p>
             )}
+            {!accountSummary && acquiredAmount === null && (
+              <p className='text-xs text-muted-foreground'>
+                {isAccountSummaryLoading
+                  ? "Loading on-chain funding status…"
+                  : "On-chain funding status is unavailable. Enter an amount manually."}
+              </p>
+            )}
           </div>
-          <div className='grid gap-2 rounded-md border p-3 text-sm'>
-            <p>
-              Current funded through: <span className='font-medium'>{formatFundedThrough(current, nowTimestamp)}</span>
-            </p>
-            <p>
-              Projected funded through:{" "}
-              <span className='font-medium'>
-                {projected ? formatFundedThrough(projected, nowTimestamp, true) : "—"}
-              </span>
-            </p>
-            <p className='text-muted-foreground'>
-              {acquiredAmount === null ? "Target deposit" : "Ready to deposit"}:{" "}
-              {depositAmount === null ? "—" : formatUsdfcAmount(depositAmount)} USDFC.
-            </p>
-            <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
-          </div>
+          {current && (
+            <div className='grid gap-2 rounded-md border p-3 text-sm'>
+              <p>
+                Current funded through: <span className='font-medium'>{formatFundedThrough(current)}</span>
+              </p>
+              <p>
+                Projected funded through:{" "}
+                <span className='font-medium'>{projected ? formatFundedThrough(projected, true) : "—"}</span>
+              </p>
+              <p className='text-muted-foreground'>
+                {acquiredAmount === null ? "Target deposit" : "Ready to deposit"}:{" "}
+                {depositAmount === null ? "—" : formatUsdfcAmount(depositAmount)} USDFC.
+              </p>
+              <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
+            </div>
+          )}
           {acquisitionState === "blocked" && (
             <div className='grid gap-2 rounded-md border border-destructive/30 p-3 text-sm'>
               {savedAcquisition ? (
