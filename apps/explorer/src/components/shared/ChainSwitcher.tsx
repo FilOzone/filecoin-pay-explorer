@@ -8,16 +8,21 @@ import {
 } from "@filecoin-pay/ui/components/dropdown-menu";
 import { ChevronDown, Globe } from "lucide-react";
 import { useSwitchChain } from "wagmi";
+import useNetwork from "@/hooks/useNetwork";
 import { supportedChains } from "@/services/wagmi/config";
 import { getNetworkFromChainId } from "@/utils/network";
 
 interface ChainSwitcherProps {
-  chainId: number;
+  /** Connected wallet chain; omit when no wallet is connected. */
+  chainId?: number;
 }
 
+// With a connected wallet the selector switches the wallet chain; without one it
+// drives the explorer-wide network context instead.
 const ChainSwitcher = ({ chainId }: ChainSwitcherProps) => {
   const { switchChain } = useSwitchChain();
-  const currentNetwork = getNetworkFromChainId(chainId);
+  const { network, setNetwork } = useNetwork();
+  const currentNetwork = chainId !== undefined ? getNetworkFromChainId(chainId) : network;
   const currentChain = supportedChains.find((c) => c.slug === currentNetwork) ?? supportedChains[0];
 
   return (
@@ -35,8 +40,8 @@ const ChainSwitcher = ({ chainId }: ChainSwitcherProps) => {
         {supportedChains.map((chain) => (
           <DropdownMenuItem
             key={chain.id}
-            onClick={() => switchChain({ chainId: chain.id })}
-            className={chain.id === chainId ? "font-semibold" : ""}
+            onClick={() => (chainId !== undefined ? switchChain({ chainId: chain.id }) : setNetwork(chain.slug))}
+            className={chain.slug === currentNetwork ? "font-semibold" : ""}
           >
             {chain.label}
           </DropdownMenuItem>

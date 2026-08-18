@@ -14,6 +14,11 @@ export interface SynapseContextType {
 
 export interface NetworkContextType {
   network: Network;
-  setNetwork: React.Dispatch<React.SetStateAction<Network>>;
+  /** Explicit selection: header selector, console switcher, or wallet sync. */
+  setNetwork: (network: Network) => void;
+  /** Adopt from the URL without claiming user intent (deep links, first load). */
+  adoptNetwork: (network: Network) => void;
+  /** Whether any explicit selection happened this session. */
+  hasUserSelection: boolean;
   subgraphUrl: string;
 }

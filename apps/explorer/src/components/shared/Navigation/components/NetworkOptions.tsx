@@ -4,14 +4,19 @@ import { usePathname, useRouter } from "next/navigation";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
 import { supportedChains } from "@/services/wagmi/config";
+import type { Network } from "@/types";
 
 const NetworkOptions = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const { network } = useNetwork();
+  const { network, setNetwork } = useNetwork();
 
-  const handleNetworkChange = (newNetwork: string) => {
+  const handleNetworkChange = (newNetwork: Network) => {
     if (network === newNetwork) return;
+
+    // Record the selection before navigating so the route-level sync sees a
+    // settled context instead of rewriting the URL back to the old network.
+    setNetwork(newNetwork);
 
     const pathParts = pathname.split("/").filter(Boolean);
     const firstSegment = pathParts[0];
