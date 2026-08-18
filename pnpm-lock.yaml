@@ -75,8 +75,8 @@ importers:
         specifier: ^2.0.7
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       squid-evm-funding:
-        specifier: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz
-        version: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz(typescript@6.0.3)(zod@4.4.3)
+        specifier: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz
+        version: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz(typescript@6.0.3)(zod@4.4.3)
       use-debounce:
         specifier: ^10.1.1
         version: 10.1.1(react@19.2.8)
@@ -7909,9 +7909,9 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz:
-    resolution: {tarball: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz}
-    version: 0.1.6-vercel.0
+  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz:
+    resolution: {tarball: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz}
+    version: 0.1.6-vercel.1
     engines: {node: '>=18'}
 
   stackback@0.0.2:
@@ -16965,7 +16965,7 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz(typescript@6.0.3)(zod@4.4.3):
+  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz(typescript@6.0.3)(zod@4.4.3):
     dependencies:
       viem: 2.55.18(typescript@6.0.3)(zod@4.4.3)
     transitivePeerDependencies:
