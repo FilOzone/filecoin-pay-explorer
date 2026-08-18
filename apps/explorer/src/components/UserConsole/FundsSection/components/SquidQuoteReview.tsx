@@ -89,6 +89,7 @@ export function SquidQuoteReview({
   const nativeSymbol = sourceChainMeta?.nativeCurrency?.symbol ?? "the native token";
   const {
     data: tokens = [],
+    error: tokenLoadError,
     isError: isTokenLoadError,
     isFetching: isLoadingTokens,
     refetch: refetchTokens,
@@ -115,6 +116,10 @@ export function SquidQuoteReview({
     const interval = setInterval(() => setNowSeconds(Math.floor(Date.now() / 1_000)), 1_000);
     return () => clearInterval(interval);
   }, [quote]);
+
+  useEffect(() => {
+    if (tokenLoadError) console.error("Failed to load Squid token catalog:", tokenLoadError);
+  }, [tokenLoadError]);
 
   const review = async () => {
     setError(null);
