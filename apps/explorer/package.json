@@ -27,7 +27,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "sonner": "^2.0.7",
-    "squid-evm-funding": "github:FilOzone/squid-evm-funding#v0.1.5",
+    "squid-evm-funding": "https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.0/squid-evm-funding-0.1.6-vercel.0.tgz",
     "use-debounce": "^10.1.1",
     "viem": "^2.48.11",
     "wagmi": "^3.6.14"
