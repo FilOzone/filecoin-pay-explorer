@@ -11,6 +11,7 @@ import {
   FundsSection,
   OperatorApprovalsSection,
   RailsSection,
+  TopUpDialogController,
 } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
@@ -43,6 +44,11 @@ const UserConsoleContent = () => {
     isError,
     error,
   } = useAccountDetails(address || "", { networkOverride: walletNetwork });
+  const accountReady = !isLoading && !isError;
+  const showFullFunds = consoleView === "filecoin" && accountReady && !!account;
+  const showUnindexedTopUp = consoleView === "filecoin" && accountReady && !account && walletNetwork === "mainnet";
+  const allowSourceChainTopUp = consoleView === "unsupported" && isSquidSourceChain;
+  const showGuidedTopUp = showUnindexedTopUp || allowSourceChainTopUp || (showFullFunds && walletNetwork === "mainnet");
 
   return (
     <PageSection backgroundVariant='light'>
@@ -97,17 +103,17 @@ const UserConsoleContent = () => {
           </>
         )}
 
-        {address &&
-          ((consoleView === "filecoin" && !isLoading && !isError && (account || walletNetwork === "mainnet")) ||
-            (consoleView === "unsupported" && isSquidSourceChain)) && (
-            <FundsSection
-              accountId={account?.id ?? address}
-              contentHidden={consoleView === "unsupported"}
-              key={address}
-              subscribed={subscribed}
-              topUpOnly={!account || consoleView === "unsupported"}
-            />
-          )}
+        {address && showGuidedTopUp && (
+          <TopUpDialogController accountId={account?.id ?? address} key={address} showTrigger={showUnindexedTopUp}>
+            {showFullFunds
+              ? (openTopUp) => <FundsSection accountId={account.id} onGuidedTopUp={openTopUp} subscribed={subscribed} />
+              : undefined}
+          </TopUpDialogController>
+        )}
+
+        {address && showFullFunds && !showGuidedTopUp && (
+          <FundsSection accountId={account.id} key={address} subscribed={subscribed} />
+        )}
 
         {consoleView === "filecoin" && address && !isLoading && account && (
           <>
