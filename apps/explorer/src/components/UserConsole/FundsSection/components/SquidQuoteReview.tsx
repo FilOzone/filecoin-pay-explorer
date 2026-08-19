@@ -4,15 +4,15 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
-import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 import {
   fetchSourceTokens,
   type SquidFundingPlan,
   type SquidPublicClient,
   type SquidWalletClient,
-} from "squid-evm-funding";
+} from "@filecoin-project/squid-evm-funding";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
