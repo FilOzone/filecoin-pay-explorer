@@ -17,7 +17,7 @@ import { type SettleRail, useSettleRailDialog } from "./useSettleRailDialog";
 interface SettleRailDialogProps {
   rail: Rail;
   userAddress: string;
-  settlementEpoch?: bigint;
+  currentEpoch?: bigint;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isSettling?: boolean;
@@ -27,7 +27,7 @@ interface SettleRailDialogProps {
 export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
   rail,
   userAddress,
-  settlementEpoch,
+  currentEpoch,
   open,
   onOpenChange,
   isSettling = false,
@@ -36,7 +36,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
   const settlement = useSettleRailDialog({
     rail,
     userAddress,
-    settlementEpoch,
+    currentEpoch,
     open,
     isSettling,
     settleRail,
@@ -64,7 +64,8 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
 
           <SettlementDetails
             rail={rail}
-            settlementEpoch={settlement.settlementEpoch}
+            currentEpoch={settlement.currentEpoch}
+            untilEpoch={settlement.untilEpoch}
             settledUptoEpoch={settlement.settledUptoEpoch}
             epochsSinceLastSettlement={settlement.epochsSinceLastSettlement}
             settlementAmountState={settlement.settlementAmountState}

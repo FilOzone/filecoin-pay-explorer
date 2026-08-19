@@ -33,14 +33,6 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
     return () => window.clearInterval(intervalId);
   }, []);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
-    }, EPOCH_DURATION * 1_000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
   // Fetch all tokens for this account (no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
 

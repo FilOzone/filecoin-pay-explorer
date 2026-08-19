@@ -40,7 +40,8 @@ function formatSettlementAmount(state: SettlementAmountState, rail: Rail): strin
 
 interface SettlementDetailsProps {
   rail: Rail;
-  settlementEpoch: bigint | undefined;
+  currentEpoch: bigint | undefined;
+  untilEpoch: bigint | undefined;
   settledUptoEpoch: bigint;
   epochsSinceLastSettlement: bigint;
   settlementAmountState: SettlementAmountState;
@@ -48,25 +49,25 @@ interface SettlementDetailsProps {
 
 export const SettlementDetails = ({
   rail,
-  settlementEpoch,
+  currentEpoch,
+  untilEpoch,
   settledUptoEpoch,
   epochsSinceLastSettlement,
   settlementAmountState,
 }: SettlementDetailsProps) => {
-  const epochsToSettleText =
-    settlementEpoch === undefined ? "Loading..." : formatEpochDuration(epochsSinceLastSettlement);
+  const epochsToSettleText = currentEpoch === undefined ? "Loading..." : formatEpochDuration(epochsSinceLastSettlement);
 
   return (
     <div className='grid gap-3 p-4 rounded-lg border'>
       <div className='grid gap-2 text-sm'>
-        <EpochRow label='Settlement Epoch' epoch={settlementEpoch ?? 0n} currentEpoch={settlementEpoch} />
-        <EpochRow label='Settled Up To' epoch={settledUptoEpoch} currentEpoch={settlementEpoch} />
+        <EpochRow label='Settlement Epoch' epoch={untilEpoch ?? 0n} currentEpoch={currentEpoch} />
+        <EpochRow label='Settled Up To' epoch={settledUptoEpoch} currentEpoch={currentEpoch} />
 
         <div className='flex justify-between items-start'>
           <span className='text-muted-foreground'>Epochs to Settle:</span>
           <div className='text-right'>
             <div className='font-mono font-medium'>{epochsToSettleText}</div>
-            {settlementEpoch !== undefined && (
+            {currentEpoch !== undefined && (
               <div className='text-xs text-muted-foreground'>{epochsSinceLastSettlement.toString()} epochs</div>
             )}
           </div>

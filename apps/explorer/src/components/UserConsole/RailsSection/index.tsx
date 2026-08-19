@@ -30,7 +30,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
-  const [settlementEpoch, setSettlementEpoch] = useState<bigint>();
+  const [currentEpoch, setCurrentEpoch] = useState<bigint>();
 
   const chainId = useChainId();
   const { chain, walletNetwork } = useMemo(() => {
@@ -49,9 +49,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
-  const handleSettle = useCallback((rail: Rail, currentEpoch: bigint | undefined) => {
+  const handleSettle = useCallback((rail: Rail, epoch: bigint | undefined) => {
     setSelectedRail(rail);
-    setSettlementEpoch(currentEpoch);
+    setCurrentEpoch(epoch);
     setSettleDialogOpen(true);
   }, []);
 
@@ -174,7 +174,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
         <SettleRailDialog
           rail={selectedRail}
           userAddress={userAddress}
-          settlementEpoch={settlementEpoch}
+          currentEpoch={currentEpoch}
           open={settleDialogOpen}
           onOpenChange={setSettleDialogOpen}
           isSettling={isSettling(selectedRail.railId.toString())}

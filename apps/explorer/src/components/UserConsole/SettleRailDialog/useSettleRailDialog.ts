@@ -6,6 +6,7 @@ import type { SettleRailParams } from "@/hooks/useRailSettlements";
 import {
   getRailSettlementEligibility,
   getRailSettlementUnavailableReason,
+  getSettlementUntilEpoch,
   getUnsettledEpochs,
 } from "@/utils/railSettlement";
 
@@ -20,7 +21,7 @@ export type SettleRail = (params: SettleRailParams) => Promise<Hex | undefined>;
 interface UseSettleRailDialogOptions {
   rail: Rail;
   userAddress: string;
-  settlementEpoch: bigint | undefined;
+  currentEpoch: bigint | undefined;
   open: boolean;
   isSettling: boolean;
   settleRail: SettleRail;
@@ -30,7 +31,7 @@ interface UseSettleRailDialogOptions {
 export function useSettleRailDialog({
   rail,
   userAddress,
-  settlementEpoch,
+  currentEpoch,
   open,
   isSettling,
   settleRail,
@@ -38,8 +39,10 @@ export function useSettleRailDialog({
 }: UseSettleRailDialogOptions) {
   const railId = BigInt(rail.railId);
   const settledUptoEpoch = BigInt(rail.settledUpto);
-  const epochsSinceLastSettlement = getUnsettledEpochs(rail, BigInt(rail.endEpoch), settlementEpoch);
-  const settlementEligibility = getRailSettlementEligibility(rail, settlementEpoch);
+  const untilEpoch =
+    currentEpoch !== undefined ? getSettlementUntilEpoch(BigInt(rail.endEpoch), currentEpoch) : undefined;
+  const epochsSinceLastSettlement = getUnsettledEpochs(rail, untilEpoch);
+  const settlementEligibility = getRailSettlementEligibility(rail, currentEpoch);
   const isSettlementAllowed = settlementEligibility.status === "allowed";
 
   const {
@@ -49,7 +52,7 @@ export function useSettleRailDialog({
     isPending,
   } = useRailSettlementAmounts({
     railId,
-    untilEpoch: settlementEpoch,
+    untilEpoch,
     enabled: open && isSettlementAllowed,
   });
 
@@ -103,7 +106,8 @@ export function useSettleRailDialog({
 
   return {
     role,
-    settlementEpoch,
+    currentEpoch,
+    untilEpoch,
     settledUptoEpoch,
     epochsSinceLastSettlement,
     settlementEligibility,
