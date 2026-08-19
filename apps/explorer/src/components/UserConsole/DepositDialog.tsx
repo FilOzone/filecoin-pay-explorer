@@ -12,9 +12,18 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { FundingRunwaySlider, RunwayCard } from "@/components/UserConsole/FundsSection/components/RunwayCard";
+import {
+  calculateFundingRunway,
+  calculateProjectedFundingRunway,
+  defaultTopUpSuggestion,
+  type FundingAccountSummary,
+  ONE_YEAR_EPOCHS,
+} from "@/components/UserConsole/FundsSection/data/funding-runway";
+import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -23,6 +32,8 @@ interface DepositDialogProps {
   userToken?: UserToken | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  accountSummary?: FundingAccountSummary;
+  isAccountSummaryLoading?: boolean;
 }
 
 interface TokenDetails {
@@ -34,12 +45,21 @@ interface TokenDetails {
 
 type LoadingState = "idle" | "loading" | "success" | "error";
 
-export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange }) => {
+export const DepositDialog: React.FC<DepositDialogProps> = ({
+  userToken,
+  open,
+  onOpenChange,
+  accountSummary,
+  isAccountSummaryLoading = false,
+}) => {
   const { address: userAddress } = useAccount();
 
   // Form state
   const [amount, setAmount] = useState("");
   const [tokenAddress, setTokenAddress] = useState("");
+  // Set when the amount was prefilled for this open, so clearing the field
+  // doesn't refill it (see the prefill effect below).
+  const didPrefillAmount = useRef(false);
 
   const { synapse, constants } = useSynapse();
   const { data: walletClient } = useWalletClient();
@@ -56,6 +76,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
     if (!open) {
       setAmount("");
       setTokenAddress("");
+      didPrefillAmount.current = false;
     }
   }, [open]);
 
@@ -231,6 +252,35 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
 
   const canDeposit = currentToken && amount && !isExecuting;
 
+  // Runway projection currently only supports USDFC (other tokens would need
+  // decimals-aware parsing and their own lockup accounting). Matched by
+  // contract address, not symbol, so an unrelated token cannot spoof it.
+  const isUsdfcDeposit = !!userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const runwayCurrent =
+    isUsdfcDeposit && accountSummary
+      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
+      : null;
+  const usdfcDepositAmount = isUsdfcDeposit ? parseTopUpAmount(amount) : null;
+  const runwayProjected =
+    accountSummary && runwayCurrent && usdfcDepositAmount !== null
+      ? calculateProjectedFundingRunway(
+          accountSummary,
+          usdfcDepositAmount,
+          ONE_YEAR_EPOCHS,
+          constants.chain.genesisTimestamp,
+        )
+      : null;
+
+  // Prefill the amount with the slider's default suggestion once per open, so
+  // the projection is live immediately instead of dashes until the user acts.
+  const defaultSuggestion =
+    isUsdfcDeposit && accountSummary ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp) : "";
+  useEffect(() => {
+    if (!open || !defaultSuggestion || didPrefillAmount.current) return;
+    didPrefillAmount.current = true;
+    setAmount((previous) => (previous === "" ? defaultSuggestion : previous));
+  }, [defaultSuggestion, open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='sm:max-w-[500px]'>
@@ -381,6 +431,19 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
               <p className='text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
+              {isUsdfcDeposit && accountSummary && (
+                <FundingRunwaySlider
+                  accountSummary={accountSummary}
+                  amount={amount}
+                  disabled={isExecuting}
+                  genesisTimestamp={constants.chain.genesisTimestamp}
+                  onSelect={setAmount}
+                />
+              )}
+              {isUsdfcDeposit && !accountSummary && isAccountSummaryLoading && (
+                <p className='text-xs text-muted-foreground'>Loading on-chain funding status…</p>
+              )}
+              {runwayCurrent && <RunwayCard current={runwayCurrent} projected={runwayProjected} />}
             </div>
           )}
 

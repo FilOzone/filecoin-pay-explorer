@@ -4,7 +4,12 @@ import { formatDate } from "@/utils/formatter";
 
 export const USDFC_DECIMALS = 18;
 export const EPOCHS_PER_DAY = TIME_CONSTANTS.EPOCHS_PER_DAY;
+export const EPOCHS_PER_MONTH = TIME_CONSTANTS.EPOCHS_PER_MONTH;
 export const ONE_YEAR_EPOCHS = 365n * EPOCHS_PER_DAY;
+// Runway slider bounds: fund for anywhere between one month and five years,
+// defaulting to one year.
+export const MAX_FUNDING_MONTHS = 60;
+export const DEFAULT_FUNDING_MONTHS = 12;
 export const FUNDING_TARGETS = {
   month: { epochs: TIME_CONSTANTS.EPOCHS_PER_MONTH, label: "1 month" },
   year: { epochs: ONE_YEAR_EPOCHS, label: "1 year" },
@@ -69,6 +74,41 @@ export function calculateProjectedFundingRunway(
     { ...summary, availableFunds, debt: remainingDebt, runwayInEpochs },
     targetEpochs,
     genesisTimestamp,
+  );
+}
+
+// Inverse of the suggested-top-up curve: the TOTAL runway (in months from now)
+// that a deposit of `amount` roughly buys. Float math is fine here — it only
+// positions a slider thumb; the exact bigint is still what gets deposited.
+export function monthsForTopUp(summary: FundingAccountSummary, amount: bigint): number | null {
+  if (summary.lockupRatePerEpoch === 0n) return null;
+  const epochsAfter =
+    Number(summary.runwayInEpochs) -
+    Number(TOP_UP_BUFFER_EPOCHS) +
+    (Number(amount) - Number(summary.debt)) / Number(summary.lockupRatePerEpoch);
+  return epochsAfter / Number(EPOCHS_PER_MONTH);
+}
+
+// First whole-month runway target that still needs a top-up; null when the
+// account has no recurring spend to project or is funded past `maxMonths`.
+export function minTopUpMonths(summary: FundingAccountSummary, maxMonths = MAX_FUNDING_MONTHS): number | null {
+  if (summary.lockupRatePerEpoch === 0n) return null;
+  if (summary.debt > 0n) return 1;
+  const coveredMonths = Number(summary.runwayInEpochs / EPOCHS_PER_MONTH);
+  const min = coveredMonths + 1;
+  return min > maxMonths ? null : min;
+}
+
+// Prefill for the funding dialogs: the suggestion at the slider's initial
+// position (one year, clamped up to the first unfunded month so an account
+// already covered past a year still opens with a live projection). Empty when
+// there is nothing meaningful to suggest.
+export function defaultTopUpSuggestion(summary: FundingAccountSummary, genesisTimestamp: number): string {
+  const min = minTopUpMonths(summary);
+  if (min === null) return "";
+  const months = BigInt(Math.min(Math.max(DEFAULT_FUNDING_MONTHS, min), MAX_FUNDING_MONTHS));
+  return formatSuggestedTopUp(
+    calculateFundingRunway(summary, months * EPOCHS_PER_MONTH, genesisTimestamp).suggestedTopUp,
   );
 }
 

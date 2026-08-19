@@ -22,13 +22,10 @@ import useSynapse from "@/hooks/useSynapse";
 import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
-  FUNDING_ESTIMATE_DISCLAIMER,
-  FUNDING_TARGETS,
+  defaultTopUpSuggestion,
   type FundingAccountSummary,
-  type FundingTarget,
-  formatFundedThrough,
-  formatSuggestedTopUp,
   formatUsdfcAmount,
+  ONE_YEAR_EPOCHS,
 } from "../data/funding-runway";
 import { parseTopUpAmount } from "../data/guided-top-up";
 import {
@@ -39,6 +36,7 @@ import {
   type SquidAcquisition,
 } from "../data/squid-acquisition";
 import { isUserRejectedRequest } from "../data/squid-execution";
+import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
@@ -91,25 +89,32 @@ export function GuidedTopUpDialog({
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
-  const [fundingTarget, setFundingTarget] = useState<FundingTarget>("year");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
   const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const wasOpen = useRef(false);
+  // Set when the amount was prefilled for this open, so clearing the field
+  // doesn't refill it (see the prefill effect below).
+  const didPrefillAmount = useRef(false);
   const latestAddress = useRef(address);
   latestAddress.current = address;
-  const target = FUNDING_TARGETS[fundingTarget];
+  // The runway duration only affects the slider's suggestions (computed inside
+  // FundingRunwaySlider); the displayed funded-through dates are duration-agnostic.
   const current = accountSummary
-    ? calculateFundingRunway(accountSummary, target.epochs, constants.chain.genesisTimestamp)
+    ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
     : null;
-  const suggestedAmount = current ? formatSuggestedTopUp(current.suggestedTopUp) : "";
   const parsedAmount = parseTopUpAmount(amount);
   const depositAmount = acquiredAmount ?? parsedAmount;
   const projected =
     accountSummary && depositAmount !== null
-      ? calculateProjectedFundingRunway(accountSummary, depositAmount, target.epochs, constants.chain.genesisTimestamp)
+      ? calculateProjectedFundingRunway(
+          accountSummary,
+          depositAmount,
+          ONE_YEAR_EPOCHS,
+          constants.chain.genesisTimestamp,
+        )
       : null;
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
   const acquisitionOwnerMatches =
@@ -143,13 +148,26 @@ export function GuidedTopUpDialog({
   }, [address]);
 
   useEffect(() => {
-    // Reset to an empty amount on open; the user fills it (or taps the suggested chip) so nothing is pre-entered.
+    // Reset the amount on open; the prefill effect below fills it once the
+    // on-chain summary is available.
     if (open && !wasOpen.current && acquiredAmount === null) {
       setAmount("");
-      setFundingTarget("year");
+      didPrefillAmount.current = false;
     }
     wasOpen.current = open;
   }, [acquiredAmount, open]);
+
+  // Prefill the amount with the slider's default suggestion once per open, so
+  // the projection is live immediately instead of dashes until the user acts.
+  // The summary loads async, so this fires whenever it arrives while open.
+  const defaultSuggestion = accountSummary
+    ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp)
+    : "";
+  useEffect(() => {
+    if (!open || !defaultSuggestion || didPrefillAmount.current || acquiredAmount !== null) return;
+    didPrefillAmount.current = true;
+    setAmount((previous) => (previous === "" ? defaultSuggestion : previous));
+  }, [acquiredAmount, defaultSuggestion, open]);
 
   const handleConfirm = async () => {
     if (
@@ -314,30 +332,21 @@ export function GuidedTopUpDialog({
         <DialogHeader>
           <DialogTitle>Fund with another token</DialogTitle>
           <DialogDescription>
-            Acquire Filecoin USDFC through Squid, then deposit it into Filecoin Pay.
+            Acquire Filecoin USDFC through{" "}
+            <a
+              className='underline underline-offset-2'
+              href='https://app.squidrouter.com/'
+              rel='noopener noreferrer'
+              target='_blank'
+            >
+              Squid
+            </a>
+            , then deposit it into Filecoin Pay.
           </DialogDescription>
         </DialogHeader>
         <StepIndicator step={step} />
         <div className='grid gap-4'>
           <div className='grid gap-2'>
-            {accountSummary && acquiredAmount === null && (
-              <div className='flex items-center gap-2'>
-                <span className='text-sm font-medium'>Suggested runway</span>
-                {(Object.keys(FUNDING_TARGETS) as FundingTarget[]).map((option) => (
-                  <Button
-                    aria-pressed={fundingTarget === option}
-                    disabled={acquisitionState !== "idle"}
-                    key={option}
-                    onClick={() => setFundingTarget(option)}
-                    size='compact'
-                    type='button'
-                    variant={fundingTarget === option ? "primary" : "tertiary"}
-                  >
-                    {FUNDING_TARGETS[option].label}
-                  </Button>
-                ))}
-              </div>
-            )}
             <Label htmlFor='guided-top-up-amount'>USDFC to receive and deposit</Label>
             <Input
               disabled={acquiredAmount !== null || acquisitionState !== "idle"}
@@ -351,22 +360,14 @@ export function GuidedTopUpDialog({
             {amount !== "" && parsedAmount === null && acquiredAmount === null && (
               <p className='text-sm text-destructive'>Enter an amount greater than zero.</p>
             )}
-            {suggestedAmount && acquiredAmount === null && (
-              <Button
-                className='w-fit'
+            {accountSummary && acquiredAmount === null && (
+              <FundingRunwaySlider
+                accountSummary={accountSummary}
+                amount={amount}
                 disabled={acquisitionState !== "idle"}
-                onClick={() => setAmount(suggestedAmount)}
-                size='compact'
-                type='button'
-                variant='primary'
-              >
-                Use suggested: {suggestedAmount} USDFC
-              </Button>
-            )}
-            {suggestedAmount && acquiredAmount === null && (
-              <p className='text-xs text-muted-foreground'>
-                Keeps this account funded for about {target.label} at your current recurring spend rate.
-              </p>
+                genesisTimestamp={constants.chain.genesisTimestamp}
+                onSelect={setAmount}
+              />
             )}
             {!accountSummary && acquiredAmount === null && (
               <p className='text-xs text-muted-foreground'>
@@ -377,20 +378,12 @@ export function GuidedTopUpDialog({
             )}
           </div>
           {current && (
-            <div className='grid gap-2 rounded-md border p-3 text-sm'>
-              <p>
-                Current funded through: <span className='font-medium'>{formatFundedThrough(current)}</span>
-              </p>
-              <p>
-                Projected funded through:{" "}
-                <span className='font-medium'>{projected ? formatFundedThrough(projected, true) : "—"}</span>
-              </p>
+            <RunwayCard current={current} projected={projected}>
               <p className='text-muted-foreground'>
                 {acquiredAmount === null ? "Target deposit" : "Ready to deposit"}:{" "}
                 {depositAmount === null ? "—" : formatUsdfcAmount(depositAmount)} USDFC.
               </p>
-              <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
-            </div>
+            </RunwayCard>
           )}
           {acquisitionState === "blocked" && (
             <div className='grid gap-2 rounded-md border border-destructive/30 p-3 text-sm'>

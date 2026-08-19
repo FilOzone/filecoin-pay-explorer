@@ -68,8 +68,9 @@ export const FundsSection: React.FC<FundsSectionProps> = ({
     (token: UserToken) => token.token.id.toLowerCase() === usdfcAddress.toLowerCase(),
     [usdfcAddress],
   );
+  const usdfcDepositOpen = depositDialogOpen && !!selectedToken && isUsdfcToken(selectedToken);
   const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
-    enabled: guidedTopUpOpen && !!address && synapse?.chain.id === targetChain.id,
+    enabled: (guidedTopUpOpen || usdfcDepositOpen) && !!address && synapse?.chain.id === targetChain.id,
     queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
     queryKey: ["payments", "account-summary", targetChain.id, address],
   });
@@ -218,7 +219,13 @@ export const FundsSection: React.FC<FundsSectionProps> = ({
       />
       {!contentHidden && !topUpOnly && (
         <>
-          <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={handleDepositOpenChange} />
+          <DepositDialog
+            accountSummary={accountSummary}
+            isAccountSummaryLoading={isAccountSummaryLoading}
+            onOpenChange={handleDepositOpenChange}
+            open={depositDialogOpen}
+            userToken={selectedToken}
+          />
           {selectedToken && (
             <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
           )}

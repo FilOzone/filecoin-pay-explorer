@@ -9,16 +9,17 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   fetchSourceTokens,
+  NATIVE_TOKEN_ADDRESS,
   type SquidFundingPlan,
   type SquidPublicClient,
   type SquidWalletClient,
 } from "squid-evm-funding";
-import { formatUnits, parseUnits } from "viem";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
-import { USDFC_DECIMALS } from "../data/funding-runway";
+import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
   beginSquidAcquisition,
   clearSquidAcquisition,
@@ -67,14 +68,13 @@ export function SquidQuoteReview({
   const { constants } = useSynapse();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
-  const [sourceAmount, setSourceAmount] = useState("");
   const [plan, setPlan] = useState<SquidFundingPlan | null>(null);
   const [planQuoteKey, setPlanQuoteKey] = useState("");
   const [maximumNativeFee, setMaximumNativeFee] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1_000));
-  const quoteKey = `${address}:${chainId}:${destinationAmount}:${sourceAmount}:${sourceChainId}:${sourceTokenAddress}`;
+  const quoteKey = `${address}:${chainId}:${destinationAmount}:${sourceChainId}:${sourceTokenAddress}`;
   const latestQuoteKey = useRef(quoteKey);
   const latestAddress = useRef(address);
   latestQuoteKey.current = quoteKey;
@@ -104,6 +104,24 @@ export function SquidQuoteReview({
   const secondsLeft = quote ? quote.expiresAt - nowSeconds : 0;
   const isExpired = quote ? secondsLeft <= 0 : false;
   const isBusy = acquisitionState !== "idle";
+  // The connected wallet's balance of the selected source token. It doubles as
+  // the planner's spend cap, so a route the user cannot afford is never proposed.
+  const { data: sourceBalance } = useQuery({
+    enabled: !!address && !!source && !!sourcePublicClient,
+    queryFn: async () => {
+      if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
+      if (source.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()) {
+        return sourcePublicClient.getBalance({ address });
+      }
+      return sourcePublicClient.readContract({
+        abi: erc20Abi,
+        address: source.token,
+        args: [address],
+        functionName: "balanceOf",
+      });
+    },
+    queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the dependencies intentionally invalidate the displayed quote.
   useEffect(() => {
@@ -125,14 +143,10 @@ export function SquidQuoteReview({
     setError(null);
     if (quotesUnavailable) return setError("Squid quotes are not configured for this deployment.");
     if (!address || !source || destinationAmount === null)
-      return setError("Select a source token and enter both amounts.");
-    let parsedSourceAmount: bigint;
-    try {
-      parsedSourceAmount = parseUnits(sourceAmount, source.decimals);
-    } catch {
-      return setError("Enter a valid source amount.");
-    }
-    if (parsedSourceAmount <= 0n) return setError("Enter a source amount greater than zero.");
+      return setError("Select a source token and enter the USDFC amount.");
+    if (sourceBalance === undefined) return setError("Your source-token balance is still loading. Try again shortly.");
+    const insufficientBalance = `You don't have enough ${source.symbol} to receive ${formatUsdfcAmount(destinationAmount)} USDFC.`;
+    if (sourceBalance <= 0n) return setError(insufficientBalance);
     const reviewedQuoteKey = quoteKey;
     setIsReviewing(true);
     try {
@@ -142,7 +156,7 @@ export function SquidQuoteReview({
         integratorId,
         owner: address,
         source,
-        sourceAmount: parsedSourceAmount,
+        sourceAmount: sourceBalance,
       });
       if (latestQuoteKey.current !== reviewedQuoteKey) {
         throw new Error("Funding details or wallet changed while requesting the quote.");
@@ -151,11 +165,35 @@ export function SquidQuoteReview({
       setPlanQuoteKey(reviewedQuoteKey);
       setMaximumNativeFee("");
     } catch (quoteError) {
-      setError(quoteError instanceof Error ? quoteError.message : "Squid could not provide a route.");
+      const message = quoteError instanceof Error ? quoteError.message : "Squid could not provide a route.";
+      // The cap is the wallet balance, so exceeding it means the user cannot afford the route.
+      setError(message.includes("exceed the source-token cap") ? insufficientBalance : message);
     } finally {
       setIsReviewing(false);
     }
   };
+
+  // Fetch the estimate as soon as the inputs are complete, once per quote key;
+  // the button below remains for retries and expired-quote refreshes.
+  const attemptedQuoteKey = useRef("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: guarded by attemptedQuoteKey; runs at most once per quote key.
+  useEffect(() => {
+    if (quotesUnavailable || isBusy || isReviewing) return;
+    if (!address || !source || destinationAmount === null || sourceBalance === undefined) return;
+    if (planQuoteKey === quoteKey || attemptedQuoteKey.current === quoteKey) return;
+    attemptedQuoteKey.current = quoteKey;
+    void review();
+  }, [
+    address,
+    destinationAmount,
+    isBusy,
+    isReviewing,
+    planQuoteKey,
+    quoteKey,
+    quotesUnavailable,
+    source,
+    sourceBalance,
+  ]);
 
   const acquire = async () => {
     setError(null);
@@ -245,7 +283,17 @@ export function SquidQuoteReview({
 
   return (
     <section aria-label='Swap quote review' className='grid gap-3 rounded-md border p-3 text-sm'>
-      <p className='font-medium'>Acquire USDFC with Squid</p>
+      <p className='text-xs text-muted-foreground'>
+        Supported via{" "}
+        <a
+          className='underline underline-offset-2'
+          href='https://app.squidrouter.com/'
+          rel='noopener noreferrer'
+          target='_blank'
+        >
+          Squid
+        </a>
+      </p>
 
       {quotesUnavailable && (
         <p className='rounded-md bg-muted/50 p-2 text-muted-foreground'>{sourceTokenCatalogMessage(false, false)}</p>
@@ -314,22 +362,8 @@ export function SquidQuoteReview({
         )}
       </div>
 
-      <div className='grid gap-1'>
-        <Label htmlFor='squid-source-amount'>Maximum source amount</Label>
-        <Input
-          disabled={isBusy}
-          id='squid-source-amount'
-          min='0'
-          onChange={setSourceAmount}
-          placeholder='0.0'
-          step='any'
-          type='number'
-          value={sourceAmount}
-        />
-      </div>
-
       <Button
-        disabled={!source || destinationAmount === null || isBusy || isReviewing}
+        disabled={!source || destinationAmount === null || isBusy || isReviewing || sourceBalance === undefined}
         onClick={review}
         size='compact'
         type='button'
@@ -343,7 +377,7 @@ export function SquidQuoteReview({
         ) : plan ? (
           "Refresh quote"
         ) : (
-          "Review route"
+          "Get estimate"
         )}
       </Button>
 
@@ -357,9 +391,15 @@ export function SquidQuoteReview({
       {quote && planQuoteKey === quoteKey && (
         <div className='grid gap-2 border-t pt-3'>
           <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-            <span className='text-muted-foreground'>Spend</span>
+            <span className='text-muted-foreground'>Spend (estimated)</span>
             <span className='text-right font-medium'>
               {displayAmount(quote.sourceAmount, plan.source.decimals, plan.source.symbol)}
+            </span>
+            <span className='text-muted-foreground'>Your balance</span>
+            <span className='text-right font-medium'>
+              {sourceBalance !== undefined && source
+                ? displayAmount(sourceBalance, source.decimals, source.symbol)
+                : "—"}
             </span>
             <span className='text-muted-foreground'>Receive at least</span>
             <span className='text-right font-medium'>
