@@ -83,7 +83,8 @@ export function SquidQuoteReview({
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
   const { data: sourceWalletClient } = useWalletClient({ chainId: sourceChain || undefined });
   const destinationClient = usePublicClient({ chainId: 314 });
-  const integratorId = process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() ?? "";
+  const integratorId =
+    process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
   const nativeSymbol = sourceChainMeta?.nativeCurrency?.symbol ?? "the native token";
