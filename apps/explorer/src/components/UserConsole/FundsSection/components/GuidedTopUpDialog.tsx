@@ -16,7 +16,7 @@ import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Address } from "viem";
-import { useAccount, useSwitchChain } from "wagmi";
+import { useConnection, useSwitchChain } from "wagmi";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 import {
@@ -87,7 +87,7 @@ export function GuidedTopUpDialog({
   open,
 }: GuidedTopUpDialogProps) {
   const { constants, synapse } = useSynapse();
-  const { address, chainId } = useAccount();
+  const { address, chainId } = useConnection();
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
