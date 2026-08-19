@@ -4,7 +4,7 @@ import UserConsole from "./page";
 
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111",
-  chainId: 42161,
+  chainId: 42161 as number | undefined,
   isConnected: true,
 }));
 const accountState = vi.hoisted(() => ({
@@ -71,6 +71,15 @@ describe("UserConsole", () => {
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");
     expect(markup).not.toContain("Rails");
+  });
+
+  it("waits for the wallet network before choosing a console state", () => {
+    wallet.chainId = undefined;
+    const markup = renderToStaticMarkup(<UserConsole />);
+
+    expect(markup).toContain("Loading your wallet network...");
+    expect(markup).not.toContain("Unsupported network");
+    expect(markup).not.toContain("Funds");
   });
 
   it("keeps the full console on Filecoin", () => {

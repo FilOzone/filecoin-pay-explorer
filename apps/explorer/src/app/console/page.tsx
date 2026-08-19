@@ -24,7 +24,13 @@ const UserConsoleContent = () => {
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isSquidSourceChain = SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
   const consoleView =
-    !isConnected || !address ? "disconnected" : isSupportedChainId(chainId) ? "filecoin" : "unsupported";
+    !isConnected || !address
+      ? "disconnected"
+      : chainId === undefined
+        ? "pending"
+        : isSupportedChainId(chainId)
+          ? "filecoin"
+          : "unsupported";
 
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
 
@@ -74,6 +80,9 @@ const UserConsoleContent = () => {
 
         {/* Not Connected */}
         {consoleView === "disconnected" && <NotConnected />}
+
+        {/* Wallet Network Pending */}
+        {consoleView === "pending" && <LoadingStateCard message='Loading your wallet network...' />}
 
         {/* Unsupported Chain */}
         {consoleView === "unsupported" && <UnsupportedChain />}
