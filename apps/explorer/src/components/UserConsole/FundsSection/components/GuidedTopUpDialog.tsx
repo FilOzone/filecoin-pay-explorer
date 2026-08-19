@@ -30,7 +30,7 @@ import {
   formatSuggestedTopUp,
   formatUsdfcAmount,
 } from "../data/funding-runway";
-import { parseTopUpAmount } from "../data/guided-top-up";
+import { invalidateTopUpQueries, parseTopUpAmount } from "../data/guided-top-up";
 import {
   clearSquidAcquisition,
   loadSquidAcquisition,
@@ -191,12 +191,7 @@ export function GuidedTopUpDialog({
         },
       });
       if (receipt.status !== "success") throw new Error("Top-up transaction reverted");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["account", accountId, "tokens"] }),
-        queryClient.invalidateQueries({ queryKey: ["payments", "account-summary"] }),
-        queryClient.invalidateQueries({ queryKey: ["balance"] }),
-        queryClient.invalidateQueries({ queryKey: ["readContract"] }),
-      ]);
+      await invalidateTopUpQueries(queryClient, accountId, depositOwner);
       try {
         clearSquidAcquisition(window.localStorage, depositOwner);
       } catch {
