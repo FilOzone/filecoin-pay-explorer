@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
+  defaultTopUpSuggestion,
   EPOCHS_PER_DAY,
+  EPOCHS_PER_MONTH,
   FUNDING_TARGETS,
   type FundingAccountSummary,
   formatFundedThrough,
@@ -106,5 +108,23 @@ describe("suggested top-up formatting", () => {
     expect(parseFundingAmount("1.25", 6)).toBe(1_250_000n);
     expect(parseFundingAmount("0", 18)).toBeNull();
     expect(parseFundingAmount("not-a-number", 18)).toBeNull();
+  });
+});
+
+describe("defaultTopUpSuggestion", () => {
+  const current = summary(EPOCHS_PER_DAY);
+  const cost = (months: bigint) =>
+    calculateFundingRunway(current, months * EPOCHS_PER_MONTH, genesisTimestamp).suggestedTopUp;
+
+  it("suggests one year when unconstrained", () => {
+    expect(defaultTopUpSuggestion(current, genesisTimestamp)).toBe(formatSuggestedTopUp(cost(12n)));
+  });
+
+  it("clamps the suggestion to what maxAmount can pay", () => {
+    expect(defaultTopUpSuggestion(current, genesisTimestamp, cost(3n))).toBe(formatSuggestedTopUp(cost(3n)));
+  });
+
+  it("suggests nothing when maxAmount cannot cover the first unfunded month", () => {
+    expect(defaultTopUpSuggestion(current, genesisTimestamp, 0n)).toBe("");
   });
 });

@@ -20,9 +20,9 @@ type AddFundsDialogProps = {
   tokenSymbol: string;
 };
 
-const cardBase = "group flex items-start gap-4 rounded-lg border p-4 text-left transition-colors";
+const cardBase = "group relative flex items-start gap-4 rounded-lg border p-4 text-left transition-colors";
 const enabledCard = `${cardBase} hover:border-primary hover:bg-muted/50`;
-const disabledCard = `${cardBase} cursor-not-allowed border-dashed bg-muted/30`;
+const disabledCard = `${cardBase} border-dashed bg-muted/30`;
 const iconEnabled = "mt-0.5 rounded-md bg-primary/10 p-2 text-primary";
 const iconDisabled = "mt-0.5 rounded-md bg-muted p-2 text-muted-foreground";
 
@@ -42,7 +42,15 @@ export function AddFundsDialog({
           <DialogDescription>Choose how you want to fund your Filecoin Pay account.</DialogDescription>
         </DialogHeader>
         <div className='grid gap-3'>
-          <button className={enabledCard} onClick={() => onSelect("deposit")} type='button'>
+          <div className={enabledCard}>
+            {/* Stretched button keeps the whole card clickable without nesting
+                interactive elements inside a <button>. */}
+            <button
+              aria-label={`Deposit ${tokenSymbol}`}
+              className='absolute inset-0 cursor-pointer rounded-lg'
+              onClick={() => onSelect("deposit")}
+              type='button'
+            />
             <span className={iconEnabled}>
               <Wallet className='h-5 w-5' />
             </span>
@@ -52,17 +60,19 @@ export function AddFundsDialog({
                 <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
               </span>
               <span className='mt-1 block text-sm text-muted-foreground'>
-                You already hold {tokenSymbol} on Filecoin. One transaction, no swap.
+                You already hold {tokenSymbol}, top up your account.
               </span>
             </span>
-          </button>
+          </div>
 
-          <button
-            className={squidAvailable ? enabledCard : disabledCard}
-            disabled={!squidAvailable}
-            onClick={() => onSelect("squid")}
-            type='button'
-          >
+          <div className={squidAvailable ? enabledCard : disabledCard}>
+            <button
+              aria-label='Fund with another token'
+              className={`absolute inset-0 rounded-lg ${squidAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}
+              disabled={!squidAvailable}
+              onClick={() => onSelect("squid")}
+              type='button'
+            />
             <span className={squidAvailable ? iconEnabled : iconDisabled}>
               <Repeat className='h-5 w-5' />
             </span>
@@ -78,12 +88,26 @@ export function AddFundsDialog({
                 )}
               </span>
               <span className='mt-1 block text-sm text-muted-foreground'>
-                {squidAvailable
-                  ? "Swap ETH, USDC and more from another chain into USDFC via Squid, then deposit it."
-                  : (squidDisabledReason ?? "Available on Filecoin mainnet.")}
+                {squidAvailable ? (
+                  <>
+                    Swap ETH, USDC and more from another chain into USDFC via{" "}
+                    {/* `relative` lifts the link above the stretched button so it stays clickable. */}
+                    <a
+                      className='relative underline underline-offset-2'
+                      href='https://app.squidrouter.com/'
+                      rel='noopener noreferrer'
+                      target='_blank'
+                    >
+                      Squid
+                    </a>{" "}
+                    to top up.
+                  </>
+                ) : (
+                  (squidDisabledReason ?? "Available on Filecoin mainnet.")
+                )}
               </span>
             </span>
-          </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

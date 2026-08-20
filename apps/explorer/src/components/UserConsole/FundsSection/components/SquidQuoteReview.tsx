@@ -3,22 +3,24 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Label } from "@filecoin-pay/ui/components/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import {
   fetchSourceTokens,
-  type SquidFundingPlan,
+  NATIVE_TOKEN_ADDRESS,
   type SquidPublicClient,
   type SquidWalletClient,
 } from "@filecoin-project/squid-evm-funding";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { formatUnits, parseUnits } from "viem";
+import { useEffect, useId, useRef, useState } from "react";
+import { useDebounce } from "use-debounce";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
+import CopyButton from "@/components/shared/CopyButton";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
-import { USDFC_DECIMALS } from "../data/funding-runway";
+import { formatAddress } from "@/utils/formatter";
+import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
   beginSquidAcquisition,
   clearSquidAcquisition,
@@ -27,7 +29,26 @@ import {
   type SquidAcquisition,
 } from "../data/squid-acquisition";
 import { executeSquidTopUp, isUserRejectedRequest } from "../data/squid-execution";
-import { planSquidTopUp } from "../data/squid-quote";
+import { planSquidTopUp, squidFetch } from "../data/squid-quote";
+
+const QUOTE_DEBOUNCE_MS = 500;
+
+// Squid 429s recover slowly, so the quote fails fast with copy telling the
+// user when to refresh; only the token catalog retries a burst.
+const isRateLimited = (error: unknown) => error instanceof Error && error.message.includes("(429)");
+const rateLimitRetry = (failureCount: number, error: unknown) => isRateLimited(error) && failureCount < 2;
+const rateLimitRetryDelay = (failureCount: number) => 15_000 * (failureCount + 1);
+
+type SearchableOption = {
+  aliases?: readonly string[];
+  label: string;
+  value: string;
+};
+
+const SOURCE_CHAIN_OPTIONS: readonly SearchableOption[] = SQUID_SOURCE_CHAINS.map((chain) => ({
+  label: chain.name,
+  value: String(chain.id),
+}));
 
 type SquidQuoteReviewProps = {
   acquisitionState: "acquired" | "blocked" | "idle" | "processing";
@@ -54,6 +75,22 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   return "No supported tokens on this network.";
 }
 
+export function sourceSpendCap(sourceBalance: bigint, maximumNativeFee: bigint, isNativeSource: boolean) {
+  if (!isNativeSource) return sourceBalance;
+  return maximumNativeFee < sourceBalance ? sourceBalance - maximumNativeFee : 0n;
+}
+
+export function resolveSearchableOption(options: readonly SearchableOption[], query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const labelMatch = options.find((option) => option.label.toLowerCase() === normalizedQuery);
+  if (labelMatch) return labelMatch.value;
+
+  const aliasMatches = options.filter((option) =>
+    option.aliases?.some((alias) => alias.toLowerCase() === normalizedQuery),
+  );
+  return aliasMatches.length === 1 ? aliasMatches[0].value : "";
+}
+
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
@@ -67,18 +104,19 @@ export function SquidQuoteReview({
   const { constants } = useSynapse();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
-  const [sourceAmount, setSourceAmount] = useState("");
-  const [plan, setPlan] = useState<SquidFundingPlan | null>(null);
-  const [planQuoteKey, setPlanQuoteKey] = useState("");
+  const [sourceChainQuery, setSourceChainQuery] = useState("");
+  const [sourceChainQueryTouched, setSourceChainQueryTouched] = useState(false);
+  const [sourceTokenQuery, setSourceTokenQuery] = useState("");
+  const [sourceTokenQueryTouched, setSourceTokenQueryTouched] = useState(false);
   const [maximumNativeFee, setMaximumNativeFee] = useState("");
-  const [isReviewing, setIsReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1_000));
-  const quoteKey = `${address}:${chainId}:${destinationAmount}:${sourceAmount}:${sourceChainId}:${sourceTokenAddress}`;
-  const latestQuoteKey = useRef(quoteKey);
+  const sourceChainListId = useId();
+  const sourceTokenListId = useId();
   const latestAddress = useRef(address);
-  latestQuoteKey.current = quoteKey;
   latestAddress.current = address;
+  const [debouncedDestinationAmount] = useDebounce(destinationAmount, QUOTE_DEBOUNCE_MS);
+  const [debouncedMaximumNativeFee] = useDebounce(maximumNativeFee, QUOTE_DEBOUNCE_MS);
   const sourceChain = Number(sourceChainId);
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
   const { data: sourceWalletClient } = useWalletClient({ chainId: sourceChain || undefined });
@@ -96,24 +134,151 @@ export function SquidQuoteReview({
     refetch: refetchTokens,
   } = useQuery({
     enabled: !quotesUnavailable && SQUID_SOURCE_CHAINS.some((chain) => chain.id === sourceChain),
-    queryFn: () => fetchSourceTokens(sourceChain, { integratorId }),
+    queryFn: () => fetchSourceTokens(sourceChain, { fetch: squidFetch, integratorId }),
     queryKey: ["squid", "source-tokens", sourceChain],
+    retry: rateLimitRetry,
+    retryDelay: rateLimitRetryDelay,
+    staleTime: 300_000,
   });
   const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
+  const sourceTokenOptions: readonly SearchableOption[] = tokens.map((token) => ({
+    aliases: [token.symbol, token.token],
+    label: `${token.symbol} (${formatAddress(token.token)})`,
+    value: token.token,
+  }));
+  const sourceChainQueryInvalid = sourceChainQueryTouched && sourceChainQuery.trim() !== "" && sourceChainId === "";
+  const sourceTokenQueryInvalid =
+    sourceTokenQueryTouched && sourceTokenQuery.trim() !== "" && sourceTokenAddress === "";
   const source = tokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
+  const isBusy = acquisitionState !== "idle";
+  const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
+  // Fee edits only invalidate native-route quotes; ERC-20 estimates ignore the cap.
+  const isQuoteDebouncing =
+    destinationAmount !== debouncedDestinationAmount ||
+    (isNativeSource && maximumNativeFee !== debouncedMaximumNativeFee);
+  let maxNativeFee: bigint | null = null;
+  try {
+    const parsed = parseUnits(debouncedMaximumNativeFee, sourceChainMeta?.nativeCurrency.decimals ?? 18);
+    if (parsed > 0n) maxNativeFee = parsed;
+  } catch {
+    // The fee field reports its own validation error when the user requests a quote.
+  }
+  const { data: sourceBalance, refetch: refetchSourceBalance } = useQuery({
+    enabled: !!address && !!source && !!sourcePublicClient,
+    queryFn: async () => {
+      if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
+      if (source.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()) {
+        return sourcePublicClient.getBalance({ address });
+      }
+      return sourcePublicClient.readContract({
+        abi: erc20Abi,
+        address: source.token,
+        args: [address],
+        functionName: "balanceOf",
+      });
+    },
+    queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
+  });
+  // The gas cap is paid in the chain's native token; know that balance so an
+  // impossible cap is flagged here instead of failing at execution.
+  const { data: fetchedNativeBalance } = useQuery({
+    enabled: !!address && !!sourcePublicClient && !!source && !isNativeSource,
+    queryFn: async () => {
+      if (!sourcePublicClient || !address) throw new Error("Source network client is unavailable");
+      return sourcePublicClient.getBalance({ address });
+    },
+    queryKey: ["squid", "native-balance", sourceChain, address],
+  });
+  const nativeBalance = isNativeSource ? sourceBalance : fetchedNativeBalance;
+  const nativeDecimals = sourceChainMeta?.nativeCurrency.decimals ?? 18;
+  const feeExceedsNativeBalance = maxNativeFee !== null && nativeBalance !== undefined && maxNativeFee > nativeBalance;
+  // Only native routes pay gas from the swapped balance, so only they reserve the cap.
+  const sourceAmount =
+    sourceBalance === undefined
+      ? null
+      : isNativeSource
+        ? maxNativeFee === null
+          ? null
+          : sourceSpendCap(sourceBalance, maxNativeFee, true)
+        : sourceBalance;
+  const insufficientBalance =
+    source && debouncedDestinationAmount !== null
+      ? isNativeSource && maxNativeFee !== null && sourceBalance !== undefined && sourceBalance > 0n
+        ? // The user's own gas reserve ate the headroom; blaming the balance would mislead.
+          `After reserving ${displayAmount(maxNativeFee, source.decimals, source.symbol)} for gas, your ${source.symbol} balance can't cover ${formatUsdfcAmount(debouncedDestinationAmount)} USDFC. Lower the gas cap or the amount.`
+        : `You don't have enough ${source.symbol} to receive ${formatUsdfcAmount(debouncedDestinationAmount)} USDFC.`
+      : null;
+  const {
+    data: quotedPlan,
+    error: quoteError,
+    isFetching: isReviewing,
+    refetch: refetchQuote,
+  } = useQuery({
+    enabled:
+      !quotesUnavailable &&
+      !isBusy &&
+      !isQuoteDebouncing &&
+      !!address &&
+      !!source &&
+      debouncedDestinationAmount !== null &&
+      debouncedDestinationAmount > 0n &&
+      sourceAmount !== null &&
+      sourceAmount > 0n,
+    queryFn: async () => {
+      if (!address || !source || debouncedDestinationAmount === null || sourceAmount === null) {
+        throw new Error("Select a source token and enter the USDFC amount.");
+      }
+      return planSquidTopUp({
+        destinationAmount: debouncedDestinationAmount,
+        destinationToken: constants.contracts.usdfc,
+        integratorId,
+        owner: address,
+        source,
+        sourceAmount,
+      });
+    },
+    queryKey: [
+      "squid",
+      "top-up-plan",
+      address,
+      chainId,
+      constants.contracts.usdfc,
+      debouncedDestinationAmount?.toString() ?? "",
+      sourceChain,
+      sourceTokenAddress,
+      sourceAmount?.toString() ?? "",
+    ],
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const plan = isQuoteDebouncing ? undefined : quotedPlan;
   const quote = plan?.quotes[0];
   const secondsLeft = quote ? quote.expiresAt - nowSeconds : 0;
   const isExpired = quote ? secondsLeft <= 0 : false;
-  const isBusy = acquisitionState !== "idle";
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the dependencies intentionally invalidate the displayed quote.
-  useEffect(() => {
-    setPlan(null);
-    setPlanQuoteKey("");
-  }, [quoteKey]);
+  const quoteErrorMessage =
+    !isQuoteDebouncing && quoteError
+      ? quoteError instanceof Error && quoteError.message.includes("exceed the source-token cap")
+        ? insufficientBalance
+        : isRateLimited(quoteError)
+          ? "Squid is rate-limiting quote requests. Wait a moment, then refresh the estimate."
+          : quoteError instanceof Error
+            ? quoteError.message
+            : "Squid could not provide a route."
+      : null;
+  // A zero spend cap never reaches the planner (query disabled), so surface it without a click.
+  const capBlockedMessage =
+    !isQuoteDebouncing &&
+    debouncedDestinationAmount !== null &&
+    debouncedDestinationAmount > 0n &&
+    sourceAmount !== null &&
+    sourceAmount <= 0n
+      ? insufficientBalance
+      : null;
 
   useEffect(() => {
     if (!quote) return;
+    setNowSeconds(Math.floor(Date.now() / 1_000));
     const interval = setInterval(() => setNowSeconds(Math.floor(Date.now() / 1_000)), 1_000);
     return () => clearInterval(interval);
   }, [quote]);
@@ -122,40 +287,15 @@ export function SquidQuoteReview({
     if (tokenLoadError) console.error("Failed to load Squid token catalog:", tokenLoadError);
   }, [tokenLoadError]);
 
-  const review = async () => {
+  const review = () => {
     setError(null);
     if (quotesUnavailable) return setError("Squid quotes are not configured for this deployment.");
     if (!address || !source || destinationAmount === null)
-      return setError("Select a source token and enter both amounts.");
-    let parsedSourceAmount: bigint;
-    try {
-      parsedSourceAmount = parseUnits(sourceAmount, source.decimals);
-    } catch {
-      return setError("Enter a valid source amount.");
-    }
-    if (parsedSourceAmount <= 0n) return setError("Enter a source amount greater than zero.");
-    const reviewedQuoteKey = quoteKey;
-    setIsReviewing(true);
-    try {
-      const result = await planSquidTopUp({
-        destinationAmount,
-        destinationToken: constants.contracts.usdfc,
-        integratorId,
-        owner: address,
-        source,
-        sourceAmount: parsedSourceAmount,
-      });
-      if (latestQuoteKey.current !== reviewedQuoteKey) {
-        throw new Error("Funding details or wallet changed while requesting the quote.");
-      }
-      setPlan(result);
-      setPlanQuoteKey(reviewedQuoteKey);
-      setMaximumNativeFee("");
-    } catch (quoteError) {
-      setError(quoteError instanceof Error ? quoteError.message : "Squid could not provide a route.");
-    } finally {
-      setIsReviewing(false);
-    }
+      return setError("Select a source token and enter the USDFC amount.");
+    if (sourceBalance === undefined) return setError("Your source-token balance is still loading. Try again shortly.");
+    if (isNativeSource && maxNativeFee === null) return setError("Enter a positive network-fee limit.");
+    if (sourceAmount === null || sourceAmount <= 0n) return setError(insufficientBalance);
+    void refetchQuote();
   };
 
   const acquire = async () => {
@@ -163,7 +303,7 @@ export function SquidQuoteReview({
     if (acquisitionState === "blocked")
       return setError("Check your source wallet activity before starting another acquisition.");
     if (acquisitionState !== "idle") return setError("This acquisition is already complete or in progress.");
-    if (!address || !source || !plan || planQuoteKey !== quoteKey || destinationAmount === null)
+    if (!address || !source || !plan || !quote || destinationAmount === null)
       return setError("Review a route before acquiring USDFC.");
     if (chainId !== source.chainId)
       return setError("Switch your wallet to the selected source network before confirming.");
@@ -171,15 +311,22 @@ export function SquidQuoteReview({
       return setError("Wallet or network client is unavailable.");
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
-    let maxNativeFee: bigint;
-    try {
-      maxNativeFee = parseUnits(maximumNativeFee, sourceChainMeta?.nativeCurrency.decimals ?? 18);
-    } catch {
-      return setError("Enter a valid maximum network fee.");
-    }
-    if (maxNativeFee <= 0n) return setError("Enter a positive network-fee limit.");
+    const executionMaxNativeFee = maxNativeFee;
+    if (executionMaxNativeFee === null) return setError("Enter a positive network-fee limit.");
+    if (feeExceedsNativeBalance) return setError(`Your gas cap exceeds your ${nativeSymbol} balance.`);
     if (plan.quotes.some((planQuote) => planQuote.expiresAt <= Math.floor(Date.now() / 1_000)))
       return setError("This route expired. Review it again before acquiring USDFC.");
+
+    const latestBalanceResult = await refetchSourceBalance();
+    if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
+      return setError("Could not refresh your source-token balance. Try again before confirming.");
+    }
+    const requiredSourceBalance = quote.sourceAmount + (isNativeSource ? executionMaxNativeFee : 0n);
+    if (requiredSourceBalance > latestBalanceResult.data) {
+      return setError(
+        `Your ${source.symbol} balance no longer covers the quote and network-fee limit. Refresh the quote.`,
+      );
+    }
 
     const publicClient =
       source.chainId === 10 || source.chainId === 8453
@@ -204,7 +351,7 @@ export function SquidQuoteReview({
       await executeSquidTopUp({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
-        maxNativeFee,
+        maxNativeFee: executionMaxNativeFee,
         onBroadcast: (hash) => {
           didBroadcast = true;
           acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
@@ -246,7 +393,17 @@ export function SquidQuoteReview({
 
   return (
     <section aria-label='Swap quote review' className='grid gap-3 rounded-md border p-3 text-sm'>
-      <p className='font-medium'>Acquire USDFC with Squid</p>
+      <p className='text-xs text-muted-foreground'>
+        Supported via{" "}
+        <a
+          className='underline underline-offset-2'
+          href='https://app.squidrouter.com/'
+          rel='noopener noreferrer'
+          target='_blank'
+        >
+          Squid
+        </a>
+      </p>
 
       {quotesUnavailable && (
         <p className='rounded-md bg-muted/50 p-2 text-muted-foreground'>{sourceTokenCatalogMessage(false, false)}</p>
@@ -254,51 +411,77 @@ export function SquidQuoteReview({
 
       <div className='grid gap-1'>
         <Label htmlFor='squid-source-network'>Source network</Label>
-        <Select
+        <Input
+          aria-describedby={sourceChainQueryInvalid ? "squid-source-network-error" : undefined}
+          aria-invalid={sourceChainQueryInvalid}
+          autoComplete='off'
           disabled={isBusy}
-          onValueChange={(value) => {
-            setSourceChainId(value);
-            setSourceTokenAddress("");
+          id='squid-source-network'
+          list={sourceChainListId}
+          onBlur={() => setSourceChainQueryTouched(true)}
+          onChange={(value) => {
+            setError(null);
+            setSourceChainQuery(value);
+            setSourceChainQueryTouched(false);
+            const nextSourceChainId = resolveSearchableOption(SOURCE_CHAIN_OPTIONS, value);
+            if (nextSourceChainId !== sourceChainId) {
+              setSourceChainId(nextSourceChainId);
+              setSourceTokenAddress("");
+              setSourceTokenQuery("");
+              setSourceTokenQueryTouched(false);
+            }
           }}
-          value={sourceChainId || undefined}
-        >
-          <SelectTrigger className='w-full' id='squid-source-network'>
-            <SelectValue placeholder='Select a network' />
-          </SelectTrigger>
-          <SelectContent>
-            {SQUID_SOURCE_CHAINS.map((chain) => (
-              <SelectItem key={chain.id} value={String(chain.id)}>
-                {chain.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder='Search networks'
+          type='search'
+          value={sourceChainQuery}
+        />
+        <datalist id={sourceChainListId}>
+          {SOURCE_CHAIN_OPTIONS.map((option) => (
+            <option key={option.value} value={option.label} />
+          ))}
+        </datalist>
+        {sourceChainQueryInvalid && (
+          <p className='text-xs text-destructive' id='squid-source-network-error'>
+            Choose a source network from the suggestions.
+          </p>
+        )}
       </div>
 
       <div className='grid gap-1'>
         <Label htmlFor='squid-source-token'>Source token</Label>
-        <Select
+        <Input
+          aria-describedby={sourceTokenQueryInvalid ? "squid-source-token-error" : undefined}
+          aria-invalid={sourceTokenQueryInvalid}
+          autoComplete='off'
           disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
-          onValueChange={setSourceTokenAddress}
-          value={sourceTokenAddress || undefined}
-        >
-          <SelectTrigger className='w-full' id='squid-source-token'>
-            <SelectValue placeholder={isLoadingTokens ? "Loading tokens…" : "Select a token"} />
-          </SelectTrigger>
-          <SelectContent>
-            {tokens.length === 0 && !isLoadingTokens ? (
-              <div className='px-2 py-1.5 text-sm text-muted-foreground'>
-                {sourceTokenCatalogMessage(!quotesUnavailable, isTokenLoadError)}
-              </div>
-            ) : (
-              tokens.map((token) => (
-                <SelectItem key={token.token} value={token.token}>
-                  {token.symbol}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
+          id='squid-source-token'
+          list={sourceTokenListId}
+          onBlur={() => setSourceTokenQueryTouched(true)}
+          onChange={(value) => {
+            setError(null);
+            setSourceTokenQuery(value);
+            setSourceTokenQueryTouched(false);
+            setSourceTokenAddress(resolveSearchableOption(sourceTokenOptions, value));
+          }}
+          placeholder={isLoadingTokens ? "Loading tokens…" : "Search tokens"}
+          type='search'
+          value={sourceTokenQuery}
+        />
+        <datalist id={sourceTokenListId}>
+          {sourceTokenOptions.map((option) => (
+            <option key={option.value} value={option.label} />
+          ))}
+        </datalist>
+        {sourceTokenQueryInvalid && (
+          <p className='text-xs text-destructive' id='squid-source-token-error'>
+            Choose a source token from the suggestions.
+          </p>
+        )}
+        {sourceChainId !== "" && !quotesUnavailable && tokens.length === 0 && !isLoadingTokens && !tokenLoadFailed && (
+          <p className='text-sm text-muted-foreground'>
+            {sourceTokenCatalogMessage(!quotesUnavailable, isTokenLoadError)}
+          </p>
+        )}
         {tokenLoadFailed && (
           <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
             <span>{sourceTokenCatalogMessage(true, true)}</span>
@@ -313,24 +496,63 @@ export function SquidQuoteReview({
             </Button>
           </div>
         )}
+        {source && !isNativeSource && (
+          <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+            <span>Token address</span>
+            <span className='flex items-center font-mono'>
+              {formatAddress(source.token)}
+              <CopyButton
+                successMessage={`${source.symbol} token address copied`}
+                tooltipText={`Copy ${source.symbol} token address`}
+                value={source.token}
+              />
+            </span>
+          </div>
+        )}
       </div>
 
-      <div className='grid gap-1'>
-        <Label htmlFor='squid-source-amount'>Maximum source amount</Label>
+      <div className='grid gap-1 rounded-md border p-2 text-xs'>
+        <div className='flex items-center justify-between gap-2'>
+          <Label htmlFor='squid-max-native-fee'>Maximum network fee ({nativeSymbol})</Label>
+          {nativeBalance !== undefined && (
+            <span className='text-muted-foreground'>
+              Balance: {displayAmount(nativeBalance, nativeDecimals, nativeSymbol)}
+            </span>
+          )}
+        </div>
         <Input
+          aria-invalid={feeExceedsNativeBalance}
           disabled={isBusy}
-          id='squid-source-amount'
+          id='squid-max-native-fee'
           min='0'
-          onChange={setSourceAmount}
-          placeholder='0.0'
+          onChange={(value) => {
+            setError(null);
+            setMaximumNativeFee(value);
+          }}
           step='any'
           type='number'
-          value={sourceAmount}
+          value={maximumNativeFee}
         />
+        {feeExceedsNativeBalance && nativeBalance !== undefined && (
+          <p className='text-destructive' role='alert'>
+            The cap exceeds your {displayAmount(nativeBalance, nativeDecimals, nativeSymbol)} balance.
+          </p>
+        )}
+        <p className='text-muted-foreground'>
+          Total gas cap for the source-chain transactions (approval and swap); execution stops before exceeding it.
+          Needed before acquiring. For native-token routes it is kept out of the swap estimate.
+        </p>
       </div>
 
       <Button
-        disabled={!source || destinationAmount === null || isBusy || isReviewing}
+        disabled={
+          !source ||
+          destinationAmount === null ||
+          isBusy ||
+          isReviewing ||
+          isQuoteDebouncing ||
+          sourceBalance === undefined
+        }
         onClick={review}
         size='compact'
         type='button'
@@ -344,23 +566,29 @@ export function SquidQuoteReview({
         ) : plan ? (
           "Refresh quote"
         ) : (
-          "Review route"
+          "Get estimate"
         )}
       </Button>
 
-      {error && (
+      {(error || quoteErrorMessage || capBlockedMessage) && (
         <div className='flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive' role='alert'>
           <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
-          <span>{error}</span>
+          <span>{error || quoteErrorMessage || capBlockedMessage}</span>
         </div>
       )}
 
-      {quote && planQuoteKey === quoteKey && (
+      {quote && (
         <div className='grid gap-2 border-t pt-3'>
           <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-            <span className='text-muted-foreground'>Spend</span>
+            <span className='text-muted-foreground'>Spend (estimated)</span>
             <span className='text-right font-medium'>
               {displayAmount(quote.sourceAmount, plan.source.decimals, plan.source.symbol)}
+            </span>
+            <span className='text-muted-foreground'>Your balance</span>
+            <span className='text-right font-medium'>
+              {sourceBalance !== undefined && source
+                ? displayAmount(sourceBalance, source.decimals, source.symbol)
+                : "—"}
             </span>
             <span className='text-muted-foreground'>Receive at least</span>
             <span className='text-right font-medium'>
@@ -387,25 +615,14 @@ export function SquidQuoteReview({
             Route: {quote.actions.map((action) => action.description ?? action.type).join(" → ")}
           </p>
 
-          <div className='grid gap-1 rounded-md border p-2 text-xs'>
-            <Label htmlFor='squid-max-native-fee'>Maximum network fee ({nativeSymbol})</Label>
-            <Input
-              disabled={isBusy}
-              id='squid-max-native-fee'
-              min='0'
-              onChange={setMaximumNativeFee}
-              step='any'
-              type='number'
-              value={maximumNativeFee}
-            />
-            <p className='text-muted-foreground'>
-              Enter a total source-chain fee cap. Approval and route transactions all count toward it, and execution
-              stops before exceeding it.
-            </p>
-          </div>
-
           {isExpired ? (
-            <Button disabled={isBusy || isReviewing} onClick={review} size='compact' type='button' variant='primary'>
+            <Button
+              disabled={isBusy || isReviewing || isQuoteDebouncing}
+              onClick={review}
+              size='compact'
+              type='button'
+              variant='primary'
+            >
               Quote expired — refresh
             </Button>
           ) : (

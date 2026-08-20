@@ -46,7 +46,7 @@ describe("Squid quote review", () => {
         sourceChainId: 314,
         sourceToken: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       }),
-      { integratorId: "test" },
+      { fetch: expect.any(Function), integratorId: "test" },
     );
     expect(assertTrustedSquidQuote).toHaveBeenCalledWith(expect.any(Object), {
       spender: "0xce16f69375520ab01377ce7b88f5ba8c48f8d666",
