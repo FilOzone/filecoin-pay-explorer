@@ -1,6 +1,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { InlineTextLoader } from "@/components/shared";
+import { getRailSettlementEligibility, getRailSettlementUnavailableReason } from "@/utils/railSettlement";
 import { useSettleRail } from "../context/SettleRailContext";
 import type { RailTableRow } from "../types";
 
@@ -9,14 +10,12 @@ type RailActionsProps = {
 };
 
 const RailActions = ({ rail }: RailActionsProps) => {
-  const { openSettleDialog } = useSettleRail();
-  const isFinalized = rail.state === "FINALIZED";
-  const isDisabled = isFinalized || rail.isSettling;
+  const { currentEpoch, openSettleDialog } = useSettleRail();
+  const settlementEligibility = getRailSettlementEligibility(rail, currentEpoch);
+  const isDisabled = settlementEligibility.status !== "allowed" || rail.isSettling;
 
-  let tooltipContent = "";
-  if (isFinalized) {
-    tooltipContent = "Rail is finalized and cannot be settled";
-  } else if (rail.isSettling) {
+  let tooltipContent = getRailSettlementUnavailableReason(settlementEligibility);
+  if (settlementEligibility.status === "allowed" && rail.isSettling) {
     tooltipContent = "Settlement in progress...";
   }
 
@@ -30,7 +29,10 @@ const RailActions = ({ rail }: RailActionsProps) => {
     return (
       <div className='flex justify-center'>
         <Tooltip>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipTrigger asChild>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: makes the disabled action explanation keyboard-accessible */}
+            <span tabIndex={0}>{button}</span>
+          </TooltipTrigger>
           <TooltipContent>
             <p>{tooltipContent}</p>
           </TooltipContent>

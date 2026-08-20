@@ -29,6 +29,26 @@ export function formatToken(
   return `${formatCompactNumber(unitValue, decimals)} ${symbol}`;
 }
 
+/**
+ * Formats a token amount by truncating to `decimals` fractional digits, computed exactly via
+ * BigInt division. Unlike `formatToken`, this never rounds up through a float `Number()`
+ * conversion, so the display can't show more than the underlying amount actually is.
+ */
+export function formatTokenTruncated(
+  value: bigint,
+  tokenDecimals: number | bigint,
+  symbol: string = "",
+  decimals: number = 2,
+): string {
+  const negative = value < 0n;
+  const absValue = negative ? -value : value;
+  const divisor = 10n ** BigInt(tokenDecimals);
+  const whole = absValue / divisor;
+  const fraction = (absValue % divisor).toString().padStart(Number(tokenDecimals), "0").slice(0, decimals);
+  const amount = `${whole}.${fraction.padEnd(decimals, "0")}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+  return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
+}
+
 export const formatFIL = (attoFil: string | bigint) => {
   if (!attoFil || attoFil === "0") return "0 FIL";
 
