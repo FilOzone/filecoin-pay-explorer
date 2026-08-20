@@ -537,10 +537,10 @@ export function SquidQuoteReview({
         variant='tertiary'
       >
         {isReviewing ? (
-          <>
-            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+          <span className='inline-flex items-center gap-2'>
+            <Loader2 className='h-4 w-4 animate-spin' />
             Fetching quote…
-          </>
+          </span>
         ) : plan ? (
           "Refresh quote"
         ) : (
@@ -591,10 +591,10 @@ export function SquidQuoteReview({
 
           <Button disabled={isBusy} onClick={acquire} size='compact' type='button' variant='primary'>
             {acquisitionState === "processing" ? (
-              <>
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              <span className='inline-flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
                 Acquiring USDFC…
-              </>
+              </span>
             ) : (
               "Acquire USDFC"
             )}

@@ -459,8 +459,10 @@ export function GuidedTopUpDialog({
           </Button>
           {acquisitionState === "processing" ? (
             <Button disabled variant='primary'>
-              <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-              Acquiring USDFC…
+              <span className='inline-flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                Acquiring USDFC…
+              </span>
             </Button>
           ) : acquisitionState === "blocked" ? (
             <Button disabled variant='primary'>
@@ -477,10 +479,10 @@ export function GuidedTopUpDialog({
               variant='primary'
             >
               {isSubmitting ? (
-                <>
-                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                <span className='inline-flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
                   Depositing…
-                </>
+                </span>
               ) : (
                 "Deposit acquired USDFC"
               )}
