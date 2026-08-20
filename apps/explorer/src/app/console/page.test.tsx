@@ -4,7 +4,7 @@ import UserConsole from "./page";
 
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111",
-  chainId: 42161,
+  chainId: 42161 as number | undefined,
   isConnected: true,
 }));
 const accountState = vi.hoisted(() => ({
@@ -34,17 +34,23 @@ vi.mock("@/components/UserConsole/States", () => ({
 vi.mock("@/components/UserConsole", () => ({
   AlertsBanner: () => null,
   BetaWarning: () => null,
-  FundsSection: ({
-    accountId,
-    contentHidden,
-    topUpOnly,
-  }: {
-    accountId: string;
-    contentHidden?: boolean;
-    topUpOnly?: boolean;
-  }) => <div data-account-id={accountId}>{contentHidden ? null : topUpOnly ? "Fund with another token" : "Funds"}</div>,
+  FundsSection: ({ accountId }: { accountId: string }) => <div data-account-id={accountId}>Funds</div>,
   OperatorApprovalsSection: () => <div>Approvals</div>,
   RailsSection: () => <div>Rails</div>,
+  TopUpDialogController: ({
+    accountId,
+    children,
+    showTrigger,
+  }: {
+    accountId: string;
+    children?: (openTopUp: () => void) => React.ReactNode;
+    showTrigger?: boolean;
+  }) => (
+    <div data-top-up-account-id={accountId}>
+      {children?.(() => undefined)}
+      {showTrigger ? "Fund with another token" : null}
+    </div>
+  ),
 }));
 vi.mock("@/hooks/useAccountDetails", () => ({
   useAccountDetails: () => accountState,
@@ -66,11 +72,21 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Unsupported network");
-    expect(markup).toContain('data-account-id="0x1111111111111111111111111111111111111111"');
+    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
     expect(markup).not.toContain("Fund with another token");
+    expect(markup).not.toContain("Funds");
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");
     expect(markup).not.toContain("Rails");
+  });
+
+  it("waits for the wallet network before choosing a console state", () => {
+    wallet.chainId = undefined;
+    const markup = renderToStaticMarkup(<UserConsole />);
+
+    expect(markup).toContain("Loading your wallet network...");
+    expect(markup).not.toContain("Unsupported network");
+    expect(markup).not.toContain("Funds");
   });
 
   it("keeps the full console on Filecoin", () => {
@@ -82,6 +98,14 @@ describe("UserConsole", () => {
     expect(markup).toContain("Filecoin network");
     expect(markup).toContain("Approvals");
     expect(markup).toContain("Rails");
+  });
+
+  it("keeps direct deposit funding on Calibration", () => {
+    wallet.chainId = 314159;
+    const markup = renderToStaticMarkup(<UserConsole />);
+
+    expect(markup).toContain("Funds");
+    expect(markup).not.toContain("data-top-up-account-id");
   });
 
   it("allows an unindexed account to start Squid funding", () => {

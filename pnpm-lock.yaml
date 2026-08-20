@@ -35,6 +35,9 @@ importers:
       '@filecoin-pay/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@filecoin-project/squid-evm-funding':
+        specifier: ^0.1.7
+        version: 0.1.7(typescript@6.0.3)(zod@4.4.3)
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.55.18(typescript@6.0.3)(zod@4.4.3))
@@ -74,9 +77,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      squid-evm-funding:
-        specifier: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz
-        version: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz(typescript@6.0.3)(zod@4.4.3)
       use-debounce:
         specifier: ^10.1.1
         version: 10.1.1(react@19.2.8)
@@ -1695,6 +1695,10 @@ packages:
       react: ^19.2.4
       swr: ^2.4.0
       tailwindcss: ^4.1.18
+
+  '@filecoin-project/squid-evm-funding@0.1.7':
+    resolution: {integrity: sha512-N3ml/Z5LCzTTj/9GVl1hcaZpE9buGT0IQKiX9gllIqvIUMvavnU5Iyi7KT5DAYSVXY9NVw/wsSMiKl8vC58TRA==}
+    engines: {node: '>=18'}
 
   '@filoz/synapse-core@0.5.2':
     resolution: {integrity: sha512-euxg/UhABStkXYJBft259V9KKNdzV/08NwfwIJnlhQnTJDu5suNXqZlP5QEDTdpMVtaCCfqEXJuPGqGZy6Nz6w==}
@@ -7909,11 +7913,6 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz:
-    resolution: {tarball: https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz}
-    version: 0.1.6-vercel.1
-    engines: {node: '>=18'}
-
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
@@ -10084,6 +10083,15 @@ snapshots:
       - supports-color
       - typescript
       - utf-8-validate
+
+  '@filecoin-project/squid-evm-funding@0.1.7(typescript@6.0.3)(zod@4.4.3)':
+    dependencies:
+      viem: 2.55.18(typescript@6.0.3)(zod@4.4.3)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
 
   '@filoz/synapse-core@0.5.2(typescript@6.0.3)(viem@2.55.18(typescript@6.0.3)(zod@4.4.3))':
     dependencies:
@@ -16964,15 +16972,6 @@ snapshots:
   sponge-case@2.0.3: {}
 
   sprintf-js@1.0.3: {}
-
-  squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/v0.1.6-vercel.1/squid-evm-funding-0.1.6-vercel.1.tgz(typescript@6.0.3)(zod@4.4.3):
-    dependencies:
-      viem: 2.55.18(typescript@6.0.3)(zod@4.4.3)
-    transitivePeerDependencies:
-      - bufferutil
-      - typescript
-      - utf-8-validate
-      - zod
 
   stackback@0.0.2: {}
 

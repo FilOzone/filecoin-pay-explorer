@@ -1,8 +1,8 @@
-import { executeSquidFunding, SQUID_ROUTER_ADDRESS } from "squid-evm-funding";
+import { executeSquidFunding, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { describe, expect, it, vi } from "vitest";
 import { executeSquidTopUp, isUserRejectedRequest } from "./squid-execution";
 
-vi.mock("squid-evm-funding", () => ({
+vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
   SQUID_ROUTER_ADDRESS: "0x1111111111111111111111111111111111111111",
 }));

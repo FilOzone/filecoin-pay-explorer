@@ -5,7 +5,7 @@ import {
   type SquidFundingPlan,
   type SquidPublicClient,
   type SquidWalletClient,
-} from "squid-evm-funding";
+} from "@filecoin-project/squid-evm-funding";
 import type { Hash } from "viem";
 
 const OP_STACK_CHAIN_IDS = new Set([10, 8453]);

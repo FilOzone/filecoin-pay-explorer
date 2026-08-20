@@ -5,7 +5,7 @@ import { planSquidTopUp } from "./squid-quote";
 const planSquidFunding = vi.hoisted(() => vi.fn());
 const assertTrustedSquidQuote = vi.hoisted(() => vi.fn((quote) => quote));
 
-vi.mock("squid-evm-funding", () => ({
+vi.mock("@filecoin-project/squid-evm-funding", () => ({
   assertTrustedSquidQuote,
   planSquidFunding,
   SQUID_ROUTER_ADDRESS: "0xce16f69375520ab01377ce7b88f5ba8c48f8d666",

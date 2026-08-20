@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
@@ -20,7 +21,6 @@ import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
   defaultTopUpSuggestion,
-  type FundingAccountSummary,
   ONE_YEAR_EPOCHS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
@@ -32,8 +32,6 @@ interface DepositDialogProps {
   userToken?: UserToken | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accountSummary?: FundingAccountSummary;
-  isAccountSummaryLoading?: boolean;
 }
 
 interface TokenDetails {
@@ -45,13 +43,7 @@ interface TokenDetails {
 
 type LoadingState = "idle" | "loading" | "success" | "error";
 
-export const DepositDialog: React.FC<DepositDialogProps> = ({
-  userToken,
-  open,
-  onOpenChange,
-  accountSummary,
-  isAccountSummaryLoading = false,
-}) => {
+export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange }) => {
   const { address: userAddress } = useAccount();
 
   // Form state
@@ -62,6 +54,12 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({
   const didPrefillAmount = useRef(false);
 
   const { synapse, constants } = useSynapse();
+  const isUsdfcDeposit = !!userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
+    enabled: open && isUsdfcDeposit && !!userAddress && synapse?.chain.id === constants.chain.id,
+    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
+    queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
+  });
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
@@ -255,7 +253,6 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({
   // Runway projection currently only supports USDFC (other tokens would need
   // decimals-aware parsing and their own lockup accounting). Matched by
   // contract address, not symbol, so an unrelated token cannot spoof it.
-  const isUsdfcDeposit = !!userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
       ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)

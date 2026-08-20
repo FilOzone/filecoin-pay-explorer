@@ -4,7 +4,7 @@ import {
   type SourceToken,
   SQUID_ROUTER_ADDRESS,
   type SquidFundingPlan,
-} from "squid-evm-funding";
+} from "@filecoin-project/squid-evm-funding";
 import { type Address, formatUnits } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 
