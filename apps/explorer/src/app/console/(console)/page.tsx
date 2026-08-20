@@ -15,20 +15,40 @@ type AccountSectionsProps = {
   error: Error | null;
   isLoading: boolean;
   userAddress: string;
+  /**
+   * Rendered below the funds overview rather than above the page: the prompt to
+   * enable alerts lands better once the reader has seen the balances it protects.
+   * Passed in as a node so the states that render no funds overview can still
+   * place it, keeping the banner visible exactly when it was before.
+   */
+  alertsBanner: React.ReactNode;
 };
 
-const AccountSections = ({ account, error, isLoading, userAddress }: AccountSectionsProps) => {
+const AccountSections = ({ account, error, isLoading, userAddress, alertsBanner }: AccountSectionsProps) => {
   if (isLoading) {
-    return <LoadingStateCard message='Loading your account details...' />;
+    return (
+      <>
+        <LoadingStateCard message='Loading your account details...' />
+        {alertsBanner}
+      </>
+    );
   }
 
   if (!account) {
-    return error ? <ErrorState error={error} /> : <AccountNotFound />;
+    return (
+      <>
+        {error ? <ErrorState error={error} /> : <AccountNotFound />}
+        {alertsBanner}
+      </>
+    );
   }
 
   return (
     <>
-      <FundsSection account={account} />
+      <div className='flex flex-col gap-6'>
+        <FundsSection account={account} />
+        {alertsBanner}
+      </div>
       <RailsSection account={account} userAddress={userAddress} />
       <OperatorApprovalsSection account={account} />
 
@@ -50,8 +70,6 @@ const UserConsole = () => {
 
   return (
     <div className='flex flex-col gap-15'>
-      {showAlertsBanner ? <AlertsBanner /> : null}
-
       {/* The (console) layout gates on a connected wallet, so address is set here. */}
       {address ? (
         <AccountSections
@@ -59,6 +77,7 @@ const UserConsole = () => {
           error={accountQuery.error}
           isLoading={accountQuery.isLoading}
           userAddress={address}
+          alertsBanner={showAlertsBanner ? <AlertsBanner /> : null}
         />
       ) : null}
     </div>

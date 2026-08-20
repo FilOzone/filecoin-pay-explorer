@@ -1,17 +1,40 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import type { ReactNode } from "react";
 
 interface FundsSectionLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   handleOpenDeposit: () => void;
+  /**
+   * Token picker rendered beside the heading. Only the loaded view has a token
+   * to select — the loading, error and empty states pass none.
+   */
+  tokenSelector?: ReactNode;
+  /** Omitted by the loading, error and empty states: there is nothing to withdraw yet. */
+  handleOpenWithdraw?: () => void;
 }
 
-const FundsSectionLayout = ({ children, handleOpenDeposit }: FundsSectionLayoutProps) => (
+const FundsSectionLayout = ({
+  children,
+  handleOpenDeposit,
+  tokenSelector,
+  handleOpenWithdraw,
+}: FundsSectionLayoutProps) => (
   <div className='flex flex-col gap-4'>
-    <div className='flex items-center justify-between'>
-      <h3 className='text-2xl font-medium'>Funds</h3>
-      <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
-        Deposit
-      </Button>
+    <div className='flex flex-wrap items-center justify-between gap-3'>
+      <div className='flex items-baseline gap-3'>
+        <h3 className='text-3xl font-medium text-foreground'>Funds overview</h3>
+        {tokenSelector}
+      </div>
+      <div className='flex items-center gap-2'>
+        <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
+          Deposit
+        </Button>
+        {handleOpenWithdraw ? (
+          <Button className='py-2' variant='ghost' onClick={handleOpenWithdraw}>
+            Withdraw
+          </Button>
+        ) : null}
+      </div>
     </div>
     {children}
   </div>
