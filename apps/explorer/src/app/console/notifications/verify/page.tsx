@@ -246,7 +246,7 @@ const VerifyContent = () => {
 };
 
 const VerifyPage = () => (
-  <div className='flex min-h-screen flex-col bg-background text-foreground'>
+  <div className='flex min-h-full flex-col bg-background text-foreground'>
     <ConsoleHeader />
 
     <div className='flex-1 py-12'>
