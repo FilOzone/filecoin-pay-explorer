@@ -31,30 +31,37 @@ type FundingRunwaySliderProps = {
   amount: string;
   disabled?: boolean;
   genesisTimestamp: number;
+  maxAmount?: bigint;
   onSelect: (amount: string) => void;
 };
 
 // "Fund for" slider: drag a duration and the USDFC amount fills in; type an
 // amount and the thumb tracks the runway it buys. The floor starts at the
 // first month the account is not already funded through, so a covered target
-// is never offered.
+// is never offered; the ceiling stops at what `maxAmount` can pay, so an
+// unaffordable target is never offered either.
 export function FundingRunwaySlider({
   accountSummary,
   amount,
   disabled = false,
   genesisTimestamp,
+  maxAmount,
   onSelect,
 }: FundingRunwaySliderProps) {
   const minMonths = minTopUpMonths(accountSummary);
   // No recurring spend to project, or already funded past the max target.
   if (minMonths === null) return null;
+  const affordableMonths = maxAmount === undefined ? null : monthsForTopUp(accountSummary, maxAmount);
+  const maxMonths =
+    affordableMonths === null ? MAX_FUNDING_MONTHS : Math.min(MAX_FUNDING_MONTHS, Math.floor(affordableMonths));
+  if (maxMonths < minMonths) return null;
 
   const parsed = parseTopUpAmount(amount);
   const exactMonths = parsed === null ? null : monthsForTopUp(accountSummary, parsed);
   const position =
     exactMonths === null
-      ? Math.min(Math.max(DEFAULT_FUNDING_MONTHS, minMonths), MAX_FUNDING_MONTHS)
-      : Math.min(Math.max(Math.round(exactMonths), minMonths), MAX_FUNDING_MONTHS);
+      ? Math.min(Math.max(DEFAULT_FUNDING_MONTHS, minMonths), maxMonths)
+      : Math.min(Math.max(Math.round(exactMonths), minMonths), maxMonths);
   const label =
     exactMonths === null
       ? formatMonths(position)
@@ -76,7 +83,7 @@ export function FundingRunwaySlider({
         aria-label='Runway to fund, in months'
         className='w-full accent-primary'
         disabled={disabled}
-        max={MAX_FUNDING_MONTHS}
+        max={maxMonths}
         min={minMonths}
         onChange={(event) => {
           const months = BigInt(event.target.value);
@@ -92,7 +99,7 @@ export function FundingRunwaySlider({
       />
       <div className='flex justify-between text-xs text-muted-foreground'>
         <span>{formatMonths(minMonths)}</span>
-        <span>5 years</span>
+        <span>{formatMonths(maxMonths)}</span>
       </div>
     </div>
   );

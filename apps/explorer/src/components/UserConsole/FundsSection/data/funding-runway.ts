@@ -101,14 +101,23 @@ export function minTopUpMonths(summary: FundingAccountSummary, maxMonths = MAX_F
 
 // Prefill for the funding dialogs: the suggestion at the slider's initial
 // position (one year, clamped up to the first unfunded month so an account
-// already covered past a year still opens with a live projection). Empty when
-// there is nothing meaningful to suggest.
-export function defaultTopUpSuggestion(summary: FundingAccountSummary, genesisTimestamp: number): string {
+// already covered past a year still opens with a live projection, and down to
+// what `maxAmount` can pay). Empty when there is nothing to suggest.
+export function defaultTopUpSuggestion(
+  summary: FundingAccountSummary,
+  genesisTimestamp: number,
+  maxAmount?: bigint,
+): string {
   const min = minTopUpMonths(summary);
   if (min === null) return "";
-  const months = BigInt(Math.min(Math.max(DEFAULT_FUNDING_MONTHS, min), MAX_FUNDING_MONTHS));
+  let months = Math.min(Math.max(DEFAULT_FUNDING_MONTHS, min), MAX_FUNDING_MONTHS);
+  if (maxAmount !== undefined) {
+    const affordableMonths = monthsForTopUp(summary, maxAmount);
+    if (affordableMonths === null || Math.floor(affordableMonths) < min) return "";
+    months = Math.min(months, Math.floor(affordableMonths));
+  }
   return formatSuggestedTopUp(
-    calculateFundingRunway(summary, months * EPOCHS_PER_MONTH, genesisTimestamp).suggestedTopUp,
+    calculateFundingRunway(summary, BigInt(months) * EPOCHS_PER_MONTH, genesisTimestamp).suggestedTopUp,
   );
 }
 

@@ -271,7 +271,9 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
   // Prefill the amount with the slider's default suggestion once per open, so
   // the projection is live immediately instead of dashes until the user acts.
   const defaultSuggestion =
-    isUsdfcDeposit && accountSummary ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp) : "";
+    isUsdfcDeposit && accountSummary && balance !== undefined
+      ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp, balance)
+      : "";
   useEffect(() => {
     if (!open || !defaultSuggestion || didPrefillAmount.current) return;
     didPrefillAmount.current = true;
@@ -428,12 +430,13 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
               <p className='text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
-              {isUsdfcDeposit && accountSummary && (
+              {isUsdfcDeposit && accountSummary && balance !== undefined && (
                 <FundingRunwaySlider
                   accountSummary={accountSummary}
                   amount={amount}
                   disabled={isExecuting}
                   genesisTimestamp={constants.chain.genesisTimestamp}
+                  maxAmount={balance}
                   onSelect={setAmount}
                 />
               )}

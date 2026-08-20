@@ -8,6 +8,25 @@ import {
 import { type Address, formatUnits } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 
+// Squid's /tokens response is chain-independent, changes rarely, and gets
+// re-fetched by the planner on every estimate; caching it leaves the
+// rate-limit budget to /route calls.
+const TOKENS_CACHE_MS = 5 * 60_000;
+let tokensCache: { body: string; expires: number } | null = null;
+
+export const squidFetch: typeof globalThis.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (!url.includes("/tokens")) return fetch(input, init);
+  if (tokensCache && tokensCache.expires > Date.now()) {
+    return new Response(tokensCache.body, { headers: { "content-type": "application/json" }, status: 200 });
+  }
+  const response = await fetch(input, init);
+  if (!response.ok) return response;
+  const body = await response.text();
+  tokensCache = { body, expires: Date.now() + TOKENS_CACHE_MS };
+  return new Response(body, { headers: { "content-type": "application/json" }, status: 200 });
+};
+
 export async function planSquidTopUp({
   destinationAmount,
   destinationToken,
@@ -45,7 +64,7 @@ export async function planSquidTopUp({
       sourceChainId: source.chainId,
       sourceToken: source.token,
     },
-    { integratorId },
+    { fetch: squidFetch, integratorId },
   );
   return {
     ...plan,
