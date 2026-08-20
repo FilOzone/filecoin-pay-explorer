@@ -1,6 +1,6 @@
 import { executeSquidFunding, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { describe, expect, it, vi } from "vitest";
-import { executeSquidTopUp, isUserRejectedRequest } from "./squid-execution";
+import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "./squid-execution";
 
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
@@ -91,5 +91,11 @@ describe("executeSquidTopUp", () => {
   it("recognizes nested wallet rejection errors", () => {
     expect(isUserRejectedRequest({ cause: { code: 4001 } })).toBe(true);
     expect(isUserRejectedRequest(new Error("response lost"))).toBe(false);
+  });
+
+  it("shortens wallet rejection errors without hiding other failures", () => {
+    expect(walletErrorMessage({ cause: { code: 4001 } }, "fallback")).toBe("Transaction cancelled in your wallet.");
+    expect(walletErrorMessage(new Error("response lost"), "fallback")).toBe("response lost");
+    expect(walletErrorMessage(null, "fallback")).toBe("fallback");
   });
 });

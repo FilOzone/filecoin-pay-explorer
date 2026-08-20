@@ -76,3 +76,8 @@ export function isUserRejectedRequest(error: unknown): boolean {
   }
   return false;
 }
+
+export function walletErrorMessage(error: unknown, fallback: string): string {
+  if (isUserRejectedRequest(error)) return "Transaction cancelled in your wallet.";
+  return error instanceof Error ? error.message : fallback;
+}

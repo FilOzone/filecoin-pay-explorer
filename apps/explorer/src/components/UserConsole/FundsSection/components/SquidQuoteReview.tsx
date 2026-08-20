@@ -28,7 +28,7 @@ import {
   markSquidBroadcast,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
-import { executeSquidTopUp, isUserRejectedRequest } from "../data/squid-execution";
+import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
 
 const QUOTE_DEBOUNCE_MS = 500;
@@ -364,9 +364,7 @@ export function SquidQuoteReview({
         onAcquisitionStateChange("blocked");
       }
       if (isCurrentExecutionOwner()) {
-        setError(
-          executionError instanceof Error ? executionError.message : "Squid could not complete the acquisition.",
-        );
+        setError(walletErrorMessage(executionError, "Squid could not complete the acquisition."));
       }
     }
   };

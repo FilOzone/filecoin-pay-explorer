@@ -35,7 +35,7 @@ import {
   markSquidDepositPending,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
-import { isUserRejectedRequest } from "../data/squid-execution";
+import { isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
@@ -245,7 +245,7 @@ export function GuidedTopUpDialog({
       }
       if (isCurrentDepositOwner()) {
         toast.error("USDFC top-up failed", {
-          description: error instanceof Error ? error.message : "Your wallet did not complete the request.",
+          description: walletErrorMessage(error, "Your wallet did not complete the request."),
         });
       }
     } finally {
