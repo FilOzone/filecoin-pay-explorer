@@ -1,6 +1,6 @@
 import type { Rail } from "@filecoin-pay/types";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { formatEpochDuration, formatToken } from "@/utils/formatter";
+import { formatEpochDuration, formatToken, formatTokenTruncated } from "@/utils/formatter";
 import { EpochTimeCell } from "../../shared";
 import type { SettlementAmountState } from "./useSettleRailDialog";
 
@@ -32,7 +32,7 @@ function formatSettlementAmount(state: SettlementAmountState, rail: Rail): strin
     case "error":
       return "Unavailable";
     case "ready":
-      return formatToken(state.amount, rail.token.decimals, rail.token.symbol, 8);
+      return formatTokenTruncated(state.amount, rail.token.decimals, rail.token.symbol, 8);
     case "unavailable":
       return "—";
   }
