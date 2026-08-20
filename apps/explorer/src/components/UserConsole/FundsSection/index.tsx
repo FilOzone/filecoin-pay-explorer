@@ -42,7 +42,11 @@ const findDefaultToken = (userTokens: UserToken[], usdfcAddress: string): UserTo
 
 export const FundsSection = ({ account }: FundsSectionProps) => {
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [depositToken, setDepositToken] = useState<UserToken | null>(null);
+
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [withdrawToken, setWithdrawToken] = useState<UserToken | null>(null);
+
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
@@ -76,28 +80,36 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
     return selected ?? findDefaultToken(userTokens, constants.contracts.usdfc);
   }, [userTokens, selectedTokenId, constants.contracts.usdfc]);
 
+  // Snapshot each transaction token when its dialog opens so query and selector
+  // updates cannot change a part-filled form's target. Keep the snapshots after
+  // close so WithdrawDialog remains mounted while tracking its receipt and both
+  // dialogs retain a consistent lifecycle. The next open replaces the snapshot.
   const handleOpenDeposit = useCallback(() => {
+    setDepositToken(selectedToken);
     setDepositDialogOpen(true);
-  }, []);
+  }, [selectedToken]);
 
   const handleOpenWithdraw = useCallback(() => {
+    if (!selectedToken) return;
+
+    setWithdrawToken(selectedToken);
     setWithdrawDialogOpen(true);
-  }, []);
+  }, [selectedToken]);
 
-  if (isLoading) {
-    return <FundsLoadingState onDeposit={handleOpenDeposit} />;
-  }
+  const renderSection = () => {
+    if (isLoading) {
+      return <FundsLoadingState onDeposit={handleOpenDeposit} />;
+    }
 
-  if (isError) {
-    return <FundsErrorState onDeposit={handleOpenDeposit} />;
-  }
+    if (isError) {
+      return <FundsErrorState onDeposit={handleOpenDeposit} />;
+    }
 
-  if (!selectedToken || !userTokens) {
-    return <FundsEmptyState onDeposit={handleOpenDeposit} />;
-  }
+    if (!selectedToken || !userTokens) {
+      return <FundsEmptyState onDeposit={handleOpenDeposit} />;
+    }
 
-  return (
-    <>
+    return (
       <FundsSectionLayout
         handleOpenDeposit={handleOpenDeposit}
         handleOpenWithdraw={handleOpenWithdraw}
@@ -105,9 +117,20 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
       >
         <FundsOverview userToken={selectedToken} currentTimestamp={currentTimestamp} />
       </FundsSectionLayout>
+    );
+  };
 
-      <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
-      <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
+  return (
+    <>
+      {renderSection()}
+
+      {/* A null token opens the custom-token deposit flow used by empty accounts. */}
+      <DepositDialog userToken={depositToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
+
+      {/* Mounted only once a token is captured, so WithdrawDialog keeps a non-nullable prop. */}
+      {withdrawToken ? (
+        <WithdrawDialog userToken={withdrawToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
+      ) : null}
     </>
   );
 };
