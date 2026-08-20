@@ -5,7 +5,7 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { RefreshOverlay } from "@filecoin-foundation/ui-filecoin/RefreshOverlay";
 import { AlertCircle, SearchIcon } from "lucide-react";
-import { StyledLink } from "@/components/shared";
+import { NetworkLink, StyledLink } from "@/components/shared";
 import { calibration, mainnet } from "@/constants/chains";
 import useAccountsLeaderboard from "@/hooks/useAccountsLeaderboard";
 import useNetwork from "@/hooks/useNetwork";
@@ -24,8 +24,8 @@ const TopAccounts = () => {
       <div className='flex flex-col gap-6 -mt-20'>
         <div className='flex items-center justify-between'>
           <h2 className='text-2xl font-medium'>Accounts Leaderboards</h2>
-          <StyledLink to='/accounts' className='text-sm'>
-            View All
+          <StyledLink className='text-sm'>
+            <NetworkLink href='/accounts'>View All</NetworkLink>
           </StyledLink>
         </div>
 
