@@ -1,10 +1,4 @@
-import {
-  assertTrustedSquidQuote,
-  planSquidFunding,
-  type SourceToken,
-  SQUID_ROUTER_ADDRESS,
-  type SquidFundingPlan,
-} from "@filecoin-project/squid-evm-funding";
+import { planSquidFunding, type SourceToken, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
 import { type Address, formatUnits } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 
@@ -47,7 +41,7 @@ export async function planSquidTopUp({
   }
   if (integratorId.trim() === "") throw new Error("Squid quotes are unavailable");
 
-  const plan = await planSquidFunding(
+  return planSquidFunding(
     {
       maxSourceAmount: formatUnits(sourceAmount, source.decimals),
       owner,
@@ -66,13 +60,4 @@ export async function planSquidTopUp({
     },
     { fetch: squidFetch, integratorId },
   );
-  return {
-    ...plan,
-    quotes: plan.quotes.map((quote) =>
-      assertTrustedSquidQuote(quote, {
-        spender: SQUID_ROUTER_ADDRESS,
-        target: SQUID_ROUTER_ADDRESS,
-      }),
-    ),
-  };
 }

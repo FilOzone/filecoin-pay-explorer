@@ -62,13 +62,6 @@ function displayAmount(amount: bigint, decimals: number, symbol: string) {
   return `${formatUnits(amount, decimals)} ${symbol}`;
 }
 
-function formatCountdown(seconds: number) {
-  if (seconds <= 0) return "expired";
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
-}
-
 export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boolean) {
   if (!isConfigured) return "Squid funding is not configured for this deployment.";
   if (hasError) return "Could not load tokens from Squid. Check the configuration or try again.";
@@ -110,7 +103,6 @@ export function SquidQuoteReview({
   const [sourceTokenQueryTouched, setSourceTokenQueryTouched] = useState(false);
   const [maximumNativeFee, setMaximumNativeFee] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1_000));
   const sourceChainListId = useId();
   const sourceTokenListId = useId();
   const latestAddress = useRef(address);
@@ -254,8 +246,6 @@ export function SquidQuoteReview({
   });
   const plan = isQuoteDebouncing ? undefined : quotedPlan;
   const quote = plan?.quotes[0];
-  const secondsLeft = quote ? quote.expiresAt - nowSeconds : 0;
-  const isExpired = quote ? secondsLeft <= 0 : false;
   const quoteErrorMessage =
     !isQuoteDebouncing && quoteError
       ? quoteError instanceof Error && quoteError.message.includes("exceed the source-token cap")
@@ -275,13 +265,6 @@ export function SquidQuoteReview({
     sourceAmount <= 0n
       ? insufficientBalance
       : null;
-
-  useEffect(() => {
-    if (!quote) return;
-    setNowSeconds(Math.floor(Date.now() / 1_000));
-    const interval = setInterval(() => setNowSeconds(Math.floor(Date.now() / 1_000)), 1_000);
-    return () => clearInterval(interval);
-  }, [quote]);
 
   useEffect(() => {
     if (tokenLoadError) console.error("Failed to load Squid token catalog:", tokenLoadError);
@@ -314,9 +297,6 @@ export function SquidQuoteReview({
     const executionMaxNativeFee = maxNativeFee;
     if (executionMaxNativeFee === null) return setError("Enter a positive network-fee limit.");
     if (feeExceedsNativeBalance) return setError(`Your gas cap exceeds your ${nativeSymbol} balance.`);
-    if (plan.quotes.some((planQuote) => planQuote.expiresAt <= Math.floor(Date.now() / 1_000)))
-      return setError("This route expired. Review it again before acquiring USDFC.");
-
     const latestBalanceResult = await refetchSourceBalance();
     if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
       return setError("Could not refresh your source-token balance. Try again before confirming.");
@@ -606,37 +586,21 @@ export function SquidQuoteReview({
                 </span>
               </>
             )}
-            <span className='text-muted-foreground'>Quote expires</span>
-            <span className={`text-right font-medium ${isExpired ? "text-destructive" : ""}`}>
-              in {formatCountdown(secondsLeft)}
-            </span>
           </div>
           <p className='text-xs text-muted-foreground'>
             Route: {quote.actions.map((action) => action.description ?? action.type).join(" → ")}
           </p>
 
-          {isExpired ? (
-            <Button
-              disabled={isBusy || isReviewing || isQuoteDebouncing}
-              onClick={review}
-              size='compact'
-              type='button'
-              variant='primary'
-            >
-              Quote expired — refresh
-            </Button>
-          ) : (
-            <Button disabled={isBusy} onClick={acquire} size='compact' type='button' variant='primary'>
-              {acquisitionState === "processing" ? (
-                <>
-                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                  Acquiring USDFC…
-                </>
-              ) : (
-                "Acquire USDFC"
-              )}
-            </Button>
-          )}
+          <Button disabled={isBusy} onClick={acquire} size='compact' type='button' variant='primary'>
+            {acquisitionState === "processing" ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Acquiring USDFC…
+              </>
+            ) : (
+              "Acquire USDFC"
+            )}
+          </Button>
         </div>
       )}
     </section>
