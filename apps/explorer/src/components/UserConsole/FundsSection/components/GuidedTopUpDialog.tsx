@@ -323,7 +323,7 @@ export function GuidedTopUpDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
+      <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[500px]'>
         <DialogHeader>
           <DialogTitle>Fund with another token</DialogTitle>
           <DialogDescription>
