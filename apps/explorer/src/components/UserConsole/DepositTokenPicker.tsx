@@ -21,6 +21,12 @@ export type PickerToken = {
   address: string;
   symbol: string;
   decimals: number;
+  /**
+   * Present for a token resolved from chain reads, absent for one taken from the
+   * account list — those carry a subgraph-supplied name that must not be reused
+   * for permit signing, so the picker does not carry it at all.
+   */
+  name?: string;
 };
 
 type DepositTokenPickerProps = {
@@ -34,6 +40,8 @@ type DepositTokenPickerProps = {
   customAddress: string;
   onCustomAddressChange: (value: string) => void;
   customTokenStatus: CustomTokenStatus;
+  /** The connected network, named in the custom-address hint. */
+  chainName: string;
   disabled?: boolean;
 };
 
@@ -46,12 +54,30 @@ const toPickerToken = (userToken: UserToken): PickerToken => ({
   decimals: Number(userToken.token.decimals),
 });
 
-/** Icon, symbol and truncated address — the one token presentation used everywhere here. */
-const TokenSummary = ({ token }: { token: PickerToken }) => (
+/**
+ * Icon, symbol and truncated address — the one token presentation used everywhere here.
+ *
+ * `showName` is off by default because the name only earns its width where the
+ * token is unfamiliar: the rows list tokens the account already holds, so there
+ * the symbol identifies them and a second string per row costs scanability.
+ *
+ * The name never replaces the address. It is self-reported by the contract — any
+ * token can claim to be "USD Coin" — so it helps recognition without being what
+ * pins identity.
+ *
+ * Symbol and name both truncate: on the custom-address path they are whatever a
+ * hand-entered contract returns, so neither has a length this layout can assume.
+ */
+const TokenSummary = ({ token, showName = false }: { token: PickerToken; showName?: boolean }) => (
   <span className='flex min-w-0 items-center gap-3'>
     <TokenIcon token={token} className='size-7 shrink-0' />
     <span className='flex min-w-0 flex-col'>
-      <span className='font-medium text-foreground'>{token.symbol}</span>
+      <span className='flex min-w-0 items-baseline gap-2'>
+        <span className='min-w-0 truncate font-medium text-foreground'>{token.symbol}</span>
+        {showName && token.name ? (
+          <span className='min-w-0 truncate text-xs text-muted-foreground'>{token.name}</span>
+        ) : null}
+      </span>
       <span className='truncate font-mono text-[0.6875rem] text-muted-foreground'>{formatAddress(token.address)}</span>
     </span>
   </span>
@@ -66,7 +92,22 @@ const TokenDecimals = ({ decimals }: { decimals: number }) => (
  * Condensed replacement for the old verbose "token loaded" panel: the failure
  * modes still get their own message, success is just the token row itself.
  */
-const CustomTokenStatusMessage = ({ status, token }: { status: CustomTokenStatus; token: PickerToken | null }) => {
+const CustomTokenStatusMessage = ({
+  status,
+  token,
+  chainName,
+}: {
+  status: CustomTokenStatus;
+  token: PickerToken | null;
+  chainName: string;
+}) => {
+  // An empty field otherwise offers only a "0x..." placeholder. Naming the
+  // network matters most here: an address from another chain is the likeliest
+  // mistake, and it surfaces only as the generic error below.
+  if (status === "idle") {
+    return <p className='text-sm text-muted-foreground'>Paste an ERC-20 contract address on {chainName}.</p>;
+  }
+
   if (status === "invalid") {
     return (
       <p className='flex items-center gap-2 text-sm text-destructive'>
@@ -96,8 +137,10 @@ const CustomTokenStatusMessage = ({ status, token }: { status: CustomTokenStatus
 
   if (status === "loaded" && token) {
     return (
+      // The one surface that shows the name: the address here was typed by hand,
+      // so this is where the user needs to recognise what it resolved to.
       <div className='flex items-center justify-between gap-3 rounded-lg border bg-background p-3'>
-        <TokenSummary token={token} />
+        <TokenSummary token={token} showName />
         <TokenDecimals decimals={token.decimals} />
       </div>
     );
@@ -119,10 +162,12 @@ const DepositTokenPicker = ({
   customAddress,
   onCustomAddressChange,
   customTokenStatus,
+  chainName,
   disabled = false,
 }: DepositTokenPickerProps) => {
   const listId = useId();
   const addressInputId = useId();
+  const addressStatusId = useId();
 
   // The selected token is already shown on the collapsed trigger, so listing it
   // again would just be a row that does nothing when clicked.
@@ -153,8 +198,11 @@ const DepositTokenPicker = ({
           disabled={disabled}
           className='font-mono text-sm'
           aria-invalid={customTokenStatus === "invalid" || customTokenStatus === "error"}
+          aria-describedby={addressStatusId}
         />
-        <CustomTokenStatusMessage status={customTokenStatus} token={token} />
+        <div id={addressStatusId} aria-live='polite'>
+          <CustomTokenStatusMessage status={customTokenStatus} token={token} chainName={chainName} />
+        </div>
       </div>
     );
   }

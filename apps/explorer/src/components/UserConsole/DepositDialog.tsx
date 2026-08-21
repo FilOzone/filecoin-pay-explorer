@@ -25,6 +25,37 @@ import { getPermitSignature } from "@/utils/permit";
 
 const PERMIT_DEADLINE_SECONDS = 3600;
 
+/**
+ * How far the hand-entered address has got towards a usable token.
+ *
+ * The checks are ordered by precedence and each one assumes those above it
+ * passed, so an empty field never reports as invalid and an in-flight read never
+ * reports as an error. `loaded` is the only state left once every check clears.
+ */
+const getCustomTokenStatus = ({
+  address,
+  isValidAddress,
+  isLoadingReads,
+  isReadsError,
+  token,
+}: {
+  /** The trimmed contract address as typed. */
+  address: string;
+  isValidAddress: boolean;
+  isLoadingReads: boolean;
+  isReadsError: boolean;
+  /** The token those reads resolved to, or null if they did not resolve one. */
+  token: PickerToken | null;
+}): CustomTokenStatus => {
+  if (!address) return "idle";
+  if (!isValidAddress) return "invalid";
+  if (isLoadingReads) return "loading";
+  // A well-formed address that resolves nothing is an error too: the reads came
+  // back, but not from something this dialog can deposit.
+  if (isReadsError || !token) return "error";
+  return "loaded";
+};
+
 type DepositDialogProps = {
   /**
    * Seeds the initial selection only. The dialog owns its selection after that,
@@ -44,6 +75,13 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const [customAddress, setCustomAddress] = useState("");
   const [selectedUserToken, setSelectedUserToken] = useState<UserToken | null>(null);
   const [pickerMode, setPickerMode] = useState<TokenPickerMode>("collapsed");
+  /**
+   * Covers the whole of `handleDeposit`, which `isExecuting` does not: that only
+   * turns true once `execute` reaches `writeContract`, leaving the permit
+   * signature — an open wallet prompt, for as long as the user takes — a window
+   * where the form still looked idle and every click started another prompt.
+   */
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { synapse, constants } = useSynapse();
   const { data: walletClient } = useWalletClient();
@@ -54,6 +92,9 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     abi: constants.contracts.payments.abi,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
+
+  /** The form is locked from the first click through to the receipt. */
+  const isBusy = isSubmitting || isExecuting;
 
   /**
    * Reads `depositToken` at the moment the dialog opens without making it a
@@ -80,6 +121,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setCustomAddress("");
     setSelectedUserToken(null);
     setPickerMode("collapsed");
+    setIsSubmitting(false);
   }, [open]);
 
   const trimmedCustomAddress = customAddress.trim();
@@ -112,6 +154,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       ? [
           { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
           { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
         ]
       : [],
     query: {
@@ -120,15 +163,27 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   });
 
   // Results come back positionally, in the order the contracts are listed above.
-  const [symbolRead, decimalsRead] = tokenReads ?? [];
+  const [symbolRead, decimalsRead, nameRead] = tokenReads ?? [];
 
-  /** A token resolved purely from chain reads — the custom-address path. */
+  /**
+   * A token resolved purely from chain reads — the custom-address path.
+   *
+   * All three reads must succeed, `name` included. That is not a display
+   * preference: this dialog deposits through `depositWithPermit`, and the EIP-712
+   * domain in `getPermitSignature` is built from the token's `name()`. A token
+   * that has none cannot be signed for, so resolving it here would only arm a
+   * Deposit button that fails after the click.
+   */
   const chainToken: PickerToken | null =
-    customTokenAddress && symbolRead?.status === "success" && decimalsRead?.status === "success"
+    customTokenAddress &&
+    symbolRead?.status === "success" &&
+    decimalsRead?.status === "success" &&
+    nameRead?.status === "success"
       ? {
           address: customTokenAddress,
           symbol: symbolRead.result as string,
           decimals: Number(decimalsRead.result),
+          name: nameRead.result as string,
         }
       : null;
 
@@ -142,15 +197,13 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       }
     : chainToken;
 
-  const customTokenStatus: CustomTokenStatus = !trimmedCustomAddress
-    ? "idle"
-    : !isCustomAddressValid
-      ? "invalid"
-      : isLoadingTokenReads
-        ? "loading"
-        : isTokenReadsError || !chainToken
-          ? "error"
-          : "loaded";
+  const customTokenStatus = getCustomTokenStatus({
+    address: trimmedCustomAddress,
+    isValidAddress: isCustomAddressValid,
+    isLoadingReads: isLoadingTokenReads,
+    isReadsError: isTokenReadsError,
+    token: chainToken,
+  });
 
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
     address: activeTokenAddress || undefined,
@@ -185,11 +238,20 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setAmount("");
   };
 
-  const handleClose = () => {
-    if (!isExecuting) {
-      onOpenChange(false);
-      // State will be reset by useEffect when open becomes false
-    }
+  /**
+   * The single gate for every user-initiated close: the X, Escape, an outside
+   * click and Cancel all arrive here.
+   *
+   * Closing while busy is refused rather than ignored, because closing does not
+   * cancel anything — an in-flight permit signature resolves regardless and goes
+   * on to submit. A dismissed dialog must not be able to move funds.
+   *
+   * The close that follows a submitted transaction deliberately does not come
+   * through here; see `onSubmitOnChain` below.
+   */
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isBusy) return;
+    onOpenChange(nextOpen);
   };
 
   const handleMaxClick = () => {
@@ -224,6 +286,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
       const amountInWei = parseUnits(amount, currentToken.decimals);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
@@ -233,6 +297,13 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       const permitSignature = await getPermitSignature(
         {
           tokenAddress: currentToken.address as Hex,
+          // Set only for a token resolved from chain reads, where this is the
+          // contract's own `name()` and so the exact string the EIP-712 domain
+          // needs. Account-list tokens leave it undefined on purpose: their name
+          // comes from the subgraph, which stores "Unknown" for a reverting
+          // `name()`, and a domain built on that would produce a signature the
+          // token rejects. `getPermitSignature` re-reads it from chain instead.
+          tokenName: currentToken.name,
           ownerAddress: userAddress,
           spenderAddress: constants.contracts.payments.address,
           amount: amountInWei,
@@ -261,21 +332,36 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           amount,
           token: currentToken.symbol,
         },
-        onSubmitOnChain: () => handleClose(),
+        // The one close that must succeed while busy: the transaction is away and
+        // the toast tracks it from here. Bypasses the guard above on purpose.
+        onSubmitOnChain: () => onOpenChange(false),
       });
     } catch (err) {
       console.error("Deposit failed:", err);
+    } finally {
+      // Releases the permit half of the lock. `isExecuting` carries `isBusy` on
+      // its own from here until the receipt lands.
+      setIsSubmitting(false);
     }
   };
 
-  const canDeposit = Boolean(currentToken) && Boolean(amount) && !isExecuting;
+  const canDeposit = Boolean(currentToken) && Boolean(amount) && !isBusy;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Capped and scrollable like SettleRailDialog: the dialog is fixed and
-          vertically centred, so without a bound tall content pushes the title and
-          footer past the edges of a short viewport. */}
-      <DialogContent className='flex max-h-[90vh] flex-col sm:max-w-[500px]'>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
+        // The guard in `handleDialogOpenChange` already refuses these closes, but
+        // stopping them at the source means no dismissal is even attempted while
+        // a signature is pending, and the missing X says so before it is tried.
+        showCloseButton={!isBusy}
+        onEscapeKeyDown={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Deposit tokens</DialogTitle>
           <DialogDescription>Choose a token and deposit it into your Filecoin Pay account.</DialogDescription>
@@ -292,7 +378,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
             customAddress={customAddress}
             onCustomAddressChange={handleCustomAddressChange}
             customTokenStatus={customTokenStatus}
-            disabled={isExecuting}
+            chainName={constants.chain.name}
+            disabled={isBusy}
           />
 
           {currentToken ? (
@@ -300,9 +387,11 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
               <div className='flex items-center justify-between'>
                 <Label htmlFor='amount'>Amount</Label>
                 {balance !== undefined || isLoadingBalance ? (
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3' />
-                    <span>
+                  // `min-w-0` down the chain so the symbol — arbitrary text from a
+                  // hand-entered contract — clips instead of widening the row.
+                  <div className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
+                    <Wallet className='h-3 w-3 shrink-0' />
+                    <span className='min-w-0 truncate'>
                       Balance:{" "}
                       {isLoadingBalance || balance === undefined ? (
                         <Loader2 className='h-3 w-3 animate-spin inline' />
@@ -327,7 +416,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
                   onChange={setAmount}
                   min='0'
                   step='any'
-                  disabled={isExecuting}
+                  disabled={isBusy}
                   className='text-lg pr-16'
                 />
                 <Button
@@ -335,12 +424,14 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
                   variant='ghost'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
-                  disabled={isExecuting || balance === undefined || isLoadingBalance}
+                  disabled={isBusy || balance === undefined || isLoadingBalance}
                 >
                   MAX
                 </Button>
               </div>
-              <p className='text-xs text-muted-foreground'>
+              {/* Wraps rather than truncates: this line has the width to spare,
+                  and `break-words` keeps an unbroken symbol from widening it. */}
+              <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
             </div>
@@ -348,11 +439,11 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
         </div>
 
         <DialogFooter>
-          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} size='compact'>
+          <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
           <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
-            {isExecuting ? (
+            {isBusy ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing...
