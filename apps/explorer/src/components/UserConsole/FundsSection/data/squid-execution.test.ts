@@ -15,14 +15,13 @@ const source = {
 } as const;
 const owner = "0x2222222222222222222222222222222222222222" as const;
 describe("executeSquidTopUp", () => {
-  it("executes the reviewed OP Stack plan with an explicit fee cap and trusted router", async () => {
+  it("executes the reviewed OP Stack plan with automatic fees and a trusted router", async () => {
     const plan = { maxSourceAmount: 2_000_000_000_000_000_000n, owner, quotes: [], slippage: 1, source };
     vi.mocked(executeSquidFunding).mockResolvedValue({ nativeFee: 1n, routes: [], sourceAmount: 2n });
 
     await executeSquidTopUp({
       destinationClient: {} as never,
       integratorId: "test-integrator",
-      maxNativeFee: 3n,
       plan,
       sourcePublicClient: {} as never,
       sourceWalletClient: {} as never,
@@ -31,7 +30,7 @@ describe("executeSquidTopUp", () => {
     expect(executeSquidFunding).toHaveBeenCalledWith(
       expect.objectContaining({
         feeMode: "op-stack",
-        maxNativeFee: 3n,
+        maxNativeFee: "auto",
         trustedSpender: SQUID_ROUTER_ADDRESS,
         trustedTarget: SQUID_ROUTER_ADDRESS,
         plan,
@@ -57,7 +56,6 @@ describe("executeSquidTopUp", () => {
     await executeSquidTopUp({
       destinationClient: {} as never,
       integratorId: "test-integrator",
-      maxNativeFee: 3n,
       onBroadcast,
       plan,
       sourcePublicClient: {} as never,
@@ -78,7 +76,6 @@ describe("executeSquidTopUp", () => {
       executeSquidTopUp({
         destinationClient: {} as never,
         integratorId: "test-integrator",
-        maxNativeFee: 3n,
         onTransactionAttempt,
         plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source },
         sourcePublicClient: {} as never,

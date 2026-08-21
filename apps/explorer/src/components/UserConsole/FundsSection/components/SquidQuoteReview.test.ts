@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveSearchableOption, sourceSpendCap, sourceTokenCatalogMessage } from "./SquidQuoteReview";
+import { nativeTokenFirst, resolveSearchableOption, sourceTokenCatalogMessage } from "./SquidQuoteReview";
 
 describe("searchable option resolution", () => {
   const options = [
@@ -29,13 +29,14 @@ describe("source token catalog messages", () => {
   });
 });
 
-describe("source spend cap", () => {
-  it("reserves the maximum network fee when the source token is native", () => {
-    expect(sourceSpendCap(10n, 3n, true)).toBe(7n);
-    expect(sourceSpendCap(3n, 3n, true)).toBe(0n);
-  });
+describe("source token ordering", () => {
+  it("puts the native token first without changing the other catalog entries", () => {
+    const tokens = [
+      { token: "0x123", symbol: "USDC" },
+      { token: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", symbol: "ETH" },
+      { token: "0x456", symbol: "USDT" },
+    ];
 
-  it("does not subtract native fees from an ERC-20 balance", () => {
-    expect(sourceSpendCap(10n, 3n, false)).toBe(10n);
+    expect(nativeTokenFirst(tokens).map(({ symbol }) => symbol)).toEqual(["ETH", "USDC", "USDT"]);
   });
 });

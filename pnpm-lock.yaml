@@ -36,8 +36,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@filecoin-project/squid-evm-funding':
-        specifier: ^0.2.2
-        version: 0.2.2(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
+        specifier: ^0.3.0
+        version: 0.3.0(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
@@ -1629,8 +1629,8 @@ packages:
       swr: ^2.4.0
       tailwindcss: ^4.1.18
 
-  '@filecoin-project/squid-evm-funding@0.2.2':
-    resolution: {integrity: sha512-s6w9EFANUWMkVBLG58T2F0w4vyOhfBWbRuV8cJDGwyu2ck57TgzY9740XfaENlyi5CSGwwBdeBtUVX+oIvnugg==}
+  '@filecoin-project/squid-evm-funding@0.3.0':
+    resolution: {integrity: sha512-dZ5pws7T1EExSBeIcr0mWXaOVoKeHbu2LDG9FY2N0T5PFYYYfd9AuqOC0CWa8Fq4b2rZGlNxr4M69nugHrEKrQ==}
     engines: {node: '>=18'}
 
   '@filoz/synapse-core@0.5.2':
@@ -10631,7 +10631,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@filecoin-project/squid-evm-funding@0.2.2(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)':
+  '@filecoin-project/squid-evm-funding@0.3.0(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)':
     dependencies:
       viem: 2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     transitivePeerDependencies:
