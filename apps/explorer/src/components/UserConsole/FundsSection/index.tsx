@@ -24,9 +24,16 @@ interface FundsSectionProps {
   accountId: string;
   onGuidedTopUp?: () => void;
   subscribed: boolean;
+  /** A guided top-up is already running; the chooser's Squid card opens it. */
+  topUpInProgress?: boolean;
 }
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, onGuidedTopUp, subscribed }) => {
+export const FundsSection: React.FC<FundsSectionProps> = ({
+  accountId,
+  onGuidedTopUp,
+  subscribed,
+  topUpInProgress = false,
+}) => {
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
@@ -170,6 +177,7 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ accountId, onGuidedT
               : "Cross-chain funding is disabled on the Calibration testnet. Switch to Filecoin mainnet to fund with another token."
           }
           tokenSymbol={selectedToken.token.symbol}
+          topUpInProgress={topUpInProgress}
         />
       )}
       <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={handleDepositOpenChange} />

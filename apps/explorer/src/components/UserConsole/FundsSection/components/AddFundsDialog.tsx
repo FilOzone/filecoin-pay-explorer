@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { ArrowRight, Repeat, Wallet } from "lucide-react";
+import { ArrowRight, Loader2, Repeat, Wallet } from "lucide-react";
 
 export type AddFundsMethod = "deposit" | "squid";
 
@@ -18,6 +18,8 @@ type AddFundsDialogProps = {
   squidAvailable: boolean;
   squidDisabledReason?: string;
   tokenSymbol: string;
+  /** A guided top-up is already running; the Squid card opens it instead of starting a new one. */
+  topUpInProgress?: boolean;
 };
 
 const cardBase = "group relative flex items-start gap-4 rounded-lg border p-4 text-left transition-colors";
@@ -33,6 +35,7 @@ export function AddFundsDialog({
   squidAvailable,
   squidDisabledReason,
   tokenSymbol,
+  topUpInProgress = false,
 }: AddFundsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,18 +70,18 @@ export function AddFundsDialog({
 
           <div className={squidAvailable ? enabledCard : disabledCard}>
             <button
-              aria-label='Fund with another token'
+              aria-label={topUpInProgress ? "Top-up in progress — view" : "Fund with another token"}
               className={`absolute inset-0 rounded-lg ${squidAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}
               disabled={!squidAvailable}
               onClick={() => onSelect("squid")}
               type='button'
             />
             <span className={squidAvailable ? iconEnabled : iconDisabled}>
-              <Repeat className='h-5 w-5' />
+              {topUpInProgress ? <Loader2 className='h-5 w-5 animate-spin' /> : <Repeat className='h-5 w-5' />}
             </span>
             <span className='flex-1'>
               <span className='flex items-center justify-between font-medium'>
-                Fund with another token
+                {topUpInProgress ? "Top-up in progress — view" : "Fund with another token"}
                 {squidAvailable ? (
                   <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
                 ) : (
@@ -88,7 +91,9 @@ export function AddFundsDialog({
                 )}
               </span>
               <span className='mt-1 block text-sm text-muted-foreground'>
-                {squidAvailable ? (
+                {topUpInProgress ? (
+                  "A top-up is already running. Open it to see progress; a new one can start after it finishes or is cleared."
+                ) : squidAvailable ? (
                   <>
                     Swap ETH, USDC and more from another chain into USDFC via{" "}
                     {/* `relative` lifts the link above the stretched button so it stays clickable. */}
