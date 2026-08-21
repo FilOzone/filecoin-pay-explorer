@@ -592,7 +592,7 @@ export function SquidQuoteReview({
                 ? displayAmount(sourceBalance, source.decimals, source.symbol)
                 : "—"}
             </span>
-            <span className='text-muted-foreground'>Estimated receive</span>
+            <span className='text-muted-foreground'>Minimum received</span>
             <span className='text-right font-medium'>
               {displayAmount(quote.destinationAmount, USDFC_DECIMALS, "USDFC")}
             </span>
