@@ -1,4 +1,5 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { ArrowCircleDownIcon, ArrowCircleUpIcon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 
 interface FundsSectionLayoutProps {
@@ -26,11 +27,12 @@ const FundsSectionLayout = ({
         {tokenSelector}
       </div>
       <div className='flex items-center gap-2'>
-        <Button className='py-2' variant='primary' onClick={handleOpenDeposit}>
+        {/* Arrows point the way the funds move: in on deposit, out on withdraw. */}
+        <Button className='py-2' variant='primary' icon={ArrowCircleDownIcon} onClick={handleOpenDeposit}>
           Deposit
         </Button>
         {handleOpenWithdraw ? (
-          <Button className='py-2' variant='ghost' onClick={handleOpenWithdraw}>
+          <Button className='py-2' variant='ghost' icon={ArrowCircleUpIcon} onClick={handleOpenWithdraw}>
             Withdraw
           </Button>
         ) : null}

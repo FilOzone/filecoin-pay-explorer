@@ -1,9 +1,12 @@
-import type { UserToken } from "@filecoin-pay/types";
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import USDFCLogo from "@/assests/USDFCLogo";
 
 type TokenIconProps = {
-  token: UserToken["token"];
+  /**
+   * Only the symbol is needed, so tokens resolved straight from a contract read
+   * can be rendered without a full subgraph `Token` entity.
+   */
+  token: { symbol: string };
   className?: string;
 };
 
