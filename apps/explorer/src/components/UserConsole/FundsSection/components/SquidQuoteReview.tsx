@@ -157,7 +157,12 @@ export function SquidQuoteReview({
   } catch {
     // The fee field reports its own validation error when the user requests a quote.
   }
-  const { data: sourceBalance, refetch: refetchSourceBalance } = useQuery({
+  const {
+    data: sourceBalance,
+    isError: isSourceBalanceError,
+    isFetching: isLoadingSourceBalance,
+    refetch: refetchSourceBalance,
+  } = useQuery({
     enabled: !!address && !!source && !!sourcePublicClient,
     queryFn: async () => {
       if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
@@ -277,6 +282,7 @@ export function SquidQuoteReview({
     if (quotesUnavailable) return setError("Squid quotes are not configured for this deployment.");
     if (!address || !source || destinationAmount === null)
       return setError("Select a source token and enter the USDFC amount.");
+    if (isSourceBalanceError) return setError("Could not load your source-token balance. Retry the balance read.");
     if (sourceBalance === undefined) return setError("Your source-token balance is still loading. Try again shortly.");
     if (isNativeSource && maxNativeFee === null) return setError("Enter a positive network-fee limit.");
     if (sourceAmount === null || sourceAmount <= 0n) return setError(insufficientBalance);
@@ -489,6 +495,20 @@ export function SquidQuoteReview({
             </span>
           </div>
         )}
+        {isSourceBalanceError && (
+          <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+            <span>Could not load your source-token balance.</span>
+            <Button
+              disabled={isLoadingSourceBalance}
+              onClick={() => void refetchSourceBalance()}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              {isLoadingSourceBalance ? "Retrying…" : "Retry"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className='grid gap-1 rounded-md border p-2 text-xs'>
@@ -531,6 +551,8 @@ export function SquidQuoteReview({
           isBusy ||
           isReviewing ||
           isQuoteDebouncing ||
+          isSourceBalanceError ||
+          isLoadingSourceBalance ||
           sourceBalance === undefined
         }
         onClick={review}
