@@ -14,11 +14,10 @@ type AccountSectionsProps = {
   // so it doubles as the error flag.
   error: Error | null;
   isLoading: boolean;
-  subscribed: boolean;
   userAddress: string;
 };
 
-const AccountSections = ({ account, error, isLoading, subscribed, userAddress }: AccountSectionsProps) => {
+const AccountSections = ({ account, error, isLoading, userAddress }: AccountSectionsProps) => {
   if (isLoading) {
     return <LoadingStateCard message='Loading your account details...' />;
   }
@@ -29,7 +28,7 @@ const AccountSections = ({ account, error, isLoading, subscribed, userAddress }:
 
   return (
     <>
-      <FundsSection account={account} subscribed={subscribed} />
+      <FundsSection account={account} />
       <RailsSection account={account} userAddress={userAddress} />
       <OperatorApprovalsSection account={account} />
 
@@ -59,7 +58,6 @@ const UserConsole = () => {
           account={accountQuery.data}
           error={accountQuery.error}
           isLoading={accountQuery.isLoading}
-          subscribed={isSubscribed}
           userAddress={address}
         />
       ) : null}

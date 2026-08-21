@@ -3,8 +3,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, WifiOff } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, WifiOff } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BaseError, UserRejectedRequestError } from "viem";
@@ -439,14 +438,6 @@ const NotificationsPage = () => {
   return (
     <div className='flex flex-col gap-15'>
       <div>
-        <Link
-          href='/console'
-          className='inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6'
-        >
-          <ArrowLeft className='h-4 w-4' />
-          Back to console
-        </Link>
-
         <div className='flex items-baseline justify-between'>
           <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
             Email alerts

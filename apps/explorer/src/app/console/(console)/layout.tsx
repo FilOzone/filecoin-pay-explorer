@@ -7,7 +7,9 @@ import Balance from "@/components/shared/Balance";
 import ChainSwitcher from "@/components/shared/ChainSwitcher";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
+import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
+import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { isSupportedChainId } from "@/utils/network";
 
@@ -81,13 +83,25 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className='flex min-h-full flex-col bg-background text-foreground'>
-      <ConsoleHeader walletControls={<ConsoleWalletControls accessState={accessState} chainId={chainId} />} />
+      <ConsoleHeader
+        walletControls={<ConsoleWalletControls accessState={accessState} chainId={chainId} />}
+        navTrigger={accessState === "ready" ? <ConsoleNavDrawer /> : null}
+      />
 
       <div className='flex-1 pt-4 pb-12'>
         <Container>
           <div className='flex flex-col gap-15'>
+            {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
-            <ConsoleAccessGate accessState={accessState}>{children}</ConsoleAccessGate>
+            <ConsoleAccessGate accessState={accessState}>
+              <div className='flex gap-8'>
+                {/* Exact complement of the drawer trigger's `lg:hidden`. */}
+                <div className='hidden border-r pr-4 lg:flex'>
+                  <ConsoleSidebar />
+                </div>
+                <div className='min-w-0 flex-1'>{children}</div>
+              </div>
+            </ConsoleAccessGate>
           </div>
         </Container>
       </div>
