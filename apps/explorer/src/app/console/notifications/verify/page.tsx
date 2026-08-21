@@ -1,5 +1,5 @@
 "use client";
-import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
+import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Clock, Link2Off, Loader2 } from "lucide-react";
@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 
@@ -158,106 +159,110 @@ const VerifyContent = () => {
   }, [verifyState.type]);
 
   return (
-    <PageSection backgroundVariant='light'>
-      <div aria-live='polite' aria-atomic='true'>
-        <Card className='mx-auto w-full max-w-lg p-8 text-center'>
-          {verifyState.type === "loading" && <VerifyLoadingContent showDelayedMessage={showDelayedMessage} />}
+    <div aria-live='polite' aria-atomic='true'>
+      <Card className='mx-auto w-full max-w-lg p-8 text-center'>
+        {verifyState.type === "loading" && <VerifyLoadingContent showDelayedMessage={showDelayedMessage} />}
 
-          {verifyState.type === "success" && (
-            <VerifyResultCard
-              icon={<CheckCircle2 className='h-8 w-8 text-green-500' />}
-              color='green'
-              title='Alerts are now on'
-              description="Your email has been verified. We'll notify you when this account has less than 30 days of service runway remaining."
-              actions={
-                <div className='flex w-full flex-col items-center gap-3'>
-                  <Link
-                    href='/console'
-                    className='w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700'
-                  >
-                    Back to Console
-                  </Link>
-                  <Link href='/console/notifications' className='text-sm text-primary hover:underline'>
-                    Manage alerts
-                  </Link>
-                </div>
-              }
-            />
-          )}
+        {verifyState.type === "success" && (
+          <VerifyResultCard
+            icon={<CheckCircle2 className='h-8 w-8 text-green-500' />}
+            color='green'
+            title='Alerts are now on'
+            description="Your email has been verified. We'll notify you when this account has less than 30 days of service runway remaining."
+            actions={
+              <div className='flex w-full flex-col items-center gap-3'>
+                <Link
+                  href='/console'
+                  className='w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700'
+                >
+                  Back to Console
+                </Link>
+                <Link href='/console/notifications' className='text-sm text-primary hover:underline'>
+                  Manage alerts
+                </Link>
+              </div>
+            }
+          />
+        )}
 
-          {verifyState.type === "not-found" && (
-            <VerifyResultCard
-              icon={<Clock className='h-8 w-8 text-amber-500' />}
-              color='amber'
-              title='This verification link is no longer available'
-              description='It may have expired or already been used. Return to alert settings to request a new verification email.'
-              actions={<AlertSettingsLink />}
-            />
-          )}
+        {verifyState.type === "not-found" && (
+          <VerifyResultCard
+            icon={<Clock className='h-8 w-8 text-amber-500' />}
+            color='amber'
+            title='This verification link is no longer available'
+            description='It may have expired or already been used. Return to alert settings to request a new verification email.'
+            actions={<AlertSettingsLink />}
+          />
+        )}
 
-          {verifyState.type === "rate-limited" && (
-            <VerifyResultCard
-              icon={<Clock className='h-8 w-8 text-amber-500' />}
-              color='amber'
-              title='Too many attempts'
-              description='Please wait a few minutes before trying again, then return to alert settings to request a new verification email.'
-              actions={<AlertSettingsLink />}
-            />
-          )}
+        {verifyState.type === "rate-limited" && (
+          <VerifyResultCard
+            icon={<Clock className='h-8 w-8 text-amber-500' />}
+            color='amber'
+            title='Too many attempts'
+            description='Please wait a few minutes before trying again, then return to alert settings to request a new verification email.'
+            actions={<AlertSettingsLink />}
+          />
+        )}
 
-          {verifyState.type === "error" && (
-            <VerifyResultCard
-              icon={<AlertCircle className='h-8 w-8 text-red-500' />}
-              color='red'
-              title="We couldn't verify your email"
-              description={
-                verifyState.kind === "network"
-                  ? "Check your internet connection and try again."
-                  : "Something went wrong on our end. Try again in a moment, or return to alert settings to request a new verification email."
-              }
-              detail={verifyState.detail}
-              actions={
-                <div className='flex items-center gap-3'>
-                  <button
-                    type='button'
-                    onClick={doVerify}
-                    className='rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700'
-                  >
-                    Try again
-                  </button>
-                  <AlertSettingsLink label='Alert settings' />
-                </div>
-              }
-            />
-          )}
+        {verifyState.type === "error" && (
+          <VerifyResultCard
+            icon={<AlertCircle className='h-8 w-8 text-red-500' />}
+            color='red'
+            title="We couldn't verify your email"
+            description={
+              verifyState.kind === "network"
+                ? "Check your internet connection and try again."
+                : "Something went wrong on our end. Try again in a moment, or return to alert settings to request a new verification email."
+            }
+            detail={verifyState.detail}
+            actions={
+              <div className='flex items-center gap-3'>
+                <button
+                  type='button'
+                  onClick={doVerify}
+                  className='rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700'
+                >
+                  Try again
+                </button>
+                <AlertSettingsLink label='Alert settings' />
+              </div>
+            }
+          />
+        )}
 
-          {verifyState.type === "missing-params" && (
-            <VerifyResultCard
-              icon={<Link2Off className='h-8 w-8 text-amber-500' />}
-              color='amber'
-              title='This verification link is incomplete'
-              description="We couldn't find the information needed to verify your email. Return to alert settings to request a new verification email."
-              actions={<AlertSettingsLink />}
-            />
-          )}
-        </Card>
-      </div>
-    </PageSection>
+        {verifyState.type === "missing-params" && (
+          <VerifyResultCard
+            icon={<Link2Off className='h-8 w-8 text-amber-500' />}
+            color='amber'
+            title='This verification link is incomplete'
+            description="We couldn't find the information needed to verify your email. Return to alert settings to request a new verification email."
+            actions={<AlertSettingsLink />}
+          />
+        )}
+      </Card>
+    </div>
   );
 };
 
 const VerifyPage = () => (
-  <Suspense
-    fallback={
-      <PageSection backgroundVariant='light'>
-        <Card className='mx-auto w-full max-w-lg p-8 text-center'>
-          <VerifyLoadingContent />
-        </Card>
-      </PageSection>
-    }
-  >
-    <VerifyContent />
-  </Suspense>
+  <div className='flex min-h-full flex-col bg-background text-foreground'>
+    <ConsoleHeader />
+
+    <div className='flex-1 py-12'>
+      <Container>
+        <Suspense
+          fallback={
+            <Card className='mx-auto w-full max-w-lg p-8 text-center'>
+              <VerifyLoadingContent />
+            </Card>
+          }
+        >
+          <VerifyContent />
+        </Suspense>
+      </Container>
+    </div>
+  </div>
 );
 
 export default VerifyPage;

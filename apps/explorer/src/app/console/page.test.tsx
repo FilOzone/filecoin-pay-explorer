@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import UserConsole from "./page";
+import UserConsole from "./(console)/page";
 
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111",
@@ -34,7 +34,7 @@ vi.mock("@/components/UserConsole/States", () => ({
 vi.mock("@/components/UserConsole", () => ({
   AlertsBanner: () => null,
   BetaWarning: () => null,
-  FundsSection: ({ accountId }: { accountId: string }) => <div data-account-id={accountId}>Funds</div>,
+  FundsSection: ({ account }: { account: { id: string } }) => <div data-account-id={account.id}>Funds</div>,
   OperatorApprovalsSection: () => <div>Approvals</div>,
   RailsSection: () => <div>Rails</div>,
   TopUpDialogController: ({
@@ -80,22 +80,12 @@ describe("UserConsole", () => {
     expect(markup).not.toContain("Rails");
   });
 
-  it("waits for the wallet network before choosing a console state", () => {
-    wallet.chainId = undefined;
-    const markup = renderToStaticMarkup(<UserConsole />);
-
-    expect(markup).toContain("Loading your wallet network...");
-    expect(markup).not.toContain("Unsupported network");
-    expect(markup).not.toContain("Funds");
-  });
-
   it("keeps the full console on Filecoin", () => {
     wallet.chainId = 314;
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Funds");
-    expect(markup).toContain("Filecoin balance");
-    expect(markup).toContain("Filecoin network");
+    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
     expect(markup).toContain("Approvals");
     expect(markup).toContain("Rails");
   });

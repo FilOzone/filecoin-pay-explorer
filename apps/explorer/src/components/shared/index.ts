@@ -1,6 +1,7 @@
 import AllowanceDisplay from "./AllowanceDisplay";
 import Balance from "./Balance";
 import ChainSwitcher from "./ChainSwitcher";
+import ConditionalNavigation from "./ConditionalNavigation";
 import CopyableText from "./CopyableText";
 import CopyButton from "./CopyButton";
 import CustomConnectButton from "./CustomConnectButton";
@@ -25,6 +26,7 @@ export {
   AllowanceDisplay,
   Balance,
   ChainSwitcher,
+  ConditionalNavigation,
   CopyableText,
   CopyButton,
   CustomConnectButton,

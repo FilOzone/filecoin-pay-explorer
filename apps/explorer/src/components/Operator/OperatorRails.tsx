@@ -15,7 +15,7 @@ import { AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { useOperatorRails } from "@/hooks/useOperatorDetails";
 import { formatDate, formatToken } from "@/utils/formatter";
-import { CopyableText, RailStateBadge, StyledLink } from "../shared";
+import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "../shared";
 
 interface OperatorRailsProps {
   operator: Operator;
@@ -106,7 +106,9 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
             {data.rails.map((rail) => (
               <TableRow key={rail.id}>
                 <TableCell className='font-medium'>
-                  <StyledLink to={`/rail/${rail.railId}`}>{rail.railId.toString()}</StyledLink>
+                  <StyledLink>
+                    <NetworkLink href={`/rail/${rail.railId}`}>{rail.railId.toString()}</NetworkLink>
+                  </StyledLink>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
                   <CopyableText

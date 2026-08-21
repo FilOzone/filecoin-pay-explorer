@@ -29,6 +29,15 @@ interface AccountDetailsOptions {
   networkOverride?: Network;
 }
 
+interface AccountTokensOptions extends AccountDetailsOptions {
+  /**
+   * Rows per request. Callers that render the list in one go — rather than
+   * paging through it — pass a larger value to reduce how often a token falls
+   * outside the response. It raises the cap; it does not remove it.
+   */
+  pageSize?: number;
+}
+
 const PAGE_SIZE = 10;
 
 export const useAccountDetails = (address: string, options?: AccountDetailsOptions) =>
@@ -41,22 +50,27 @@ export const useAccountDetails = (address: string, options?: AccountDetailsOptio
     networkOverride: options?.networkOverride,
   });
 
-export const useAccountTokens = (accountId: string, page: number = 1, options?: AccountDetailsOptions) =>
-  useGraphQLQuery<AccountTokensResponse, { userTokens: UserToken[]; hasMore: boolean }>({
-    queryKey: ["account", accountId, "tokens", page],
+export const useAccountTokens = (accountId: string, page: number = 1, options?: AccountTokensOptions) => {
+  const pageSize = options?.pageSize ?? PAGE_SIZE;
+
+  return useGraphQLQuery<AccountTokensResponse, { userTokens: UserToken[]; hasMore: boolean }>({
+    // `pageSize` belongs in the key: callers asking for different sizes must not
+    // share a cache entry for the same account and page.
+    queryKey: ["account", accountId, "tokens", page, pageSize],
     query: GET_ACCOUNT_TOKENS,
     variables: {
       accountId,
-      first: PAGE_SIZE,
-      skip: (page - 1) * PAGE_SIZE,
+      first: pageSize,
+      skip: (page - 1) * pageSize,
     },
     select: (data) => ({
       userTokens: data.userTokens,
-      hasMore: data.userTokens.length === PAGE_SIZE,
+      hasMore: data.userTokens.length === pageSize,
     }),
     enabled: !!accountId,
     networkOverride: options?.networkOverride,
   });
+};
 
 export const useAccountToken = (accountId: string, tokenId: string, options?: AccountDetailsOptions) =>
   useGraphQLQuery<AccountTokensResponse, UserToken | null>({

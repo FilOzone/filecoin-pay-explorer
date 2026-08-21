@@ -1,4 +1,3 @@
-import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import type { UserToken } from "@filecoin-pay/types";
@@ -12,10 +11,15 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Loader2, Wallet } from "lucide-react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import DepositTokenPicker, {
+  type CustomTokenStatus,
+  type PickerToken,
+  type TokenPickerMode,
+} from "@/components/UserConsole/DepositTokenPicker";
 import { FundingRunwaySlider, RunwayCard } from "@/components/UserConsole/FundsSection/components/RunwayCard";
 import {
   calculateFundingRunway,
@@ -28,133 +32,257 @@ import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
 
-interface DepositDialogProps {
-  userToken?: UserToken | null;
+const PERMIT_DEADLINE_SECONDS = 3600;
+
+/**
+ * How far the hand-entered address has got towards a usable token.
+ *
+ * The checks are ordered by precedence and each one assumes those above it
+ * passed, so an empty field never reports as invalid and an in-flight read never
+ * reports as an error. `loaded` is the only state left once every check clears.
+ */
+const getCustomTokenStatus = ({
+  address,
+  isValidAddress,
+  isLoadingReads,
+  isReadsError,
+  token,
+}: {
+  /** The trimmed contract address as typed. */
+  address: string;
+  isValidAddress: boolean;
+  isLoadingReads: boolean;
+  isReadsError: boolean;
+  /** The token those reads resolved to, or null if they did not resolve one. */
+  token: PickerToken | null;
+}): CustomTokenStatus => {
+  if (!address) return "idle";
+  if (!isValidAddress) return "invalid";
+  if (isLoadingReads) return "loading";
+  // A well-formed address that resolves nothing is an error too: the reads came
+  // back, but not from something this dialog can deposit.
+  if (isReadsError || !token) return "error";
+  return "loaded";
+};
+
+type DepositDialogProps = {
+  /**
+   * Seeds the initial selection only. The dialog owns its selection after that,
+   * so a later change to this prop must not swap the target of a part-filled form.
+   */
+  depositToken?: UserToken | null;
+  /** Tokens already held by the account, resolved by the caller. */
+  tokens: UserToken[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
+};
 
-interface TokenDetails {
-  address: string;
-  symbol: string;
-  decimals: number;
-  name?: string;
-}
-
-type LoadingState = "idle" | "loading" | "success" | "error";
-
-export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, onOpenChange }) => {
+export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: DepositDialogProps) => {
   const { address: userAddress } = useAccount();
 
-  // Form state
   const [amount, setAmount] = useState("");
-  const [tokenAddress, setTokenAddress] = useState("");
-  // Set when the amount was prefilled for this open, so clearing the field
-  // doesn't refill it (see the prefill effect below).
+  const [customAddress, setCustomAddress] = useState("");
+  const [selectedUserToken, setSelectedUserToken] = useState<UserToken | null>(null);
+  const [pickerMode, setPickerMode] = useState<TokenPickerMode>("collapsed");
   const didPrefillAmount = useRef(false);
+  /**
+   * Covers the whole of `handleDeposit`, which `isExecuting` does not: that only
+   * turns true once `execute` reaches `writeContract`, leaving the permit
+   * signature — an open wallet prompt, for as long as the user takes — a window
+   * where the form still looked idle and every click started another prompt.
+   */
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { synapse, constants } = useSynapse();
-  const isUsdfcDeposit = !!userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
-  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
-    enabled: open && isUsdfcDeposit && !!userAddress && synapse?.chain.id === constants.chain.id,
-    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
-    queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
-  });
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
-  // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
-  // Reset state when dialog closes
+
+  /** The form is locked from the first click through to the receipt. */
+  const isBusy = isSubmitting || isExecuting;
+
+  /**
+   * Reads `depositToken` at the moment the dialog opens without making it a
+   * dependency of the effect below. The prop seeds the selection once; it is not
+   * a live binding, so a later change to it must not swap the target of a
+   * part-filled form.
+   */
+  const seedSelection = useEffectEvent(() => {
+    const seedToken = depositToken ?? null;
+    setSelectedUserToken(seedToken);
+    // Without a preselected token there is nothing to collapse, and the first
+    // thing the user has to do is pick one — so open on the list.
+    setPickerMode(seedToken ? "collapsed" : "list");
+  });
+
+  // Seed on open, reset on close — including the picker's own expanded state.
   useEffect(() => {
-    if (!open) {
-      setAmount("");
-      setTokenAddress("");
-      didPrefillAmount.current = false;
+    if (open) {
+      seedSelection();
+      return;
     }
+
+    setAmount("");
+    setCustomAddress("");
+    setSelectedUserToken(null);
+    setPickerMode("collapsed");
+    setIsSubmitting(false);
+    didPrefillAmount.current = false;
   }, [open]);
 
-  // Determine which token address to use for queries
-  const shouldFetchToken = tokenAddress.trim() && isAddress(tokenAddress.trim());
-  const validatedTokenAddress = shouldFetchToken ? (tokenAddress.trim() as Hex) : null;
-  const activeTokenAddress = userToken ? (userToken.token.id as Hex) : validatedTokenAddress;
+  const trimmedCustomAddress = customAddress.trim();
+  const isCustomAddressValid = isAddress(trimmedCustomAddress);
 
-  // Fetch token details using useReadContracts for parallel queries
+  /**
+   * Set only on the custom-address path. A token picked from the account list
+   * already carries its symbol and decimals from the subgraph, so reading those
+   * back off-chain would be a multicall that changes nothing on screen.
+   *
+   * The two sources are mutually exclusive (see the handlers below); the
+   * `selectedUserToken` guard states that here rather than relying on it.
+   */
+  const customTokenAddress: Hex | null =
+    !selectedUserToken && isCustomAddressValid ? (trimmedCustomAddress as Hex) : null;
+
+  /** Whichever token the deposit acts on. Its wallet balance is only knowable on-chain. */
+  const activeTokenAddress: Hex | null = selectedUserToken ? (selectedUserToken.token.id as Hex) : customTokenAddress;
+
+  /**
+   * `allowFailure` is left at its default of `true`, so results arrive as
+   * `{ status, result }` rather than bare values.
+   */
   const {
-    data: tokenDetailsData,
-    isLoading: isLoadingTokenDetails,
-    isError: isTokenDetailsError,
+    data: tokenReads,
+    isLoading: isLoadingTokenReads,
+    isError: isTokenReadsError,
   } = useReadContracts({
-    contracts: activeTokenAddress
+    contracts: customTokenAddress
       ? [
-          {
-            address: activeTokenAddress,
-            abi: erc20Abi,
-            functionName: "symbol",
-          },
-          {
-            address: activeTokenAddress,
-            abi: erc20Abi,
-            functionName: "decimals",
-          },
-          {
-            address: activeTokenAddress,
-            abi: erc20Abi,
-            functionName: "name",
-          },
+          { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
         ]
       : [],
     query: {
-      enabled: !!activeTokenAddress && open,
+      enabled: Boolean(customTokenAddress) && open,
     },
   });
 
-  // Parse token details from contract response
-  const tokenDetails: TokenDetails | null =
-    activeTokenAddress && tokenDetailsData && !isTokenDetailsError
+  // Results come back positionally, in the order the contracts are listed above.
+  const [symbolRead, decimalsRead, nameRead] = tokenReads ?? [];
+
+  /**
+   * A token resolved purely from chain reads — the custom-address path.
+   *
+   * All three reads must succeed, `name` included. That is not a display
+   * preference: this dialog deposits through `depositWithPermit`, and the EIP-712
+   * domain in `getPermitSignature` is built from the token's `name()`. A token
+   * that has none cannot be signed for, so resolving it here would only arm a
+   * Deposit button that fails after the click.
+   */
+  const chainToken: PickerToken | null =
+    customTokenAddress &&
+    symbolRead?.status === "success" &&
+    decimalsRead?.status === "success" &&
+    nameRead?.status === "success"
       ? {
-          address: activeTokenAddress,
-          symbol: (tokenDetailsData[0]?.result as string) || "",
-          decimals: Number(tokenDetailsData[1]?.result || 0),
-          name: (tokenDetailsData[2]?.result as string) || "",
+          address: customTokenAddress,
+          symbol: symbolRead.result as string,
+          decimals: Number(decimalsRead.result),
+          name: nameRead.result as string,
         }
       : null;
 
-  // Fetch balance using useReadContract
+  // A token from the account list already carries its metadata, so it renders
+  // immediately instead of waiting on the multicall.
+  const currentToken: PickerToken | null = selectedUserToken
+    ? {
+        address: selectedUserToken.token.id,
+        symbol: selectedUserToken.token.symbol,
+        decimals: Number(selectedUserToken.token.decimals),
+      }
+    : chainToken;
+
+  const customTokenStatus = getCustomTokenStatus({
+    address: trimmedCustomAddress,
+    isValidAddress: isCustomAddressValid,
+    isLoadingReads: isLoadingTokenReads,
+    isReadsError: isTokenReadsError,
+    token: chainToken,
+  });
+
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: {
-      enabled: !!activeTokenAddress && !!userAddress && open,
+      enabled: Boolean(activeTokenAddress) && Boolean(userAddress) && open,
     },
   });
 
-  // Determine loading state for UI feedback
-  const loadingState: LoadingState = !shouldFetchToken
-    ? "idle"
-    : isLoadingTokenDetails
-      ? "loading"
-      : isTokenDetailsError || !tokenDetails
-        ? "error"
-        : "success";
+  const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
+    enabled: open && isUsdfcDeposit && Boolean(userAddress) && synapse?.chain.id === constants.chain.id,
+    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
+    queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
+  });
+
+  // Amounts are denominated in the token that was on screen when they were
+  // typed, so any change of token clears the field rather than reinterpreting it.
+  const handleSelectToken = (userToken: UserToken) => {
+    setSelectedUserToken(userToken);
+    setCustomAddress("");
+    setAmount("");
+    setPickerMode("collapsed");
+    didPrefillAmount.current = false;
+  };
+
+  const handleModeChange = (mode: TokenPickerMode) => {
+    if (mode === "custom") {
+      setSelectedUserToken(null);
+      setAmount("");
+      didPrefillAmount.current = false;
+    }
+
+    setPickerMode(mode);
+  };
+
+  const handleCustomAddressChange = (value: string) => {
+    setCustomAddress(value);
+    setAmount("");
+    didPrefillAmount.current = false;
+  };
+
+  /**
+   * The single gate for every user-initiated close: the X, Escape, an outside
+   * click and Cancel all arrive here.
+   *
+   * Closing while busy is refused rather than ignored, because closing does not
+   * cancel anything — an in-flight permit signature resolves regardless and goes
+   * on to submit. A dismissed dialog must not be able to move funds.
+   *
+   * The close that follows a submitted transaction deliberately does not come
+   * through here; see `onSubmitOnChain` below.
+   */
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isBusy) return;
+    onOpenChange(nextOpen);
+  };
+
+  const handleMaxClick = () => {
+    if (balance !== undefined && currentToken) {
+      setAmount(formatUnits(balance, currentToken.decimals));
+    }
+  };
 
   const handleDeposit = async () => {
-    // Determine which token to use
-    const token = userToken
-      ? {
-          symbol: userToken.token.symbol,
-          address: userToken.token.id,
-          decimals: Number(userToken.token.decimals),
-        }
-      : tokenDetails;
-
-    if (!token) {
+    if (!currentToken) {
       console.log("No token selected");
       return;
     }
@@ -179,16 +307,24 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
-      const amountInWei = parseUnits(amount, token.decimals);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+      const amountInWei = parseUnits(amount, currentToken.decimals);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
 
       console.log("[Deposit] Getting permit signature...");
 
-      // Get permit signature
       const permitSignature = await getPermitSignature(
         {
-          tokenAddress: token.address as `0x${string}`,
+          tokenAddress: currentToken.address as Hex,
+          // Set only for a token resolved from chain reads, where this is the
+          // contract's own `name()` and so the exact string the EIP-712 domain
+          // needs. Account-list tokens leave it undefined on purpose: their name
+          // comes from the subgraph, which stores "Unknown" for a reverting
+          // `name()`, and a domain built on that would produce a signature the
+          // token rejects. `getPermitSignature` re-reads it from chain instead.
+          tokenName: currentToken.name,
           ownerAddress: userAddress,
           spenderAddress: constants.contracts.payments.address,
           amount: amountInWei,
@@ -201,11 +337,10 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
 
       console.log("[Deposit] Permit signature obtained, submitting transaction...");
 
-      // Execute transaction with rich metadata
       await execute({
         functionName: "depositWithPermit",
         args: [
-          token.address,
+          currentToken.address,
           userAddress,
           amountInWei,
           permitSignature.deadline,
@@ -216,43 +351,23 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
         metadata: {
           type: "deposit",
           amount,
-          token: token.symbol,
+          token: currentToken.symbol,
         },
-        onSubmitOnChain: () => handleClose(),
+        // The one close that must succeed while busy: the transaction is away and
+        // the toast tracks it from here. Bypasses the guard above on purpose.
+        onSubmitOnChain: () => onOpenChange(false),
       });
     } catch (err) {
       console.error("Deposit failed:", err);
+    } finally {
+      // Releases the permit half of the lock. `isExecuting` carries `isBusy` on
+      // its own from here until the receipt lands.
+      setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    if (!isExecuting) {
-      onOpenChange(false);
-      // State will be reset by useEffect when open becomes false
-    }
-  };
+  const canDeposit = Boolean(currentToken) && Boolean(amount) && !isBusy;
 
-  const handleMaxClick = () => {
-    if (balance !== undefined && currentToken) {
-      const formattedBalance = formatUnits(balance, currentToken.decimals);
-      setAmount(formattedBalance);
-    }
-  };
-
-  // Determine current token to display
-  const currentToken = userToken
-    ? {
-        symbol: userToken.token.symbol,
-        decimals: Number(userToken.token.decimals),
-        address: userToken.token.id,
-      }
-    : tokenDetails;
-
-  const canDeposit = currentToken && amount && !isExecuting;
-
-  // Runway projection currently only supports USDFC (other tokens would need
-  // decimals-aware parsing and their own lockup accounting). Matched by
-  // contract address, not symbol, so an unrelated token cannot spoof it.
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
       ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
@@ -267,13 +382,11 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
           constants.chain.genesisTimestamp,
         )
       : null;
-
-  // Prefill the amount with the slider's default suggestion once per open, so
-  // the projection is live immediately instead of dashes until the user acts.
   const defaultSuggestion =
     isUsdfcDeposit && accountSummary && balance !== undefined
       ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp, balance)
       : "";
+
   useEffect(() => {
     if (!open || !defaultSuggestion || didPrefillAmount.current) return;
     didPrefillAmount.current = true;
@@ -281,115 +394,50 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
   }, [defaultSuggestion, open]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
+        // The guard in `handleDialogOpenChange` already refuses these closes, but
+        // stopping them at the source means no dismissal is even attempted while
+        // a signature is pending, and the missing X says so before it is tried.
+        showCloseButton={!isBusy}
+        onEscapeKeyDown={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Deposit {currentToken?.symbol || "Tokens"}</DialogTitle>
-          <DialogDescription>
-            {userToken
-              ? `Deposit more ${userToken.token.symbol} tokens to your account.`
-              : "Enter a token contract address to deposit tokens."}
-          </DialogDescription>
+          <DialogTitle>Deposit tokens</DialogTitle>
+          <DialogDescription>Choose a token and deposit it into your Filecoin Pay account.</DialogDescription>
         </DialogHeader>
 
-        <div className='grid gap-4 py-4'>
-          {/* Custom Token Address Input (only if no userToken) */}
-          {!userToken && (
-            <div className='grid gap-2'>
-              <Label htmlFor='tokenAddress'>Token Contract Address</Label>
-              <div className='flex gap-2'>
-                <Input
-                  id='tokenAddress'
-                  placeholder='0x...'
-                  value={tokenAddress}
-                  onChange={setTokenAddress}
-                  disabled={loadingState === "loading" || isExecuting}
-                  className='font-mono text-sm'
-                />
-              </div>
+        {/* `min-h-0` lets this shrink below its content so `overflow-y-auto` engages. */}
+        <div className='grid min-h-0 gap-4 overflow-y-auto py-4'>
+          <DepositTokenPicker
+            tokens={tokens}
+            token={currentToken}
+            mode={pickerMode}
+            onModeChange={handleModeChange}
+            onSelectToken={handleSelectToken}
+            customAddress={customAddress}
+            onCustomAddressChange={handleCustomAddressChange}
+            customTokenStatus={customTokenStatus}
+            chainName={constants.chain.name}
+            disabled={isBusy}
+          />
 
-              {/* Token Validation & Details */}
-              {tokenAddress && (
-                <div className='mt-2 space-y-2'>
-                  {!validatedTokenAddress ? (
-                    <div className='flex items-center gap-2 text-sm text-destructive'>
-                      <AlertCircle className='h-4 w-4' />
-                      <span>Invalid token address</span>
-                    </div>
-                  ) : isLoadingTokenDetails ? (
-                    <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-                      <Loader2 className='h-4 w-4 animate-spin' />
-                      <span>Loading token details...</span>
-                    </div>
-                  ) : isTokenDetailsError ? (
-                    <div className='flex items-center gap-2 text-sm text-destructive'>
-                      <AlertCircle className='h-4 w-4' />
-                      <span>Failed to load token details</span>
-                    </div>
-                  ) : tokenDetails ? (
-                    <div className='rounded-lg bg-primary/10 p-3 space-y-2'>
-                      <div className='flex items-center gap-2 text-sm text-primary'>
-                        <CheckCircle2 className='h-4 w-4' />
-                        <span className='font-medium'>Token loaded successfully</span>
-                      </div>
-                      <div className='grid grid-cols-2 gap-2 text-xs'>
-                        <div>
-                          <span className='text-muted-foreground'>Symbol:</span>{" "}
-                          <span className='font-medium'>{tokenDetails.symbol}</span>
-                        </div>
-                        <div>
-                          <span className='text-muted-foreground'>Decimals:</span>{" "}
-                          <span className='font-medium'>{tokenDetails.decimals}</span>
-                        </div>
-                        <div className='col-span-2'>
-                          <span className='text-muted-foreground'>Name:</span>{" "}
-                          <span className='font-medium'>{tokenDetails.name}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Token Info Display */}
-          {currentToken && (
-            <div className='space-y-3'>
-              <div className='flex items-center justify-between p-3 rounded-lg bg-muted/50'>
-                <span className='text-sm text-muted-foreground'>Token</span>
-                <div className='flex items-center gap-2'>
-                  <span className='font-medium'>{currentToken.symbol}</span>
-                  <Badge variant='secondary'>{`${currentToken.decimals} decimals`}</Badge>
-                </div>
-              </div>
-
-              {!userToken && tokenDetails && (
-                <div className='p-3 rounded-lg bg-muted/30 space-y-2'>
-                  <div className='flex justify-between text-xs'>
-                    <span className='text-muted-foreground'>Contract Address</span>
-                    <span className='font-mono'>{`${tokenDetails.address.slice(0, 6)}...${tokenDetails.address.slice(-4)}`}</span>
-                  </div>
-                  {tokenDetails.name && (
-                    <div className='flex justify-between text-xs'>
-                      <span className='text-muted-foreground'>Token Name</span>
-                      <span className='font-medium'>{tokenDetails.name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Amount Input - Only show if token is selected */}
-          {currentToken && (
+          {currentToken ? (
             <div className='grid gap-2'>
               <div className='flex items-center justify-between'>
                 <Label htmlFor='amount'>Amount</Label>
-                {(balance !== undefined || isLoadingBalance) && (
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3' />
-                    <span>
+                {balance !== undefined || isLoadingBalance ? (
+                  // `min-w-0` down the chain so the symbol — arbitrary text from a
+                  // hand-entered contract — clips instead of widening the row.
+                  <div className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
+                    <Wallet className='h-3 w-3 shrink-0' />
+                    <span className='min-w-0 truncate'>
                       Balance:{" "}
                       {isLoadingBalance || balance === undefined ? (
                         <Loader2 className='h-3 w-3 animate-spin inline' />
@@ -403,7 +451,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                       )}
                     </span>
                   </div>
-                )}
+                ) : null}
               </div>
               <div className='relative'>
                 <Input
@@ -414,7 +462,7 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   onChange={setAmount}
                   min='0'
                   step='any'
-                  disabled={isExecuting}
+                  disabled={isBusy}
                   className='text-lg pr-16'
                 />
                 <Button
@@ -422,47 +470,44 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
                   variant='ghost'
                   className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
                   onClick={handleMaxClick}
-                  disabled={isExecuting || balance === undefined || isLoadingBalance}
+                  disabled={isBusy || balance === undefined || isLoadingBalance}
                 >
                   MAX
                 </Button>
               </div>
-              <p className='text-xs text-muted-foreground'>
+              {/* Wraps rather than truncates: this line has the width to spare,
+                  and `break-words` keeps an unbroken symbol from widening it. */}
+              <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
-              {isUsdfcDeposit && accountSummary && balance !== undefined && (
-                <FundingRunwaySlider
-                  accountSummary={accountSummary}
-                  amount={amount}
-                  disabled={isExecuting}
-                  genesisTimestamp={constants.chain.genesisTimestamp}
-                  maxAmount={balance}
-                  onSelect={setAmount}
-                />
-              )}
-              {isUsdfcDeposit && !accountSummary && isAccountSummaryLoading && (
-                <p className='text-xs text-muted-foreground'>Loading on-chain funding status…</p>
-              )}
-              {runwayCurrent && <RunwayCard current={runwayCurrent} projected={runwayProjected} />}
             </div>
-          )}
+          ) : null}
 
-          {/* Info Message for new users */}
-          {!userToken && !currentToken && (
-            <div className='p-4 rounded-lg bg-muted/30 border border-dashed'>
-              <p className='text-sm text-muted-foreground text-center'>
-                Enter a token contract address above to begin your deposit
-              </p>
-            </div>
-          )}
+          {isUsdfcDeposit && accountSummary && runwayCurrent ? (
+            <>
+              <FundingRunwaySlider
+                accountSummary={accountSummary}
+                amount={amount}
+                disabled={isBusy}
+                genesisTimestamp={constants.chain.genesisTimestamp}
+                maxAmount={balance}
+                onSelect={setAmount}
+              />
+              <RunwayCard current={runwayCurrent} projected={runwayProjected}>
+                <p className='text-muted-foreground'>Target deposit: {amount || "—"} USDFC.</p>
+              </RunwayCard>
+            </>
+          ) : isUsdfcDeposit && isAccountSummaryLoading ? (
+            <p className='text-sm text-muted-foreground'>Loading funding runway…</p>
+          ) : null}
         </div>
 
         <DialogFooter>
-          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} size='compact'>
+          <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
           <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
-            {isExecuting ? (
+            {isBusy ? (
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Processing...

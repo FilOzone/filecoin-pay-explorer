@@ -34,7 +34,7 @@ export const GET_RECENT_ACCOUNTS = gql`
 
 export const GET_ACCOUNTS_LEADERBOARD = gql`
   query GetAccountsLeaderboard($first: Int = 10, $token: String!) {
-    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first: $first, where:{token: $token}) {
+    topEarners: userTokens(orderBy: fundsCollected, orderDirection: desc, first: $first, where: { token: $token }) {
       fundsCollected
       account {
         id
@@ -46,7 +46,7 @@ export const GET_ACCOUNTS_LEADERBOARD = gql`
         decimals
       }
     }
-    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first: $first, where:{token: $token}) {
+    topSpenders: userTokens(orderBy: payout, orderDirection: desc, first: $first, where: { token: $token }) {
       payout
       account {
         id
@@ -148,7 +148,7 @@ export const GET_ACCOUNTS_PAGINATED = gql`
       totalRails
       totalTokens
       totalApprovals
-      userTokens(where: {token: $token}) {
+      userTokens(where: { token: $token }) {
         payout
         fundsCollected
         token {
@@ -476,6 +476,12 @@ export const GET_ACCOUNT_RAILS = gql`
       totalOneTimePaymentAmount
       lockupPeriod
       settledUpto
+      endEpoch
+      # If the latest positive-rate segment is settled, every older segment is settled too.
+      rateChangeQueue(first: 1, where: { rate_gt: 0 }, orderBy: untilEpoch, orderDirection: desc) {
+        rate
+        untilEpoch
+      }
       createdAt
       payer {
         id

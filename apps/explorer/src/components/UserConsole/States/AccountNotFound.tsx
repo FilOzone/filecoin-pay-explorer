@@ -46,7 +46,8 @@ const AccountNotFound = () => {
       </div>
 
       {/* Deposit Dialog */}
-      <DepositDialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
+      {/* This account has no indexed tokens by definition, so the picker only offers address entry. */}
+      <DepositDialog tokens={[]} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
 
       {/* Deposit and Approve Dialog */}
       <DepositAndApproveDialog open={depositAndApproveDialogOpen} onOpenChange={setDepositAndApproveDialogOpen} />
