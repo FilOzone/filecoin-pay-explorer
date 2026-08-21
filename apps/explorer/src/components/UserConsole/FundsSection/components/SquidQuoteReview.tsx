@@ -500,7 +500,10 @@ export function SquidQuoteReview({
             <span>Could not load your source-token balance.</span>
             <Button
               disabled={isLoadingSourceBalance}
-              onClick={() => void refetchSourceBalance()}
+              onClick={() => {
+                setError(null);
+                void refetchSourceBalance();
+              }}
               size='compact'
               type='button'
               variant='tertiary'
