@@ -15,8 +15,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Address } from "viem";
-import { useConnection, useSwitchChain } from "wagmi";
+import { type Address, erc20Abi } from "viem";
+import { useConnection, usePublicClient, useSwitchChain } from "wagmi";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 import {
@@ -38,6 +38,7 @@ import {
 import { isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
+import { TopUpProgress, type TopUpStage } from "./TopUpProgress";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
   const steps = ["Acquire USDFC", "Deposit to Filecoin Pay"] as const;
@@ -88,18 +89,31 @@ export function GuidedTopUpDialog({
   const { address, chainId } = useConnection();
   const { switchChainAsync } = useSwitchChain();
   const queryClient = useQueryClient();
+  const filecoinClient = usePublicClient({ chainId: mainnet.id });
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
   const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
+  const [progressStage, setProgressStage] = useState<TopUpStage | null>(null);
+  const [stageFailed, setStageFailed] = useState(false);
+  const [quotedReceive, setQuotedReceive] = useState<bigint | null>(null);
+  const [stillBridging, setStillBridging] = useState(false);
+  const [lastFailure, setLastFailure] = useState<string | null>(null);
   const wasOpen = useRef(false);
   // Set when the amount was prefilled for this open, so clearing the field
   // doesn't refill it (see the prefill effect below).
   const didPrefillAmount = useRef(false);
   const latestAddress = useRef(address);
   latestAddress.current = address;
+  const latestChainId = useRef(chainId);
+  latestChainId.current = chainId;
+  const latestSynapse = useRef(synapse);
+  latestSynapse.current = synapse;
+  // One auto-deposit attempt per acquisition; a failure hands over to the
+  // manual resume buttons instead of retry loops.
+  const autoDepositAttempted = useRef(false);
   // The runway duration only affects the slider's suggestions (computed inside
   // FundingRunwaySlider); the displayed funded-through dates are duration-agnostic.
   const current = accountSummary
@@ -138,7 +152,28 @@ export function GuidedTopUpDialog({
       setSavedAcquisition(saved);
       setAcquisitionOwner(saved?.owner ?? null);
       setAcquiredAmount(saved?.status === "acquired" ? saved.destinationAmount : null);
-      setAcquisitionState(saved?.status === "acquired" ? "acquired" : saved ? "blocked" : "idle");
+      // Interrupted acquisitions with a balance snapshot resume automatic
+      // verification ("processing"); only records the app cannot verify
+      // on-chain (legacy, no snapshot) fall to the manual recovery card.
+      setAcquisitionState(
+        saved?.status === "acquired"
+          ? "acquired"
+          : saved?.status === "processing" &&
+              saved.destinationBalanceBefore !== undefined &&
+              saved.swapBroadcast === true
+            ? "processing"
+            : saved
+              ? "blocked"
+              : "idle",
+      );
+      setProgressStage(
+        saved?.status === "processing" && saved.destinationBalanceBefore !== undefined && saved.swapBroadcast === true
+          ? "bridging"
+          : null,
+      );
+      setStageFailed(false);
+      setStillBridging(false);
+      autoDepositAttempted.current = false;
     } catch {
       setAcquiredAmount(null);
       setAcquisitionOwner(null);
@@ -169,32 +204,31 @@ export function GuidedTopUpDialog({
     setAmount((previous) => (previous === "" ? defaultSuggestion : previous));
   }, [acquiredAmount, defaultSuggestion, open]);
 
-  const handleConfirm = async () => {
-    if (
-      !synapse ||
-      acquiredAmount === null ||
-      isSubmitting ||
-      !acquisitionOwner ||
-      !acquisitionOwnerMatches ||
-      !savedAcquisition
-    )
-      return;
+  // Reopening resumes arrival verification after a "still bridging" timeout.
+  useEffect(() => {
+    if (open) setStillBridging(false);
+  }, [open]);
+
+  const runDeposit = async (acquired: SquidAcquisition) => {
+    const depositSynapse = latestSynapse.current;
+    if (!depositSynapse || isSubmitting || !acquisitionOwnerMatches) return;
 
     let pendingAcquisition: SquidAcquisition;
     try {
-      pendingAcquisition = markSquidDepositPending(window.localStorage, savedAcquisition);
+      pendingAcquisition = markSquidDepositPending(window.localStorage, acquired);
       setSavedAcquisition(pendingAcquisition);
     } catch {
       toast.error("Browser storage is unavailable. The deposit cannot start safely without recovery state.");
       return;
     }
-    const depositOwner = acquisitionOwner;
+    const depositOwner = acquired.owner;
     const isCurrentDepositOwner = () => latestAddress.current?.toLowerCase() === depositOwner.toLowerCase();
     let didBroadcast = false;
     setIsSubmitting(true);
+    setProgressStage("depositing");
     try {
-      const { receipt } = await synapse.payments.fundSync({
-        amount: acquiredAmount,
+      const { receipt } = await depositSynapse.payments.fundSync({
+        amount: acquired.destinationAmount,
         onHash: (hash) => {
           didBroadcast = true;
           try {
@@ -223,14 +257,17 @@ export function GuidedTopUpDialog({
         setAcquisitionOwner(null);
         setSavedAcquisition(null);
         setAcquisitionState("idle");
+        setProgressStage(null);
+        setStageFailed(false);
+        autoDepositAttempted.current = false;
         onOpenChange(false);
       }
     } catch (error) {
       if (!didBroadcast && isUserRejectedRequest(error)) {
         try {
-          const acquired = markSquidAcquired(window.localStorage, pendingAcquisition);
+          const reacquired = markSquidAcquired(window.localStorage, pendingAcquisition);
           if (isCurrentDepositOwner()) {
-            setSavedAcquisition(acquired);
+            setSavedAcquisition(reacquired);
             setAcquisitionState("acquired");
           }
         } catch {
@@ -244,6 +281,7 @@ export function GuidedTopUpDialog({
         setAcquisitionState("blocked");
       }
       if (isCurrentDepositOwner()) {
+        setStageFailed(true);
         toast.error("USDFC top-up failed", {
           description: walletErrorMessage(error, "Your wallet did not complete the request."),
         });
@@ -252,6 +290,106 @@ export function GuidedTopUpDialog({
       if (isCurrentDepositOwner()) setIsSubmitting(false);
     }
   };
+
+  const handleConfirm = async () => {
+    if (acquiredAmount === null || isSubmitting || !acquisitionOwnerMatches || !savedAcquisition) return;
+    await runDeposit(savedAcquisition);
+  };
+
+  // Full-auto continuation: once arrival is confirmed, request the switch
+  // back to Filecoin and start the deposit without further clicks. Exactly one
+  // attempt per acquisition; failures hold the stage and hand over to the
+  // manual buttons.
+  const autoDeposit = async (acquired: SquidAcquisition) => {
+    if (autoDepositAttempted.current) return;
+    autoDepositAttempted.current = true;
+    setStageFailed(false);
+    setProgressStage("switching");
+    try {
+      if (latestChainId.current !== mainnet.id) await switchChainAsync({ chainId: mainnet.id });
+      // synapse re-initializes after a network switch; wait for the
+      // Filecoin-bound instance before depositing through it.
+      for (let attempt = 0; ; attempt += 1) {
+        const candidate = latestSynapse.current;
+        if (candidate && candidate.chain.id === mainnet.id && latestChainId.current === mainnet.id) break;
+        if (attempt >= 30) throw new Error("The Filecoin connection did not become ready after the switch.");
+        const { promise: readyDelay, resolve: readyTick } = Promise.withResolvers<void>();
+        setTimeout(readyTick, 500);
+        await readyDelay;
+      }
+    } catch (error) {
+      setStageFailed(true);
+      toast.error("Could not switch to Filecoin", {
+        description: walletErrorMessage(error, "Your wallet did not switch networks."),
+      });
+      return;
+    }
+    await runDeposit(acquired);
+  };
+  const autoDepositRef = useRef(autoDeposit);
+  autoDepositRef.current = autoDeposit;
+
+  // Resume verification for an interrupted acquisition: the swap may
+  // still be bridging, so watch the on-chain balance instead of asking the
+  // user. 5 minutes of 10s polls, then downgrade to "still bridging".
+  useEffect(() => {
+    const saved = savedAcquisition;
+    if (!open || !address || !filecoinClient) return;
+    if (saved?.status !== "processing" || saved.destinationBalanceBefore === undefined) return;
+    // Without a recorded swap broadcast, no USDFC can be in flight — the
+    // manual recovery card handles that state instead of a phantom bridge.
+    if (saved.swapBroadcast !== true) return;
+    if (!acquisitionOwnerMatches || stillBridging) return;
+    const before = saved.destinationBalanceBefore;
+    const usdfc = constants.contracts.usdfc;
+    let cancelled = false;
+    const verify = async () => {
+      for (let attempt = 0; attempt < 30 && !cancelled; attempt += 1) {
+        try {
+          const balance = await filecoinClient.readContract({
+            abi: erc20Abi,
+            address: usdfc,
+            args: [saved.owner],
+            functionName: "balanceOf",
+          });
+          if (cancelled) return;
+          if (balance >= before + saved.destinationAmount) {
+            const reacquired = markSquidAcquired(window.localStorage, saved);
+            setSavedAcquisition(reacquired);
+            setAcquisitionOwner(reacquired.owner);
+            setAcquiredAmount(reacquired.destinationAmount);
+            setAcquisitionState("acquired");
+            return;
+          }
+        } catch {
+          // Transient RPC failure spends the attempt; arrival is re-checked.
+        }
+        const { promise: pollDelay, resolve: pollTick } = Promise.withResolvers<void>();
+        setTimeout(pollTick, 10_000);
+        await pollDelay;
+      }
+      if (!cancelled) setStillBridging(true);
+    };
+    void verify();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    address,
+    savedAcquisition,
+    acquisitionOwnerMatches,
+    stillBridging,
+    filecoinClient,
+    constants.contracts.usdfc,
+  ]);
+
+  // A verified (or recovered) acquisition continues to deposit automatically.
+  useEffect(() => {
+    if (!open || acquisitionState !== "acquired" || !savedAcquisition) return;
+    if (!acquisitionOwnerMatches || isSubmitting || autoDepositAttempted.current) return;
+    void autoDepositRef.current(savedAcquisition);
+  }, [open, acquisitionState, savedAcquisition, acquisitionOwnerMatches, isSubmitting]);
 
   const clearBlockedAcquisition = () => {
     if (!address) return;
@@ -273,6 +411,10 @@ export function GuidedTopUpDialog({
     const completedDeposit = savedAcquisition?.status === "depositing";
     setSavedAcquisition(null);
     setAcquisitionState("idle");
+    setProgressStage(null);
+    setStageFailed(false);
+    setStillBridging(false);
+    autoDepositAttempted.current = false;
     if (completedDeposit) onOpenChange(false);
   };
 
@@ -293,6 +435,7 @@ export function GuidedTopUpDialog({
     if (savedAcquisition?.status !== "depositing") return;
     if (!window.confirm("Retry only after confirming the saved Filecoin transaction did not complete.")) return;
     try {
+      autoDepositAttempted.current = false;
       const acquired = markSquidAcquired(window.localStorage, savedAcquisition);
       setSavedAcquisition(acquired);
       setAcquisitionOwner(acquired.owner);
@@ -314,9 +457,10 @@ export function GuidedTopUpDialog({
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && acquisitionState === "processing") {
-      toast.info("Wait for the acquisition request to finish before closing this dialog.");
-      return;
+    // Closing mid-flight is safe: the acquisition record persists and
+    // verification resumes automatically when the dialog reopens.
+    if (!nextOpen && (acquisitionState === "processing" || isSubmitting)) {
+      toast.info("Top-up continues in the background — reopen this dialog anytime to check progress.");
     }
     onOpenChange(nextOpen);
   };
@@ -341,37 +485,48 @@ export function GuidedTopUpDialog({
         </DialogHeader>
         <StepIndicator step={step} />
         <div className='grid gap-4'>
-          <div className='grid gap-2'>
-            <Label htmlFor='guided-top-up-amount'>USDFC to receive and deposit</Label>
-            <Input
-              disabled={acquiredAmount !== null || acquisitionState !== "idle"}
-              id='guided-top-up-amount'
-              min='0'
-              onChange={setAmount}
-              step='any'
-              type='number'
-              value={amount}
-            />
-            {amount !== "" && parsedAmount === null && acquiredAmount === null && (
-              <p className='text-sm text-destructive'>Enter an amount greater than zero.</p>
-            )}
-            {accountSummary && acquiredAmount === null && (
-              <FundingRunwaySlider
-                accountSummary={accountSummary}
-                amount={amount}
-                disabled={acquisitionState !== "idle"}
-                genesisTimestamp={constants.chain.genesisTimestamp}
-                onSelect={setAmount}
+          {/* Inputs only while composing; a running or finished acquisition
+              collapses the dialog to progress + key figures. */}
+          {acquisitionState === "idle" && acquiredAmount === null && (
+            <div className='grid gap-2'>
+              <Label htmlFor='guided-top-up-amount'>USDFC to receive and deposit</Label>
+              <Input
+                disabled={acquiredAmount !== null || acquisitionState !== "idle"}
+                id='guided-top-up-amount'
+                min='0'
+                onChange={setAmount}
+                step='any'
+                type='number'
+                value={amount}
               />
-            )}
-            {!accountSummary && acquiredAmount === null && (
-              <p className='text-xs text-muted-foreground'>
-                {isAccountSummaryLoading
-                  ? "Loading on-chain funding status…"
-                  : "On-chain funding status is unavailable. Enter an amount manually."}
-              </p>
-            )}
-          </div>
+              {amount !== "" && parsedAmount === null && acquiredAmount === null && (
+                <p className='text-sm text-destructive'>Enter an amount greater than zero.</p>
+              )}
+              {acquiredAmount === null && (
+                <p className='text-xs text-muted-foreground'>
+                  {quotedReceive !== null
+                    ? `~${formatUsdfcAmount(quotedReceive)} USDFC will be deposited once the swap succeeds.`
+                    : "You'll receive at least this amount; the exact amount the swap delivers is what gets deposited."}
+                </p>
+              )}
+              {accountSummary && acquiredAmount === null && (
+                <FundingRunwaySlider
+                  accountSummary={accountSummary}
+                  amount={amount}
+                  disabled={acquisitionState !== "idle"}
+                  genesisTimestamp={constants.chain.genesisTimestamp}
+                  onSelect={setAmount}
+                />
+              )}
+              {!accountSummary && acquiredAmount === null && (
+                <p className='text-xs text-muted-foreground'>
+                  {isAccountSummaryLoading
+                    ? "Loading on-chain funding status…"
+                    : "On-chain funding status is unavailable. Enter an amount manually."}
+                </p>
+              )}
+            </div>
+          )}
           {current && (
             <RunwayCard current={current} projected={projected}>
               <p className='text-muted-foreground'>
@@ -380,11 +535,45 @@ export function GuidedTopUpDialog({
               </p>
             </RunwayCard>
           )}
+          {progressStage && (
+            <div className='grid gap-2 rounded-md border p-3'>
+              <TopUpProgress failed={stageFailed} stage={progressStage} />
+              {quotedReceive !== null && acquiredAmount === null && (
+                <p className='text-xs text-muted-foreground'>
+                  ~{formatUsdfcAmount(quotedReceive)} USDFC will be deposited once the swap succeeds.
+                </p>
+              )}
+              {savedAcquisition?.status === "processing" && !stillBridging && progressStage === "bridging" && (
+                <p className='text-xs text-muted-foreground'>
+                  Bridging to Filecoin — usually 1–5 minutes. Your USDFC balance is checked automatically every few
+                  seconds, and it is safe to close this dialog.
+                </p>
+              )}
+              {stillBridging && (
+                <p className='text-xs text-muted-foreground'>
+                  Still bridging — this can occasionally take longer. It is safe to close this dialog; checking resumes
+                  automatically when you reopen it. Funds in a committed bridge cannot be cancelled.
+                </p>
+              )}
+              {savedAcquisition?.status === "processing" && (
+                <Button onClick={clearBlockedAcquisition} size='compact' type='button' variant='tertiary'>
+                  Stop tracking this acquisition
+                </Button>
+              )}
+            </div>
+          )}
           {acquisitionState === "blocked" && (
             <div className='grid gap-2 rounded-md border border-destructive/30 p-3 text-sm'>
               {savedAcquisition ? (
                 <>
-                  <p className='font-medium text-destructive'>A saved transaction needs verification.</p>
+                  <p className='font-medium text-destructive'>
+                    An acquisition was interrupted before its outcome was confirmed.
+                  </p>
+                  {lastFailure && (
+                    <p>
+                      Reason: <span className='text-destructive'>{lastFailure}</span>
+                    </p>
+                  )}
                   {savedAcquisition.status === "depositing" ? (
                     <p>
                       Check the Filecoin deposit transaction before retrying or clearing it:
@@ -396,7 +585,17 @@ export function GuidedTopUpDialog({
                     </p>
                   ) : (
                     <>
-                      <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for USDFC.</p>
+                      <p>
+                        The acquisition sent the transaction(s) below on{" "}
+                        {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} — these can be token
+                        approvals or the swap itself, and the flow stopped before confirming the swap completed. If the
+                        swap ran, the USDFC arrives in your wallet on Filecoin after a few minutes of bridging. Check
+                        your Filecoin USDFC balance changed before continuing; if only approvals went through, no USDFC
+                        is coming — clear and retry.
+                      </p>
+                      <p className='text-muted-foreground'>
+                        Sent on {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`}:
+                      </p>
                       {savedAcquisition.transactionHashes.map((hash) => (
                         <code className='block break-all' key={hash}>
                           {hash}
@@ -409,12 +608,12 @@ export function GuidedTopUpDialog({
                   )}
                   <div className='flex flex-wrap gap-2'>
                     {savedAcquisition.status === "processing" && (
-                      <Button onClick={continueWithAcquiredUsdfc} size='compact' type='button' variant='tertiary'>
+                      <Button onClick={continueWithAcquiredUsdfc} size='compact' type='button' variant='primary'>
                         USDFC arrived, continue to deposit
                       </Button>
                     )}
                     {savedAcquisition.status === "depositing" && (
-                      <Button onClick={retryFilecoinDeposit} size='compact' type='button' variant='tertiary'>
+                      <Button onClick={retryFilecoinDeposit} size='compact' type='button' variant='primary'>
                         Deposit failed, retry
                       </Button>
                     )}
@@ -430,19 +629,42 @@ export function GuidedTopUpDialog({
               )}
             </div>
           )}
-          {acquiredAmount === null && acquisitionState !== "blocked" && (
-            <SquidQuoteReview
-              acquisitionState={acquisitionState}
-              destinationAmount={depositAmount}
-              onAcquired={(acquired) => {
-                setSavedAcquisition(acquired);
-                setAcquiredAmount(acquired.destinationAmount);
-                setAcquisitionOwner(acquired.owner);
-              }}
-              onAcquisitionStateChange={setAcquisitionState}
-              onBlocked={setSavedAcquisition}
-            />
+          {lastFailure && acquisitionState === "idle" && acquiredAmount === null && (
+            <p className='text-sm text-destructive' role='alert'>
+              Last attempt: {lastFailure}
+            </p>
           )}
+          {acquiredAmount === null &&
+            acquisitionState !== "blocked" &&
+            acquisitionState !== "processing" &&
+            savedAcquisition?.status !== "processing" && (
+              <SquidQuoteReview
+                acquisitionState={acquisitionState}
+                destinationAmount={depositAmount}
+                onAcquired={(acquired) => {
+                  setSavedAcquisition(acquired);
+                  setAcquiredAmount(acquired.destinationAmount);
+                  setAcquisitionOwner(acquired.owner);
+                }}
+                onAcquisitionStateChange={(state) => {
+                  if (state === "processing") {
+                    autoDepositAttempted.current = false;
+                    setStageFailed(false);
+                    setStillBridging(false);
+                    setLastFailure(null);
+                  }
+                  if (state === "idle") setProgressStage(null);
+                  setAcquisitionState(state);
+                }}
+                onBlocked={setSavedAcquisition}
+                onFailure={setLastFailure}
+                onProgress={(stage) => {
+                  setStageFailed(false);
+                  setProgressStage(stage);
+                }}
+                onQuoteChange={setQuotedReceive}
+              />
+            )}
           {acquiredAmount !== null && !acquisitionOwnerMatches && (
             <p className='text-sm text-destructive' role='alert'>
               Switch back to {acquisitionOwner} before depositing the acquired USDFC.
@@ -450,18 +672,21 @@ export function GuidedTopUpDialog({
           )}
         </div>
         <DialogFooter>
-          <Button
-            disabled={isSubmitting || acquisitionState === "processing"}
-            onClick={() => handleOpenChange(false)}
-            variant='ghost'
-          >
-            Cancel
+          <Button onClick={() => handleOpenChange(false)} variant='ghost'>
+            {/* Nothing is cancelled by closing once a flow is running or acquired. */}
+            {acquisitionState === "idle" && acquiredAmount === null ? "Cancel" : "Close"}
           </Button>
           {acquisitionState === "processing" ? (
             <Button disabled variant='primary'>
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
-                Acquiring USDFC…
+                {progressStage === "approving"
+                  ? "Approving…"
+                  : progressStage === "swapping"
+                    ? "Confirm the swap in your wallet…"
+                    : progressStage === "bridging"
+                      ? "Bridging to Filecoin…"
+                      : "Acquiring USDFC…"}
               </span>
             </Button>
           ) : acquisitionState === "blocked" ? (

@@ -7,6 +7,17 @@ type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 export type SquidAcquisition = {
   depositTransactionHash?: Hash;
   destinationAmount: bigint;
+  /**
+   * Owner's destination-token balance when the acquisition began; lets an
+   * interrupted flow verify arrival on-chain (balance >= before + amount)
+   * instead of asking the user. Absent on records saved before this field.
+   */
+  destinationBalanceBefore?: bigint;
+  /**
+   * True once the swap transaction itself broadcast (approvals excluded).
+   * Absent means only approvals may have run — no USDFC can be in flight.
+   */
+  swapBroadcast?: boolean;
   owner: Address;
   sourceChainId: number;
   status: "acquired" | "depositing" | "processing";
@@ -20,7 +31,11 @@ function storageKey(owner: Address) {
 function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
   storage.setItem(
     storageKey(acquisition.owner),
-    JSON.stringify({ ...acquisition, destinationAmount: acquisition.destinationAmount.toString() }),
+    JSON.stringify({
+      ...acquisition,
+      destinationAmount: acquisition.destinationAmount.toString(),
+      destinationBalanceBefore: acquisition.destinationBalanceBefore?.toString(),
+    }),
   );
   return acquisition;
 }
@@ -46,13 +61,22 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
       BigInt(acquisition.destinationAmount) <= 0n ||
       !Array.isArray(acquisition.transactionHashes) ||
       !acquisition.transactionHashes.every(isTransactionHash) ||
-      (acquisition.depositTransactionHash !== undefined && !isTransactionHash(acquisition.depositTransactionHash))
+      (acquisition.depositTransactionHash !== undefined && !isTransactionHash(acquisition.depositTransactionHash)) ||
+      (acquisition.destinationBalanceBefore !== undefined &&
+        (typeof acquisition.destinationBalanceBefore !== "string" ||
+          !/^\d+$/.test(acquisition.destinationBalanceBefore))) ||
+      (acquisition.swapBroadcast !== undefined && acquisition.swapBroadcast !== true)
     ) {
       return null;
     }
     return {
       destinationAmount: BigInt(acquisition.destinationAmount),
       depositTransactionHash: acquisition.depositTransactionHash as Hash | undefined,
+      destinationBalanceBefore:
+        acquisition.destinationBalanceBefore === undefined
+          ? undefined
+          : BigInt(acquisition.destinationBalanceBefore as string),
+      swapBroadcast: acquisition.swapBroadcast === true ? true : undefined,
       owner: acquisition.owner,
       sourceChainId: acquisition.sourceChainId,
       status: acquisition.status,
@@ -68,13 +92,27 @@ export function beginSquidAcquisition(
   owner: Address,
   destinationAmount: bigint,
   sourceChainId: number,
+  destinationBalanceBefore?: bigint,
 ) {
-  return save(storage, { destinationAmount, owner, sourceChainId, status: "processing", transactionHashes: [] });
+  return save(storage, {
+    destinationAmount,
+    destinationBalanceBefore,
+    owner,
+    sourceChainId,
+    status: "processing",
+    transactionHashes: [],
+  });
 }
 
-export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash: Hash) {
+export function markSquidBroadcast(
+  storage: AcquisitionStorage,
+  acquisition: SquidAcquisition,
+  hash: Hash,
+  kind?: "approval" | "swap",
+) {
   return save(storage, {
     ...acquisition,
+    swapBroadcast: acquisition.swapBroadcast === true || kind === "swap" ? true : undefined,
     transactionHashes: acquisition.transactionHashes.includes(hash)
       ? acquisition.transactionHashes
       : [...acquisition.transactionHashes, hash],
