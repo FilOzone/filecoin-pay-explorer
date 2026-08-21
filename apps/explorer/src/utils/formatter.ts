@@ -137,10 +137,15 @@ export const formatFutureTimestamp = (
   }
 
   if (diffDays > 1) {
+    // The year is only worth its width when it isn't the current one: "Aug 31,
+    // 2026" overflows a narrow card, and on a phone that clipped to "Aug 31,…"
+    // — the same information the year was there to add, minus the day.
+    const isSameYear = date.getFullYear() === new Date(now).getFullYear();
+
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: "numeric",
+      ...(isSameYear ? {} : { year: "numeric" }),
     });
   } else if (diffHours > 1) {
     return `${diffHours}h ${diffMinutes % 60}m`;
