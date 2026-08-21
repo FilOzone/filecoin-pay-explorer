@@ -11,6 +11,7 @@ import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { ConsoleContent } from "./ConsoleContent";
 import { type ConsoleAccessState, getConsoleAccessState } from "./console-access";
 
 const ConsoleWalletControls = ({
@@ -74,14 +75,9 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={accessState}>
-              <div className={accessState === "ready" ? "flex gap-8" : undefined}>
-                {/* Keep this sibling mounted so the page remains in place when the
-                    wallet switches between Filecoin and a Squid source chain. */}
-                <div className={accessState === "ready" ? "hidden border-r pr-4 lg:flex" : "hidden"}>
-                  {accessState === "ready" ? <ConsoleSidebar /> : null}
-                </div>
-                <div className={accessState === "ready" ? "min-w-0 flex-1" : undefined}>{children}</div>
-              </div>
+              <ConsoleContent accessState={accessState} sidebar={<ConsoleSidebar />}>
+                {children}
+              </ConsoleContent>
             </ConsoleAccessGate>
           </div>
         </Container>
