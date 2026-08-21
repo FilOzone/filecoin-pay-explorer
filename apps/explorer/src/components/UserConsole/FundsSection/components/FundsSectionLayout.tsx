@@ -23,7 +23,7 @@ const FundsSectionLayout = ({
   <div className='flex flex-col gap-4'>
     <div className='flex flex-wrap items-center justify-between gap-3'>
       <div className='flex items-baseline gap-3'>
-        <h3 className='text-3xl font-medium text-foreground'>Funds overview</h3>
+        <h3 className='text-2xl font-medium text-foreground sm:text-3xl'>Funds overview</h3>
         {tokenSelector}
       </div>
       <div className='flex items-center gap-2'>
