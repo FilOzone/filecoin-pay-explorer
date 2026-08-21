@@ -74,17 +74,14 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={accessState}>
-              {accessState === "ready" ? (
-                <div className='flex gap-8'>
-                  {/* Exact complement of the drawer trigger's `lg:hidden`. */}
-                  <div className='hidden border-r pr-4 lg:flex'>
-                    <ConsoleSidebar />
-                  </div>
-                  <div className='min-w-0 flex-1'>{children}</div>
+              <div className={accessState === "ready" ? "flex gap-8" : undefined}>
+                {/* Keep this sibling mounted so the page remains in place when the
+                    wallet switches between Filecoin and a Squid source chain. */}
+                <div className={accessState === "ready" ? "hidden border-r pr-4 lg:flex" : "hidden"}>
+                  {accessState === "ready" ? <ConsoleSidebar /> : null}
                 </div>
-              ) : (
-                children
-              )}
+                <div className={accessState === "ready" ? "min-w-0 flex-1" : undefined}>{children}</div>
+              </div>
             </ConsoleAccessGate>
           </div>
         </Container>
