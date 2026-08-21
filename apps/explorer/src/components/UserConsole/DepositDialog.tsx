@@ -57,7 +57,12 @@ export const DepositDialog: React.FC<DepositDialogProps> = ({ userToken, open, o
   const isUsdfcDeposit = !!userToken && userToken.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
   const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
     enabled: open && isUsdfcDeposit && !!userAddress && synapse?.chain.id === constants.chain.id,
-    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
+    // `enabled` gates execution; react-query still requires queryFn to exist
+    // on every render or it logs "No queryFn was passed" for the key.
+    queryFn: () => {
+      if (!synapse) throw new Error("Synapse is not ready");
+      return synapse.payments.accountSummary();
+    },
     queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
   });
   const { data: walletClient } = useWalletClient();
