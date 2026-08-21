@@ -77,15 +77,18 @@ const UserConsole = () => {
   const { address, chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
   const isFilecoinChain = isSupportedChainId(chainId);
+  const canLoadFilecoinConsole = chainId === undefined || isFilecoinChain;
   const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
 
   const { data: notificationStatus, isError: isNotificationStatusError } = useNotificationStatus(
-    isFilecoinChain ? address : undefined,
+    canLoadFilecoinConsole ? address : undefined,
   );
   const isSubscribed = notificationStatus?.subscribed === true;
   const showAlertsBanner = isNotificationsEligibleNetwork(walletNetwork) && !isSubscribed && !isNotificationStatusError;
 
-  const accountQuery = useAccountDetails(isFilecoinChain ? (address ?? "") : "", { networkOverride: walletNetwork });
+  const accountQuery = useAccountDetails(canLoadFilecoinConsole ? (address ?? "") : "", {
+    networkOverride: walletNetwork,
+  });
 
   if (address && isSquidSourceChain) {
     return (
@@ -111,7 +114,7 @@ const UserConsole = () => {
   return (
     <div className='flex flex-col gap-15'>
       {/* The (console) layout gates on a connected wallet, so address is set here. */}
-      {address && isFilecoinChain && walletNetwork === "mainnet" ? (
+      {address && canLoadFilecoinConsole && walletNetwork === "mainnet" ? (
         <TopUpDialogController
           accountId={accountQuery.data?.id ?? address}
           key={address}

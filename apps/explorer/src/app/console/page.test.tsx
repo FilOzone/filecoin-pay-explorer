@@ -90,6 +90,14 @@ describe("UserConsole", () => {
     expect(markup).toContain("Rails");
   });
 
+  it("keeps the default Filecoin console while the wallet chain resolves", () => {
+    wallet.chainId = undefined;
+    const markup = renderToStaticMarkup(<UserConsole />);
+
+    expect(markup).toContain("Funds");
+    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
+  });
+
   it("keeps direct deposit funding on Calibration", () => {
     wallet.chainId = 314159;
     const markup = renderToStaticMarkup(<UserConsole />);
