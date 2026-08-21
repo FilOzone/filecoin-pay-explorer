@@ -6,6 +6,7 @@ import {
   FUNDING_ESTIMATE_DISCLAIMER,
   type FundingAccountSummary,
   type FundingRunway,
+  type FundingStatus,
   formatFundedThrough,
   formatSuggestedTopUp,
   MAX_FUNDING_MONTHS,
@@ -25,6 +26,15 @@ function formatMonths(months: number): string {
   }
   return months === 1 ? "1 month" : `${months} months`;
 }
+
+const FUNDING_STATUS_LABELS: Record<FundingStatus, string> = {
+  critical: "Critical",
+  urgent: "Urgent",
+  low: "Low",
+  funded: "Funded",
+  "long-term-funded": "Long-term funded",
+  "no-active-spend": "No active spend",
+};
 
 type FundingRunwaySliderProps = {
   accountSummary: FundingAccountSummary;
@@ -115,11 +125,13 @@ export function RunwayCard({ children, current, projected }: RunwayCardProps) {
   return (
     <div className='grid gap-2 rounded-md border p-3 text-sm'>
       <p>
-        Current funded through: <span className='font-medium'>{formatFundedThrough(current)}</span>
+        Current funded through: <span className='font-medium'>{formatFundedThrough(current)}</span>{" "}
+        <span className='text-muted-foreground'>({FUNDING_STATUS_LABELS[current.status]})</span>
       </p>
       <p>
         Projected funded through:{" "}
-        <span className='font-medium'>{projected ? formatFundedThrough(projected, true) : "—"}</span>
+        <span className='font-medium'>{projected ? formatFundedThrough(projected, true) : "—"}</span>{" "}
+        {projected ? <span className='text-muted-foreground'>({FUNDING_STATUS_LABELS[projected.status]})</span> : null}
       </p>
       {children}
       <p className='text-muted-foreground'>{FUNDING_ESTIMATE_DISCLAIMER}</p>
