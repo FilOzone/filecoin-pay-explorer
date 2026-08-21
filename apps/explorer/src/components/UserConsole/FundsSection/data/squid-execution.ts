@@ -12,6 +12,8 @@ const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
 const BPS = 10_000n;
 
+export type SquidTransactionKind = "approval" | "swap";
+
 export async function executeSquidTopUp({
   destinationClient,
   integratorId,
@@ -25,8 +27,8 @@ export async function executeSquidTopUp({
   destinationClient: SquidPublicClient;
   integratorId: string;
   maxNativeFee: bigint;
-  onBroadcast?: (transactionHash: Hash) => void;
-  onTransactionAttempt?: () => void;
+  onBroadcast?: (transactionHash: Hash, kind: SquidTransactionKind) => void;
+  onTransactionAttempt?: (kind: SquidTransactionKind) => void;
   plan: SquidFundingPlan;
   sourcePublicClient: SquidPublicClient;
   sourceWalletClient: SquidWalletClient;
@@ -34,9 +36,15 @@ export async function executeSquidTopUp({
   const trackedWalletClient = {
     ...sourceWalletClient,
     sendTransaction: async (...args: Parameters<SquidWalletClient["sendTransaction"]>) => {
-      onTransactionAttempt?.();
+      // Approvals target the source token contract; anything else is the swap
+      // itself (the Squid router). Lets the UI stage its progress display.
+      const kind: SquidTransactionKind =
+        (args[0] as { to?: string } | undefined)?.to?.toLowerCase() === plan.source.token.toLowerCase()
+          ? "approval"
+          : "swap";
+      onTransactionAttempt?.(kind);
       const transactionHash = await sourceWalletClient.sendTransaction(...args);
-      onBroadcast?.(transactionHash);
+      onBroadcast?.(transactionHash, kind);
       return transactionHash;
     },
   } as SquidWalletClient;
@@ -79,5 +87,15 @@ export function isUserRejectedRequest(error: unknown): boolean {
 
 export function walletErrorMessage(error: unknown, fallback: string): string {
   if (isUserRejectedRequest(error)) return "Transaction cancelled in your wallet.";
+  // viem errors carry the multi-line request dump in `message` (URL, request
+  // body, call args); `shortMessage` is the one-line cause meant for users.
+  if (
+    error instanceof Error &&
+    "shortMessage" in error &&
+    typeof error.shortMessage === "string" &&
+    error.shortMessage.trim() !== ""
+  ) {
+    return error.shortMessage;
+  }
   return error instanceof Error ? error.message : fallback;
 }

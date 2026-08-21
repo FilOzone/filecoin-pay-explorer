@@ -64,7 +64,7 @@ describe("executeSquidTopUp", () => {
       sourceWalletClient: { sendTransaction } as never,
     });
 
-    expect(onBroadcast).toHaveBeenCalledWith(transactionHash);
+    expect(onBroadcast).toHaveBeenCalledWith(transactionHash, "swap");
   });
 
   it("reports an attempted transaction even when the wallet loses the response", async () => {
@@ -88,6 +88,39 @@ describe("executeSquidTopUp", () => {
     expect(onTransactionAttempt).toHaveBeenCalledOnce();
   });
 
+  it("classifies approval and swap transactions for progress reporting", async () => {
+    const erc20Source = {
+      chainId: 8453,
+      decimals: 6,
+      symbol: "USDC",
+      token: "0x8335000000000000000000000000000000002913",
+    } as const;
+    const onTransactionAttempt = vi.fn();
+    const onBroadcast = vi.fn();
+    const sendTransaction = vi.fn().mockResolvedValue(`0x${"5".repeat(64)}`);
+    vi.mocked(executeSquidFunding).mockImplementation(async (_input, dependencies) => {
+      await dependencies.walletClient.sendTransaction({ to: erc20Source.token } as never);
+      await dependencies.walletClient.sendTransaction({ to: "0x1111111111111111111111111111111111111111" } as never);
+      return { nativeFee: 1n, routes: [], sourceAmount: 2n };
+    });
+
+    await executeSquidTopUp({
+      destinationClient: {} as never,
+      integratorId: "test-integrator",
+      maxNativeFee: 3n,
+      onBroadcast,
+      onTransactionAttempt,
+      plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source: erc20Source },
+      sourcePublicClient: {} as never,
+      sourceWalletClient: { sendTransaction } as never,
+    });
+
+    expect(onTransactionAttempt).toHaveBeenNthCalledWith(1, "approval");
+    expect(onTransactionAttempt).toHaveBeenNthCalledWith(2, "swap");
+    expect(onBroadcast).toHaveBeenNthCalledWith(1, expect.any(String), "approval");
+    expect(onBroadcast).toHaveBeenNthCalledWith(2, expect.any(String), "swap");
+  });
+
   it("recognizes nested wallet rejection errors", () => {
     expect(isUserRejectedRequest({ cause: { code: 4001 } })).toBe(true);
     expect(isUserRejectedRequest(new Error("response lost"))).toBe(false);
@@ -97,5 +130,15 @@ describe("executeSquidTopUp", () => {
     expect(walletErrorMessage({ cause: { code: 4001 } }, "fallback")).toBe("Transaction cancelled in your wallet.");
     expect(walletErrorMessage(new Error("response lost"), "fallback")).toBe("response lost");
     expect(walletErrorMessage(null, "fallback")).toBe("fallback");
+  });
+
+  it("prefers viem's concise shortMessage over the full request dump", () => {
+    const viemError = Object.assign(
+      new Error("RPC Request failed.\nURL: https://mainnet.base.org\nRequest body: {...}"),
+      {
+        shortMessage: "over rate limit",
+      },
+    );
+    expect(walletErrorMessage(viemError, "fallback")).toBe("over rate limit");
   });
 });

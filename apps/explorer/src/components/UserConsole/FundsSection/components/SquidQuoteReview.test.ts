@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { resolveSearchableOption, sourceSpendCap, sourceTokenCatalogMessage } from "./SquidQuoteReview";
+import {
+  acquireNetworkMismatchMessage,
+  resolveSearchableOption,
+  sourceSpendCap,
+  sourceTokenCatalogMessage,
+  walletClientUnavailableMessage,
+} from "./SquidQuoteReview";
 
 describe("searchable option resolution", () => {
   const options = [
@@ -37,5 +43,35 @@ describe("source spend cap", () => {
 
   it("does not subtract native fees from an ERC-20 balance", () => {
     expect(sourceSpendCap(10n, 3n, false)).toBe(10n);
+  });
+});
+
+describe("wallet client unavailable message", () => {
+  it("surfaces the underlying wagmi error instead of a dead end", () => {
+    expect(walletClientUnavailableMessage(new Error("Connector not connected."))).toBe(
+      "Wallet or network client is unavailable: Connector not connected.",
+    );
+  });
+
+  it("falls back to a generic message when there is no underlying error", () => {
+    expect(walletClientUnavailableMessage(null)).toBe("Wallet or network client is unavailable.");
+  });
+});
+
+describe("acquire network mismatch message", () => {
+  it("asks for a switch when the wallet is on a different chain than the source", () => {
+    expect(acquireNetworkMismatchMessage(314, 8453, "Base")).toBe("Switch your wallet to Base to acquire USDFC.");
+  });
+
+  it("falls back to a generic network name when chain metadata is missing", () => {
+    expect(acquireNetworkMismatchMessage(314, 8453, undefined)).toBe(
+      "Switch your wallet to the selected source network to acquire USDFC.",
+    );
+  });
+
+  it("stays silent when chains match or either chain is unknown", () => {
+    expect(acquireNetworkMismatchMessage(8453, 8453, "Base")).toBeNull();
+    expect(acquireNetworkMismatchMessage(undefined, 8453, "Base")).toBeNull();
+    expect(acquireNetworkMismatchMessage(314, undefined, "Base")).toBeNull();
   });
 });

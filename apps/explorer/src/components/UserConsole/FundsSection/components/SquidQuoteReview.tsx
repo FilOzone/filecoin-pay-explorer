@@ -3,6 +3,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import {
   fetchSourceTokens,
   NATIVE_TOKEN_ADDRESS,
@@ -28,7 +29,12 @@ import {
   markSquidBroadcast,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
-import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
+import {
+  executeSquidTopUp,
+  isUserRejectedRequest,
+  type SquidTransactionKind,
+  walletErrorMessage,
+} from "../data/squid-execution";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
 
 const QUOTE_DEBOUNCE_MS = 500;
@@ -56,6 +62,9 @@ type SquidQuoteReviewProps = {
   onAcquired: (acquisition: SquidAcquisition) => void;
   onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
   onBlocked: (acquisition: SquidAcquisition) => void;
+  onFailure?: (message: string) => void;
+  onProgress?: (stage: "approving" | "swapping" | "bridging") => void;
+  onQuoteChange?: (quotedDestinationAmount: bigint | null) => void;
 };
 
 function displayAmount(amount: bigint, decimals: number, symbol: string) {
@@ -66,6 +75,15 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   if (!isConfigured) return "Squid funding is not configured for this deployment.";
   if (hasError) return "Could not load tokens from Squid. Check the configuration or try again.";
   return "No supported tokens on this network.";
+}
+
+// A missing wallet client is almost always a wagmi ConnectorChainMismatchError
+// or ConnectorNotConnectedError, not a generic unavailability; surface it
+// instead of leaving the user at an unexplained dead end.
+export function walletClientUnavailableMessage(error: unknown) {
+  return error instanceof Error
+    ? `Wallet or network client is unavailable: ${error.message}`
+    : "Wallet or network client is unavailable.";
 }
 
 export function sourceSpendCap(sourceBalance: bigint, maximumNativeFee: bigint, isNativeSource: boolean) {
@@ -84,12 +102,28 @@ export function resolveSearchableOption(options: readonly SearchableOption[], qu
   return aliasMatches.length === 1 ? aliasMatches[0].value : "";
 }
 
+// Executing on the wrong wallet network is the most common acquire failure;
+// gate the button as soon as the mismatch is knowable instead of only
+// failing inside acquire(). The in-acquire() guard stays as defense in depth.
+export function acquireNetworkMismatchMessage(
+  walletChainId: number | undefined,
+  sourceChainId: number | undefined,
+  sourceChainName: string | undefined,
+) {
+  if (walletChainId === undefined || sourceChainId === undefined) return null;
+  if (walletChainId === sourceChainId) return null;
+  return `Switch your wallet to ${sourceChainName ?? "the selected source network"} to acquire USDFC.`;
+}
+
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
   onAcquired,
   onAcquisitionStateChange,
   onBlocked,
+  onFailure,
+  onProgress,
+  onQuoteChange,
 }: SquidQuoteReviewProps) {
   // The flow is deliberately split into read-only route review and wallet execution.
   // Any execution that may have broadcast remains blocked until it is recovered or explicitly cleared.
@@ -111,7 +145,11 @@ export function SquidQuoteReview({
   const [debouncedMaximumNativeFee] = useDebounce(maximumNativeFee, QUOTE_DEBOUNCE_MS);
   const sourceChain = Number(sourceChainId);
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
-  const { data: sourceWalletClient } = useWalletClient({ chainId: sourceChain || undefined });
+  const {
+    data: sourceWalletClient,
+    error: sourceWalletClientError,
+    refetch: refetchSourceWalletClient,
+  } = useWalletClient({ chainId: sourceChain || undefined });
   const destinationClient = usePublicClient({ chainId: 314 });
   const integratorId =
     process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
@@ -265,10 +303,25 @@ export function SquidQuoteReview({
     sourceAmount <= 0n
       ? insufficientBalance
       : null;
+  const networkMismatch = acquireNetworkMismatchMessage(chainId, source?.chainId, sourceChainMeta?.name);
 
   useEffect(() => {
     if (tokenLoadError) console.error("Failed to load Squid token catalog:", tokenLoadError);
   }, [tokenLoadError]);
+
+  // The dialog's callout ("~X USDFC will be deposited…") tracks the live quote.
+  const quotedDestinationAmount = quote?.destinationAmount ?? null;
+  useEffect(() => {
+    onQuoteChange?.(quotedDestinationAmount);
+  }, [onQuoteChange, quotedDestinationAmount]);
+
+  // useWalletClient's query only re-runs on an address change; a same-address
+  // network switch (the normal path here — the user switches to the source
+  // chain to sign) leaves it caching a stale or errored client from before
+  // the switch finished. Force a fresh read once the live chain catches up.
+  useEffect(() => {
+    if (chainId !== undefined && chainId === sourceChain) void refetchSourceWalletClient();
+  }, [chainId, sourceChain, refetchSourceWalletClient]);
 
   const review = () => {
     setError(null);
@@ -291,7 +344,7 @@ export function SquidQuoteReview({
     if (chainId !== source.chainId)
       return setError("Switch your wallet to the selected source network before confirming.");
     if (!sourcePublicClient || !sourceWalletClient || !destinationClient)
-      return setError("Wallet or network client is unavailable.");
+      return setError(walletClientUnavailableMessage(sourceWalletClientError));
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
     const executionMaxNativeFee = maxNativeFee;
@@ -316,9 +369,31 @@ export function SquidQuoteReview({
               estimateTotalFee(sourcePublicClient, request),
           }
         : sourcePublicClient;
-    let acquisition: ReturnType<typeof beginSquidAcquisition>;
+    // Snapshot the destination balance so an interrupted flow can verify
+    // arrival on-chain (balance >= before + amount) instead of asking the
+    // user; on read failure the recovery path degrades to the manual card.
+    let destinationBalanceBefore: bigint | undefined;
     try {
-      acquisition = beginSquidAcquisition(window.localStorage, address, destinationAmount, source.chainId);
+      destinationBalanceBefore = await destinationClient.readContract({
+        abi: erc20Abi,
+        address: constants.contracts.usdfc,
+        args: [address],
+        functionName: "balanceOf",
+      });
+    } catch {
+      destinationBalanceBefore = undefined;
+    }
+    let acquisition: SquidAcquisition;
+    try {
+      // The record carries the quoted minimum receive — the amount that will
+      // actually be deposited — not the user's target.
+      acquisition = beginSquidAcquisition(
+        window.localStorage,
+        address,
+        quote.destinationAmount,
+        source.chainId,
+        destinationBalanceBefore,
+      );
     } catch {
       return setError("Browser storage is unavailable. Squid funding cannot start safely without recovery state.");
     }
@@ -332,12 +407,14 @@ export function SquidQuoteReview({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
         maxNativeFee: executionMaxNativeFee,
-        onBroadcast: (hash) => {
+        onBroadcast: (hash, kind: SquidTransactionKind) => {
           didBroadcast = true;
-          acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
+          acquisition = markSquidBroadcast(window.localStorage, acquisition, hash, kind);
+          if (kind === "swap") onProgress?.("bridging");
         },
-        onTransactionAttempt: () => {
+        onTransactionAttempt: (kind: SquidTransactionKind) => {
           didAttemptTransaction = true;
+          onProgress?.(kind === "approval" ? "approving" : "swapping");
         },
         plan,
         sourcePublicClient: publicClient as unknown as SquidPublicClient,
@@ -364,7 +441,9 @@ export function SquidQuoteReview({
         onAcquisitionStateChange("blocked");
       }
       if (isCurrentExecutionOwner()) {
-        setError(walletErrorMessage(executionError, "Squid could not complete the acquisition."));
+        const failureMessage = walletErrorMessage(executionError, "Squid could not complete the acquisition.");
+        setError(failureMessage);
+        onFailure?.(failureMessage);
       }
     }
   };
@@ -589,16 +668,39 @@ export function SquidQuoteReview({
             Route: {quote.actions.map((action) => action.description ?? action.type).join(" → ")}
           </p>
 
-          <Button disabled={isBusy} onClick={acquire} size='compact' type='button' variant='primary'>
-            {acquisitionState === "processing" ? (
-              <span className='inline-flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin' />
-                Acquiring USDFC…
+          {networkMismatch && (
+            <p className='text-xs text-muted-foreground' role='status'>
+              {networkMismatch}
+            </p>
+          )}
+          <Tooltip>
+            {/* Disabled buttons swallow pointer events, so the tooltip listens on a wrapping span. */}
+            <TooltipTrigger asChild>
+              <span className='grid'>
+                <Button
+                  disabled={isBusy || networkMismatch !== null}
+                  onClick={acquire}
+                  size='compact'
+                  type='button'
+                  variant='primary'
+                >
+                  {acquisitionState === "processing" ? (
+                    <span className='inline-flex items-center gap-2'>
+                      <Loader2 className='h-4 w-4 animate-spin' />
+                      Acquiring USDFC…
+                    </span>
+                  ) : (
+                    "Acquire USDFC"
+                  )}
+                </Button>
               </span>
-            ) : (
-              "Acquire USDFC"
+            </TooltipTrigger>
+            {networkMismatch && (
+              <TooltipContent>
+                <p>{networkMismatch}</p>
+              </TooltipContent>
             )}
-          </Button>
+          </Tooltip>
         </div>
       )}
     </section>
