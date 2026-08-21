@@ -25,5 +25,10 @@
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@filecoin-project/squid-evm-funding@0.2.2": "patches/@filecoin-project__squid-evm-funding@0.2.2.patch"
+    }
   }
 }

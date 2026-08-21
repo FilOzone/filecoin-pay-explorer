@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@filecoin-project/squid-evm-funding@0.2.2':
+    hash: bpmwzrp7kg7jduzhqdayojlfxq
+    path: patches/@filecoin-project__squid-evm-funding@0.2.2.patch
+
 importers:
 
   .:
@@ -37,7 +42,7 @@ importers:
         version: link:../../packages/ui
       '@filecoin-project/squid-evm-funding':
         specifier: ^0.2.2
-        version: 0.2.2(typescript@6.0.3)(zod@4.4.3)
+        version: 0.2.2(patch_hash=bpmwzrp7kg7jduzhqdayojlfxq)(typescript@6.0.3)(zod@4.4.3)
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.55.18(typescript@6.0.3)(zod@4.4.3))
@@ -10084,7 +10089,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@filecoin-project/squid-evm-funding@0.2.2(typescript@6.0.3)(zod@4.4.3)':
+  '@filecoin-project/squid-evm-funding@0.2.2(patch_hash=bpmwzrp7kg7jduzhqdayojlfxq)(typescript@6.0.3)(zod@4.4.3)':
     dependencies:
       viem: 2.55.18(typescript@6.0.3)(zod@4.4.3)
     transitivePeerDependencies:

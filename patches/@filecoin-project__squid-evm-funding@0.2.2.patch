@@ -1,0 +1,186 @@
+diff --git a/dist/execution.js b/dist/execution.js
+index 5a1372ccd623b83d7197cadcd0627514d5cf3ac9..129dff54e55cf6ef7942a4081dcd1ffabc45eca9 100644
+--- a/dist/execution.js
++++ b/dist/execution.js
+@@ -11,6 +11,19 @@ function native(token) {
+ function sleep(milliseconds) {
+     return new Promise((resolve) => setTimeout(resolve, milliseconds));
+ }
++// LOCAL PATCH (fpe-pr293): two of these checks were written for same-chain
++// swaps and reject every legitimate cross-chain bridge route:
++// 1. ERC-20 routes were required to carry value === 0, but bridge routes
++//    (e.g. Base USDC -> Axelar -> Filecoin USDFC) carry the bridge gas fee
++//    as native value. Relaxed to a 0.001-native-unit ceiling so a malicious
++//    quote still cannot drain the native balance.
++// 2. approvalSpender was required for every ERC-20 route, but Squid omits it
++//    on some routes; execution approves the caller's trustedSpender directly
++//    and never reads approvalSpender, so absence is harmless. Its value is
++//    still asserted against the trusted spender whenever it is present.
++// Upstream fix belongs in FilOzone/squid-evm-funding (proper fee accounting
++// for bridge value + optional approvalSpender).
++const MAX_ERC20_BRIDGE_VALUE = 10n ** 15n;
+ function assertQuote(planned, refreshed, source, target, spender, now) {
+     if (refreshed.requirement.id !== planned.requirement.id ||
+         refreshed.sourceAmount !== planned.sourceAmount ||
+@@ -20,14 +33,13 @@ function assertQuote(planned, refreshed, source, target, spender, now) {
+         refreshed.destinationAmount < planned.requirement.amount ||
+         refreshed.id.trim() === "" ||
+         !sameAddress(refreshed.target, target) ||
+-        (!native(source.token) && refreshed.approvalSpender == null) ||
+         (refreshed.approvalSpender != null &&
+             !sameAddress(refreshed.approvalSpender, spender)) ||
+         !/^0x(?:[0-9a-fA-F]{2})+$/.test(refreshed.data) ||
+         !Number.isSafeInteger(refreshed.expiresAt) ||
+         refreshed.expiresAt <= now ||
+         (native(source.token) && refreshed.value !== refreshed.sourceAmount) ||
+-        (!native(source.token) && refreshed.value !== 0n))
++        (!native(source.token) && refreshed.value > MAX_ERC20_BRIDGE_VALUE))
+         throw new Error("Refreshed Squid route failed execution trust checks");
+ }
+ async function balance(client, token, owner) {
+@@ -116,30 +128,74 @@ export async function executeSquidFunding(input, dependencies) {
+     if (destinationChainId == null ||
+         (await dependencies.destinationClient.getChainId()) !== destinationChainId)
+         throw new Error("Destination RPC chain does not match the Squid route");
+-    const refresh = (quote) => quoteSquidRoute({
+-        owner: plan.owner,
+-        source: plan.source,
+-        requirement: quote.requirement,
+-        sourceAmount: quote.sourceAmount,
+-        slippage: plan.slippage,
+-    }, dependencies.squid);
++    // LOCAL PATCH (fpe-pr293): Squid's per-wallet executable-quote limiter
++    // (429 "Too many quote requests for this address") recovers within
++    // seconds; a one-shot failure here strands the flow between approve and
++    // swap, so retry twice before giving up.
++    const refresh = async (quote) => {
++        for (let attempt = 0; ; attempt += 1) {
++            try {
++                return await quoteSquidRoute({
++                    owner: plan.owner,
++                    source: plan.source,
++                    requirement: quote.requirement,
++                    sourceAmount: quote.sourceAmount,
++                    slippage: plan.slippage,
++                }, dependencies.squid);
++            }
++            catch (error) {
++                const rateLimited = error instanceof Error && error.message.includes("(429)");
++                if (!rateLimited || attempt >= 2)
++                    throw error;
++                await (dependencies.sleep ?? sleep)(15_000);
++            }
++        }
++    };
+     const now = () => Math.floor((dependencies.squid.now ?? Date.now)() / 1000);
+     let totalNativeFee = 0n;
+     const routes = [];
+     const send = async (transaction, remainingSource, validate) => {
+-        const [latestNonce, pendingNonce] = await Promise.all([
+-            dependencies.publicClient.getTransactionCount({
+-                address: plan.owner,
+-                blockTag: "latest",
+-            }),
+-            dependencies.publicClient.getTransactionCount({
+-                address: plan.owner,
+-                blockTag: "pending",
+-            }),
+-        ]);
+-        if (latestNonce !== pendingNonce)
+-            throw new Error("Source account has pending transactions");
+-        const prepared = await prepare(dependencies.publicClient, dependencies.walletClient, transaction, pendingNonce, input.feeMode, input.opStackFeeBuffer);
++        // LOCAL PATCH (fpe-pr293): a load-balanced RPC can briefly disagree
++        // about latest vs pending right after the previous leg's receipt
++        // (lagging replica). Re-check a few times before treating the account
++        // as having genuinely pending transactions.
++        let latestNonce;
++        let pendingNonce;
++        for (let check = 0; ; check += 1) {
++            [latestNonce, pendingNonce] = await Promise.all([
++                dependencies.publicClient.getTransactionCount({
++                    address: plan.owner,
++                    blockTag: "latest",
++                }),
++                dependencies.publicClient.getTransactionCount({
++                    address: plan.owner,
++                    blockTag: "pending",
++                }),
++            ]);
++            if (latestNonce === pendingNonce)
++                break;
++            if (check >= 3)
++                throw new Error("Source account has pending transactions");
++            await (dependencies.sleep ?? sleep)(3_000);
++        }
++        // LOCAL PATCH (fpe-pr293): gas estimation right after an approve can
++        // hit a load-balancer replica that has not indexed the approval yet;
++        // the simulated transferFrom then reverts (TransferFailed) even
++        // though the transaction is executable. Retry briefly before
++        // treating the failure as real — genuine reverts persist and still
++        // surface after the retries.
++        let prepared;
++        for (let attempt = 0; ; attempt += 1) {
++            try {
++                prepared = await prepare(dependencies.publicClient, dependencies.walletClient, transaction, pendingNonce, input.feeMode, input.opStackFeeBuffer);
++                break;
++            }
++            catch (error) {
++                if (attempt >= 3)
++                    throw error;
++                await (dependencies.sleep ?? sleep)(3_000);
++            }
++        }
+         if (totalNativeFee + prepared.fee > input.maxNativeFee)
+             throw new Error("Execution would exceed the total-native-fee cap");
+         const [nativeBalance, sourceBalance] = await Promise.all([
+@@ -185,8 +241,6 @@ export async function executeSquidFunding(input, dependencies) {
+     };
+     for (let index = 0; index < plan.quotes.length; index += 1) {
+         const planned = plan.quotes[index];
+-        const refreshed = await refresh(planned);
+-        assertQuote(planned, refreshed, plan.source, input.trustedTarget, input.trustedSpender, now());
+         const remainingSource = plan.quotes
+             .slice(index)
+             .reduce((total, quote) => total + quote.sourceAmount, 0n);
+@@ -218,16 +272,33 @@ export async function executeSquidFunding(input, dependencies) {
+                     }),
+                     value: 0n,
+                 }, remainingSource);
+-                allowance = await dependencies.publicClient.readContract({
+-                    address: plan.source.token,
+-                    abi: erc20Abi,
+-                    functionName: "allowance",
+-                    args: [plan.owner, input.trustedSpender],
+-                });
+-                if (allowance !== planned.sourceAmount)
+-                    throw new Error("Exact source-token allowance is required after approval");
++                // LOCAL PATCH (fpe-pr293): this read fires immediately after
++                // the approve receipt — the highest replica-lag moment on a
++                // load-balanced RPC. Re-read a few times before declaring the
++                // allowance wrong; a genuinely wrong allowance still throws.
++                for (let check = 0; ; check += 1) {
++                    allowance = await dependencies.publicClient.readContract({
++                        address: plan.source.token,
++                        abi: erc20Abi,
++                        functionName: "allowance",
++                        args: [plan.owner, input.trustedSpender],
++                    });
++                    if (allowance === planned.sourceAmount)
++                        break;
++                    if (check >= 4)
++                        throw new Error("Exact source-token allowance is required after approval");
++                    await (dependencies.sleep ?? sleep)(3_000);
++                }
+             }
+         }
++        // LOCAL PATCH (fpe-pr293): fetch the executable route AFTER the
++        // approval legs. Squid routes expire in ~30-60s; fetching before the
++        // approvals meant the expiry re-check at broadcast time failed for
++        // any user slower than the expiry window, deterministically aborting
++        // between approve and swap. The route is only needed for the swap
++        // broadcast; approvals use plan data alone.
++        const refreshed = await refresh(planned);
++        assertQuote(planned, refreshed, plan.source, input.trustedTarget, input.trustedSpender, now());
+         const transactionHash = await send({
+             to: refreshed.target,
+             data: refreshed.data,
