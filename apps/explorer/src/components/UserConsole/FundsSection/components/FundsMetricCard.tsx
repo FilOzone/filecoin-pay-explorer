@@ -28,7 +28,7 @@ const FundsMetricCard = ({
     <p className='text-sm text-muted-foreground'>{label}</p>
     <p className={cn("flex items-center gap-1.5 text-xl font-medium tabular-nums text-foreground", valueClassName)}>
       {icon}
-      <span className='truncate'>{value}</span>
+      <span className='min-w-0'>{value}</span>
     </p>
     {detail ? <p className={cn("text-xs text-muted-foreground", detailClassName)}>{detail}</p> : null}
   </Card>

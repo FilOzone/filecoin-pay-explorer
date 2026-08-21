@@ -90,7 +90,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
 
       <div className='flex-1 pt-4 pb-12'>
         <Container>
-          <div className='flex flex-col gap-15'>
+          <div className='flex flex-col gap-6'>
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={accessState}>
