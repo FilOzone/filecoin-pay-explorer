@@ -122,15 +122,37 @@ type RunwayCardProps = {
 };
 
 export function RunwayCard({ children, current, projected }: RunwayCardProps) {
+  const currentLabel = formatFundedThrough(current, true);
+  const projectedLabel = projected ? formatFundedThrough(projected, true) : "—";
+
   return (
     <div className='grid gap-2 rounded-md border p-3 text-sm'>
       <p>
-        Current funded through: <span className='font-medium'>{formatFundedThrough(current)}</span>{" "}
+        Current funded through:{" "}
+        <span className='font-medium'>
+          {currentLabel.startsWith("~") ? (
+            <>
+              <span aria-hidden='true'>{currentLabel}</span>
+              <span className='sr-only'>Approximately {currentLabel.slice(1)}</span>
+            </>
+          ) : (
+            currentLabel
+          )}
+        </span>{" "}
         <span className='text-muted-foreground'>({FUNDING_STATUS_LABELS[current.status]})</span>
       </p>
       <p>
         Projected funded through:{" "}
-        <span className='font-medium'>{projected ? formatFundedThrough(projected, true) : "—"}</span>{" "}
+        <span className='font-medium'>
+          {projectedLabel.startsWith("~") ? (
+            <>
+              <span aria-hidden='true'>{projectedLabel}</span>
+              <span className='sr-only'>Approximately {projectedLabel.slice(1)}</span>
+            </>
+          ) : (
+            projectedLabel
+          )}
+        </span>{" "}
         {projected ? <span className='text-muted-foreground'>({FUNDING_STATUS_LABELS[projected.status]})</span> : null}
       </p>
       {children}
