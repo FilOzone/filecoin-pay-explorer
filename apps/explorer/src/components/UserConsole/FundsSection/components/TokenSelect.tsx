@@ -1,6 +1,6 @@
 import type { UserToken } from "@filecoin-pay/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
-import TokenIcon from "./TokenIcon";
+import TokenIcon from "@/components/shared/TokenIcon";
 
 type TokenSelectProps = {
   tokens: UserToken[];

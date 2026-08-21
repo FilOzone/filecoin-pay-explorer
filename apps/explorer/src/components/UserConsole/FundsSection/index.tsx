@@ -124,8 +124,13 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
     <>
       {renderSection()}
 
-      {/* A null token opens the custom-token deposit flow used by empty accounts. */}
-      <DepositDialog userToken={depositToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
+      {/* A null token opens the picker expanded, the first-deposit path for an empty account. */}
+      <DepositDialog
+        depositToken={depositToken}
+        tokens={userTokens ?? []}
+        open={depositDialogOpen}
+        onOpenChange={setDepositDialogOpen}
+      />
 
       {/* Mounted only once a token is captured, so WithdrawDialog keeps a non-nullable prop. */}
       {withdrawToken ? (
