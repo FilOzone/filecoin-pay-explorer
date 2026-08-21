@@ -111,7 +111,9 @@ export function SquidQuoteReview({
   const [debouncedMaximumNativeFee] = useDebounce(maximumNativeFee, QUOTE_DEBOUNCE_MS);
   const sourceChain = Number(sourceChainId);
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
-  const { data: sourceWalletClient } = useWalletClient({ chainId: sourceChain || undefined });
+  // Follow the connected chain so switching networks refreshes a wallet-client
+  // query that may previously have failed because the selected chain differed.
+  const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
   const destinationClient = usePublicClient({ chainId: 314 });
   const integratorId =
     process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
@@ -589,8 +591,19 @@ export function SquidQuoteReview({
             Route: {quote.actions.map((action) => action.description ?? action.type).join(" → ")}
           </p>
 
-          <Button disabled={isBusy} onClick={acquire} size='compact' type='button' variant='primary'>
-            {acquisitionState === "processing" ? (
+          <Button
+            disabled={isBusy || isPreparingWallet}
+            onClick={acquire}
+            size='compact'
+            type='button'
+            variant='primary'
+          >
+            {isPreparingWallet ? (
+              <span className='inline-flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                Preparing wallet…
+              </span>
+            ) : acquisitionState === "processing" ? (
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Acquiring USDFC…
