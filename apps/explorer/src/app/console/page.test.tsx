@@ -68,12 +68,17 @@ describe("UserConsole", () => {
     accountState.isLoading = false;
   });
 
-  it("keeps the unsupported-network console state on a Squid source chain", () => {
+  it("keeps a reachable funding trigger on a Squid source chain", () => {
+    // The console itself only supports Filecoin, so the unsupported-network
+    // banner is correct here — but the guided top-up needs the wallet parked
+    // on a source chain (Base, Arbitrum, …) to sign, so a reachable trigger
+    // is required or a lost/refreshed dialog strands the user off Filecoin
+    // with no way back into the flow without a round trip that just repeats.
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Unsupported network");
     expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
-    expect(markup).not.toContain("Fund with another token");
+    expect(markup).toContain("Fund with another token");
     expect(markup).not.toContain("Funds");
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");

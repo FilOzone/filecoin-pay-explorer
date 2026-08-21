@@ -2,7 +2,7 @@
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { AlertTriangle } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useConnection } from "wagmi";
 import { Balance, ChainSwitcher } from "@/components/shared";
 import {
@@ -14,6 +14,7 @@ import {
   TopUpDialogController,
 } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
+import { consoleDisplayView } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
@@ -22,6 +23,7 @@ import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChain
 
 const UserConsoleContent = () => {
   const { address, isConnected, chainId } = useConnection();
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const walletNetwork = useMemo(() => getNetworkFromChainId(chainId), [chainId]);
   const isSquidSourceChain = SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
   const consoleView =
@@ -32,6 +34,9 @@ const UserConsoleContent = () => {
         : isSupportedChainId(chainId)
           ? "filecoin"
           : "unsupported";
+  // The console body follows displayView so an in-progress top-up keeps the
+  // Filecoin console behind the dialog while the wallet visits a source chain.
+  // The header pill stays on consoleView: the wallet truly is elsewhere.
 
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
 
@@ -45,8 +50,9 @@ const UserConsoleContent = () => {
     error,
   } = useAccountDetails(address || "", { networkOverride: walletNetwork });
   const accountReady = !isLoading && !isError;
-  const showFullFunds = consoleView === "filecoin" && accountReady && !!account;
-  const showUnindexedTopUp = consoleView === "filecoin" && accountReady && !account && walletNetwork === "mainnet";
+  const displayView = consoleDisplayView(consoleView, isSquidSourceChain, isTopUpOpen);
+  const showFullFunds = displayView === "filecoin" && accountReady && !!account;
+  const showUnindexedTopUp = displayView === "filecoin" && accountReady && !account && walletNetwork === "mainnet";
   const allowSourceChainTopUp = consoleView === "unsupported" && isSquidSourceChain;
   const showGuidedTopUp = showUnindexedTopUp || allowSourceChainTopUp || (showFullFunds && walletNetwork === "mainnet");
 
@@ -91,9 +97,9 @@ const UserConsoleContent = () => {
         {consoleView === "pending" && <LoadingStateCard message='Loading your wallet network...' />}
 
         {/* Unsupported Chain */}
-        {consoleView === "unsupported" && <UnsupportedChain />}
+        {displayView === "unsupported" && <UnsupportedChain />}
 
-        {consoleView === "filecoin" && address && (
+        {displayView === "filecoin" && address && (
           <>
             {/* Loading */}
             {isLoading && <LoadingStateCard message='Loading your account details...' />}
@@ -104,9 +110,21 @@ const UserConsoleContent = () => {
         )}
 
         {address && showGuidedTopUp && (
-          <TopUpDialogController accountId={account?.id ?? address} key={address} showTrigger={showUnindexedTopUp}>
+          <TopUpDialogController
+            accountId={account?.id ?? address}
+            key={address}
+            onOpenStateChange={setIsTopUpOpen}
+            showTrigger={showUnindexedTopUp || allowSourceChainTopUp}
+          >
             {showFullFunds
-              ? (openTopUp) => <FundsSection accountId={account.id} onGuidedTopUp={openTopUp} subscribed={subscribed} />
+              ? (openTopUp, topUpInProgress) => (
+                  <FundsSection
+                    accountId={account.id}
+                    onGuidedTopUp={openTopUp}
+                    subscribed={subscribed}
+                    topUpInProgress={topUpInProgress}
+                  />
+                )
               : undefined}
           </TopUpDialogController>
         )}
@@ -115,7 +133,7 @@ const UserConsoleContent = () => {
           <FundsSection accountId={account.id} key={address} subscribed={subscribed} />
         )}
 
-        {consoleView === "filecoin" && address && !isLoading && account && (
+        {displayView === "filecoin" && address && !isLoading && account && (
           <>
             <RailsSection account={account} userAddress={address} />
             <OperatorApprovalsSection account={account} />
@@ -123,7 +141,7 @@ const UserConsoleContent = () => {
         )}
 
         {/* Error */}
-        {consoleView === "filecoin" && isError && <ErrorState error={error} />}
+        {displayView === "filecoin" && isError && <ErrorState error={error} />}
       </div>
     </PageSection>
   );

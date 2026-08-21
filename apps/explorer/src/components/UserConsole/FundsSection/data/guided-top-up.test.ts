@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { invalidateTopUpQueries, parseTopUpAmount } from "./guided-top-up";
+import { consoleDisplayView, invalidateTopUpQueries, parseTopUpAmount } from "./guided-top-up";
 
 describe("guided top-up", () => {
   it("parses an editable 18-decimal USDFC amount", () => {
@@ -34,5 +34,15 @@ describe("guided top-up", () => {
       true,
     ]);
     expect(queryClient.getQueryState(unaffectedKey)?.isInvalidated).toBe(false);
+  });
+
+  it("keeps the Filecoin console visible while topping up from a source chain", () => {
+    expect(consoleDisplayView("unsupported", true, true)).toBe("filecoin");
+    // Dialog closed, or a chain Squid cannot fund from: the unsupported state stands.
+    expect(consoleDisplayView("unsupported", true, false)).toBe("unsupported");
+    expect(consoleDisplayView("unsupported", false, true)).toBe("unsupported");
+    // Supported networks are never rewritten.
+    expect(consoleDisplayView("filecoin", true, true)).toBe("filecoin");
+    expect(consoleDisplayView("pending", true, true)).toBe("pending");
   });
 });

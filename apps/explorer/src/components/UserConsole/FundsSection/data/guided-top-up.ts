@@ -12,6 +12,19 @@ export function withoutTopUpSearchParam(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
+export type ConsoleView = "disconnected" | "pending" | "filecoin" | "unsupported";
+
+/**
+ * The console body to render. While the guided top-up dialog is open and the
+ * wallet is parked on a Squid source chain (a required, temporary state for
+ * signing the acquisition), the Filecoin console stays visible behind the
+ * dialog instead of flipping to the unsupported-network takeover; account
+ * data is subgraph-sourced, so it does not depend on the wallet's chain.
+ */
+export function consoleDisplayView(view: ConsoleView, isSquidSourceChain: boolean, topUpOpen: boolean): ConsoleView {
+  return view === "unsupported" && isSquidSourceChain && topUpOpen ? "filecoin" : view;
+}
+
 export function invalidateTopUpQueries(queryClient: QueryClient, accountId: string, accountOwner: string) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ["account", accountOwner] }),
