@@ -1,7 +1,6 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, ChevronRight, WifiOff } from "lucide-react";
@@ -11,7 +10,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BaseError, UserRejectedRequestError } from "viem";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
-import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import {
   AlertsActiveCard,
   AlertsOffCard,
@@ -22,7 +20,6 @@ import {
   PendingVerificationCard,
   UnsubscribeDialog,
 } from "@/components/UserConsole/NotificationsSection/components";
-import { NotConnected } from "@/components/UserConsole/States";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import {
   getNetworkFromChainId,
@@ -415,7 +412,7 @@ const NotificationsContent = ({
   }
 };
 
-const NotificationsMain = () => {
+const NotificationsPage = () => {
   const { address, isConnected, chainId } = useConnection();
   const walletNetwork = getNetworkFromChainId(chainId);
   const isEligibleNetwork = isSupportedChainId(chainId) && isNotificationsEligibleNetwork(walletNetwork);
@@ -425,8 +422,8 @@ const NotificationsMain = () => {
   const showUpdateEmail = viewType === "subscribed" && isConnected && !!address && isEligibleNetwork;
 
   function renderContent() {
-    if (!isConnected || !address) return <NotConnected />;
-    if (chainId === undefined) return null;
+    // Connection gating lives in the console layout; by here the wallet is connected.
+    if (!address || chainId === undefined) return null;
     if (!isEligibleNetwork) return <IneligibleNetwork />;
     return (
       <NotificationsContent
@@ -440,47 +437,40 @@ const NotificationsMain = () => {
   }
 
   return (
-    <PageSection backgroundVariant='light'>
-      <div className='flex flex-col gap-15 -mt-25 sm:mt-0'>
-        <div>
-          <Link
-            href='/console'
-            className='inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6'
-          >
-            <ArrowLeft className='h-4 w-4' />
-            Back to console
-          </Link>
-          <div className='flex items-baseline justify-between'>
-            <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
-              Email alerts
-            </h2>
-            {showUpdateEmail && (
-              <button
-                type='button'
-                onClick={() => updateEmailRef.current?.()}
-                className='inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline'
-              >
-                Update email
-                <ChevronRight className='h-4 w-4' />
-              </button>
-            )}
-          </div>
-          <p className='mt-2 text-muted-foreground'>
-            Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
-            services are affected.
-          </p>
-        </div>
+    <div className='flex flex-col gap-15'>
+      <div>
+        <Link
+          href='/console'
+          className='inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6'
+        >
+          <ArrowLeft className='h-4 w-4' />
+          Back to console
+        </Link>
 
-        <div>{renderContent()}</div>
+        <div className='flex items-baseline justify-between'>
+          <h2 className='font-heading text-balance text-3xl/10 font-medium sm:text-5xl/15 sm:tracking-tight'>
+            Email alerts
+          </h2>
+          {showUpdateEmail ? (
+            <button
+              type='button'
+              onClick={() => updateEmailRef.current?.()}
+              className='inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline'
+            >
+              Update email
+              <ChevronRight className='h-4 w-4' />
+            </button>
+          ) : null}
+        </div>
+        <p className='mt-2 text-muted-foreground'>
+          Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
+          services are affected.
+        </p>
       </div>
-    </PageSection>
+
+      <div>{renderContent()}</div>
+    </div>
   );
 };
-
-const NotificationsPage = () => (
-  <ConsoleProviders>
-    <NotificationsMain />
-  </ConsoleProviders>
-);
 
 export default NotificationsPage;
