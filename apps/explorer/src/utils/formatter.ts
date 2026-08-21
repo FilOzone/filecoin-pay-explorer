@@ -136,7 +136,11 @@ export const formatFutureTimestamp = (
     return `~${diffYears} years`;
   }
 
-  if (diffDays > 1) {
+  // Inclusive bounds: a full day out is a date, a full hour out is an hour. The
+  // exclusive form left each unit's first value to the branch below it, so a day
+  // away read "31h 12m" beside a "in 1 day" detail line, and 90 minutes read
+  // "90m" — the more precise reading, but not the one the caller asked for.
+  if (diffDays >= 1) {
     // The year is only worth its width when it isn't the current one: "Aug 31,
     // 2026" overflows a narrow card, and on a phone that clipped to "Aug 31,…"
     // — the same information the year was there to add, minus the day.
@@ -147,7 +151,7 @@ export const formatFutureTimestamp = (
       day: "numeric",
       ...(isSameYear ? {} : { year: "numeric" }),
     });
-  } else if (diffHours > 1) {
+  } else if (diffHours >= 1) {
     return `${diffHours}h ${diffMinutes % 60}m`;
   } else {
     return `${diffMinutes}m`;

@@ -66,6 +66,9 @@ const FundsMeters = ({
         trackClassName={TIER_TRACK_CLASSNAME[health.tier]}
         valueClassName={TIER_VALUE_CLASSNAME[health.tier]}
       />
+      {/* Locked is a proportion, not a severity: a high locked share is normal for an
+        active account. Blue at every value keeps it from being read as an alert
+        the way the tier-tinted runway bar above is meant to be. */}
       <MeterRow
         label='Locked of balance'
         detail={`${formatTokenAmount(lockedAmount, tokenDecimals)} of ${formatTokenAmount(funds, tokenDecimals)} ${tokenSymbol} reserved`}
