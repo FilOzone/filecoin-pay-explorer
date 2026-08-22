@@ -94,6 +94,8 @@ export function GuidedTopUpDialog({
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
   const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
+  const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
+  const originalChainId = useRef<number | undefined>(undefined);
   const wasOpen = useRef(false);
   // Set when the amount was prefilled for this open, so clearing the field
   // doesn't refill it (see the prefill effect below).
@@ -150,12 +152,15 @@ export function GuidedTopUpDialog({
   useEffect(() => {
     // Reset the amount on open; the prefill effect below fills it once the
     // on-chain summary is available.
-    if (open && !wasOpen.current && acquiredAmount === null) {
-      setAmount("");
-      didPrefillAmount.current = false;
+    if (open && !wasOpen.current) {
+      originalChainId.current = chainId;
+      if (acquiredAmount === null) {
+        setAmount("");
+        didPrefillAmount.current = false;
+      }
     }
     wasOpen.current = open;
-  }, [acquiredAmount, open]);
+  }, [acquiredAmount, chainId, open]);
 
   // Prefill the amount with the slider's default suggestion once per open, so
   // the projection is live immediately instead of dashes until the user acts.
@@ -223,7 +228,7 @@ export function GuidedTopUpDialog({
         setAcquisitionOwner(null);
         setSavedAcquisition(null);
         setAcquisitionState("idle");
-        onOpenChange(false);
+        closeDialog();
       }
     } catch (error) {
       if (!didBroadcast && isUserRejectedRequest(error)) {
@@ -273,7 +278,7 @@ export function GuidedTopUpDialog({
     const completedDeposit = savedAcquisition?.status === "depositing";
     setSavedAcquisition(null);
     setAcquisitionState("idle");
-    if (completedDeposit) onOpenChange(false);
+    if (completedDeposit) closeDialog();
   };
 
   const continueWithAcquiredUsdfc = () => {
@@ -304,13 +309,28 @@ export function GuidedTopUpDialog({
   };
 
   const switchToFilecoin = async () => {
+    setIsSwitchingNetwork(true);
     try {
       await switchChainAsync({ chainId: mainnet.id });
     } catch (error) {
       toast.error("Could not switch to Filecoin", {
         description: error instanceof Error ? error.message : "Your wallet did not switch networks.",
       });
+    } finally {
+      setIsSwitchingNetwork(false);
     }
+  };
+
+  const closeDialog = () => {
+    const chainIdToRestore = originalChainId.current;
+    originalChainId.current = undefined;
+    onOpenChange(false);
+    if (chainIdToRestore === undefined || chainIdToRestore === chainId) return;
+    void switchChainAsync({ chainId: chainIdToRestore }).catch((error) => {
+      toast.error("Could not restore your wallet network", {
+        description: walletErrorMessage(error, "Your wallet did not switch back to its original network."),
+      });
+    });
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -318,7 +338,12 @@ export function GuidedTopUpDialog({
       toast.info("Wait for the acquisition request to finish before closing this dialog.");
       return;
     }
-    onOpenChange(nextOpen);
+    if (!nextOpen && isSwitchingNetwork) {
+      toast.info("Wait for the wallet network switch to finish before closing this dialog.");
+      return;
+    }
+    if (nextOpen) onOpenChange(true);
+    else closeDialog();
   };
 
   return (
@@ -441,6 +466,7 @@ export function GuidedTopUpDialog({
               }}
               onAcquisitionStateChange={setAcquisitionState}
               onBlocked={setSavedAcquisition}
+              onNetworkSwitchingChange={setIsSwitchingNetwork}
             />
           )}
           {acquiredAmount !== null && !acquisitionOwnerMatches && (
@@ -451,7 +477,7 @@ export function GuidedTopUpDialog({
         </div>
         <DialogFooter>
           <Button
-            disabled={isSubmitting || acquisitionState === "processing"}
+            disabled={isSubmitting || acquisitionState === "processing" || isSwitchingNetwork}
             onClick={() => handleOpenChange(false)}
             variant='ghost'
           >
@@ -469,12 +495,19 @@ export function GuidedTopUpDialog({
               Check the saved acquisition above to continue
             </Button>
           ) : acquiredAmount !== null && chainId !== mainnet.id ? (
-            <Button disabled={isSubmitting} onClick={switchToFilecoin} variant='primary'>
-              Switch to Filecoin to deposit
+            <Button disabled={isSubmitting || isSwitchingNetwork} onClick={switchToFilecoin} variant='primary'>
+              {isSwitchingNetwork ? (
+                <span className='inline-flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                  Switching to Filecoin…
+                </span>
+              ) : (
+                "Switch to Filecoin to deposit"
+              )}
             </Button>
           ) : acquiredAmount !== null ? (
             <Button
-              disabled={!synapse || isSubmitting || !acquisitionOwnerMatches}
+              disabled={!synapse || isSubmitting || isSwitchingNetwork || !acquisitionOwnerMatches}
               onClick={handleConfirm}
               variant='primary'
             >

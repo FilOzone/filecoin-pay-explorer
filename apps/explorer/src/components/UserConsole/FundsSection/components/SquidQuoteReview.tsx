@@ -56,6 +56,7 @@ type SquidQuoteReviewProps = {
   onAcquired: (acquisition: SquidAcquisition) => void;
   onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
   onBlocked: (acquisition: SquidAcquisition) => void;
+  onNetworkSwitchingChange: (isSwitching: boolean) => void;
 };
 
 function displayAmount(amount: bigint, decimals: number, symbol: string) {
@@ -93,6 +94,7 @@ export function SquidQuoteReview({
   onAcquired,
   onAcquisitionStateChange,
   onBlocked,
+  onNetworkSwitchingChange,
 }: SquidQuoteReviewProps) {
   // The flow is deliberately split into read-only route review and wallet execution.
   // Any execution that may have broadcast remains blocked until it is recovered or explicitly cleared.
@@ -265,6 +267,7 @@ export function SquidQuoteReview({
     setError(null);
     setSwitchError(null);
     if (!source || !sourceChainMeta) return setError("Select a source network and token first.");
+    onNetworkSwitchingChange(true);
     try {
       await switchChainAsync({ chainId: source.chainId });
     } catch (switchError) {
@@ -273,6 +276,8 @@ export function SquidQuoteReview({
           ? "Network switch cancelled in your wallet."
           : walletErrorMessage(switchError, `Could not switch your wallet to ${sourceChainMeta.name}.`),
       );
+    } finally {
+      onNetworkSwitchingChange(false);
     }
   };
 
