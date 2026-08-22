@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopUpActivityProvider, useTopUpActivity } from "../TopUpActivityContext";
 import { TopUpDialogController } from "./TopUpDialogController";
 
+const replace = vi.fn();
+let params = new URLSearchParams();
 const dialog = vi.hoisted(() => ({
   onOpenChange: undefined as ((open: boolean) => void) | undefined,
   open: false,
@@ -13,8 +15,8 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/console",
-  useRouter: () => ({ replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace }),
+  useSearchParams: () => params,
 }));
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
@@ -26,7 +28,13 @@ vi.mock("./components", () => ({
   GuidedTopUpDialog: ({ onOpenChange, open }: { onOpenChange: (open: boolean) => void; open: boolean }) => {
     dialog.onOpenChange = onOpenChange;
     dialog.open = open;
-    return <div data-guided-top-up-open={open} />;
+    return (
+      <div data-guided-top-up-open={open} data-testid='dialog'>
+        <button onClick={() => onOpenChange(false)} type='button'>
+          Close
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -52,12 +60,26 @@ function Harness({ showController = true }: { showController?: boolean }) {
   );
 }
 
-describe("TopUpDialogController activity", () => {
-  beforeEach(() => {
-    dialog.onOpenChange = undefined;
-    dialog.open = false;
+function renderController() {
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <TopUpActivityProvider>
+        <TopUpDialogController accountId='0xabc' />
+      </TopUpActivityProvider>,
+    );
   });
+  return renderer;
+}
 
+beforeEach(() => {
+  dialog.onOpenChange = undefined;
+  dialog.open = false;
+  params = new URLSearchParams();
+  replace.mockReset();
+});
+
+describe("TopUpDialogController activity", () => {
   it("propagates real open, close, and controller cleanup through the activity provider", () => {
     let renderer!: ReturnType<typeof create>;
     act(() => {
@@ -77,5 +99,23 @@ describe("TopUpDialogController activity", () => {
     expect(renderer.root.findByProps({ "data-top-up-active": true }).children).toEqual(["true"]);
     act(() => renderer.update(<Harness showController={false} />));
     expect(renderer.root.findByProps({ "data-top-up-active": false }).children).toEqual(["false"]);
+  });
+});
+
+describe("TopUpDialogController deep link", () => {
+  it("opens the dialog when ?topUp=1 is present", () => {
+    params = new URLSearchParams("topUp=1&utm_source=email");
+    const renderer = renderController();
+    const renderedDialog = renderer.root.findByProps({ "data-testid": "dialog" });
+    expect(renderedDialog.props["data-guided-top-up-open"]).toBe(true);
+  });
+
+  it("closing strips only the topUp param and preserves the rest", () => {
+    params = new URLSearchParams("topUp=1&utm_source=email");
+    const renderer = renderController();
+    act(() => {
+      renderer.root.findByType("button").props.onClick();
+    });
+    expect(replace).toHaveBeenCalledWith("/console?utm_source=email");
   });
 });
