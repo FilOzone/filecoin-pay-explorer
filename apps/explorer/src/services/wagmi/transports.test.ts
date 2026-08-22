@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import { chainTransport, SOURCE_RPC_URLS } from "./transports";
+import { createChainTransport, SOURCE_RPC_URLS } from "./transports";
 
 const FILECOIN_MAINNET_ID = 314;
 
@@ -20,7 +20,7 @@ describe("source-chain transports", () => {
   });
 
   it("returns a transport for covered and uncovered chains", () => {
-    expect(chainTransport(8453)).toBeTypeOf("function");
-    expect(chainTransport(314)).toBeTypeOf("function");
+    expect(createChainTransport(8453)).toBeTypeOf("function");
+    expect(createChainTransport(314)).toBeTypeOf("function");
   });
 });

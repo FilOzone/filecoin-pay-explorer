@@ -12,7 +12,7 @@ export const SOURCE_RPC_URLS: Record<number, readonly string[]> = {
   43114: ["https://avalanche-c-chain-rpc.publicnode.com", "https://avalanche.drpc.org"],
 };
 
-export function chainTransport(chainId: number): Transport {
+export function createChainTransport(chainId: number): Transport {
   const urls = SOURCE_RPC_URLS[chainId];
   if (!urls) return http();
   return fallback([...urls.map((url) => http(url)), http()]);
