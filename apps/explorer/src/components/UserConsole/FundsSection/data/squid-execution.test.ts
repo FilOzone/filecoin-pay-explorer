@@ -1,6 +1,11 @@
 import { executeSquidFunding, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { describe, expect, it, vi } from "vitest";
-import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "./squid-execution";
+import {
+  canClearSquidAcquisitionAfterError,
+  executeSquidTopUp,
+  isUserRejectedRequest,
+  walletErrorMessage,
+} from "./squid-execution";
 
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
@@ -43,32 +48,39 @@ describe("executeSquidTopUp", () => {
     );
   });
 
-  it("reports a transaction as soon as the wallet broadcasts it", async () => {
+  it("reports only the Squid transaction as attempted and broadcast", async () => {
     const transactionHash = `0x${"4".repeat(64)}` as const;
-    const onBroadcast = vi.fn();
+    const approvalHash = `0x${"3".repeat(64)}` as const;
+    const onSwapAttempt = vi.fn();
+    const onSwapBroadcast = vi.fn();
     const sendTransaction = vi.fn().mockResolvedValue(transactionHash);
     const plan = { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source };
     vi.mocked(executeSquidFunding).mockImplementation(async (_input, dependencies) => {
-      await dependencies.walletClient.sendTransaction({} as never);
+      sendTransaction.mockResolvedValueOnce(approvalHash).mockResolvedValueOnce(transactionHash);
+      await dependencies.walletClient.sendTransaction({ to: source.token } as never);
+      await dependencies.walletClient.sendTransaction({ to: SQUID_ROUTER_ADDRESS } as never);
       return { nativeFee: 1n, routes: [], sourceAmount: 2n };
     });
 
     await executeSquidTopUp({
       destinationClient: {} as never,
       integratorId: "test-integrator",
-      onBroadcast,
+      onSwapAttempt,
+      onSwapBroadcast,
       plan,
       sourcePublicClient: {} as never,
       sourceWalletClient: { sendTransaction } as never,
     });
 
-    expect(onBroadcast).toHaveBeenCalledWith(transactionHash);
+    expect(onSwapAttempt).toHaveBeenCalledOnce();
+    expect(onSwapBroadcast).toHaveBeenCalledOnce();
+    expect(onSwapBroadcast).toHaveBeenCalledWith(transactionHash);
   });
 
-  it("reports an attempted transaction even when the wallet loses the response", async () => {
-    const onTransactionAttempt = vi.fn();
+  it("reports an attempted swap even when the wallet loses the response", async () => {
+    const onSwapAttempt = vi.fn();
     vi.mocked(executeSquidFunding).mockImplementation(async (_input, dependencies) => {
-      await dependencies.walletClient.sendTransaction({} as never);
+      await dependencies.walletClient.sendTransaction({ to: SQUID_ROUTER_ADDRESS } as never);
       return { nativeFee: 1n, routes: [], sourceAmount: 2n };
     });
 
@@ -76,13 +88,40 @@ describe("executeSquidTopUp", () => {
       executeSquidTopUp({
         destinationClient: {} as never,
         integratorId: "test-integrator",
-        onTransactionAttempt,
+        onSwapAttempt,
         plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source },
         sourcePublicClient: {} as never,
         sourceWalletClient: { sendTransaction: vi.fn().mockRejectedValue(new Error("response lost")) } as never,
       }),
     ).rejects.toThrow("response lost");
-    expect(onTransactionAttempt).toHaveBeenCalledOnce();
+    expect(onSwapAttempt).toHaveBeenCalledOnce();
+  });
+
+  it("does not report an approval attempt when its response is lost", async () => {
+    const onSwapAttempt = vi.fn();
+    vi.mocked(executeSquidFunding).mockImplementation(async (_input, dependencies) => {
+      await dependencies.walletClient.sendTransaction({ to: source.token } as never);
+      return { nativeFee: 1n, routes: [], sourceAmount: 2n };
+    });
+
+    await expect(
+      executeSquidTopUp({
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        onSwapAttempt,
+        plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source },
+        sourcePublicClient: {} as never,
+        sourceWalletClient: { sendTransaction: vi.fn().mockRejectedValue(new Error("response lost")) } as never,
+      }),
+    ).rejects.toThrow("response lost");
+    expect(onSwapAttempt).not.toHaveBeenCalled();
+  });
+
+  it("clears recovery state only before a swap attempt or after an unbroadcast rejection", () => {
+    expect(canClearSquidAcquisitionAfterError(false, false, new Error("approval response lost"))).toBe(true);
+    expect(canClearSquidAcquisitionAfterError(true, false, { code: 4001 })).toBe(true);
+    expect(canClearSquidAcquisitionAfterError(true, true, { code: 4001 })).toBe(false);
+    expect(canClearSquidAcquisitionAfterError(true, false, new Error("response lost"))).toBe(false);
   });
 
   it("recognizes nested wallet rejection errors", () => {

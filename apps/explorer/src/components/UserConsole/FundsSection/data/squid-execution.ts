@@ -15,16 +15,16 @@ const BPS = 10_000n;
 export async function executeSquidTopUp({
   destinationClient,
   integratorId,
-  onBroadcast,
-  onTransactionAttempt,
+  onSwapAttempt,
+  onSwapBroadcast,
   plan,
   sourcePublicClient,
   sourceWalletClient,
 }: {
   destinationClient: SquidPublicClient;
   integratorId: string;
-  onBroadcast?: (transactionHash: Hash) => void;
-  onTransactionAttempt?: () => void;
+  onSwapAttempt?: () => void;
+  onSwapBroadcast?: (transactionHash: Hash) => void;
   plan: SquidFundingPlan;
   sourcePublicClient: SquidPublicClient;
   sourceWalletClient: SquidWalletClient;
@@ -32,9 +32,11 @@ export async function executeSquidTopUp({
   const trackedWalletClient = {
     ...sourceWalletClient,
     sendTransaction: async (...args: Parameters<SquidWalletClient["sendTransaction"]>) => {
-      onTransactionAttempt?.();
+      const [request] = args;
+      const isSwap = request.to?.toLowerCase() === SQUID_ROUTER_ADDRESS.toLowerCase();
+      if (isSwap) onSwapAttempt?.();
       const transactionHash = await sourceWalletClient.sendTransaction(...args);
-      onBroadcast?.(transactionHash);
+      if (isSwap) onSwapBroadcast?.(transactionHash);
       return transactionHash;
     },
   } as SquidWalletClient;
@@ -59,6 +61,14 @@ export async function executeSquidTopUp({
       walletClient: trackedWalletClient,
     },
   );
+}
+
+export function canClearSquidAcquisitionAfterError(
+  didAttemptSwap: boolean,
+  didSwapBroadcast: boolean,
+  error: unknown,
+): boolean {
+  return !didAttemptSwap || (!didSwapBroadcast && isUserRejectedRequest(error));
 }
 
 export function isUserRejectedRequest(error: unknown): boolean {

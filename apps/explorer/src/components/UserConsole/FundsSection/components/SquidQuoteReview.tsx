@@ -28,7 +28,12 @@ import {
   markSquidBroadcast,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
-import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
+import {
+  canClearSquidAcquisitionAfterError,
+  executeSquidTopUp,
+  isUserRejectedRequest,
+  walletErrorMessage,
+} from "../data/squid-execution";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
 
 const QUOTE_DEBOUNCE_MS = 500;
@@ -318,19 +323,19 @@ export function SquidQuoteReview({
     }
 
     const isCurrentExecutionOwner = () => latestAddress.current?.toLowerCase() === address.toLowerCase();
-    let didAttemptTransaction = false;
-    let didBroadcast = false;
+    let didAttemptSwap = false;
+    let didSwapBroadcast = false;
     onAcquisitionStateChange("processing");
     try {
       await executeSquidTopUp({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
-        onBroadcast: (hash) => {
-          didBroadcast = true;
+        onSwapBroadcast: (hash) => {
+          didSwapBroadcast = true;
           acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
         },
-        onTransactionAttempt: () => {
-          didAttemptTransaction = true;
+        onSwapAttempt: () => {
+          didAttemptSwap = true;
         },
         plan,
         sourcePublicClient: publicClient as unknown as SquidPublicClient,
@@ -342,7 +347,7 @@ export function SquidQuoteReview({
         onAcquired(acquired);
       }
     } catch (executionError) {
-      if (!didAttemptTransaction || (!didBroadcast && isUserRejectedRequest(executionError))) {
+      if (canClearSquidAcquisitionAfterError(didAttemptSwap, didSwapBroadcast, executionError)) {
         try {
           clearSquidAcquisition(window.localStorage, address);
           if (isCurrentExecutionOwner()) onAcquisitionStateChange("idle");
