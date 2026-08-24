@@ -1,6 +1,7 @@
 import { executeSquidFunding, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyNetworkFeeExecutionBuffer,
   canClearSquidAcquisitionAfterError,
   executeSquidTopUp,
   isUserRejectedRequest,
@@ -20,13 +21,19 @@ const source = {
 } as const;
 const owner = "0x2222222222222222222222222222222222222222" as const;
 describe("executeSquidTopUp", () => {
-  it("executes the reviewed OP Stack plan with automatic fees and a trusted router", async () => {
+  it("applies the same rounded OP Stack buffer used by reviewed fee caps", () => {
+    expect(applyNetworkFeeExecutionBuffer(8453, 3n)).toBe(4n);
+    expect(applyNetworkFeeExecutionBuffer(1, 3n)).toBe(3n);
+  });
+
+  it("executes the reviewed OP Stack plan with an explicit fee cap and a trusted router", async () => {
     const plan = { maxSourceAmount: 2_000_000_000_000_000_000n, owner, quotes: [], slippage: 1, source };
     vi.mocked(executeSquidFunding).mockResolvedValue({ nativeFee: 1n, routes: [], sourceAmount: 2n });
 
     await executeSquidTopUp({
       destinationClient: {} as never,
       integratorId: "test-integrator",
+      maxNativeFee: 30n,
       plan,
       sourcePublicClient: {} as never,
       sourceWalletClient: {} as never,
@@ -35,7 +42,7 @@ describe("executeSquidTopUp", () => {
     expect(executeSquidFunding).toHaveBeenCalledWith(
       expect.objectContaining({
         feeMode: "op-stack",
-        maxNativeFee: "auto",
+        maxNativeFee: 30n,
         trustedSpender: SQUID_ROUTER_ADDRESS,
         trustedTarget: SQUID_ROUTER_ADDRESS,
         plan,
@@ -65,6 +72,7 @@ describe("executeSquidTopUp", () => {
     await executeSquidTopUp({
       destinationClient: {} as never,
       integratorId: "test-integrator",
+      maxNativeFee: 30n,
       onSwapAttempt,
       onSwapBroadcast,
       plan,
@@ -88,6 +96,7 @@ describe("executeSquidTopUp", () => {
       executeSquidTopUp({
         destinationClient: {} as never,
         integratorId: "test-integrator",
+        maxNativeFee: 30n,
         onSwapAttempt,
         plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source },
         sourcePublicClient: {} as never,
@@ -108,6 +117,7 @@ describe("executeSquidTopUp", () => {
       executeSquidTopUp({
         destinationClient: {} as never,
         integratorId: "test-integrator",
+        maxNativeFee: 30n,
         onSwapAttempt,
         plan: { maxSourceAmount: 2n, owner, quotes: [], slippage: 1, source },
         sourcePublicClient: {} as never,

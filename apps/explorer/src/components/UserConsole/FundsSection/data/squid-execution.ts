@@ -12,9 +12,14 @@ const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
 const BPS = 10_000n;
 
+export function applyNetworkFeeExecutionBuffer(chainId: number, fee: bigint): bigint {
+  return OP_STACK_CHAIN_IDS.has(chainId) ? (fee * OP_STACK_FEE_BUFFER_BPS + BPS - 1n) / BPS : fee;
+}
+
 export async function executeSquidTopUp({
   destinationClient,
   integratorId,
+  maxNativeFee,
   onSwapAttempt,
   onSwapBroadcast,
   plan,
@@ -23,6 +28,7 @@ export async function executeSquidTopUp({
 }: {
   destinationClient: SquidPublicClient;
   integratorId: string;
+  maxNativeFee: bigint;
   onSwapAttempt?: () => void;
   onSwapBroadcast?: (transactionHash: Hash) => void;
   plan: SquidFundingPlan;
@@ -44,10 +50,10 @@ export async function executeSquidTopUp({
   return executeSquidFunding(
     {
       feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
-      maxNativeFee: "auto",
+      maxNativeFee,
       maxPollAttempts: 30,
       opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
-        ? (fee) => (fee * OP_STACK_FEE_BUFFER_BPS + BPS - 1n) / BPS
+        ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)
         : undefined,
       plan,
       pollIntervalMs: 10_000,

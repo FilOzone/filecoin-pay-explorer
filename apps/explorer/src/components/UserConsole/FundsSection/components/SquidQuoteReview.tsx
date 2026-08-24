@@ -22,6 +22,12 @@ import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
+  formatNativeFee,
+  getPlanNetworkGas,
+  getRequiredNativeBalance,
+  shouldBlockOnSeparateNativeBalance,
+} from "../data/guided-top-up";
+import {
   beginSquidAcquisition,
   clearSquidAcquisition,
   markSquidAcquired,
@@ -177,7 +183,21 @@ export function SquidQuoteReview({
     },
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
   });
+  const {
+    data: separateNativeBalance,
+    isError: isNativeBalanceError,
+    isFetching: isLoadingNativeBalance,
+    refetch: refetchNativeBalance,
+  } = useQuery({
+    enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
+    queryFn: async () => {
+      if (!sourcePublicClient || !address) throw new Error("Source network client is unavailable");
+      return sourcePublicClient.getBalance({ address });
+    },
+    queryKey: ["squid", "native-balance", sourceChain, address],
+  });
   const sourceAmount = sourceBalance ?? null;
+  const nativeBalance = isNativeSource ? sourceBalance : separateNativeBalance;
   const insufficientBalance =
     source && debouncedDestinationAmount !== null
       ? `You don't have enough ${source.symbol} to receive ${formatUsdfcAmount(debouncedDestinationAmount)} USDFC.`
@@ -227,6 +247,28 @@ export function SquidQuoteReview({
   });
   const plan = isQuoteDebouncing ? undefined : quotedPlan;
   const quote = plan?.quotes[0];
+  const networkGas = plan ? getPlanNetworkGas(plan) : { estimated: 0n, maximum: 0n };
+  const estimatedNetworkFeeLabel = sourceChainMeta
+    ? formatNativeFee(networkGas.estimated, sourceChainMeta.nativeCurrency)
+    : null;
+  const maximumNetworkFeeLabel = sourceChainMeta
+    ? formatNativeFee(networkGas.maximum, sourceChainMeta.nativeCurrency)
+    : null;
+  const requiredNativeBalance = plan ? getRequiredNativeBalance(plan, networkGas.maximum) : 0n;
+  const requiredNativeBalanceLabel = sourceChainMeta
+    ? formatNativeFee(requiredNativeBalance, sourceChainMeta.nativeCurrency)
+    : null;
+  const isSeparateNativeBalanceBlocked = shouldBlockOnSeparateNativeBalance(
+    isNativeSource === true,
+    isNativeBalanceError,
+    isLoadingNativeBalance,
+  );
+  const nativeBalanceBlockedMessage =
+    plan && networkGas.maximum === 0n
+      ? "Squid did not provide a source-network gas estimate. Refresh the quote before acquiring."
+      : plan && nativeBalance !== undefined && nativeBalance < requiredNativeBalance && sourceChainMeta
+        ? `Your ${sourceChainMeta.nativeCurrency.symbol} balance does not cover the reviewed maximum native requirement.`
+        : null;
   const quoteErrorMessage =
     !isQuoteDebouncing && quoteError
       ? quoteError instanceof Error && quoteError.message.includes("exceed the source-token cap")
@@ -306,6 +348,18 @@ export function SquidQuoteReview({
     if (quote.sourceAmount > latestBalanceResult.data) {
       return setError(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
     }
+    const latestNativeBalanceResult = isNativeSource ? latestBalanceResult : await refetchNativeBalance();
+    if (latestNativeBalanceResult.isError || latestNativeBalanceResult.data === undefined) {
+      return setError("Could not refresh your source-network gas balance. Try again before confirming.");
+    }
+    if (networkGas.maximum === 0n) {
+      return setError("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
+    }
+    if (latestNativeBalanceResult.data < requiredNativeBalance) {
+      return setError(
+        `Your ${sourceChainMeta?.nativeCurrency.symbol ?? "native-token"} balance does not cover the reviewed maximum native requirement.`,
+      );
+    }
 
     const publicClient =
       source.chainId === 10 || source.chainId === 8453
@@ -330,6 +384,7 @@ export function SquidQuoteReview({
       await executeSquidTopUp({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
+        maxNativeFee: networkGas.maximum,
         onSwapBroadcast: (hash) => {
           didSwapBroadcast = true;
           acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
@@ -544,6 +599,37 @@ export function SquidQuoteReview({
             </Button>
           </div>
         )}
+        {source && !isNativeSource && !isNativeBalanceError && sourceChainMeta && (
+          <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+            <span>Network fee balance</span>
+            <span>
+              {isLoadingNativeBalance || nativeBalance === undefined
+                ? "Loading…"
+                : displayAmount(
+                    nativeBalance,
+                    sourceChainMeta.nativeCurrency.decimals,
+                    sourceChainMeta.nativeCurrency.symbol,
+                  )}
+            </span>
+          </div>
+        )}
+        {source && !isNativeSource && isNativeBalanceError && (
+          <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+            <span>Could not load your source-network gas balance.</span>
+            <Button
+              disabled={isLoadingNativeBalance}
+              onClick={() => {
+                setError(null);
+                void refetchNativeBalance();
+              }}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              {isLoadingNativeBalance ? "Retrying…" : "Retry"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <Button
@@ -574,10 +660,10 @@ export function SquidQuoteReview({
         )}
       </Button>
 
-      {(error || switchError || quoteErrorMessage || capBlockedMessage) && (
+      {(error || switchError || quoteErrorMessage || capBlockedMessage || nativeBalanceBlockedMessage) && (
         <div className='flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive' role='alert'>
           <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
-          <span>{error || switchError || quoteErrorMessage || capBlockedMessage}</span>
+          <span>{error || switchError || quoteErrorMessage || capBlockedMessage || nativeBalanceBlockedMessage}</span>
         </div>
       )}
 
@@ -594,23 +680,52 @@ export function SquidQuoteReview({
             </span>
             <span className='text-muted-foreground'>Slippage</span>
             <span className='text-right font-medium'>1%</span>
-            {quote.costs.length > 0 && (
+            {quote.costs.some((cost) => cost.kind !== "gas" || cost.token.chainId !== plan.source.chainId) && (
               <>
-                <span className='text-muted-foreground'>Fees</span>
+                <span className='text-muted-foreground'>Other route costs (estimated)</span>
                 <span className='text-right font-medium'>
                   {quote.costs
+                    .filter((cost) => cost.kind !== "gas" || cost.token.chainId !== plan.source.chainId)
                     .map((cost) => displayAmount(cost.amount, cost.token.decimals, cost.token.symbol))
                     .join(", ")}
                 </span>
               </>
             )}
+            {estimatedNetworkFeeLabel && maximumNetworkFeeLabel && (
+              <>
+                <span className='text-muted-foreground'>Source-network gas (estimated)</span>
+                <span className='text-right font-medium'>{estimatedNetworkFeeLabel}</span>
+                <span className='text-muted-foreground'>Source-network gas maximum</span>
+                <span className='text-right font-medium'>{maximumNetworkFeeLabel}</span>
+              </>
+            )}
+            {requiredNativeBalanceLabel && (
+              <>
+                <span className='text-muted-foreground'>Maximum native balance required</span>
+                <span className='text-right font-medium'>{requiredNativeBalanceLabel}</span>
+              </>
+            )}
           </div>
+          {maximumNetworkFeeLabel && (
+            <p className='text-xs text-muted-foreground'>
+              The maximum is a conservative reviewed cap for the swap and any approvals. Execution stops before signing
+              if cumulative prepared network fees exceed it.
+            </p>
+          )}
           <p className='text-xs text-muted-foreground'>
             Route: {quote.actions.map((action) => action.description ?? action.type).join(" → ")}
           </p>
 
           <Button
-            disabled={isBusy || isSwitchingChain || (chainId === sourceChain && isPreparingWallet)}
+            disabled={
+              isBusy ||
+              isSwitchingChain ||
+              isSeparateNativeBalanceBlocked ||
+              nativeBalance === undefined ||
+              networkGas.maximum === 0n ||
+              nativeBalance < requiredNativeBalance ||
+              (chainId === sourceChain && isPreparingWallet)
+            }
             onClick={chainId === sourceChain ? acquire : switchToSourceNetwork}
             size='compact'
             type='button'
