@@ -36,8 +36,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@filecoin-project/squid-evm-funding':
-        specifier: https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz
-        version: https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
+        specifier: ^0.3.2
+        version: 0.3.2(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.50.4(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3))
@@ -1629,9 +1629,8 @@ packages:
       swr: ^2.4.0
       tailwindcss: ^4.1.18
 
-  '@filecoin-project/squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz':
-    resolution: {integrity: sha512-H4kqULASEszvSietqnlYbf2NsTcvzJyQQAC+1x0NnXf3mZchp7JycvAd83l/pJEfAQRoPU3iXAmPeLP3fZjGLg==, tarball: https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz}
-    version: 0.3.1
+  '@filecoin-project/squid-evm-funding@0.3.2':
+    resolution: {integrity: sha512-Akt/WzrGd2S9cyoO5ZfsoMt1MaZD55kC8XnFxRZNxqywbjJYXJqY/r+At7v/Vz8vTDW8ing9U75ws3rHXwU7VQ==}
     engines: {node: '>=18'}
 
   '@filoz/synapse-core@0.5.2':
@@ -10632,7 +10631,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@filecoin-project/squid-evm-funding@https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)':
+  '@filecoin-project/squid-evm-funding@0.3.2(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)':
     dependencies:
       viem: 2.54.5(bufferutil@4.0.9)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     transitivePeerDependencies:
