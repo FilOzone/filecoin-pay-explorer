@@ -17,8 +17,7 @@ import { erc20Abi, formatUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
-import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import useSynapse from "@/hooks/useSynapse";
+import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
@@ -29,20 +28,12 @@ import {
   isBridgeNativeFee,
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
-import {
-  beginSquidAcquisition,
-  clearSquidAcquisition,
-  markSquidAcquired,
-  markSquidBroadcast,
-  type SquidAcquisition,
-} from "../data/squid-acquisition";
-import {
-  canClearSquidAcquisitionAfterError,
-  executeSquidTopUp,
-  isUserRejectedRequest,
-  walletErrorMessage,
-} from "../data/squid-execution";
+import type { SquidAcquisition } from "../data/squid-acquisition";
+import { runSquidAcquisition } from "../data/squid-acquisition-flow";
+import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
+import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
+import { readUsdfcBalance } from "../data/usdfc-balance";
 
 const QUOTE_DEBOUNCE_MS = 500;
 
@@ -90,6 +81,12 @@ export function nativeTokenFirst<T extends { token: string }>(tokens: readonly T
   );
 }
 
+export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
+  return sourceChainId === mainnet.id
+    ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
+    : [...tokens];
+}
+
 export function resolveSearchableOption(options: readonly SearchableOption[], query: string) {
   const normalizedQuery = query.trim().toLowerCase();
   const labelMatch = options.find((option) => option.label.toLowerCase() === normalizedQuery);
@@ -112,7 +109,6 @@ export function SquidQuoteReview({
   // The flow is deliberately split into read-only route review and wallet execution.
   // Any execution that may have broadcast remains blocked until it is recovered or explicitly cleared.
   const { address, chainId } = useAccount();
-  const { constants } = useSynapse();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [sourceChainQuery, setSourceChainQuery] = useState("");
@@ -132,7 +128,7 @@ export function SquidQuoteReview({
   // query that may previously have failed because the selected chain differed.
   const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
-  const destinationClient = usePublicClient({ chainId: 314 });
+  const destinationClient = usePublicClient({ chainId: mainnet.id });
   const integratorId =
     process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
   const quotesUnavailable = integratorId === "";
@@ -152,7 +148,8 @@ export function SquidQuoteReview({
     staleTime: 300_000,
   });
   const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
-  const sourceTokenOptions: readonly SearchableOption[] = nativeTokenFirst(tokens).map((token) => ({
+  const selectableTokens = excludeDestinationUsdfc(tokens, sourceChain);
+  const sourceTokenOptions: readonly SearchableOption[] = nativeTokenFirst(selectableTokens).map((token) => ({
     aliases: [token.symbol, token.token],
     label: `${token.symbol} (${formatAddress(token.token)})`,
     value: token.token,
@@ -160,7 +157,7 @@ export function SquidQuoteReview({
   const sourceChainQueryInvalid = sourceChainQueryTouched && sourceChainQuery.trim() !== "" && sourceChainId === "";
   const sourceTokenQueryInvalid =
     sourceTokenQueryTouched && sourceTokenQuery.trim() !== "" && sourceTokenAddress === "";
-  const source = tokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
+  const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
   const isBusy = acquisitionState !== "idle";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
   const isQuoteDebouncing = destinationAmount !== debouncedDestinationAmount;
@@ -226,7 +223,7 @@ export function SquidQuoteReview({
       }
       return planSquidTopUp({
         destinationAmount: debouncedDestinationAmount,
-        destinationToken: constants.contracts.usdfc,
+        destinationToken: mainnet.contracts.usdfc.address,
         integratorId,
         owner: address,
         source,
@@ -237,7 +234,7 @@ export function SquidQuoteReview({
       "squid",
       "top-up-plan",
       address,
-      constants.contracts.usdfc,
+      mainnet.contracts.usdfc.address,
       debouncedDestinationAmount?.toString() ?? "",
       sourceChain,
       sourceTokenAddress,
@@ -389,57 +386,47 @@ export function SquidQuoteReview({
               estimateTotalFee(sourcePublicClient, request),
           }
         : sourcePublicClient;
-    let acquisition: ReturnType<typeof beginSquidAcquisition>;
-    try {
-      acquisition = beginSquidAcquisition(window.localStorage, address, destinationAmount, source.chainId);
-    } catch {
-      return setError("Browser storage is unavailable. Squid funding cannot start safely without recovery state.");
-    }
-
     const isCurrentExecutionOwner = () => latestAddress.current?.toLowerCase() === address.toLowerCase();
-    let didAttemptSwap = false;
-    let didSwapBroadcast = false;
-    onAcquisitionStateChange("processing");
     try {
-      await executeSquidTopUp({
-        destinationClient: destinationClient as unknown as SquidPublicClient,
-        integratorId,
-        maxNativeFee: networkGas.maximum,
-        maxTotalNativeRouteFee: bridgeNativeFees.maximum,
-        onSwapBroadcast: (hash) => {
-          didSwapBroadcast = true;
-          acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
-        },
-        onSwapAttempt: () => {
-          didAttemptSwap = true;
-        },
-        plan,
-        sourcePublicClient: publicClient as unknown as SquidPublicClient,
-        sourceWalletClient: sourceWalletClient as SquidWalletClient,
-      });
-      const acquired = markSquidAcquired(window.localStorage, acquisition);
-      if (isCurrentExecutionOwner()) {
+      const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
+        runSquidAcquisition({
+          execute: ({ onSwapAttempt, onSwapBroadcast }) =>
+            executeSquidTopUp({
+              destinationClient: destinationClient as unknown as SquidPublicClient,
+              integratorId,
+              maxNativeFee: networkGas.maximum,
+              maxTotalNativeRouteFee: bridgeNativeFees.maximum,
+              onSwapAttempt,
+              onSwapBroadcast,
+              plan,
+              sourcePublicClient: publicClient as unknown as SquidPublicClient,
+              sourceWalletClient: sourceWalletClient as SquidWalletClient,
+            }),
+          minimumDestinationAmount: quote.requirement.amount,
+          onStarted: () => {
+            if (isCurrentExecutionOwner()) onAcquisitionStateChange("processing");
+          },
+          owner: address,
+          readDestinationBalance: () => readUsdfcBalance(destinationClient, mainnet.contracts.usdfc.address, address),
+          sourceChainId: source.chainId,
+          storage: window.localStorage,
+        }),
+      );
+      if (!isCurrentExecutionOwner()) return;
+      if (outcome.status === "acquired") {
         onAcquisitionStateChange("acquired");
-        onAcquired(acquired);
+        onAcquired(outcome.acquisition);
+        return;
       }
-    } catch (executionError) {
-      if (canClearSquidAcquisitionAfterError(didAttemptSwap, didSwapBroadcast, executionError)) {
-        try {
-          clearSquidAcquisition(window.localStorage, address);
-          if (isCurrentExecutionOwner()) onAcquisitionStateChange("idle");
-        } catch {
-          if (isCurrentExecutionOwner()) {
-            onBlocked(acquisition);
-            onAcquisitionStateChange("blocked");
-          }
-        }
-      } else if (isCurrentExecutionOwner()) {
-        onBlocked(acquisition);
+      if (outcome.status === "blocked") {
+        onBlocked(outcome.acquisition);
         onAcquisitionStateChange("blocked");
+      } else {
+        onAcquisitionStateChange("idle");
       }
-      if (isCurrentExecutionOwner()) {
-        setError(walletErrorMessage(executionError, "Squid could not complete the acquisition."));
-      }
+      setError(walletErrorMessage(outcome.error, "Squid could not complete the acquisition."));
+    } catch (executionError) {
+      if (isCurrentExecutionOwner()) setError(walletErrorMessage(executionError, "Squid could not start safely."));
     }
   };
 
@@ -695,9 +682,13 @@ export function SquidQuoteReview({
             <span className='text-right font-medium'>
               {displayAmount(quote.sourceAmount, plan.source.decimals, plan.source.symbol)}
             </span>
-            <span className='text-muted-foreground'>Minimum received</span>
+            <span className='text-muted-foreground'>Estimated received</span>
             <span className='text-right font-medium'>
               {displayAmount(quote.destinationAmount, USDFC_DECIMALS, "USDFC")}
+            </span>
+            <span className='text-muted-foreground'>Execution minimum</span>
+            <span className='text-right font-medium'>
+              {displayAmount(quote.requirement.amount, USDFC_DECIMALS, "USDFC")}
             </span>
             <span className='text-muted-foreground'>Slippage</span>
             <span className='text-right font-medium'>1%</span>

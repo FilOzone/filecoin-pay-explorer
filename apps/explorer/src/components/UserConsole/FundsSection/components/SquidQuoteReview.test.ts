@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { nativeTokenFirst, resolveSearchableOption, sourceTokenCatalogMessage } from "./SquidQuoteReview";
+import {
+  excludeDestinationUsdfc,
+  nativeTokenFirst,
+  resolveSearchableOption,
+  sourceTokenCatalogMessage,
+} from "./SquidQuoteReview";
 
 describe("searchable option resolution", () => {
   const options = [
@@ -38,5 +43,17 @@ describe("source token ordering", () => {
     ];
 
     expect(nativeTokenFirst(tokens).map(({ symbol }) => symbol)).toEqual(["ETH", "USDC", "USDT"]);
+  });
+});
+
+describe("source token safety", () => {
+  it("excludes destination USDFC only when Filecoin is the source chain", () => {
+    const tokens = [
+      { token: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045", symbol: "USDFC" },
+      { token: "0x1111111111111111111111111111111111111111", symbol: "OTHER" },
+    ];
+
+    expect(excludeDestinationUsdfc(tokens, 314)).toEqual([tokens[1]]);
+    expect(excludeDestinationUsdfc(tokens, 8453)).toEqual(tokens);
   });
 });

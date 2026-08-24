@@ -1,30 +1,52 @@
 import { act, create } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  beginSquidAcquisition,
+  hasSavedSquidAcquisition,
+  loadSquidAcquisition,
+  markSquidAcquired,
+  markSquidBroadcast,
+  type SquidAcquisition,
+} from "../data/squid-acquisition";
 import { GuidedTopUpDialog } from "./GuidedTopUpDialog";
 
-const wallet = vi.hoisted(() => ({ chainId: 314 as number | undefined }));
+const wallet = vi.hoisted(() => ({
+  address: undefined as `0x${string}` | undefined,
+  chainId: 314 as number | undefined,
+}));
 const switchChainAsync = vi.hoisted(() => vi.fn(async (): Promise<void> => undefined));
 const dialog = vi.hoisted(() => ({ onOpenChange: undefined as ((open: boolean) => void) | undefined }));
+const sdk = vi.hoisted(() => ({
+  fundSync: vi.fn(),
+  invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  synapse: undefined as { payments: { fundSync: ReturnType<typeof vi.fn> } } | undefined,
+}));
 const quoteReview = vi.hoisted(() => ({
-  onAcquired: undefined as
-    | ((acquisition: {
-        destinationAmount: bigint;
-        owner: `0x${string}`;
-        sourceChainId: number;
-        status: "acquired";
-        transactionHashes: `0x${string}`[];
-      }) => void)
-    | undefined,
+  onAcquired: undefined as ((acquisition: SquidAcquisition) => void) | undefined,
   onNetworkSwitchingChange: undefined as ((isSwitching: boolean) => void) | undefined,
+}));
+const lockManager = vi.hoisted(() => ({
+  request: vi.fn(async (_name: string, _options: LockOptions, callback: (lock: Lock) => unknown) =>
+    callback({} as Lock),
+  ),
 }));
 
 vi.mock("wagmi", () => ({
-  useConnection: () => ({ address: undefined, chainId: wallet.chainId }),
+  useConnection: () => wallet,
+  usePublicClient: () => undefined,
   useSwitchChain: () => ({ switchChainAsync }),
 }));
-vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: sdk.invalidateQueries }),
+}));
 vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { chain: { genesisTimestamp: 0 } }, synapse: undefined }),
+  default: () => ({
+    constants: {
+      chain: { genesisTimestamp: 0 },
+      contracts: { usdfc: "0x3333333333333333333333333333333333333333" },
+    },
+    synapse: sdk.synapse,
+  }),
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -75,6 +97,16 @@ vi.mock("./SquidQuoteReview", () => ({
   },
 }));
 
+beforeEach(() => {
+  vi.stubGlobal("navigator", { locks: lockManager });
+});
+
+afterEach(() => {
+  wallet.address = undefined;
+  wallet.chainId = 314;
+  sdk.synapse = undefined;
+  vi.unstubAllGlobals();
+});
 describe("GuidedTopUpDialog", () => {
   it("restores the wallet network captured when the dialog opened", async () => {
     const onOpenChange = vi.fn();
@@ -174,5 +206,83 @@ describe("GuidedTopUpDialog", () => {
       dialog.onOpenChange?.(false);
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("deposits the frozen delivered balance increase instead of the reviewed minimum", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    const oneUsdfc = 10n ** 18n;
+    const processing = beginSquidAcquisition(
+      storage,
+      owner,
+      10n * oneUsdfc,
+      100n * oneUsdfc,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const acquired = markSquidAcquired(
+      storage,
+      markSquidBroadcast(storage, processing, `0x${"3".repeat(64)}`),
+      15n * oneUsdfc,
+    );
+    sdk.fundSync.mockImplementation(async ({ onHash }: { onHash: (hash: `0x${string}`) => void }) => {
+      onHash(`0x${"4".repeat(64)}`);
+      return { receipt: { status: "success" } };
+    });
+    sdk.synapse = { payments: { fundSync: sdk.fundSync } };
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    const depositButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Deposit acquired USDFC"));
+    expect(JSON.stringify(renderer.toJSON())).toContain('"15"');
+    await act(async () => {
+      await depositButton?.props.onClick();
+    });
+
+    expect(sdk.fundSync).toHaveBeenCalledWith(expect.objectContaining({ amount: 15n * oneUsdfc }));
+    expect(loadSquidAcquisition(storage, acquired.owner)).toBeNull();
+  });
+
+  it("offers a confirmed recovery path for malformed saved state", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    storage.setItem(`filecoin-pay:squid-acquisition:v1:${owner.toLowerCase()}`, "not json");
+    vi.stubGlobal("window", { confirm: vi.fn().mockReturnValue(true), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    const clearButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Clear invalid saved acquisition"));
+    expect(clearButton).toBeDefined();
+
+    await act(async () => {
+      await clearButton?.props.onClick();
+    });
+    expect(hasSavedSquidAcquisition(storage, owner)).toBe(false);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("invalid and must be cleared");
   });
 });
