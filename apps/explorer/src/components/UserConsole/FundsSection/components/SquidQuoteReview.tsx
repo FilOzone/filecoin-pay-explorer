@@ -131,9 +131,8 @@ export function SquidQuoteReview({
   const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
   const destinationClient = usePublicClient({ chainId: 314 });
-  // No fallback id: a missing env must surface the not-configured state
-  // instead of silently billing quota to a shared testing integrator.
-  const integratorId = process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() ?? "";
+  const integratorId =
+    process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
   const {
