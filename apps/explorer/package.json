@@ -8,13 +8,14 @@
     "start": "next start",
     "lint": "biome check --write",
     "format": "biome format --write",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@filecoin-foundation/ui-filecoin": "^0.9.0",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
-    "@filecoin-project/squid-evm-funding": "^0.3.1",
+    "@filecoin-project/squid-evm-funding": "https://github.com/FilOzone/squid-evm-funding/releases/download/pr38-8086448/squid-evm-funding-0.3.1-pr38-8086448.tgz",
     "@filoz/synapse-sdk": "^0.41.0",
     "@phosphor-icons/react": "^2.1.10",
     "@rainbow-me/rainbowkit": "^2.2.11",

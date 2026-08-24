@@ -20,6 +20,7 @@ export async function executeSquidTopUp({
   destinationClient,
   integratorId,
   maxNativeFee,
+  maxTotalNativeRouteFee,
   onSwapAttempt,
   onSwapBroadcast,
   plan,
@@ -29,6 +30,7 @@ export async function executeSquidTopUp({
   destinationClient: SquidPublicClient;
   integratorId: string;
   maxNativeFee: bigint;
+  maxTotalNativeRouteFee: bigint;
   onSwapAttempt?: () => void;
   onSwapBroadcast?: (transactionHash: Hash) => void;
   plan: SquidFundingPlan;
@@ -51,6 +53,7 @@ export async function executeSquidTopUp({
     {
       feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
       maxNativeFee,
+      maxTotalNativeRouteFee,
       maxPollAttempts: 30,
       opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
         ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)

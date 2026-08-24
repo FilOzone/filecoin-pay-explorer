@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import { planSquidTopUp } from "./squid-quote";
+import { planSquidTopUp, squidFetch } from "./squid-quote";
 
 const planSquidFunding = vi.hoisted(() => vi.fn());
 
@@ -8,10 +8,32 @@ vi.mock("@filecoin-project/squid-evm-funding", () => ({
   planSquidFunding,
 }));
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 const owner = "0x1111111111111111111111111111111111111111" as const;
 const usdfc = "0x2222222222222222222222222222222222222222" as const;
 
 describe("Squid quote review", () => {
+  it("loads the token catalog through the same-origin proxy", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ tokens: [] }), { headers: { "content-type": "application/json" } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await squidFetch("https://v2.api.squidrouter.com/v2/tokens", {
+      headers: { "x-integrator-id": "test" },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/squid/tokens", {
+      headers: { "x-integrator-id": "test" },
+    });
+    await expect(response.json()).resolves.toEqual({ tokens: [] });
+  });
+
   it("plans an explicit Filecoin source cap", async () => {
     const quote = { id: "quote" };
     planSquidFunding.mockResolvedValue({

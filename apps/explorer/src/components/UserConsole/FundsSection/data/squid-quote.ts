@@ -2,9 +2,10 @@ import { planSquidFunding, type SourceToken, type SquidFundingPlan } from "@file
 import { type Address, formatUnits } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 
+const SQUID_TOKENS_PROXY_URL = "/api/squid/tokens";
 // Squid's /tokens response is chain-independent, changes rarely, and gets
-// re-fetched by the planner on every estimate; caching it leaves the
-// rate-limit budget to /route calls.
+// re-fetched by the planner on every estimate. Route browser catalog reads
+// through the same-origin proxy and cache successful responses locally.
 const TOKENS_CACHE_MS = 5 * 60_000;
 let tokensCache: { body: string; expires: number } | null = null;
 
@@ -14,7 +15,7 @@ export const squidFetch: typeof globalThis.fetch = async (input, init) => {
   if (tokensCache && tokensCache.expires > Date.now()) {
     return new Response(tokensCache.body, { headers: { "content-type": "application/json" }, status: 200 });
   }
-  const response = await fetch(input, init);
+  const response = await fetch(SQUID_TOKENS_PROXY_URL, init);
   if (!response.ok) return response;
   const body = await response.text();
   tokensCache = { body, expires: Date.now() + TOKENS_CACHE_MS };

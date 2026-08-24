@@ -23,8 +23,10 @@ import { formatAddress } from "@/utils/formatter";
 import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
   formatNativeFee,
+  getPlanBridgeNativeFees,
   getPlanNetworkGas,
   getRequiredNativeBalance,
+  isBridgeNativeFee,
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
 import {
@@ -247,6 +249,14 @@ export function SquidQuoteReview({
   });
   const plan = isQuoteDebouncing ? undefined : quotedPlan;
   const quote = plan?.quotes[0];
+  const quoteCosts = plan?.quotes.flatMap((item) => item.costs) ?? [];
+  const bridgeNativeFees = plan ? getPlanBridgeNativeFees(plan) : { estimated: 0n, maximum: 0n };
+  const bridgeFeeLabel = sourceChainMeta
+    ? formatNativeFee(bridgeNativeFees.estimated, sourceChainMeta.nativeCurrency)
+    : null;
+  const maximumBridgeFeeLabel = sourceChainMeta
+    ? formatNativeFee(bridgeNativeFees.maximum, sourceChainMeta.nativeCurrency)
+    : null;
   const networkGas = plan ? getPlanNetworkGas(plan) : { estimated: 0n, maximum: 0n };
   const estimatedNetworkFeeLabel = sourceChainMeta
     ? formatNativeFee(networkGas.estimated, sourceChainMeta.nativeCurrency)
@@ -258,6 +268,16 @@ export function SquidQuoteReview({
   const requiredNativeBalanceLabel = sourceChainMeta
     ? formatNativeFee(requiredNativeBalance, sourceChainMeta.nativeCurrency)
     : null;
+  const otherSquidFeeCosts = quoteCosts.filter(
+    (cost) => cost.kind === "fee" && (!sourceChainMeta || !isBridgeNativeFee(cost, sourceChainMeta.id)),
+  );
+  const otherNetworkGasCosts = quoteCosts.filter(
+    (cost) =>
+      cost.kind === "gas" &&
+      (!sourceChainMeta ||
+        cost.token.chainId !== sourceChainMeta.id ||
+        cost.token.address?.toLowerCase() !== NATIVE_TOKEN_ADDRESS.toLowerCase()),
+  );
   const isSeparateNativeBalanceBlocked = shouldBlockOnSeparateNativeBalance(
     isNativeSource === true,
     isNativeBalanceError,
@@ -385,6 +405,7 @@ export function SquidQuoteReview({
         destinationClient: destinationClient as unknown as SquidPublicClient,
         integratorId,
         maxNativeFee: networkGas.maximum,
+        maxTotalNativeRouteFee: bridgeNativeFees.maximum,
         onSwapBroadcast: (hash) => {
           didSwapBroadcast = true;
           acquisition = markSquidBroadcast(window.localStorage, acquisition, hash);
@@ -680,12 +701,19 @@ export function SquidQuoteReview({
             </span>
             <span className='text-muted-foreground'>Slippage</span>
             <span className='text-right font-medium'>1%</span>
-            {quote.costs.some((cost) => cost.kind !== "gas" || cost.token.chainId !== plan.source.chainId) && (
+            {bridgeFeeLabel && maximumBridgeFeeLabel && (
               <>
-                <span className='text-muted-foreground'>Other route costs (estimated)</span>
+                <span className='text-muted-foreground'>Bridge fee (estimated)</span>
+                <span className='text-right font-medium'>{bridgeFeeLabel}</span>
+                <span className='text-muted-foreground'>Bridge fee maximum</span>
+                <span className='text-right font-medium'>{maximumBridgeFeeLabel}</span>
+              </>
+            )}
+            {otherSquidFeeCosts.length > 0 && (
+              <>
+                <span className='text-muted-foreground'>Other Squid fees (estimated)</span>
                 <span className='text-right font-medium'>
-                  {quote.costs
-                    .filter((cost) => cost.kind !== "gas" || cost.token.chainId !== plan.source.chainId)
+                  {otherSquidFeeCosts
                     .map((cost) => displayAmount(cost.amount, cost.token.decimals, cost.token.symbol))
                     .join(", ")}
                 </span>
@@ -699,6 +727,16 @@ export function SquidQuoteReview({
                 <span className='text-right font-medium'>{maximumNetworkFeeLabel}</span>
               </>
             )}
+            {otherNetworkGasCosts.length > 0 && (
+              <>
+                <span className='text-muted-foreground'>Other network gas (estimated)</span>
+                <span className='text-right font-medium'>
+                  {otherNetworkGasCosts
+                    .map((cost) => displayAmount(cost.amount, cost.token.decimals, cost.token.symbol))
+                    .join(", ")}
+                </span>
+              </>
+            )}
             {requiredNativeBalanceLabel && (
               <>
                 <span className='text-muted-foreground'>Maximum native balance required</span>
@@ -706,10 +744,10 @@ export function SquidQuoteReview({
               </>
             )}
           </div>
-          {maximumNetworkFeeLabel && (
+          {maximumBridgeFeeLabel && maximumNetworkFeeLabel && (
             <p className='text-xs text-muted-foreground'>
-              The maximum is a conservative reviewed cap for the swap and any approvals. Execution stops before signing
-              if cumulative prepared network fees exceed it.
+              The route is refreshed before signing. Execution stops if its cumulative bridge fee exceeds the reviewed
+              bridge maximum or if cumulative prepared source-network gas exceeds the separate gas maximum.
             </p>
           )}
           <p className='text-xs text-muted-foreground'>

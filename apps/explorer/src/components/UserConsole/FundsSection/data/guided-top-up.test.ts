@@ -2,6 +2,8 @@ import { NATIVE_TOKEN_ADDRESS, type SquidFundingPlan } from "@filecoin-project/s
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import {
+  getBridgeNativeFee,
+  getMaximumBridgeNativeFee,
   getPlanBridgeNativeFees,
   getPlanNetworkGas,
   getRequiredNativeBalance,
@@ -108,9 +110,40 @@ describe("guided top-up", () => {
     const erc20Plan = plan();
     const nativePlan = plan(NATIVE_TOKEN_ADDRESS);
 
-    expect(getPlanBridgeNativeFees(erc20Plan)).toEqual({ estimated: 5n, maximum: 6n });
-    expect(getRequiredNativeBalance(erc20Plan, 36n)).toBe(42n);
-    expect(getRequiredNativeBalance(nativePlan, 36n)).toBe(142n);
+    expect(getPlanBridgeNativeFees(erc20Plan)).toEqual({ estimated: 5n, maximum: 8n });
+    expect(getRequiredNativeBalance(erc20Plan, 36n)).toBe(44n);
+    expect(getRequiredNativeBalance(nativePlan, 36n)).toBe(144n);
+  });
+
+  it("uses the dependency's rounded-up 50% bridge execution headroom", () => {
+    expect(getMaximumBridgeNativeFee(0n)).toBe(0n);
+    expect(getMaximumBridgeNativeFee(1n)).toBe(2n);
+    expect(getMaximumBridgeNativeFee(5_780_000_000_000n)).toBe(8_670_000_000_000n);
+  });
+
+  it("sums only source-chain native bridge fees", () => {
+    const fundingPlan = plan();
+    const costs = fundingPlan.quotes[0]?.costs ?? [];
+
+    expect(getBridgeNativeFee(costs, fundingPlan.source.chainId)).toBe(5n);
+  });
+
+  it("sums each route's rounded reviewed maximum for the cumulative execution cap", () => {
+    const fundingPlan = plan(token, 1);
+    const firstQuote = fundingPlan.quotes[0];
+    if (!firstQuote) throw new Error("Expected a quote fixture");
+    const nativeFee = (amount: bigint) => ({
+      amount,
+      kind: "fee" as const,
+      name: "Bridge fee",
+      token: { address: NATIVE_TOKEN_ADDRESS, chainId: 1, decimals: 18, symbol: "ETH" },
+    });
+    fundingPlan.quotes = [
+      { ...firstQuote, costs: [nativeFee(1n)], id: "one" },
+      { ...firstQuote, costs: [nativeFee(3n)], id: "two" },
+    ];
+
+    expect(getPlanBridgeNativeFees(fundingPlan)).toEqual({ estimated: 4n, maximum: 7n });
   });
 
   it("ignores cached separate-native errors after selecting the native token", () => {
