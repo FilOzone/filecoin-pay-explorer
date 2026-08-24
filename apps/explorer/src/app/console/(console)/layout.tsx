@@ -1,46 +1,17 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
-import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
-import Balance from "@/components/shared/Balance";
-import ChainSwitcher from "@/components/shared/ChainSwitcher";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
-import { type ConsoleAccessState, getConsoleAccessState } from "./console-access";
-
-const ConsoleWalletControls = ({
-  accessState,
-  chainId,
-}: {
-  accessState: ConsoleAccessState;
-  chainId: number | undefined;
-}) => {
-  switch (accessState) {
-    case "not-connected":
-      return null;
-    case "unsupported-chain":
-    case "squid-source":
-      return (
-        <span className='inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700'>
-          <AlertTriangle className='size-4' />
-          Unsupported Network
-        </span>
-      );
-    case "ready":
-      return (
-        <>
-          <Balance />
-          {chainId !== undefined ? <ChainSwitcher chainId={chainId} /> : null}
-        </>
-      );
-  }
-};
+import { ConsoleWalletControls } from "./ConsoleWalletControls";
+import { type ConsoleAccessState, getConsoleAccessState, getConsoleDisplayAccessState } from "./console-access";
 
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
@@ -56,17 +27,21 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
 
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { address, isConnected, chainId } = useConnection();
-  const accessState = getConsoleAccessState({
+  const { isTopUpActive } = useTopUpActivity();
+  const walletAccessState = getConsoleAccessState({
     isConnected,
     hasAddress: Boolean(address),
     chainId,
   });
+  const displayAccessState = getConsoleDisplayAccessState(walletAccessState, isTopUpActive);
 
   return (
     <div className='flex min-h-full flex-col bg-background text-foreground'>
       <ConsoleHeader
-        walletControls={<ConsoleWalletControls accessState={accessState} chainId={chainId} />}
-        navTrigger={accessState === "ready" ? <ConsoleNavDrawer /> : null}
+        walletControls={
+          <ConsoleWalletControls accessState={walletAccessState} chainId={chainId} isTopUpActive={isTopUpActive} />
+        }
+        navTrigger={displayAccessState === "ready" ? <ConsoleNavDrawer /> : null}
       />
 
       <div className='flex-1 pt-4 pb-12'>
@@ -74,8 +49,8 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
           <div className='flex flex-col gap-6'>
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
-            <ConsoleAccessGate accessState={accessState}>
-              <ConsoleContent accessState={accessState} sidebar={<ConsoleSidebar />}>
+            <ConsoleAccessGate accessState={displayAccessState}>
+              <ConsoleContent accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>

@@ -3,6 +3,7 @@ import { WagmiProvider } from "wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
+import { TopUpActivityProvider } from "./TopUpActivityContext";
 
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -21,7 +22,9 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
           fontStack: "system",
         })}
       >
-        <SynapseProvider>{children}</SynapseProvider>
+        <SynapseProvider>
+          <TopUpActivityProvider>{children}</TopUpActivityProvider>
+        </SynapseProvider>
       </RainbowKitProvider>
     </WagmiProvider>
   );

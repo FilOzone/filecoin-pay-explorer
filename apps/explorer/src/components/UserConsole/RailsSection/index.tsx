@@ -8,11 +8,10 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { useCallback, useMemo, useState } from "react";
-import { useChainId } from "wagmi";
 import { getChain } from "@/constants/chains";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
-import { getNetworkFromChainId } from "@/utils/network";
+import type { Network } from "@/types";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
@@ -21,10 +20,11 @@ import type { RailTableRow } from "./types";
 
 interface RailsSectionProps {
   account: Account;
+  network: Network;
   userAddress: string;
 }
 
-export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress }) => {
+export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, userAddress }) => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
@@ -32,16 +32,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
   const [currentEpoch, setCurrentEpoch] = useState<bigint>();
 
-  const chainId = useChainId();
-  const { chain, walletNetwork } = useMemo(() => {
-    const walletNetwork = getNetworkFromChainId(chainId);
-    return {
-      walletNetwork,
-      chain: getChain(walletNetwork),
-    };
-  }, [chainId]);
+  const chain = useMemo(() => getChain(network), [network]);
 
-  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
+  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: network });
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,
@@ -126,7 +119,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <RailsEmptyNoResults searchFilter={searchFilter} />
         ) : (
           <>
-            <SettleRailProvider chainId={chainId} onSettle={handleSettle}>
+            <SettleRailProvider chainId={chain.id} onSettle={handleSettle}>
               <RailsTable data={tableData} />
             </SettleRailProvider>
 

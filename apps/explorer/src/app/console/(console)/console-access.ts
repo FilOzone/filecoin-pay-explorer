@@ -3,6 +3,11 @@ import { isSupportedChainId } from "@/utils/network";
 
 export type ConsoleAccessState = "not-connected" | "unsupported-chain" | "squid-source" | "ready";
 
+export const getConsoleDisplayAccessState = (
+  walletAccessState: ConsoleAccessState,
+  isTopUpActive: boolean,
+): ConsoleAccessState => (walletAccessState === "squid-source" && isTopUpActive ? "ready" : walletAccessState);
+
 export const getConsoleAccessState = ({
   isConnected,
   hasAddress,

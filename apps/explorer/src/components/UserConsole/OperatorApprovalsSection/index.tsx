@@ -2,26 +2,23 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Account, OperatorApproval } from "@filecoin-pay/types";
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { useAccount } from "wagmi";
 import { ApproveOperatorDialog } from "@/components/UserConsole/ApproveOperatorDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId } from "@/utils/network";
+import type { Network } from "@/types";
 import { ApprovalsEmptyState, ApprovalsErrorState, ApprovalsLoadingState, ApprovalsTable } from "./components";
 
 interface OperatorApprovalsSectionProps {
   account: Account;
+  network: Network;
 }
 
-export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> = ({ account }) => {
+export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> = ({ account, network }) => {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [increaseDialogOpen, setIncreaseDialogOpen] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<OperatorApproval | null>(null);
 
-  const { chainId } = useAccount();
-  const walletNetwork = getNetworkFromChainId(chainId);
-
-  const { data, isLoading, isError } = useAccountApprovals(account.id, 1, { networkOverride: walletNetwork });
+  const { data, isLoading, isError } = useAccountApprovals(account.id, 1, { networkOverride: network });
 
   const handleIncrease = useCallback((approval: OperatorApproval) => {
     setSelectedApproval(approval);

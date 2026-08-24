@@ -1,12 +1,11 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConnection } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
-import { getNetworkFromChainId } from "@/utils/network";
 import {
   AddFundsDialog,
   type AddFundsMethod,
@@ -20,6 +19,7 @@ import {
 
 type FundsSectionProps = {
   account: Account;
+  network: Network;
   onGuidedTopUp?: () => void;
 };
 
@@ -43,7 +43,7 @@ const findDefaultToken = (userTokens: UserToken[], usdfcAddress: string): UserTo
   return usdfc ?? userTokens[0];
 };
 
-export const FundsSection = ({ account, onGuidedTopUp }: FundsSectionProps) => {
+export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionProps) => {
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
@@ -54,9 +54,7 @@ export const FundsSection = ({ account, onGuidedTopUp }: FundsSectionProps) => {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { chainId } = useConnection();
   const { constants } = useSynapse();
-  const walletNetwork = getNetworkFromChainId(chainId);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -68,7 +66,7 @@ export const FundsSection = ({ account, onGuidedTopUp }: FundsSectionProps) => {
 
   // Fetch up to 100 tokens for this account (single page, no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
-    networkOverride: walletNetwork,
+    networkOverride: network,
     pageSize: TOKEN_SELECTOR_PAGE_SIZE,
   });
 
@@ -94,7 +92,7 @@ export const FundsSection = ({ account, onGuidedTopUp }: FundsSectionProps) => {
   }, [selectedToken]);
 
   const canFundWithAnotherToken =
-    walletNetwork === "mainnet" &&
+    network === "mainnet" &&
     Boolean(onGuidedTopUp) &&
     selectedToken?.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
 
