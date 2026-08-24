@@ -32,6 +32,7 @@ import {
   clearInvalidSquidAcquisition,
   clearSquidAcquisition,
   getSquidDepositAmount,
+  hasSameSquidAcquisitionSnapshot,
   hasSavedSquidAcquisition,
   loadSquidAcquisition,
   markSquidAcquired,
@@ -41,8 +42,10 @@ import {
   type SquidAcquisition,
 } from "../data/squid-acquisition";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
+import { isAutomaticSquidRecoveryCandidate } from "../data/squid-acquisition-recovery";
 import { isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { readUsdfcBalance } from "../data/usdfc-balance";
+import { useSquidAcquisitionRecovery } from "../hooks/useSquidAcquisitionRecovery";
 import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
@@ -102,6 +105,7 @@ export function GuidedTopUpDialog({
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
   const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [hasInvalidAcquisition, setHasInvalidAcquisition] = useState(false);
+  const [automaticRecoveryError, setAutomaticRecoveryError] = useState<string | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
   const originalChainId = useRef<number | undefined>(undefined);
@@ -133,6 +137,7 @@ export function GuidedTopUpDialog({
   const savedSourceChain = SQUID_SOURCE_CHAINS.find(
     (sourceChain) => sourceChain.id === savedAcquisition?.sourceChainId,
   );
+  const automaticRecovery = useSquidAcquisitionRecovery(savedAcquisition, address);
   useEffect(() => {
     setIsSubmitting(false);
     if (!address) {
@@ -140,6 +145,7 @@ export function GuidedTopUpDialog({
       setAcquisitionOwner(null);
       setSavedAcquisition(null);
       setHasInvalidAcquisition(false);
+      setAutomaticRecoveryError(null);
       setAcquisitionState("idle");
       return;
     }
@@ -150,6 +156,7 @@ export function GuidedTopUpDialog({
       const hasInvalidSavedAcquisition = hasSavedAcquisition && saved === null;
       setSavedAcquisition(saved);
       setHasInvalidAcquisition(hasInvalidSavedAcquisition);
+      setAutomaticRecoveryError(null);
       setAcquisitionOwner(saved?.owner ?? null);
       setAcquiredAmount(saved?.status === "acquired" ? getSquidDepositAmount(saved) : null);
       setAcquisitionState(
@@ -160,9 +167,56 @@ export function GuidedTopUpDialog({
       setAcquisitionOwner(null);
       setSavedAcquisition(null);
       setHasInvalidAcquisition(false);
+      setAutomaticRecoveryError(null);
       setAcquisitionState("blocked");
     }
   }, [address]);
+
+  useEffect(() => {
+    const pending = savedAcquisition;
+    const deliveredAmount = automaticRecovery.data;
+    if (
+      !isAutomaticSquidRecoveryCandidate(pending) ||
+      deliveredAmount === undefined ||
+      deliveredAmount === null ||
+      automaticRecovery.dataUpdatedAt === 0
+    ) {
+      return;
+    }
+    let cancelled = false;
+    setAutomaticRecoveryError(null);
+    void withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, () =>
+      markSquidAcquired(window.localStorage, pending, deliveredAmount),
+    )
+      .then((acquired) => {
+        if (cancelled || latestAddress.current?.toLowerCase() !== acquired.owner.toLowerCase()) return;
+        setSavedAcquisition(acquired);
+        setAcquisitionOwner(acquired.owner);
+        setAcquiredAmount(getSquidDepositAmount(acquired));
+        setAcquisitionState("acquired");
+      })
+      .catch((error) => {
+        if (cancelled || latestAddress.current?.toLowerCase() !== pending.owner.toLowerCase()) return;
+        try {
+          const latest = loadSquidAcquisition(window.localStorage, pending.owner);
+          if (latest && !hasSameSquidAcquisitionSnapshot(latest, pending)) {
+            setSavedAcquisition(latest);
+            setAcquisitionOwner(latest.owner);
+            setAcquiredAmount(latest.status === "acquired" ? getSquidDepositAmount(latest) : null);
+            setAcquisitionState(latest.status === "acquired" ? "acquired" : "blocked");
+            setAutomaticRecoveryError(null);
+            return;
+          }
+        } catch {
+          // Surface the original transition error below. The next poll retries
+          // both the storage read and the exact-snapshot transition.
+        }
+        setAutomaticRecoveryError(error instanceof Error ? error.message : "Automatic recovery could not continue");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [automaticRecovery.data, automaticRecovery.dataUpdatedAt, savedAcquisition]);
 
   useEffect(() => {
     // Reset the amount on open; the prefill effect below fills it once the
@@ -305,6 +359,7 @@ export function GuidedTopUpDialog({
     const completedDeposit = savedAcquisition?.status === "depositing";
     setSavedAcquisition(null);
     setHasInvalidAcquisition(false);
+    setAutomaticRecoveryError(null);
     setAcquisitionState("idle");
     if (completedDeposit) closeDialog();
   };
@@ -316,6 +371,7 @@ export function GuidedTopUpDialog({
         clearInvalidSquidAcquisition(window.localStorage, address),
       );
       setHasInvalidAcquisition(false);
+      setAutomaticRecoveryError(null);
       setAcquisitionState("idle");
     } catch (error) {
       toast.error("The invalid saved acquisition could not be cleared.", {
@@ -487,7 +543,7 @@ export function GuidedTopUpDialog({
                     </p>
                   ) : (
                     <>
-                      <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for USDFC.</p>
+                      <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for the swap.</p>
                       {savedAcquisition.transactionHashes.map((hash) => (
                         <code className='block break-all' key={hash}>
                           {hash}
@@ -496,10 +552,37 @@ export function GuidedTopUpDialog({
                       {savedAcquisition.transactionHashes.length === 0 && (
                         <p>The wallet request may have been submitted without returning a transaction hash.</p>
                       )}
+                      {automaticRecovery.isEligible && !automaticRecovery.error && !automaticRecoveryError && (
+                        <p className='inline-flex items-center gap-2 text-muted-foreground' role='status'>
+                          {automaticRecovery.isFetching && <Loader2 className='h-4 w-4 animate-spin' />}
+                          Automatically checking the source transaction and Filecoin USDFC balance…
+                        </p>
+                      )}
+                      {automaticRecovery.isEligible && (automaticRecovery.error || automaticRecoveryError) && (
+                        <div className='grid gap-2' role='alert'>
+                          <p className='text-destructive'>
+                            Automatic recovery {automaticRecovery.isPermanentError ? "stopped" : "will retry"}:{" "}
+                            {automaticRecoveryError || automaticRecovery.error?.message}
+                          </p>
+                          {!automaticRecovery.isPermanentError && (
+                            <Button
+                              onClick={() => {
+                                setAutomaticRecoveryError(null);
+                                void automaticRecovery.refetch();
+                              }}
+                              size='compact'
+                              type='button'
+                              variant='tertiary'
+                            >
+                              Retry automatic check now
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                   <div className='flex flex-wrap gap-2'>
-                    {savedAcquisition.status === "processing" && (
+                    {savedAcquisition.status === "processing" && !automaticRecovery.isEligible && (
                       <Button onClick={continueWithAcquiredUsdfc} size='compact' type='button' variant='tertiary'>
                         USDFC arrived, continue to deposit
                       </Button>

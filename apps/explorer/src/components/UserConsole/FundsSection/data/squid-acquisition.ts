@@ -151,8 +151,11 @@ export function markSquidAcquired(
   deliveredAmount?: bigint,
 ) {
   const current = requireCurrent(storage, acquisition);
-  if (current.status === "acquired" && current.deliveredAmount === deliveredAmount) return current;
+  if (current.status === "acquired") return current;
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
+  if (!hasSameSquidAcquisitionSnapshot(current, acquisition)) {
+    throw new Error("Saved Squid acquisition changed");
+  }
   if (deliveredAmount !== undefined && deliveredAmount < current.destinationAmount) {
     throw new Error("Delivered USDFC is below the reviewed minimum");
   }
@@ -226,7 +229,16 @@ function isSameAcquisition(current: SquidAcquisition, expected: SquidAcquisition
 }
 
 function isSameState(current: SquidAcquisition, expected: SquidAcquisition) {
+  return hasSameSquidAcquisitionSnapshot(current, expected);
+}
+
+export function hasSameSquidAcquisitionSnapshot(current: SquidAcquisition, expected: SquidAcquisition) {
   return (
+    current.acquisitionId === expected.acquisitionId &&
+    current.owner.toLowerCase() === expected.owner.toLowerCase() &&
+    current.sourceChainId === expected.sourceChainId &&
+    current.destinationAmount === expected.destinationAmount &&
+    current.destinationBalanceBefore === expected.destinationBalanceBefore &&
     current.status === expected.status &&
     current.depositTransactionHash === expected.depositTransactionHash &&
     current.deliveredAmount === expected.deliveredAmount &&

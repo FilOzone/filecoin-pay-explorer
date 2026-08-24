@@ -25,6 +25,15 @@ const quoteReview = vi.hoisted(() => ({
   onAcquired: undefined as ((acquisition: SquidAcquisition) => void) | undefined,
   onNetworkSwitchingChange: undefined as ((isSwitching: boolean) => void) | undefined,
 }));
+const automaticRecovery = vi.hoisted(() => ({
+  data: undefined as bigint | null | undefined,
+  dataUpdatedAt: 0,
+  error: null as Error | null,
+  isEligible: false,
+  isFetching: false,
+  isPermanentError: false,
+  refetch: vi.fn(),
+}));
 const lockManager = vi.hoisted(() => ({
   request: vi.fn(async (_name: string, _options: LockOptions, callback: (lock: Lock) => unknown) =>
     callback({} as Lock),
@@ -49,6 +58,9 @@ vi.mock("@/hooks/useSynapse", () => ({
   }),
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
+vi.mock("../hooks/useSquidAcquisitionRecovery", () => ({
+  useSquidAcquisitionRecovery: () => automaticRecovery,
+}));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   Button: ({
     children,
@@ -105,6 +117,13 @@ afterEach(() => {
   wallet.address = undefined;
   wallet.chainId = 314;
   sdk.synapse = undefined;
+  automaticRecovery.data = undefined;
+  automaticRecovery.dataUpdatedAt = 0;
+  automaticRecovery.error = null;
+  automaticRecovery.isEligible = false;
+  automaticRecovery.isFetching = false;
+  automaticRecovery.isPermanentError = false;
+  automaticRecovery.refetch.mockReset();
   vi.unstubAllGlobals();
 });
 describe("GuidedTopUpDialog", () => {
@@ -284,5 +303,45 @@ describe("GuidedTopUpDialog", () => {
     });
     expect(hasSavedSquidAcquisition(storage, owner)).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain("invalid and must be cleared");
+  });
+
+  it("automatically continues with the verified delivered amount after refresh", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    const processing = markSquidBroadcast(
+      storage,
+      beginSquidAcquisition(
+        storage,
+        owner,
+        10n * 10n ** 18n,
+        100n * 10n ** 18n,
+        42161,
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      `0x${"3".repeat(64)}`,
+    );
+    automaticRecovery.data = 15n * 10n ** 18n;
+    automaticRecovery.dataUpdatedAt = 1;
+    automaticRecovery.isEligible = true;
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open={false} />,
+      );
+    });
+
+    expect(loadSquidAcquisition(storage, processing.owner)).toEqual(
+      expect.objectContaining({ deliveredAmount: 15n * 10n ** 18n, status: "acquired" }),
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain('"15"');
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("USDFC arrived, continue to deposit");
   });
 });

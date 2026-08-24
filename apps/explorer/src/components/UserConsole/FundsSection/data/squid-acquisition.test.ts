@@ -121,13 +121,34 @@ describe("persisted Squid acquisition", () => {
 
     expect(() => markSquidBroadcast(storage, stale, sourceHash)).toThrow("no longer processing");
     expect(markSquidAcquired(storage, stale, 15n)).toEqual(acquired);
-    expect(() => markSquidAcquired(storage, stale, 16n)).toThrow("no longer processing");
+    expect(markSquidAcquired(storage, stale, 16n)).toEqual(acquired);
     expect(loadSquidAcquisition(storage, owner)).toEqual(acquired);
 
     clearSquidAcquisition(storage, acquired);
     const replacement = beginSquidAcquisition(storage, owner, 20n, 200n, 8453, replacementId);
     expect(() => clearSquidAcquisition(storage, acquired)).toThrow("changed");
     expect(loadSquidAcquisition(storage, owner)).toEqual(replacement);
+  });
+
+  it("does not acquire a processing marker whose source hashes advanced after verification", () => {
+    const storage = createStorage();
+    const firstBroadcast = markSquidBroadcast(
+      storage,
+      beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId),
+      sourceHash,
+    );
+    const secondHash = `0x${"5".repeat(64)}` as const;
+    const latest = markSquidBroadcast(storage, firstBroadcast, secondHash);
+
+    expect(() => markSquidAcquired(storage, firstBroadcast, 15n)).toThrow("changed");
+    expect(loadSquidAcquisition(storage, owner)).toEqual(latest);
+    expect(markSquidAcquired(storage, latest, 15n)).toEqual(
+      expect.objectContaining({
+        deliveredAmount: 15n,
+        status: "acquired",
+        transactionHashes: [sourceHash, secondHash],
+      }),
+    );
   });
 
   it("does not clear, retry, or duplicate a deposit after another tab advances it", () => {
