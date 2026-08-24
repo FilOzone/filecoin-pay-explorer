@@ -159,7 +159,6 @@ export const FundsSection = ({ account, onGuidedTopUp }: FundsSectionProps) => {
           onSelect={handleChooseMethod}
           open={addFundsOpen}
           squidAvailable={canFundWithAnotherToken}
-          tokenSymbol={selectedToken.token.symbol}
         />
       ) : null}
 

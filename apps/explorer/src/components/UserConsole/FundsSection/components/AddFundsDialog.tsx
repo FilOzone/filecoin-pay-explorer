@@ -17,7 +17,6 @@ type AddFundsDialogProps = {
   open: boolean;
   squidAvailable: boolean;
   squidDisabledReason?: string;
-  tokenSymbol: string;
 };
 
 const cardBase = "group relative flex items-start gap-4 rounded-lg border p-4 text-left transition-colors";
@@ -32,7 +31,6 @@ export function AddFundsDialog({
   open,
   squidAvailable,
   squidDisabledReason,
-  tokenSymbol,
 }: AddFundsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -46,7 +44,7 @@ export function AddFundsDialog({
             {/* Stretched button keeps the whole card clickable without nesting
                 interactive elements inside a <button>. */}
             <button
-              aria-label={`Deposit ${tokenSymbol}`}
+              aria-label='Deposit token'
               className='absolute inset-0 cursor-pointer rounded-lg'
               onClick={() => onSelect("deposit")}
               type='button'
@@ -56,18 +54,18 @@ export function AddFundsDialog({
             </span>
             <span className='flex-1'>
               <span className='flex items-center justify-between font-medium'>
-                Deposit {tokenSymbol}
+                Deposit token
                 <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
               </span>
               <span className='mt-1 block text-sm text-muted-foreground'>
-                You already hold {tokenSymbol}, top up your account.
+                Already hold USDFC or another token on Filecoin? Deposit it directly.
               </span>
             </span>
           </div>
 
           <div className={squidAvailable ? enabledCard : disabledCard}>
             <button
-              aria-label='Fund with another token'
+              aria-label='Swap to USDFC'
               className={`absolute inset-0 rounded-lg ${squidAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}
               disabled={!squidAvailable}
               onClick={() => onSelect("squid")}
@@ -78,7 +76,7 @@ export function AddFundsDialog({
             </span>
             <span className='flex-1'>
               <span className='flex items-center justify-between font-medium'>
-                Fund with another token
+                Swap to USDFC
                 {squidAvailable ? (
                   <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
                 ) : (
