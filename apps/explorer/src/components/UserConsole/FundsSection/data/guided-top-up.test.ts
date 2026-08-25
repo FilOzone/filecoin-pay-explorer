@@ -93,9 +93,20 @@ describe("guided top-up", () => {
     expect(queryClient.getQueryState(unaffectedKey)?.isInvalidated).toBe(false);
   });
 
-  it("derives a reviewed gas cap from source-chain gas and the OP Stack execution buffer", () => {
-    expect(getPlanNetworkGas(plan())).toEqual({ estimated: 10n, maximum: 36n });
-    expect(getPlanNetworkGas(plan(token, 1))).toEqual({ estimated: 10n, maximum: 30n });
+  it("derives the reviewed gas cap from source type and the current allowance", () => {
+    expect(getPlanNetworkGas(plan(NATIVE_TOKEN_ADDRESS))).toEqual({
+      estimated: 10n,
+      maximum: 12n,
+      transactionCount: 1,
+    });
+    expect(getPlanNetworkGas(plan(), 100n)).toEqual({ estimated: 10n, maximum: 12n, transactionCount: 1 });
+    expect(getPlanNetworkGas(plan(), 0n)).toEqual({ estimated: 10n, maximum: 24n, transactionCount: 2 });
+    expect(getPlanNetworkGas(plan(), 1n)).toEqual({ estimated: 10n, maximum: 36n, transactionCount: 3 });
+    expect(getPlanNetworkGas(plan(token, 1), 1n)).toEqual({
+      estimated: 10n,
+      maximum: 30n,
+      transactionCount: 3,
+    });
   });
 
   it("buffers each modeled OP Stack transaction before summing", () => {
@@ -103,7 +114,24 @@ describe("guided top-up", () => {
     const sourceGas = lowValuePlan.quotes[0].costs[0];
     if (sourceGas) sourceGas.amount = 3n;
 
-    expect(getPlanNetworkGas(lowValuePlan)).toEqual({ estimated: 3n, maximum: 12n });
+    expect(getPlanNetworkGas(lowValuePlan, 1n)).toEqual({ estimated: 3n, maximum: 12n, transactionCount: 3 });
+  });
+
+  it("waits for the ERC-20 allowance before publishing a hard gas maximum", () => {
+    expect(getPlanNetworkGas(plan())).toEqual({ estimated: 10n, maximum: null, transactionCount: null });
+  });
+
+  it("models an exact allowance as consumed before a later route", () => {
+    const fundingPlan = plan();
+    const firstQuote = fundingPlan.quotes[0];
+    if (!firstQuote) throw new Error("Expected a quote fixture");
+    fundingPlan.quotes = [firstQuote, { ...firstQuote, id: "second", sourceAmount: 50n }];
+
+    expect(getPlanNetworkGas(fundingPlan, 100n)).toEqual({
+      estimated: 20n,
+      maximum: 36n,
+      transactionCount: 3,
+    });
   });
 
   it("includes bridge headroom and the exact reviewed gas cap in the native balance requirement", () => {

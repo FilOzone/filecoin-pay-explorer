@@ -6,6 +6,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import {
   fetchSourceTokens,
   NATIVE_TOKEN_ADDRESS,
+  SQUID_ROUTER_ADDRESS,
   type SquidPublicClient,
   type SquidWalletClient,
 } from "@filecoin-project/squid-evm-funding";
@@ -195,6 +196,24 @@ export function SquidQuoteReview({
     },
     queryKey: ["squid", "native-balance", sourceChain, address],
   });
+  const {
+    data: sourceAllowance,
+    isError: isSourceAllowanceError,
+    isFetching: isLoadingSourceAllowance,
+    refetch: refetchSourceAllowance,
+  } = useQuery({
+    enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
+    queryFn: async () => {
+      if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
+      return sourcePublicClient.readContract({
+        abi: erc20Abi,
+        address: source.token,
+        args: [address, SQUID_ROUTER_ADDRESS],
+        functionName: "allowance",
+      });
+    },
+    queryKey: ["squid", "source-allowance", sourceChain, sourceTokenAddress, address, SQUID_ROUTER_ADDRESS],
+  });
   const sourceAmount = sourceBalance ?? null;
   const nativeBalance = isNativeSource ? sourceBalance : separateNativeBalance;
   const insufficientBalance =
@@ -254,14 +273,20 @@ export function SquidQuoteReview({
   const maximumBridgeFeeLabel = sourceChainMeta
     ? formatNativeFee(bridgeNativeFees.maximum, sourceChainMeta.nativeCurrency)
     : null;
-  const networkGas = plan ? getPlanNetworkGas(plan) : { estimated: 0n, maximum: 0n };
+  const networkGas = plan
+    ? getPlanNetworkGas(plan, isNativeSource ? undefined : sourceAllowance)
+    : { estimated: 0n, maximum: null, transactionCount: null };
   const estimatedNetworkFeeLabel = sourceChainMeta
     ? formatNativeFee(networkGas.estimated, sourceChainMeta.nativeCurrency)
     : null;
-  const maximumNetworkFeeLabel = sourceChainMeta
-    ? formatNativeFee(networkGas.maximum, sourceChainMeta.nativeCurrency)
-    : null;
-  const requiredNativeBalance = plan ? getRequiredNativeBalance(plan, networkGas.maximum) : 0n;
+  const maximumNetworkFeeLabel =
+    sourceChainMeta && networkGas.maximum !== null
+      ? formatNativeFee(networkGas.maximum, sourceChainMeta.nativeCurrency)
+      : null;
+  const requiredNativeBalance =
+    plan && networkGas.maximum !== null ? getRequiredNativeBalance(plan, networkGas.maximum) : 0n;
+  const approvalTransactionCount =
+    plan && networkGas.transactionCount !== null ? networkGas.transactionCount - plan.quotes.length : null;
   const requiredNativeBalanceLabel = sourceChainMeta
     ? formatNativeFee(requiredNativeBalance, sourceChainMeta.nativeCurrency)
     : null;
@@ -280,6 +305,10 @@ export function SquidQuoteReview({
     isNativeBalanceError,
     isLoadingNativeBalance,
   );
+  const isSourceAllowanceBlocked =
+    source !== undefined &&
+    !isNativeSource &&
+    (isSourceAllowanceError || isLoadingSourceAllowance || sourceAllowance === undefined);
   const nativeBalanceBlockedMessage =
     plan && networkGas.maximum === 0n
       ? "Squid did not provide a source-network gas estimate. Refresh the quote before acquiring."
@@ -372,6 +401,22 @@ export function SquidQuoteReview({
     if (networkGas.maximum === 0n) {
       return setError("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
     }
+    if (networkGas.maximum === null) {
+      return setError("Your source-token allowance is still loading. Try again shortly.");
+    }
+    const reviewedNetworkGasMaximum = networkGas.maximum;
+    if (!isNativeSource) {
+      const latestAllowanceResult = await refetchSourceAllowance();
+      if (latestAllowanceResult.isError || latestAllowanceResult.data === undefined) {
+        return setError("Could not refresh your source-token allowance. Try again before confirming.");
+      }
+      const latestNetworkGas = getPlanNetworkGas(plan, latestAllowanceResult.data);
+      if (latestNetworkGas.maximum !== reviewedNetworkGasMaximum) {
+        return setError(
+          "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.",
+        );
+      }
+    }
     if (latestNativeBalanceResult.data < requiredNativeBalance) {
       return setError(
         `Your ${sourceChainMeta?.nativeCurrency.symbol ?? "native-token"} balance does not cover the reviewed maximum native requirement.`,
@@ -394,7 +439,7 @@ export function SquidQuoteReview({
             executeSquidTopUp({
               destinationClient: destinationClient as unknown as SquidPublicClient,
               integratorId,
-              maxNativeFee: networkGas.maximum,
+              maxNativeFee: reviewedNetworkGasMaximum,
               maxTotalNativeRouteFee: bridgeNativeFees.maximum,
               onSwapAttempt,
               onSwapBroadcast,
@@ -638,6 +683,39 @@ export function SquidQuoteReview({
             </Button>
           </div>
         )}
+        {source && !isNativeSource && !isSourceAllowanceError && (
+          <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+            <span>Squid approval</span>
+            <span>
+              {isLoadingSourceAllowance || sourceAllowance === undefined
+                ? "Loading…"
+                : approvalTransactionCount === null
+                  ? "Waiting for quote"
+                  : approvalTransactionCount === 0
+                    ? "No approval needed"
+                    : approvalTransactionCount === 1
+                      ? "Approval required"
+                      : `${approvalTransactionCount} approval transactions expected`}
+            </span>
+          </div>
+        )}
+        {source && !isNativeSource && isSourceAllowanceError && (
+          <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+            <span>Could not load your Squid token allowance.</span>
+            <Button
+              disabled={isLoadingSourceAllowance}
+              onClick={() => {
+                setError(null);
+                void refetchSourceAllowance();
+              }}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              {isLoadingSourceAllowance ? "Retrying…" : "Retry"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <Button
@@ -710,12 +788,14 @@ export function SquidQuoteReview({
                 </span>
               </>
             )}
-            {estimatedNetworkFeeLabel && maximumNetworkFeeLabel && (
+            {estimatedNetworkFeeLabel && maximumNetworkFeeLabel && networkGas.transactionCount !== null && (
               <>
                 <span className='text-muted-foreground'>Source-network gas (estimated)</span>
                 <span className='text-right font-medium'>{estimatedNetworkFeeLabel}</span>
                 <span className='text-muted-foreground'>Source-network gas maximum</span>
                 <span className='text-right font-medium'>{maximumNetworkFeeLabel}</span>
+                <span className='text-muted-foreground'>Expected source transactions</span>
+                <span className='text-right font-medium'>{networkGas.transactionCount}</span>
               </>
             )}
             {otherNetworkGasCosts.length > 0 && (
@@ -749,8 +829,10 @@ export function SquidQuoteReview({
             disabled={
               isBusy ||
               isSwitchingChain ||
+              isSourceAllowanceBlocked ||
               isSeparateNativeBalanceBlocked ||
               nativeBalance === undefined ||
+              networkGas.maximum === null ||
               networkGas.maximum === 0n ||
               nativeBalance < requiredNativeBalance ||
               (chainId === sourceChain && isPreparingWallet)

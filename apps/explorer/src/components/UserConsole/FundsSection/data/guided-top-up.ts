@@ -9,12 +9,6 @@ import { formatUnits } from "viem";
 import { parseFundingAmount, USDFC_DECIMALS } from "./funding-runway";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
-// The reviewed source-chain gas estimate covers the Squid transaction. Three
-// transaction-equivalents leave room for an exact ERC-20 approval reset and
-// approval. The executor then applies this 20% buffer to prepared OP Stack
-// fees, so include it in the user-visible cap too.
-const NETWORK_FEE_TRANSACTION_MULTIPLIER = 3n;
-
 export function parseTopUpAmount(amount: string): bigint | null {
   return parseFundingAmount(amount, USDFC_DECIMALS);
 }
@@ -55,25 +49,59 @@ export function getPlanBridgeNativeFees(plan: SquidFundingPlan): { estimated: bi
   );
 }
 
-export function getPlanNetworkGas(plan: SquidFundingPlan): { estimated: bigint; maximum: bigint } {
-  const estimated = plan.quotes.reduce(
-    (total, quote) =>
+export function getPlanNetworkGas(
+  plan: SquidFundingPlan,
+  currentAllowance?: bigint,
+): { estimated: bigint; maximum: bigint | null; transactionCount: number | null } {
+  const isNativeSource = isNativeToken(plan.source.token);
+  if (!isNativeSource && currentAllowance === undefined) {
+    return {
+      estimated: plan.quotes.reduce((total, quote) => total + getQuoteNetworkGas(quote.costs, plan.source.chainId), 0n),
+      maximum: null,
+      transactionCount: null,
+    };
+  }
+
+  let allowance = currentAllowance ?? 0n;
+  let estimated = 0n;
+  let maximum = 0n;
+  let transactionCount = 0;
+  for (const quote of plan.quotes) {
+    const routeGas = getQuoteNetworkGas(quote.costs, plan.source.chainId);
+    // Squid only supplies the route estimate. Model each approval as one
+    // route-gas equivalent, but only when the exact allowance policy will
+    // actually execute it. The executor still fails closed against this cap
+    // after preparing each real transaction.
+    const bufferedTransactionGas = applyNetworkFeeExecutionBuffer(plan.source.chainId, routeGas);
+    estimated += routeGas;
+
+    if (!isNativeSource && allowance !== quote.sourceAmount) {
+      if (allowance > 0n) {
+        maximum += bufferedTransactionGas;
+        transactionCount += 1;
+      }
+      maximum += bufferedTransactionGas;
+      transactionCount += 1;
+      allowance = quote.sourceAmount;
+    }
+
+    maximum += bufferedTransactionGas;
+    transactionCount += 1;
+    // The executor grants exactly sourceAmount, which the route consumes.
+    if (!isNativeSource) allowance = 0n;
+  }
+  return { estimated, maximum, transactionCount };
+}
+
+function getQuoteNetworkGas(costs: readonly SquidQuoteCost[], sourceChainId: number): bigint {
+  return costs.reduce(
+    (total, cost) =>
       total +
-      quote.costs.reduce(
-        (quoteTotal, cost) =>
-          quoteTotal +
-          (cost.kind === "gas" && cost.token.chainId === plan.source.chainId && isNativeToken(cost.token.address)
-            ? cost.amount
-            : 0n),
-        0n,
-      ),
+      (cost.kind === "gas" && cost.token.chainId === sourceChainId && isNativeToken(cost.token.address)
+        ? cost.amount
+        : 0n),
     0n,
   );
-  // Execution buffers every prepared OP Stack transaction before adding it to
-  // the cumulative cap. Model the three possible transactions the same way so
-  // integer rounding cannot make the reviewed cap smaller than execution.
-  const maximum = applyNetworkFeeExecutionBuffer(plan.source.chainId, estimated) * NETWORK_FEE_TRANSACTION_MULTIPLIER;
-  return { estimated, maximum };
 }
 
 export function getRequiredNativeBalance(plan: SquidFundingPlan, maximumNetworkFee: bigint): bigint {
