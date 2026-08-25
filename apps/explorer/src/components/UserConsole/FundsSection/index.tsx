@@ -91,18 +91,15 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
     setDepositDialogOpen(true);
   }, [selectedToken]);
 
-  const canFundWithAnotherToken =
-    network === "mainnet" &&
-    Boolean(onGuidedTopUp) &&
-    selectedToken?.token.id.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const canUseGuidedTopUp = network === "mainnet" && Boolean(onGuidedTopUp);
 
   const handleOpenDeposit = useCallback(() => {
-    if (canFundWithAnotherToken) {
+    if (canUseGuidedTopUp) {
       setAddFundsOpen(true);
       return;
     }
     openDirectDeposit();
-  }, [canFundWithAnotherToken, openDirectDeposit]);
+  }, [canUseGuidedTopUp, openDirectDeposit]);
 
   const handleChooseMethod = useCallback(
     (method: AddFundsMethod) => {
@@ -151,12 +148,12 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
     <>
       {renderSection()}
 
-      {selectedToken ? (
+      {canUseGuidedTopUp ? (
         <AddFundsDialog
           onOpenChange={setAddFundsOpen}
           onSelect={handleChooseMethod}
           open={addFundsOpen}
-          squidAvailable={canFundWithAnotherToken}
+          squidAvailable
         />
       ) : null}
 
