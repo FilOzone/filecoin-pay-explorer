@@ -8,7 +8,7 @@ import useSynapse from "@/hooks/useSynapse";
 import { useTopUpActivity } from "../TopUpActivityContext";
 import { GuidedTopUpDialog } from "./components";
 import { withoutTopUpSearchParam } from "./data/guided-top-up";
-import { hasSavedSquidAcquisition } from "./data/squid-acquisition";
+import { getSquidAcquisitionStorageKey, hasSavedSquidAcquisition } from "./data/squid-acquisition";
 
 interface TopUpDialogControllerProps {
   accountId: string;
@@ -84,7 +84,14 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
     };
 
     refreshSavedAcquisition();
-    const handleStorage = () => {
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        address === undefined ||
+        event.storageArea !== window.localStorage ||
+        (event.key !== null && event.key !== getSquidAcquisitionStorageKey(address))
+      ) {
+        return;
+      }
       setRecoveryRevision((revision) => revision + 1);
       refreshSavedAcquisition();
     };

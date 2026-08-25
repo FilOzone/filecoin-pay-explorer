@@ -19,17 +19,17 @@ export type SquidAcquisition = {
 
 export type SquidAcquisitionExecutionStage = "preparing" | "swap-broadcast" | "swap-requested";
 
-function storageKey(owner: Address) {
+export function getSquidAcquisitionStorageKey(owner: Address) {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
 }
 
 export function hasSavedSquidAcquisition(storage: AcquisitionStorage, owner: Address) {
-  return storage.getItem(storageKey(owner)) !== null;
+  return storage.getItem(getSquidAcquisitionStorageKey(owner)) !== null;
 }
 
 function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
   storage.setItem(
-    storageKey(acquisition.owner),
+    getSquidAcquisitionStorageKey(acquisition.owner),
     JSON.stringify({
       ...acquisition,
       deliveredAmount: acquisition.deliveredAmount?.toString(),
@@ -41,7 +41,7 @@ function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
 }
 
 export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner: Address): SquidAcquisition | null {
-  const value = storage.getItem(storageKey(expectedOwner));
+  const value = storage.getItem(getSquidAcquisitionStorageKey(expectedOwner));
   if (value === null) return null;
 
   try {
@@ -129,7 +129,8 @@ export function beginSquidAcquisition(
   sourceChainId: number,
   acquisitionId = globalThis.crypto.randomUUID(),
 ) {
-  if (storage.getItem(storageKey(owner)) !== null) throw new Error("A saved Squid acquisition already exists");
+  if (storage.getItem(getSquidAcquisitionStorageKey(owner)) !== null)
+    throw new Error("A saved Squid acquisition already exists");
   return save(storage, {
     acquisitionId,
     destinationAmount,
@@ -239,13 +240,13 @@ export function getSquidDepositAmount(acquisition: SquidAcquisition) {
 export function clearSquidAcquisition(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (!isSameState(current, acquisition)) throw new Error("Saved Squid acquisition changed");
-  storage.removeItem(storageKey(current.owner));
+  storage.removeItem(getSquidAcquisitionStorageKey(current.owner));
 }
 
 export function clearInvalidSquidAcquisition(storage: AcquisitionStorage, owner: Address) {
   if (!hasSavedSquidAcquisition(storage, owner)) return;
   if (loadSquidAcquisition(storage, owner) !== null) throw new Error("The saved Squid acquisition is valid");
-  storage.removeItem(storageKey(owner));
+  storage.removeItem(getSquidAcquisitionStorageKey(owner));
 }
 
 function isTransactionHash(value: unknown): value is Hash {

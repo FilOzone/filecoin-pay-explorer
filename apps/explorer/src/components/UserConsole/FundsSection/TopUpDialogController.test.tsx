@@ -1,7 +1,7 @@
 import { act, create } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TopUpActivityProvider, useTopUpActivity } from "../TopUpActivityContext";
-import { beginSquidAcquisition } from "./data/squid-acquisition";
+import { beginSquidAcquisition, getSquidAcquisitionStorageKey } from "./data/squid-acquisition";
 import { TopUpDialogController } from "./TopUpDialogController";
 
 const replace = vi.fn();
@@ -11,7 +11,7 @@ const dialog = vi.hoisted(() => ({
   open: false,
   recoveryRevision: 0,
 }));
-let storageListener: (() => void) | undefined;
+let storageListener: ((event: StorageEvent) => void) | undefined;
 const storedValues = new Map<string, string>();
 const storage = {
   getItem: (key: string) => storedValues.get(key) ?? null,
@@ -99,7 +99,7 @@ beforeEach(() => {
   replace.mockReset();
   storedValues.clear();
   vi.stubGlobal("window", {
-    addEventListener: vi.fn((type: string, listener: () => void) => {
+    addEventListener: vi.fn((type: string, listener: (event: StorageEvent) => void) => {
       if (type === "storage") storageListener = listener;
     }),
     localStorage: storage,
@@ -190,9 +190,39 @@ describe("TopUpDialogController recovery", () => {
       42161,
       "11111111-1111-4111-8111-111111111111",
     );
-    act(() => storageListener?.());
+    act(() =>
+      storageListener?.({
+        key: "unrelated-key",
+        storageArea: storage as unknown as Storage,
+      } as StorageEvent),
+    );
+    expect(dialog.recoveryRevision).toBe(initialRevision);
+
+    act(() =>
+      storageListener?.({
+        key: getSquidAcquisitionStorageKey("0x1111111111111111111111111111111111111111"),
+        storageArea: {} as Storage,
+      } as StorageEvent),
+    );
+    expect(dialog.recoveryRevision).toBe(initialRevision);
+
+    act(() =>
+      storageListener?.({
+        key: getSquidAcquisitionStorageKey("0x1111111111111111111111111111111111111111"),
+        storageArea: storage as unknown as Storage,
+      } as StorageEvent),
+    );
 
     expect(dialog.open).toBe(true);
     expect(dialog.recoveryRevision).toBe(initialRevision + 1);
+
+    storedValues.clear();
+    act(() =>
+      storageListener?.({
+        key: null,
+        storageArea: storage as unknown as Storage,
+      } as StorageEvent),
+    );
+    expect(dialog.recoveryRevision).toBe(initialRevision + 2);
   });
 });
