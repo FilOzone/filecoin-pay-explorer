@@ -9,7 +9,9 @@ let params = new URLSearchParams();
 const dialog = vi.hoisted(() => ({
   onOpenChange: undefined as ((open: boolean) => void) | undefined,
   open: false,
+  recoveryRevision: 0,
 }));
+let storageListener: (() => void) | undefined;
 const storedValues = new Map<string, string>();
 const storage = {
   getItem: (key: string) => storedValues.get(key) ?? null,
@@ -32,9 +34,18 @@ vi.mock("@/hooks/useSynapse", () => ({
   default: () => ({ synapse: undefined }),
 }));
 vi.mock("./components", () => ({
-  GuidedTopUpDialog: ({ onOpenChange, open }: { onOpenChange: (open: boolean) => void; open: boolean }) => {
+  GuidedTopUpDialog: ({
+    onOpenChange,
+    open,
+    recoveryRevision,
+  }: {
+    onOpenChange: (open: boolean) => void;
+    open: boolean;
+    recoveryRevision: number;
+  }) => {
     dialog.onOpenChange = onOpenChange;
     dialog.open = open;
+    dialog.recoveryRevision = recoveryRevision;
     return (
       <div data-guided-top-up-open={open} data-testid='dialog'>
         <button onClick={() => onOpenChange(false)} type='button'>
@@ -82,11 +93,15 @@ function renderController() {
 beforeEach(() => {
   dialog.onOpenChange = undefined;
   dialog.open = false;
+  dialog.recoveryRevision = 0;
+  storageListener = undefined;
   params = new URLSearchParams();
   replace.mockReset();
   storedValues.clear();
   vi.stubGlobal("window", {
-    addEventListener: vi.fn(),
+    addEventListener: vi.fn((type: string, listener: () => void) => {
+      if (type === "storage") storageListener = listener;
+    }),
     localStorage: storage,
     removeEventListener: vi.fn(),
   });
@@ -159,5 +174,25 @@ describe("TopUpDialogController recovery", () => {
 
     act(() => launcher.props.onClick());
     expect(dialog.open).toBe(true);
+  });
+
+  it("refreshes recovery state when another tab writes while the dialog is already open", () => {
+    renderController();
+    act(() => dialog.onOpenChange?.(true));
+    expect(dialog.open).toBe(true);
+    const initialRevision = dialog.recoveryRevision;
+
+    beginSquidAcquisition(
+      storage,
+      "0x1111111111111111111111111111111111111111",
+      10n,
+      100n,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    act(() => storageListener?.());
+
+    expect(dialog.open).toBe(true);
+    expect(dialog.recoveryRevision).toBe(initialRevision + 1);
   });
 });

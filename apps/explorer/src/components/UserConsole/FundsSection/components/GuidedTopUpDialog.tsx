@@ -85,6 +85,7 @@ type GuidedTopUpDialogProps = {
   isAccountSummaryLoading: boolean;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  recoveryRevision?: number;
 };
 
 export function GuidedTopUpDialog({
@@ -93,6 +94,7 @@ export function GuidedTopUpDialog({
   isAccountSummaryLoading,
   onOpenChange,
   open,
+  recoveryRevision = 0,
 }: GuidedTopUpDialogProps) {
   const { constants, synapse } = useSynapse();
   const { address, chainId } = useConnection();
@@ -140,6 +142,9 @@ export function GuidedTopUpDialog({
   );
   const automaticRecovery = useSquidAcquisitionRecovery(savedAcquisition, address);
   useEffect(() => {
+    // The controller advances this value when another tab changes recovery
+    // storage, forcing the snapshot below to be reloaded even while open.
+    void recoveryRevision;
     let cancelled = false;
     const applySavedAcquisition = (saved: SquidAcquisition | null, hasSaved: boolean) => {
       if (cancelled) return;
@@ -215,7 +220,7 @@ export function GuidedTopUpDialog({
     return () => {
       cancelled = true;
     };
-  }, [address, open]);
+  }, [address, open, recoveryRevision]);
 
   useEffect(() => {
     const pending = savedAcquisition;

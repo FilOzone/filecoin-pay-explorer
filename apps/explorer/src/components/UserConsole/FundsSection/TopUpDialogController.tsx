@@ -19,6 +19,7 @@ interface TopUpDialogControllerProps {
 export function TopUpDialogController({ accountId, children, showTrigger = false }: TopUpDialogControllerProps) {
   const [open, setOpen] = useState(false);
   const [hasSavedAcquisition, setHasSavedAcquisition] = useState(false);
+  const [recoveryRevision, setRecoveryRevision] = useState(0);
   const didAutoOpenSavedAcquisition = useRef(false);
   const { setTopUpActive } = useTopUpActivity();
   const { address } = useConnection();
@@ -83,8 +84,13 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
     };
 
     refreshSavedAcquisition();
-    window.addEventListener("storage", refreshSavedAcquisition);
-    return () => window.removeEventListener("storage", refreshSavedAcquisition);
+    const handleStorage = () => {
+      setRecoveryRevision((revision) => revision + 1);
+      refreshSavedAcquisition();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, [address, openTopUp]);
 
   useEffect(
@@ -117,6 +123,7 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
         isAccountSummaryLoading={isAccountSummaryLoading}
         onOpenChange={handleOpenChange}
         open={open}
+        recoveryRevision={recoveryRevision}
       />
     </>
   );

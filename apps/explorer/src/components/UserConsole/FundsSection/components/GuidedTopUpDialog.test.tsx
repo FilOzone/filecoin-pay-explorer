@@ -425,4 +425,55 @@ describe("GuidedTopUpDialog", () => {
       expect.objectContaining({ executionStage: "swap-requested" }),
     );
   });
+
+  it("reloads a saved acquisition after a cross-tab storage revision", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog
+          accountId='account'
+          isAccountSummaryLoading={false}
+          onOpenChange={vi.fn()}
+          open
+          recoveryRevision={0}
+        />,
+      );
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("A saved transaction needs verification");
+
+    markSquidSwapRequested(
+      storage,
+      beginSquidAcquisition(
+        storage,
+        owner,
+        10n * 10n ** 18n,
+        100n * 10n ** 18n,
+        42161,
+        "11111111-1111-4111-8111-111111111111",
+      ),
+    );
+    await act(async () => {
+      renderer.update(
+        <GuidedTopUpDialog
+          accountId='account'
+          isAccountSummaryLoading={false}
+          onOpenChange={vi.fn()}
+          open
+          recoveryRevision={1}
+        />,
+      );
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("A saved transaction needs verification");
+  });
 });
