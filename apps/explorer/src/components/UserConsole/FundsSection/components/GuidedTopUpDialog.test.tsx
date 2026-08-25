@@ -169,6 +169,36 @@ describe("GuidedTopUpDialog", () => {
     expect(switchChainAsync).toHaveBeenCalledWith({ chainId: 314 });
   });
 
+  it("captures the first defined wallet network when opening before hydration", async () => {
+    const onOpenChange = vi.fn();
+    const props = {
+      accountId: "account",
+      isAccountSummaryLoading: false,
+      onOpenChange,
+      open: true,
+    };
+    wallet.chainId = undefined;
+    let renderer!: ReturnType<typeof create>;
+
+    await act(async () => {
+      renderer = create(<GuidedTopUpDialog {...props} />);
+    });
+    wallet.chainId = 8453;
+    await act(async () => {
+      renderer.update(<GuidedTopUpDialog {...props} />);
+    });
+    wallet.chainId = 314;
+    await act(async () => {
+      renderer.update(<GuidedTopUpDialog {...props} />);
+    });
+    await act(async () => {
+      dialog.onOpenChange?.(false);
+    });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(switchChainAsync).toHaveBeenCalledWith({ chainId: 8453 });
+  });
+
   it("keeps the dialog open until the Filecoin network switch settles", async () => {
     const onOpenChange = vi.fn();
     const props = {

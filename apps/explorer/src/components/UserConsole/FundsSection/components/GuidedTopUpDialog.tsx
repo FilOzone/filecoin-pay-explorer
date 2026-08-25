@@ -112,6 +112,7 @@ export function GuidedTopUpDialog({
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
   const originalChainId = useRef<number | undefined>(undefined);
+  const isAwaitingOriginalChainId = useRef(false);
   const wasOpen = useRef(false);
   // Set when the amount was prefilled for this open, so clearing the field
   // doesn't refill it (see the prefill effect below).
@@ -273,11 +274,19 @@ export function GuidedTopUpDialog({
     // on-chain summary is available.
     if (open && !wasOpen.current) {
       originalChainId.current = chainId;
+      isAwaitingOriginalChainId.current = chainId === undefined;
       if (acquiredAmount === null) {
         setAmount("");
         didPrefillAmount.current = false;
       }
     }
+    // An auto-opened dialog can render before Wagmi hydrates. Capture only the
+    // first defined chain so later route-driven switches cannot replace it.
+    if (open && isAwaitingOriginalChainId.current && chainId !== undefined) {
+      originalChainId.current = chainId;
+      isAwaitingOriginalChainId.current = false;
+    }
+    if (!open) isAwaitingOriginalChainId.current = false;
     wasOpen.current = open;
   }, [acquiredAmount, chainId, open]);
 
@@ -493,6 +502,7 @@ export function GuidedTopUpDialog({
   const closeDialog = () => {
     const chainIdToRestore = originalChainId.current;
     originalChainId.current = undefined;
+    isAwaitingOriginalChainId.current = false;
     onOpenChange(false);
     if (chainIdToRestore === undefined || chainIdToRestore === chainId) return;
     void switchChainAsync({ chainId: chainIdToRestore }).catch((error) => {
