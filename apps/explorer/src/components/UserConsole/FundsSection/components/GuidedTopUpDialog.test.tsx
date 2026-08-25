@@ -36,7 +36,7 @@ const automaticRecovery = vi.hoisted(() => ({
   refetch: vi.fn(),
 }));
 const lockManager = vi.hoisted(() => ({
-  request: vi.fn(async (_name: string, _options: LockOptions, callback: (lock: Lock) => unknown) =>
+  request: vi.fn(async (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
     callback({} as Lock),
   ),
 }));
@@ -111,6 +111,11 @@ vi.mock("./SquidQuoteReview", () => ({
 }));
 
 beforeEach(() => {
+  lockManager.request
+    .mockReset()
+    .mockImplementation(async (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
+      callback({} as Lock),
+    );
   vi.stubGlobal("navigator", { locks: lockManager });
 });
 
@@ -383,5 +388,41 @@ describe("GuidedTopUpDialog", () => {
     });
     expect(hasSavedSquidAcquisition(storage, owner)).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain("A saved transaction needs verification");
+  });
+
+  it("preserves a preflight marker while another tab owns the acquisition lock", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    const preparing = beginSquidAcquisition(
+      storage,
+      owner,
+      10n * 10n ** 18n,
+      100n * 10n ** 18n,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    lockManager.request.mockImplementationOnce(
+      async (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) => callback(null),
+    );
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+
+    expect(loadSquidAcquisition(storage, owner)).toEqual(preparing);
+    expect(JSON.stringify(renderer.toJSON())).toContain("already active in another tab");
+    expect(markSquidSwapRequested(storage, preparing)).toEqual(
+      expect.objectContaining({ executionStage: "swap-requested" }),
+    );
   });
 });

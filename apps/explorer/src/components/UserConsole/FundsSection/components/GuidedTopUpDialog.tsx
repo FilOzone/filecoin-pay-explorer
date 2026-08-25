@@ -105,6 +105,7 @@ export function GuidedTopUpDialog({
   const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
   const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
   const [hasInvalidAcquisition, setHasInvalidAcquisition] = useState(false);
+  const [acquisitionCoordinationError, setAcquisitionCoordinationError] = useState<string | null>(null);
   const [automaticRecoveryError, setAutomaticRecoveryError] = useState<string | null>(null);
   const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
@@ -139,42 +140,81 @@ export function GuidedTopUpDialog({
   );
   const automaticRecovery = useSquidAcquisitionRecovery(savedAcquisition, address);
   useEffect(() => {
-    setIsSubmitting(false);
-    if (!address) {
-      setAcquiredAmount(null);
-      setAcquisitionOwner(null);
-      setSavedAcquisition(null);
-      setHasInvalidAcquisition(false);
-      setAutomaticRecoveryError(null);
-      setAcquisitionState("idle");
-      return;
-    }
-
-    try {
-      let hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
-      let saved = loadSquidAcquisition(window.localStorage, address);
-      if (open && saved?.status === "processing" && saved.executionStage === "preparing") {
-        clearSquidAcquisition(window.localStorage, saved);
-        hasSavedAcquisition = false;
-        saved = null;
-      }
-      const hasInvalidSavedAcquisition = hasSavedAcquisition && saved === null;
+    let cancelled = false;
+    const applySavedAcquisition = (saved: SquidAcquisition | null, hasSaved: boolean) => {
+      if (cancelled) return;
+      const hasInvalidSavedAcquisition = hasSaved && saved === null;
       setSavedAcquisition(saved);
       setHasInvalidAcquisition(hasInvalidSavedAcquisition);
+      setAcquisitionCoordinationError(null);
       setAutomaticRecoveryError(null);
       setAcquisitionOwner(saved?.owner ?? null);
       setAcquiredAmount(saved?.status === "acquired" ? getSquidDepositAmount(saved) : null);
       setAcquisitionState(
         saved?.status === "acquired" ? "acquired" : saved || hasInvalidSavedAcquisition ? "blocked" : "idle",
       );
+    };
+
+    setIsSubmitting(false);
+    if (!address) {
+      setAcquiredAmount(null);
+      setAcquisitionOwner(null);
+      setSavedAcquisition(null);
+      setHasInvalidAcquisition(false);
+      setAcquisitionCoordinationError(null);
+      setAutomaticRecoveryError(null);
+      setAcquisitionState("idle");
+      return;
+    }
+
+    try {
+      const hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
+      const saved = loadSquidAcquisition(window.localStorage, address);
+      applySavedAcquisition(saved, hasSavedAcquisition);
+      if (!open || saved?.status !== "processing" || saved.executionStage !== "preparing") return;
+
+      void withSquidAcquisitionLock(globalThis.navigator?.locks, saved.owner, () => {
+        const current = loadSquidAcquisition(window.localStorage, saved.owner);
+        if (
+          current?.status === "processing" &&
+          current.executionStage === "preparing" &&
+          hasSameSquidAcquisitionSnapshot(current, saved)
+        ) {
+          clearSquidAcquisition(window.localStorage, current);
+        }
+      })
+        .then(() => {
+          const hasCurrent = hasSavedSquidAcquisition(window.localStorage, saved.owner);
+          applySavedAcquisition(loadSquidAcquisition(window.localStorage, saved.owner), hasCurrent);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          try {
+            const hasCurrent = hasSavedSquidAcquisition(window.localStorage, saved.owner);
+            applySavedAcquisition(loadSquidAcquisition(window.localStorage, saved.owner), hasCurrent);
+          } catch {
+            setSavedAcquisition(null);
+            setHasInvalidAcquisition(false);
+            setAcquisitionOwner(null);
+            setAcquiredAmount(null);
+            setAcquisitionState("blocked");
+          }
+          setAcquisitionCoordinationError(
+            error instanceof Error ? error.message : "Funding coordination is unavailable in this tab",
+          );
+        });
     } catch {
       setAcquiredAmount(null);
       setAcquisitionOwner(null);
       setSavedAcquisition(null);
       setHasInvalidAcquisition(false);
+      setAcquisitionCoordinationError(null);
       setAutomaticRecoveryError(null);
       setAcquisitionState("blocked");
     }
+    return () => {
+      cancelled = true;
+    };
   }, [address, open]);
 
   useEffect(() => {
@@ -549,6 +589,11 @@ export function GuidedTopUpDialog({
                   ) : (
                     <>
                       <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for the swap.</p>
+                      {acquisitionCoordinationError && (
+                        <p className='text-muted-foreground' role='status'>
+                          {acquisitionCoordinationError}
+                        </p>
+                      )}
                       {savedAcquisition.transactionHashes.map((hash) => (
                         <code className='block break-all' key={hash}>
                           {hash}
