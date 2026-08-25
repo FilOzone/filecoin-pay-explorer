@@ -157,6 +157,37 @@ describe("runSquidAcquisition", () => {
     expect(loadSquidAcquisition(storage, owner)).toBeNull();
   });
 
+  it("preserves an earlier route hash when a later wallet request is rejected", async () => {
+    const storage = createStorage();
+    const error = { code: 4001 };
+
+    const outcome = await runSquidAcquisition({
+      execute: async ({ onSwapAttempt, onSwapBroadcast }) => {
+        onSwapAttempt();
+        onSwapBroadcast(sourceHash);
+        onSwapAttempt();
+        throw error;
+      },
+      minimumDestinationAmount: 10n,
+      owner,
+      readDestinationBalance: vi.fn().mockResolvedValue(100n),
+      sourceChainId: 42161,
+      storage,
+    });
+
+    expect(outcome).toEqual({
+      acquisition: expect.objectContaining({
+        executionStage: "swap-requested",
+        transactionHashes: [sourceHash],
+      }),
+      error,
+      status: "blocked",
+    });
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [sourceHash] }),
+    );
+  });
+
   it("returns the in-memory marker when storage becomes unreadable after it is saved", async () => {
     const values = new Map<string, string>();
     let readsFail = false;

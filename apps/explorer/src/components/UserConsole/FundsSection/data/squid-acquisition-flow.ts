@@ -67,7 +67,10 @@ export async function runSquidAcquisition({
     const acquired = markSquidAcquiredFromBalance(storage, acquisition, await readDestinationBalance());
     return { acquisition: acquired, status: "acquired" };
   } catch (error) {
-    if (canClearSquidAcquisitionAfterError(acquisition.executionStage, error)) {
+    if (
+      acquisition.transactionHashes.length === 0 &&
+      canClearSquidAcquisitionAfterError(acquisition.executionStage, error)
+    ) {
       try {
         clearSquidAcquisition(storage, acquisition);
         return { error, status: "failed" };
