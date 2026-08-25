@@ -81,7 +81,11 @@ describe("runSquidAcquisition", () => {
     });
 
     expect(outcome).toEqual({
-      acquisition: expect.objectContaining({ status: "processing", transactionHashes: [sourceHash] }),
+      acquisition: expect.objectContaining({
+        executionStage: "swap-broadcast",
+        status: "processing",
+        transactionHashes: [sourceHash],
+      }),
       error: expect.any(Error),
       status: "blocked",
     });
@@ -97,6 +101,52 @@ describe("runSquidAcquisition", () => {
     await expect(
       runSquidAcquisition({
         execute: vi.fn().mockRejectedValue(error),
+        minimumDestinationAmount: 10n,
+        owner,
+        readDestinationBalance: vi.fn().mockResolvedValue(100n),
+        sourceChainId: 42161,
+        storage,
+      }),
+    ).resolves.toEqual({ error, status: "failed" });
+    expect(loadSquidAcquisition(storage, owner)).toBeNull();
+  });
+
+  it("persists an ambiguous swap request without a returned hash", async () => {
+    const storage = createStorage();
+    const error = new Error("wallet response lost");
+
+    const outcome = await runSquidAcquisition({
+      execute: async ({ onSwapAttempt }) => {
+        onSwapAttempt();
+        throw error;
+      },
+      minimumDestinationAmount: 10n,
+      owner,
+      readDestinationBalance: vi.fn().mockResolvedValue(100n),
+      sourceChainId: 42161,
+      storage,
+    });
+
+    expect(outcome).toEqual({
+      acquisition: expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [] }),
+      error,
+      status: "blocked",
+    });
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [] }),
+    );
+  });
+
+  it("clears an unbroadcast swap request only after an explicit wallet rejection", async () => {
+    const storage = createStorage();
+    const error = { code: 4001 };
+
+    await expect(
+      runSquidAcquisition({
+        execute: async ({ onSwapAttempt }) => {
+          onSwapAttempt();
+          throw error;
+        },
         minimumDestinationAmount: 10n,
         owner,
         readDestinationBalance: vi.fn().mockResolvedValue(100n),

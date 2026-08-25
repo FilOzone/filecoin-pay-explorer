@@ -5,6 +5,7 @@ import { getDeliveredSquidAmount, type SquidAcquisition } from "./squid-acquisit
 export type SquidRecoveryCandidate = SquidAcquisition & {
   acquisitionId: string;
   destinationBalanceBefore: bigint;
+  executionStage: "swap-broadcast";
   status: "processing";
 };
 
@@ -24,6 +25,7 @@ export function isAutomaticSquidRecoveryCandidate(
 ): acquisition is SquidRecoveryCandidate {
   return (
     acquisition?.status === "processing" &&
+    acquisition.executionStage === "swap-broadcast" &&
     acquisition.acquisitionId !== undefined &&
     acquisition.destinationBalanceBefore !== undefined &&
     acquisition.transactionHashes.length > 0

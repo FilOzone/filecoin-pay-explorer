@@ -12,6 +12,7 @@ import {
   markSquidAcquiredFromBalance,
   markSquidBroadcast,
   markSquidDepositPending,
+  markSquidSwapRequested,
   resetSquidDeposit,
   type SquidAcquisition,
 } from "./squid-acquisition";
@@ -38,7 +39,8 @@ describe("persisted Squid acquisition", () => {
     const processing = beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId);
     expect(loadSquidAcquisition(storage, owner)).toEqual(processing);
 
-    const broadcast = markSquidBroadcast(storage, processing, sourceHash);
+    const requested = markSquidSwapRequested(storage, processing);
+    const broadcast = markSquidBroadcast(storage, requested, sourceHash);
     const acquired = markSquidAcquired(storage, broadcast, 15n);
     expect(loadSquidAcquisition(storage, owner)).toEqual(acquired);
     expect(getSquidDepositAmount(acquired)).toBe(15n);
@@ -73,12 +75,27 @@ describe("persisted Squid acquisition", () => {
       depositTransactionHash: undefined,
       destinationAmount: 10n,
       destinationBalanceBefore: undefined,
+      executionStage: "swap-broadcast",
       owner,
       sourceChainId: 42161,
       status: "processing",
       transactionHashes: [sourceHash],
     });
     expect(getSquidDepositAmount(legacy as SquidAcquisition)).toBe(10n);
+
+    storage.setItem(
+      `filecoin-pay:squid-acquisition:v1:${owner.toLowerCase()}`,
+      JSON.stringify({
+        destinationAmount: "10",
+        owner,
+        sourceChainId: 42161,
+        status: "processing",
+        transactionHashes: [],
+      }),
+    );
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [] }),
+    );
   });
 
   it("recovers only after the Filecoin balance increase reaches the reviewed minimum", () => {
@@ -90,6 +107,7 @@ describe("persisted Squid acquisition", () => {
       sourceChainId: 42161,
       status: "processing",
       transactionHashes: [sourceHash],
+      executionStage: "swap-broadcast",
     };
 
     expect(getDeliveredSquidAmount(acquisition, 99n)).toBeNull();
@@ -102,7 +120,7 @@ describe("persisted Squid acquisition", () => {
   it("freezes the exact balance increase only after it reaches the reviewed minimum", () => {
     const storage = createStorage();
     const processing = beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId);
-    const broadcast = markSquidBroadcast(storage, processing, sourceHash);
+    const broadcast = markSquidBroadcast(storage, markSquidSwapRequested(storage, processing), sourceHash);
 
     expect(() => markSquidAcquiredFromBalance(storage, broadcast, 109n)).toThrow(
       "reviewed USDFC minimum has not arrived",
@@ -117,7 +135,11 @@ describe("persisted Squid acquisition", () => {
   it("rejects stale or regressive state mutations", () => {
     const storage = createStorage();
     const stale = beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId);
-    const acquired = markSquidAcquired(storage, markSquidBroadcast(storage, stale, sourceHash), 15n);
+    const acquired = markSquidAcquired(
+      storage,
+      markSquidBroadcast(storage, markSquidSwapRequested(storage, stale), sourceHash),
+      15n,
+    );
 
     expect(() => markSquidBroadcast(storage, stale, sourceHash)).toThrow("no longer processing");
     expect(markSquidAcquired(storage, stale, 15n)).toEqual(acquired);
@@ -134,11 +156,11 @@ describe("persisted Squid acquisition", () => {
     const storage = createStorage();
     const firstBroadcast = markSquidBroadcast(
       storage,
-      beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId),
+      markSquidSwapRequested(storage, beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId)),
       sourceHash,
     );
     const secondHash = `0x${"5".repeat(64)}` as const;
-    const latest = markSquidBroadcast(storage, firstBroadcast, secondHash);
+    const latest = markSquidBroadcast(storage, markSquidSwapRequested(storage, firstBroadcast), secondHash);
 
     expect(() => markSquidAcquired(storage, firstBroadcast, 15n)).toThrow("changed");
     expect(loadSquidAcquisition(storage, owner)).toEqual(latest);
@@ -154,7 +176,11 @@ describe("persisted Squid acquisition", () => {
   it("does not clear, retry, or duplicate a deposit after another tab advances it", () => {
     const storage = createStorage();
     const processing = beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId);
-    const acquired = markSquidAcquired(storage, markSquidBroadcast(storage, processing, sourceHash), 15n);
+    const acquired = markSquidAcquired(
+      storage,
+      markSquidBroadcast(storage, markSquidSwapRequested(storage, processing), sourceHash),
+      15n,
+    );
     const depositPreflight = markSquidDepositPending(storage, acquired);
 
     expect(() => markSquidDepositPending(storage, acquired)).toThrow("changed");
@@ -182,6 +208,33 @@ describe("persisted Squid acquisition", () => {
     storage.setItem(key, JSON.stringify({ ...record, deliveredAmount: "15", destinationBalanceBefore: "-1" }));
     expect(loadSquidAcquisition(storage, owner)).toBeNull();
     storage.setItem(key, JSON.stringify({ ...record, deliveredAmount: "15", status: "processing" }));
+    expect(loadSquidAcquisition(storage, owner)).toBeNull();
+  });
+
+  it("persists swap-requested before a hash and rejects invalid stage snapshots", () => {
+    const storage = createStorage();
+    const preparing = beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId);
+    expect(preparing.executionStage).toBe("preparing");
+
+    const requested = markSquidSwapRequested(storage, preparing);
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [] }),
+    );
+    expect(markSquidBroadcast(storage, requested, sourceHash)).toEqual(
+      expect.objectContaining({ executionStage: "swap-broadcast", transactionHashes: [sourceHash] }),
+    );
+
+    const key = `filecoin-pay:squid-acquisition:v1:${owner.toLowerCase()}`;
+    storage.setItem(
+      key,
+      JSON.stringify({
+        ...preparing,
+        destinationAmount: "10",
+        destinationBalanceBefore: "100",
+        executionStage: "swap-broadcast",
+        transactionHashes: [],
+      }),
+    );
     expect(loadSquidAcquisition(storage, owner)).toBeNull();
   });
 

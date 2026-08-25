@@ -7,6 +7,7 @@ import {
   type SquidWalletClient,
 } from "@filecoin-project/squid-evm-funding";
 import type { Hash } from "viem";
+import type { SquidAcquisitionExecutionStage } from "./squid-acquisition";
 
 const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
@@ -73,11 +74,10 @@ export async function executeSquidTopUp({
 }
 
 export function canClearSquidAcquisitionAfterError(
-  didAttemptSwap: boolean,
-  didSwapBroadcast: boolean,
+  executionStage: SquidAcquisitionExecutionStage | undefined,
   error: unknown,
 ): boolean {
-  return !didAttemptSwap || (!didSwapBroadcast && isUserRejectedRequest(error));
+  return executionStage === "preparing" || (executionStage === "swap-requested" && isUserRejectedRequest(error));
 }
 
 export function isUserRejectedRequest(error: unknown): boolean {

@@ -5,6 +5,7 @@ import {
   loadSquidAcquisition,
   markSquidAcquiredFromBalance,
   markSquidBroadcast,
+  markSquidSwapRequested,
   type SquidAcquisition,
 } from "./squid-acquisition";
 import { canClearSquidAcquisitionAfterError } from "./squid-execution";
@@ -53,23 +54,20 @@ export async function runSquidAcquisition({
     return { error, status: "failed" };
   }
 
-  let didAttemptSwap = false;
-  let didSwapBroadcast = false;
   try {
     onStarted?.(acquisition);
     await execute({
       onSwapAttempt: () => {
-        didAttemptSwap = true;
+        acquisition = markSquidSwapRequested(storage, acquisition);
       },
       onSwapBroadcast: (hash) => {
-        didSwapBroadcast = true;
         acquisition = markSquidBroadcast(storage, acquisition, hash);
       },
     });
     const acquired = markSquidAcquiredFromBalance(storage, acquisition, await readDestinationBalance());
     return { acquisition: acquired, status: "acquired" };
   } catch (error) {
-    if (canClearSquidAcquisitionAfterError(didAttemptSwap, didSwapBroadcast, error)) {
+    if (canClearSquidAcquisitionAfterError(acquisition.executionStage, error)) {
       try {
         clearSquidAcquisition(storage, acquisition);
         return { error, status: "failed" };

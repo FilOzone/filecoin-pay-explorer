@@ -6,6 +6,7 @@ import {
   loadSquidAcquisition,
   markSquidAcquired,
   markSquidBroadcast,
+  markSquidSwapRequested,
   type SquidAcquisition,
 } from "./squid-acquisition";
 import {
@@ -23,6 +24,7 @@ const candidate: SquidRecoveryCandidate = {
   acquisitionId: "11111111-1111-4111-8111-111111111111",
   destinationAmount: 10n,
   destinationBalanceBefore: 100n,
+  executionStage: "swap-broadcast",
   owner,
   sourceChainId: 42161,
   status: "processing",
@@ -105,7 +107,7 @@ describe("automatic Squid acquisition recovery", () => {
     };
     const firstSnapshot = markSquidBroadcast(
       storage,
-      beginSquidAcquisition(storage, owner, 10n, 100n, 42161, candidate.acquisitionId),
+      markSquidSwapRequested(storage, beginSquidAcquisition(storage, owner, 10n, 100n, 42161, candidate.acquisitionId)),
       sourceHash,
     ) as SquidRecoveryCandidate;
     const firstDelivered = await checkAutomaticSquidRecovery({
@@ -113,7 +115,11 @@ describe("automatic Squid acquisition recovery", () => {
       getSourceReceipt: vi.fn().mockResolvedValue(successfulReceipt),
       readDestinationBalance: vi.fn().mockResolvedValue(115n),
     });
-    const latest = markSquidBroadcast(storage, firstSnapshot, otherHash) as SquidRecoveryCandidate;
+    const latest = markSquidBroadcast(
+      storage,
+      markSquidSwapRequested(storage, firstSnapshot),
+      otherHash,
+    ) as SquidRecoveryCandidate;
 
     expect(() => markSquidAcquired(storage, firstSnapshot, firstDelivered ?? undefined)).toThrow("changed");
     expect(loadSquidAcquisition(storage, owner)).toEqual(latest);

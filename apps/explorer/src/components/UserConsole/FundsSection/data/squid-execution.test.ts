@@ -133,10 +133,10 @@ describe("executeSquidTopUp", () => {
   });
 
   it("clears recovery state only before a swap attempt or after an unbroadcast rejection", () => {
-    expect(canClearSquidAcquisitionAfterError(false, false, new Error("approval response lost"))).toBe(true);
-    expect(canClearSquidAcquisitionAfterError(true, false, { code: 4001 })).toBe(true);
-    expect(canClearSquidAcquisitionAfterError(true, true, { code: 4001 })).toBe(false);
-    expect(canClearSquidAcquisitionAfterError(true, false, new Error("response lost"))).toBe(false);
+    expect(canClearSquidAcquisitionAfterError("preparing", new Error("approval response lost"))).toBe(true);
+    expect(canClearSquidAcquisitionAfterError("swap-requested", { code: 4001 })).toBe(true);
+    expect(canClearSquidAcquisitionAfterError("swap-broadcast", { code: 4001 })).toBe(false);
+    expect(canClearSquidAcquisitionAfterError("swap-requested", new Error("response lost"))).toBe(false);
   });
 
   it("recognizes nested wallet rejection errors", () => {

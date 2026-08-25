@@ -10,11 +10,14 @@ export type SquidAcquisition = {
   deliveredAmount?: bigint;
   destinationBalanceBefore?: bigint;
   destinationAmount: bigint;
+  executionStage?: SquidAcquisitionExecutionStage;
   owner: Address;
   sourceChainId: number;
   status: "acquired" | "depositing" | "processing";
   transactionHashes: Hash[];
 };
+
+export type SquidAcquisitionExecutionStage = "preparing" | "swap-broadcast" | "swap-requested";
 
 function storageKey(owner: Address) {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
@@ -76,6 +79,30 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
     ) {
       return null;
     }
+    const executionStage =
+      acquisition.status !== "processing"
+        ? (acquisition.executionStage as SquidAcquisitionExecutionStage | undefined)
+        : acquisition.executionStage === undefined
+          ? acquisition.transactionHashes.length > 0
+            ? "swap-broadcast"
+            : "swap-requested"
+          : acquisition.executionStage;
+    if (
+      executionStage !== undefined &&
+      executionStage !== "preparing" &&
+      executionStage !== "swap-requested" &&
+      executionStage !== "swap-broadcast"
+    ) {
+      return null;
+    }
+    if (
+      acquisition.status === "processing" &&
+      (executionStage === undefined ||
+        (executionStage === "preparing" && acquisition.transactionHashes.length > 0) ||
+        (executionStage === "swap-broadcast" && acquisition.transactionHashes.length === 0))
+    ) {
+      return null;
+    }
     return {
       acquisitionId: acquisition.acquisitionId as string | undefined,
       deliveredAmount: acquisition.deliveredAmount === undefined ? undefined : BigInt(acquisition.deliveredAmount),
@@ -83,6 +110,7 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
         acquisition.destinationBalanceBefore === undefined ? undefined : BigInt(acquisition.destinationBalanceBefore),
       destinationAmount: BigInt(acquisition.destinationAmount),
       depositTransactionHash: acquisition.depositTransactionHash as Hash | undefined,
+      executionStage,
       owner: acquisition.owner,
       sourceChainId: acquisition.sourceChainId,
       status: acquisition.status,
@@ -106,11 +134,20 @@ export function beginSquidAcquisition(
     acquisitionId,
     destinationAmount,
     destinationBalanceBefore,
+    executionStage: "preparing",
     owner,
     sourceChainId,
     status: "processing",
     transactionHashes: [],
   });
+}
+
+export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+  const current = requireCurrent(storage, acquisition);
+  if (current.status !== "processing" || !hasSameSquidAcquisitionSnapshot(current, acquisition)) {
+    throw new Error("Saved Squid acquisition changed");
+  }
+  return save(storage, { ...current, executionStage: "swap-requested" });
 }
 
 export function getDeliveredSquidAmount(acquisition: SquidAcquisition, currentDestinationBalance: bigint) {
@@ -137,8 +174,13 @@ export function markSquidAcquiredFromBalance(
 export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash: Hash) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
+  if (current.executionStage === "swap-broadcast" && current.transactionHashes.includes(hash)) return current;
+  if (current.executionStage !== "swap-requested" || !hasSameSquidAcquisitionSnapshot(current, acquisition)) {
+    throw new Error("Saved Squid acquisition changed");
+  }
   return save(storage, {
     ...current,
+    executionStage: "swap-broadcast",
     transactionHashes: current.transactionHashes.includes(hash)
       ? current.transactionHashes
       : [...current.transactionHashes, hash],
@@ -239,6 +281,7 @@ export function hasSameSquidAcquisitionSnapshot(current: SquidAcquisition, expec
     current.sourceChainId === expected.sourceChainId &&
     current.destinationAmount === expected.destinationAmount &&
     current.destinationBalanceBefore === expected.destinationBalanceBefore &&
+    current.executionStage === expected.executionStage &&
     current.status === expected.status &&
     current.depositTransactionHash === expected.depositTransactionHash &&
     current.deliveredAmount === expected.deliveredAmount &&

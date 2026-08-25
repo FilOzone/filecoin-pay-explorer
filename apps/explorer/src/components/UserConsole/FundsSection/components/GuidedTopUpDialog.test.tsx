@@ -6,6 +6,7 @@ import {
   loadSquidAcquisition,
   markSquidAcquired,
   markSquidBroadcast,
+  markSquidSwapRequested,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
 import { GuidedTopUpDialog } from "./GuidedTopUpDialog";
@@ -246,7 +247,7 @@ describe("GuidedTopUpDialog", () => {
     );
     const acquired = markSquidAcquired(
       storage,
-      markSquidBroadcast(storage, processing, `0x${"3".repeat(64)}`),
+      markSquidBroadcast(storage, markSquidSwapRequested(storage, processing), `0x${"3".repeat(64)}`),
       15n * oneUsdfc,
     );
     sdk.fundSync.mockImplementation(async ({ onHash }: { onHash: (hash: `0x${string}`) => void }) => {
@@ -315,13 +316,16 @@ describe("GuidedTopUpDialog", () => {
     const owner = "0x1111111111111111111111111111111111111111" as const;
     const processing = markSquidBroadcast(
       storage,
-      beginSquidAcquisition(
+      markSquidSwapRequested(
         storage,
-        owner,
-        10n * 10n ** 18n,
-        100n * 10n ** 18n,
-        42161,
-        "11111111-1111-4111-8111-111111111111",
+        beginSquidAcquisition(
+          storage,
+          owner,
+          10n * 10n ** 18n,
+          100n * 10n ** 18n,
+          42161,
+          "11111111-1111-4111-8111-111111111111",
+        ),
       ),
       `0x${"3".repeat(64)}`,
     );
