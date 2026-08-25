@@ -13,6 +13,7 @@ import {
   RailsSection,
 } from "@/components/UserConsole";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
+import { ConsoleLayout } from "@/components/UserConsole/ConsoleSidebar";
 import { AccountNotFound, ErrorState, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
@@ -77,7 +78,7 @@ const UserConsoleContent = () => {
 
         {/* Only show content if connected to supported chain */}
         {isConnected && !isUnsupportedChain && (
-          <>
+          <ConsoleLayout>
             {/* Loading */}
             {isLoading && <LoadingStateCard message='Loading your account details...' />}
 
@@ -94,7 +95,7 @@ const UserConsoleContent = () => {
 
             {/* Error */}
             {isError && <ErrorState error={error} />}
-          </>
+          </ConsoleLayout>
         )}
       </div>
     </PageSection>
