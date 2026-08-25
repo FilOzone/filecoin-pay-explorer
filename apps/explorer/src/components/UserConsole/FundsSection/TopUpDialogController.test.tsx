@@ -1,6 +1,7 @@
 import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TopUpActivityProvider, useTopUpActivity } from "../TopUpActivityContext";
+import { beginSquidAcquisition } from "./data/squid-acquisition";
 import { TopUpDialogController } from "./TopUpDialogController";
 
 const replace = vi.fn();
@@ -9,6 +10,12 @@ const dialog = vi.hoisted(() => ({
   onOpenChange: undefined as ((open: boolean) => void) | undefined,
   open: false,
 }));
+const storedValues = new Map<string, string>();
+const storage = {
+  getItem: (key: string) => storedValues.get(key) ?? null,
+  removeItem: (key: string) => storedValues.delete(key),
+  setItem: (key: string, value: string) => storedValues.set(key, value),
+};
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: undefined, isFetching: false }),
@@ -77,6 +84,16 @@ beforeEach(() => {
   dialog.open = false;
   params = new URLSearchParams();
   replace.mockReset();
+  storedValues.clear();
+  vi.stubGlobal("window", {
+    addEventListener: vi.fn(),
+    localStorage: storage,
+    removeEventListener: vi.fn(),
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("TopUpDialogController activity", () => {
@@ -117,5 +134,30 @@ describe("TopUpDialogController deep link", () => {
       renderer.root.findByType("button").props.onClick();
     });
     expect(replace).toHaveBeenCalledWith("/console?utm_source=email");
+  });
+});
+
+describe("TopUpDialogController recovery", () => {
+  it("auto-opens a saved acquisition and leaves a persistent launcher after close", () => {
+    beginSquidAcquisition(
+      storage,
+      "0x1111111111111111111111111111111111111111",
+      10n,
+      100n,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const renderer = renderController();
+
+    expect(dialog.open).toBe(true);
+    act(() => dialog.onOpenChange?.(false));
+    expect(dialog.open).toBe(false);
+
+    const launcher = renderer.root.findByProps({ "aria-label": "View top-up in progress" });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Top-up in progress — view");
+    expect(dialog.open).toBe(false);
+
+    act(() => launcher.props.onClick());
+    expect(dialog.open).toBe(true);
   });
 });

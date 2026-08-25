@@ -1,13 +1,14 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { getChain } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 import { useTopUpActivity } from "../TopUpActivityContext";
 import { GuidedTopUpDialog } from "./components";
 import { withoutTopUpSearchParam } from "./data/guided-top-up";
+import { hasSavedSquidAcquisition } from "./data/squid-acquisition";
 
 interface TopUpDialogControllerProps {
   accountId: string;
@@ -17,6 +18,8 @@ interface TopUpDialogControllerProps {
 
 export function TopUpDialogController({ accountId, children, showTrigger = false }: TopUpDialogControllerProps) {
   const [open, setOpen] = useState(false);
+  const [hasSavedAcquisition, setHasSavedAcquisition] = useState(false);
+  const didAutoOpenSavedAcquisition = useRef(false);
   const { setTopUpActive } = useTopUpActivity();
   const { address } = useConnection();
   const { synapse } = useSynapse();
@@ -38,16 +41,51 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
     (nextOpen: boolean) => {
       setOpen(nextOpen);
       setTopUpActive(nextOpen);
+      if (!nextOpen) {
+        let hasSaved = false;
+        try {
+          hasSaved = address !== undefined && hasSavedSquidAcquisition(window.localStorage, address);
+        } catch {
+          // The dialog reports unavailable storage. Do not advertise recovery
+          // when the controller cannot verify that a marker exists.
+        }
+        setHasSavedAcquisition(hasSaved);
+        didAutoOpenSavedAcquisition.current = hasSaved;
+      }
       if (!nextOpen && searchParams.has("topUp")) {
         router.replace(`${pathname}${withoutTopUpSearchParam(searchParams)}`);
       }
     },
-    [pathname, router, searchParams, setTopUpActive],
+    [address, pathname, router, searchParams, setTopUpActive],
   );
 
   useEffect(() => {
     if (searchParams.get("topUp") === "1") openTopUp();
   }, [openTopUp, searchParams]);
+
+  useEffect(() => {
+    const refreshSavedAcquisition = () => {
+      let hasSaved = false;
+      try {
+        hasSaved = address !== undefined && hasSavedSquidAcquisition(window.localStorage, address);
+      } catch {
+        // The dialog owns the storage-unavailable error state.
+      }
+      setHasSavedAcquisition(hasSaved);
+      if (!hasSaved) {
+        didAutoOpenSavedAcquisition.current = false;
+        return;
+      }
+      if (!didAutoOpenSavedAcquisition.current) {
+        didAutoOpenSavedAcquisition.current = true;
+        openTopUp();
+      }
+    };
+
+    refreshSavedAcquisition();
+    window.addEventListener("storage", refreshSavedAcquisition);
+    return () => window.removeEventListener("storage", refreshSavedAcquisition);
+  }, [address, openTopUp]);
 
   useEffect(
     () => () => {
@@ -58,6 +96,13 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
 
   return (
     <>
+      {hasSavedAcquisition && !open && (
+        <div className='flex justify-center'>
+          <Button aria-label='View top-up in progress' onClick={openTopUp} variant='tertiary'>
+            Top-up in progress — view
+          </Button>
+        </div>
+      )}
       {children?.(openTopUp, open)}
       {showTrigger && (
         <div className='flex justify-center'>

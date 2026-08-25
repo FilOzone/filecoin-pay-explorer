@@ -151,8 +151,13 @@ export function GuidedTopUpDialog({
     }
 
     try {
-      const hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
-      const saved = loadSquidAcquisition(window.localStorage, address);
+      let hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
+      let saved = loadSquidAcquisition(window.localStorage, address);
+      if (open && saved?.status === "processing" && saved.executionStage === "preparing") {
+        clearSquidAcquisition(window.localStorage, saved);
+        hasSavedAcquisition = false;
+        saved = null;
+      }
       const hasInvalidSavedAcquisition = hasSavedAcquisition && saved === null;
       setSavedAcquisition(saved);
       setHasInvalidAcquisition(hasInvalidSavedAcquisition);
@@ -170,7 +175,7 @@ export function GuidedTopUpDialog({
       setAutomaticRecoveryError(null);
       setAcquisitionState("blocked");
     }
-  }, [address]);
+  }, [address, open]);
 
   useEffect(() => {
     const pending = savedAcquisition;

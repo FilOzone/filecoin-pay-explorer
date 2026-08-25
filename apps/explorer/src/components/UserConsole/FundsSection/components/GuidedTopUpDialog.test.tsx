@@ -348,4 +348,40 @@ describe("GuidedTopUpDialog", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('"15"');
     expect(JSON.stringify(renderer.toJSON())).not.toContain("USDFC arrived, continue to deposit");
   });
+
+  it("keeps a safe preflight marker until recovery is visible, then restarts cleanly", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    beginSquidAcquisition(
+      storage,
+      owner,
+      10n * 10n ** 18n,
+      100n * 10n ** 18n,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open={false} />,
+      );
+    });
+    expect(hasSavedSquidAcquisition(storage, owner)).toBe(true);
+
+    await act(async () => {
+      renderer.update(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    expect(hasSavedSquidAcquisition(storage, owner)).toBe(false);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("A saved transaction needs verification");
+  });
 });
