@@ -1,8 +1,10 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   excludeDestinationUsdfc,
   nativeTokenFirst,
   resolveSearchableOption,
+  SquidQuoteSummary,
   sourceTokenCatalogMessage,
 } from "./SquidQuoteReview";
 
@@ -23,7 +25,6 @@ describe("searchable option resolution", () => {
     expect(resolveSearchableOption(options, "USDC")).toBe("");
   });
 });
-
 describe("source token catalog messages", () => {
   it.each([
     [false, false, "Squid funding is not configured for this deployment."],
@@ -55,5 +56,40 @@ describe("source token safety", () => {
 
     expect(excludeDestinationUsdfc(tokens, 314)).toEqual([tokens[1]]);
     expect(excludeDestinationUsdfc(tokens, 8453)).toEqual(tokens);
+  });
+});
+
+describe("SquidQuoteSummary", () => {
+  it("shows one maximum total for a native-token route", () => {
+    const html = renderToStaticMarkup(
+      SquidQuoteSummary({
+        isNativeSource: true,
+        maximumRequirement: "0.12 ETH",
+        pay: "0.1 ETH",
+        receive: "250 USDFC",
+      }),
+    );
+
+    expect(html).toContain("You pay");
+    expect(html).toContain("Route minimum received");
+    expect(html).toContain("Maximum total required");
+    expect(html).toContain("0.12 ETH");
+    expect(html).not.toContain("Maximum native fees required");
+  });
+
+  it("keeps ERC-20 spend separate from native fees", () => {
+    const html = renderToStaticMarkup(
+      SquidQuoteSummary({
+        isNativeSource: false,
+        maximumRequirement: "0.02 ETH",
+        pay: "250 USDC",
+        receive: "249 USDFC",
+      }),
+    );
+
+    expect(html).toContain("250 USDC");
+    expect(html).toContain("Maximum native fees required");
+    expect(html).toContain("0.02 ETH");
+    expect(html).not.toContain("Maximum total required");
   });
 });
