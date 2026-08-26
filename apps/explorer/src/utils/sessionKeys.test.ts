@@ -141,3 +141,25 @@ describe("normalizeKeyName", () => {
     assert.equal(normalizeKeyName("x".repeat(80)).length, 64);
   });
 });
+
+describe("sanitizeRecords chain-sync fields", () => {
+  it("preserves source and revokedAt from synced records", () => {
+    const synced = {
+      name: "imported",
+      sessionKeyPublic: SIGNER,
+      scopes: ["addPieces"],
+      createdAt: 1,
+      source: "chain",
+      revokedAt: 2,
+    };
+    assert.deepEqual(sanitizeRecords([synced]), [synced]);
+  });
+
+  it("drops forged source/revokedAt values instead of trusting them", () => {
+    const [rec] = sanitizeRecords([
+      { name: "x", sessionKeyPublic: SIGNER, scopes: ["addPieces"], createdAt: 1, source: "evil", revokedAt: "soon" },
+    ]);
+    assert.equal("source" in rec, false);
+    assert.equal("revokedAt" in rec, false);
+  });
+});
