@@ -492,7 +492,7 @@ export function SquidQuoteReview({
               setSourceTokenAddress("");
             }
           }}
-          value={sourceChainId || undefined}
+          value={sourceChainId}
         >
           <SelectTrigger
             aria-describedby={sourceChain === chainId ? "squid-source-network-status" : undefined}
