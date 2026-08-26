@@ -1,0 +1,138 @@
+import assert from "node:assert/strict";
+import { describe, it } from "vitest";
+import { type DecodedAuthorizationEvent, foldAuthorizationEvents, mergeSyncedRecords } from "./sessionKeySync.ts";
+import { SESSION_KEY_SCOPES } from "./sessionKeys.ts";
+
+const CREATE_TYPEHASH = SESSION_KEY_SCOPES[0].typehash;
+const ADD_TYPEHASH = SESSION_KEY_SCOPES[1].typehash;
+const REMOVE_TYPEHASH = SESSION_KEY_SCOPES[2].typehash;
+const UNKNOWN_TYPEHASH = `0x${"ab".repeat(32)}` as const;
+
+const SIGNER_A = "0x8ba1f109551bD432803012645Ac136ddd64DBA72";
+const SIGNER_B = "0x000000000000000000000000000000000000b2";
+
+function fold(events: DecodedAuthorizationEvent[]) {
+  return foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
+}
+
+function event(overrides: Partial<DecodedAuthorizationEvent>): DecodedAuthorizationEvent {
+  return {
+    signer: SIGNER_A,
+    expiry: 1_000n,
+    permissions: [CREATE_TYPEHASH],
+    origin: "test-app",
+    timestamp: 1_000,
+    blockNumber: 1n,
+    logIndex: 0,
+    ...overrides,
+  };
+}
+
+describe("foldAuthorizationEvents", () => {
+  it("names the key after the latest login's origin, not the first", () => {
+    const events = [
+      event({ origin: "first-app", timestamp: 100, blockNumber: 1n }),
+      event({ origin: "second-app", timestamp: 200, blockNumber: 2n }),
+    ];
+    const { records } = fold(events);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].name, "second-app");
+  });
+
+  it("unions scopes granted across every login, not just the latest", () => {
+    const events = [
+      event({ permissions: [CREATE_TYPEHASH], blockNumber: 1n, timestamp: 100 }),
+      event({ permissions: [ADD_TYPEHASH, REMOVE_TYPEHASH], blockNumber: 2n, timestamp: 200 }),
+    ];
+    const { records } = fold(events);
+    assert.equal(records.length, 1);
+    assert.deepEqual(new Set(records[0].scopes), new Set(["createDataSet", "addPieces", "schedulePieceRemovals"]));
+  });
+
+  it("folds a revoke into revokedAt and keeps the scopes from the grants", () => {
+    const events = [
+      event({ expiry: 1_000n, permissions: [CREATE_TYPEHASH], blockNumber: 1n, timestamp: 100 }),
+      event({ expiry: 0n, permissions: [CREATE_TYPEHASH], blockNumber: 2n, timestamp: 300 }),
+    ];
+    const { records } = fold(events);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].revokedAt, 300 * 1000);
+    assert.deepEqual(records[0].scopes, ["createDataSet"]);
+  });
+
+  it("takes the createdAt from the first grant, ignoring a later revoke's timing", () => {
+    const events = [
+      event({ expiry: 1_000n, blockNumber: 1n, timestamp: 50 }),
+      event({ expiry: 0n, blockNumber: 2n, timestamp: 999 }),
+    ];
+    const { records } = fold(events);
+    assert.equal(records[0].createdAt, 50 * 1000);
+  });
+
+  it("omits revokedAt entirely when the signer was never revoked", () => {
+    const { records } = fold([event({})]);
+    assert.equal("revokedAt" in records[0], false);
+  });
+
+  it("skips and counts a signer whose grants never contain a recognized scope", () => {
+    const events = [
+      event({ signer: SIGNER_A, permissions: [CREATE_TYPEHASH] }),
+      event({ signer: SIGNER_B, permissions: [UNKNOWN_TYPEHASH] }),
+    ];
+    const { records, skippedUnrecognized } = fold(events);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].sessionKeyPublic, SIGNER_A);
+    assert.equal(skippedUnrecognized, 1);
+  });
+
+  it("ignores a revoke-only signer with no grant at all", () => {
+    const { records, skippedUnrecognized } = fold([event({ expiry: 0n })]);
+    assert.equal(records.length, 0);
+    assert.equal(skippedUnrecognized, 0);
+  });
+
+  it("marks every folded record with source: chain", () => {
+    const { records } = fold([event({})]);
+    assert.equal(records[0].source, "chain");
+  });
+});
+
+describe("mergeSyncedRecords", () => {
+  const synced = (overrides: Record<string, unknown> = {}) => ({
+    name: "chain-app",
+    sessionKeyPublic: SIGNER_A as `0x${string}`,
+    scopes: ["createDataSet"] as const,
+    createdAt: 100,
+    source: "chain" as const,
+    ...overrides,
+  });
+
+  it("adds a synced signer the local inventory doesn't have", () => {
+    const { merged, addedCount } = mergeSyncedRecords([], [synced()]);
+    assert.equal(addedCount, 1);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].source, "chain");
+  });
+
+  it("dedupes case-insensitively and lets the local record win entirely", () => {
+    const local = [
+      {
+        name: "my-local-name",
+        sessionKeyPublic: SIGNER_A.toUpperCase() as `0x${string}`,
+        scopes: ["terminateService"] as const,
+        createdAt: 1,
+      },
+    ];
+    const { merged, addedCount } = mergeSyncedRecords(local, [synced({ name: "chain-name" })]);
+    assert.equal(addedCount, 0);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].name, "my-local-name");
+    assert.equal(merged[0].source, undefined);
+  });
+
+  it("reports 0 added when everything is already up to date", () => {
+    const local = [synced()];
+    const { addedCount } = mergeSyncedRecords(local, [synced()]);
+    assert.equal(addedCount, 0);
+  });
+});
