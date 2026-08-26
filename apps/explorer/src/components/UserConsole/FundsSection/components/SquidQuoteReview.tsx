@@ -71,13 +71,15 @@ function displayAmount(amount: bigint, decimals: number, symbol: string) {
 export function SquidQuoteSummary({
   isNativeSource,
   maximumRequirement,
+  minimumReceive,
   pay,
-  receive,
+  reviewedReceive,
 }: {
   isNativeSource: boolean;
   maximumRequirement: string | null;
+  minimumReceive: string;
   pay: string;
-  receive: string;
+  reviewedReceive: string;
 }) {
   return (
     <div className='grid gap-2 rounded-md bg-muted/40 p-3'>
@@ -85,8 +87,10 @@ export function SquidQuoteSummary({
       <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
         <span className='text-muted-foreground'>You pay</span>
         <span className='text-right font-medium'>{pay}</span>
-        <span className='text-muted-foreground'>Route minimum received</span>
-        <span className='text-right font-medium'>{receive}</span>
+        <span className='text-muted-foreground'>Execution minimum received</span>
+        <span className='text-right font-medium'>{minimumReceive}</span>
+        <span className='text-muted-foreground'>Current reviewed quote</span>
+        <span className='text-right font-medium'>{reviewedReceive}</span>
         <span className='text-muted-foreground'>
           {isNativeSource ? "Maximum total required" : "Maximum native fees required"}
         </span>
@@ -793,8 +797,9 @@ export function SquidQuoteReview({
                   ? null
                   : requiredNativeBalanceLabel
             }
+            minimumReceive={displayAmount(quote.requirement.amount, USDFC_DECIMALS, "USDFC")}
             pay={displayAmount(quote.sourceAmount, plan.source.decimals, plan.source.symbol)}
-            receive={displayAmount(quote.destinationAmount, USDFC_DECIMALS, "USDFC")}
+            reviewedReceive={displayAmount(quote.destinationAmount, USDFC_DECIMALS, "USDFC")}
           />
           <details className='rounded-md border p-3'>
             <summary className='cursor-pointer font-medium'>View fee and route details</summary>
@@ -850,8 +855,6 @@ export function SquidQuoteReview({
                 </div>
               )}
               <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-                <span className='text-muted-foreground'>Required amount</span>
-                <span className='text-right'>{displayAmount(quote.requirement.amount, USDFC_DECIMALS, "USDFC")}</span>
                 <span className='text-muted-foreground'>Slippage</span>
                 <span className='text-right'>1%</span>
               </div>

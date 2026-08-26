@@ -65,13 +65,17 @@ describe("SquidQuoteSummary", () => {
       SquidQuoteSummary({
         isNativeSource: true,
         maximumRequirement: "0.12 ETH",
+        minimumReceive: "249 USDFC",
         pay: "0.1 ETH",
-        receive: "250 USDFC",
+        reviewedReceive: "250 USDFC",
       }),
     );
 
     expect(html).toContain("You pay");
-    expect(html).toContain("Route minimum received");
+    expect(html).toContain("Execution minimum received");
+    expect(html).toContain("249 USDFC");
+    expect(html).toContain("Current reviewed quote");
+    expect(html).toContain("250 USDFC");
     expect(html).toContain("Maximum total required");
     expect(html).toContain("0.12 ETH");
     expect(html).not.toContain("Maximum native fees required");
@@ -82,8 +86,9 @@ describe("SquidQuoteSummary", () => {
       SquidQuoteSummary({
         isNativeSource: false,
         maximumRequirement: "0.02 ETH",
+        minimumReceive: "248 USDFC",
         pay: "250 USDC",
-        receive: "249 USDFC",
+        reviewedReceive: "249 USDFC",
       }),
     );
 

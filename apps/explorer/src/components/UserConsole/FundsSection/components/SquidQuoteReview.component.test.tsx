@@ -119,10 +119,10 @@ describe("SquidQuoteReview quote summary", () => {
     await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
 
     const text = renderer.root.findAllByType("span").map(({ children }) => children.join(""));
-    expect(text).toContain("Route minimum received");
-    expect(text).toContain("2 USDFC");
-    expect(text).toContain("Required amount");
+    expect(text).toContain("Execution minimum received");
     expect(text).toContain("1 USDFC");
+    expect(text).toContain("Current reviewed quote");
+    expect(text).toContain("2 USDFC");
     expect(text).toContain("Maximum native fees required");
     expect(text).toContain("Unavailable");
     expect(text).not.toContain("Calculating…");
