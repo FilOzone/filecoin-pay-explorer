@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import {
   fetchSourceTokens,
   NATIVE_TOKEN_ADDRESS,
@@ -12,7 +12,7 @@ import {
 } from "@filecoin-project/squid-evm-funding";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDebounce } from "use-debounce";
 import { erc20Abi, formatUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
@@ -35,6 +35,7 @@ import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
 import { readUsdfcBalance } from "../data/usdfc-balance";
+import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
 
 const QUOTE_DEBOUNCE_MS = 500;
 
@@ -43,12 +44,6 @@ const QUOTE_DEBOUNCE_MS = 500;
 const isRateLimited = (error: unknown) => error instanceof Error && error.message.includes("(429)");
 const rateLimitRetry = (failureCount: number, error: unknown) => isRateLimited(error) && failureCount < 2;
 const rateLimitRetryDelay = (failureCount: number) => 15_000 * (failureCount + 1);
-
-type SearchableOption = {
-  aliases?: readonly string[];
-  label: string;
-  value: string;
-};
 
 const SOURCE_CHAIN_OPTIONS: readonly SearchableOption[] = SQUID_SOURCE_CHAINS.map((chain) => ({
   label: chain.name,
@@ -88,17 +83,6 @@ export function excludeDestinationUsdfc<T extends { token: string }>(tokens: rea
     : [...tokens];
 }
 
-export function resolveSearchableOption(options: readonly SearchableOption[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  const labelMatch = options.find((option) => option.label.toLowerCase() === normalizedQuery);
-  if (labelMatch) return labelMatch.value;
-
-  const aliasMatches = options.filter((option) =>
-    option.aliases?.some((alias) => alias.toLowerCase() === normalizedQuery),
-  );
-  return aliasMatches.length === 1 ? aliasMatches[0].value : "";
-}
-
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
@@ -112,14 +96,8 @@ export function SquidQuoteReview({
   const { address, chainId } = useAccount();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
-  const [sourceChainQuery, setSourceChainQuery] = useState("");
-  const [sourceChainQueryTouched, setSourceChainQueryTouched] = useState(false);
-  const [sourceTokenQuery, setSourceTokenQuery] = useState("");
-  const [sourceTokenQueryTouched, setSourceTokenQueryTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
-  const sourceChainListId = useId();
-  const sourceTokenListId = useId();
   const latestAddress = useRef(address);
   latestAddress.current = address;
   const [debouncedDestinationAmount] = useDebounce(destinationAmount, QUOTE_DEBOUNCE_MS);
@@ -155,9 +133,6 @@ export function SquidQuoteReview({
     label: `${token.symbol} (${formatAddress(token.token)})`,
     value: token.token,
   }));
-  const sourceChainQueryInvalid = sourceChainQueryTouched && sourceChainQuery.trim() !== "" && sourceChainId === "";
-  const sourceTokenQueryInvalid =
-    sourceTokenQueryTouched && sourceTokenQuery.trim() !== "" && sourceTokenAddress === "";
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
   const isBusy = acquisitionState !== "idle";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
@@ -507,87 +482,51 @@ export function SquidQuoteReview({
             </span>
           )}
         </div>
-        <Input
-          aria-describedby={
-            [
-              sourceChain === chainId ? "squid-source-network-status" : "",
-              sourceChainQueryInvalid ? "squid-source-network-error" : "",
-            ]
-              .filter(Boolean)
-              .join(" ") || undefined
-          }
-          aria-invalid={sourceChainQueryInvalid}
-          autoComplete='off'
+        <Select
           disabled={isBusy}
-          id='squid-source-network'
-          list={sourceChainListId}
-          onBlur={() => setSourceChainQueryTouched(true)}
-          onChange={(value) => {
+          onValueChange={(value) => {
             setError(null);
             setSwitchError(null);
-            setSourceChainQuery(value);
-            setSourceChainQueryTouched(false);
-            const nextSourceChainId = resolveSearchableOption(SOURCE_CHAIN_OPTIONS, value);
-            if (nextSourceChainId !== sourceChainId) {
-              setSourceChainId(nextSourceChainId);
+            if (value !== sourceChainId) {
+              setSourceChainId(value);
               setSourceTokenAddress("");
-              setSourceTokenQuery("");
-              setSourceTokenQueryTouched(false);
             }
           }}
-          placeholder='Search networks'
-          type='search'
-          value={sourceChainQuery}
-        />
-        <datalist id={sourceChainListId}>
-          {SOURCE_CHAIN_OPTIONS.map((option) => (
-            <option key={option.value} value={option.label} />
-          ))}
-        </datalist>
-        {sourceChainQueryInvalid && (
-          <p className='text-xs text-destructive' id='squid-source-network-error'>
-            Choose a source network from the suggestions.
-          </p>
-        )}
+          value={sourceChainId || undefined}
+        >
+          <SelectTrigger
+            aria-describedby={sourceChain === chainId ? "squid-source-network-status" : undefined}
+            className='w-full'
+            id='squid-source-network'
+          >
+            <SelectValue placeholder='Select a network' />
+          </SelectTrigger>
+          <SelectContent>
+            {SOURCE_CHAIN_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className='grid gap-1'>
         <Label htmlFor='squid-source-token'>Source token</Label>
-        <Input
-          aria-describedby={
-            [
-              source && !isSourceBalanceError ? "squid-source-token-balance" : "",
-              sourceTokenQueryInvalid ? "squid-source-token-error" : "",
-            ]
-              .filter(Boolean)
-              .join(" ") || undefined
-          }
-          aria-invalid={sourceTokenQueryInvalid}
-          autoComplete='off'
+        <SearchableSelect
+          aria-describedby={source && !isSourceBalanceError ? "squid-source-token-balance" : undefined}
           disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
           id='squid-source-token'
-          list={sourceTokenListId}
-          onBlur={() => setSourceTokenQueryTouched(true)}
-          onChange={(value) => {
+          invalidMessage='Choose a source token from the suggestions.'
+          key={sourceChainId}
+          onValueChange={(value) => {
             setError(null);
-            setSourceTokenQuery(value);
-            setSourceTokenQueryTouched(false);
-            setSourceTokenAddress(resolveSearchableOption(sourceTokenOptions, value));
+            setSourceTokenAddress(value);
           }}
+          options={sourceTokenOptions}
           placeholder={isLoadingTokens ? "Loading tokens…" : "Search tokens"}
-          type='search'
-          value={sourceTokenQuery}
+          value={sourceTokenAddress}
         />
-        <datalist id={sourceTokenListId}>
-          {sourceTokenOptions.map((option) => (
-            <option key={option.value} value={option.label} />
-          ))}
-        </datalist>
-        {sourceTokenQueryInvalid && (
-          <p className='text-xs text-destructive' id='squid-source-token-error'>
-            Choose a source token from the suggestions.
-          </p>
-        )}
         {sourceChainId !== "" && !quotesUnavailable && tokens.length === 0 && !isLoadingTokens && !tokenLoadFailed && (
           <p className='text-sm text-muted-foreground'>
             {sourceTokenCatalogMessage(!quotesUnavailable, isTokenLoadError)}
