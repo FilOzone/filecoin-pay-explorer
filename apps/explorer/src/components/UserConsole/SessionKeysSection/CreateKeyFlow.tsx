@@ -20,6 +20,7 @@ import { useContractTransaction } from "@/hooks/useContractTransaction";
 import {
   buildEnvSnippet,
   EXPIRY_PRESETS,
+  normalizeKeyName,
   SCOPE_BY_ID,
   type ScopeId,
   SESSION_KEY_SCOPES,
@@ -111,7 +112,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   // name is optional: the chain doesn't require an origin
   const canCreate = selectedScopes.length > 0 && resolveExpiry() !== null && !isExecuting;
-  const displayName = name.trim() || "(unnamed)";
+  // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
+  // the download filename, and the onchain origin field — strip control/bidi
+  // characters and cap the length once, here, before any of those sinks.
+  const cleanName = normalizeKeyName(name);
+  const displayName = cleanName || "(unnamed)";
 
   const handleCreate = async () => {
     const expiry = resolveExpiry();
@@ -130,8 +135,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     try {
       const txHash = await execute({
         functionName: "login",
-        args: [signerAddress, expiry, selectedScopes.map((id) => SCOPE_BY_ID[id].typehash), name.trim()],
-        metadata: { type: "createSessionKey", keyName: name.trim() },
+        args: [signerAddress, expiry, selectedScopes.map((id) => SCOPE_BY_ID[id].typehash), cleanName],
+        metadata: { type: "createSessionKey", keyName: cleanName },
       });
       onCreated({
         name: displayName,
@@ -182,7 +187,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const downloadEnv = () => {
     if (!generated) return;
     download(
-      `session-key-${name.trim() || "unnamed"}.env`,
+      `session-key-${cleanName || "unnamed"}.env`,
       buildEnvSnippet(generated.privateKey, generated.address, account),
       "text/plain",
     );

@@ -145,16 +145,18 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
                   >
                     <td className='px-4 py-3'>
                       <span className='font-medium'>{key.name}</span>
-                      <span className='block text-xs text-zinc-500'>
-                        created{" "}
-                        {new Date(key.createdAt).toLocaleString(undefined, {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                      {key.createdAt > 0 && (
+                        <span className='block text-xs text-zinc-500'>
+                          created{" "}
+                          {new Date(key.createdAt).toLocaleString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      )}
                     </td>
                     <td className='px-4 py-3 font-mono text-xs' title={key.sessionKeyPublic}>
                       {formatAddress(key.sessionKeyPublic)}
