@@ -15,7 +15,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Address } from "viem";
 import { useConnection, usePublicClient, useSwitchChain } from "wagmi";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
@@ -28,26 +27,14 @@ import {
   ONE_YEAR_EPOCHS,
 } from "../data/funding-runway";
 import { invalidateTopUpQueries, parseTopUpAmount } from "../data/guided-top-up";
-import {
-  clearInvalidSquidAcquisition,
-  clearSquidAcquisition,
-  getSquidDepositAmount,
-  hasSameSquidAcquisitionSnapshot,
-  hasSavedSquidAcquisition,
-  loadSquidAcquisition,
-  markSquidAcquired,
-  markSquidAcquiredFromBalance,
-  markSquidDepositPending,
-  resetSquidDeposit,
-  type SquidAcquisition,
-} from "../data/squid-acquisition";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
-import { isAutomaticSquidRecoveryCandidate } from "../data/squid-acquisition-recovery";
-import { isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
-import { readUsdfcBalance } from "../data/usdfc-balance";
-import { useSquidAcquisitionRecovery } from "../hooks/useSquidAcquisitionRecovery";
+import { runSquidDeposit } from "../data/squid-deposit";
+import { walletErrorMessage } from "../data/squid-execution";
+import { useGuidedSquidAcquisition } from "../hooks/useGuidedSquidAcquisition";
+import { useOriginalWalletChain } from "../hooks/useOriginalWalletChain";
 import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
+import { SquidRecoveryPanel } from "./SquidRecoveryPanel";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
   const steps = ["Acquire USDFC", "Deposit to Filecoin Pay"] as const;
@@ -103,22 +90,25 @@ export function GuidedTopUpDialog({
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [acquiredAmount, setAcquiredAmount] = useState<bigint | null>(null);
-  const [acquisitionOwner, setAcquisitionOwner] = useState<Address | null>(null);
-  const [savedAcquisition, setSavedAcquisition] = useState<SquidAcquisition | null>(null);
-  const [hasInvalidAcquisition, setHasInvalidAcquisition] = useState(false);
-  const [acquisitionCoordinationError, setAcquisitionCoordinationError] = useState<string | null>(null);
-  const [automaticRecoveryError, setAutomaticRecoveryError] = useState<string | null>(null);
-  const [acquisitionState, setAcquisitionState] = useState<"acquired" | "blocked" | "idle" | "processing">("idle");
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
-  const originalChainId = useRef<number | undefined>(undefined);
-  const isAwaitingOriginalChainId = useRef(false);
-  const wasOpen = useRef(false);
+  const takeOriginalChainId = useOriginalWalletChain(open, chainId);
   // Set when the amount was prefilled for this open, so clearing the field
   // doesn't refill it (see the prefill effect below).
   const didPrefillAmount = useRef(false);
+  const wasOpen = useRef(false);
   const latestAddress = useRef(address);
   latestAddress.current = address;
+  const acquisition = useGuidedSquidAcquisition({ address, destinationClient, open, recoveryRevision });
+  const {
+    acquiredAmount,
+    acquisitionOwner,
+    acquisitionState,
+    automaticRecovery,
+    automaticRecoveryError,
+    coordinationError: acquisitionCoordinationError,
+    hasInvalidAcquisition,
+    savedAcquisition,
+  } = acquisition;
   // The runway duration only affects the slider's suggestions (computed inside
   // FundingRunwaySlider); the displayed funded-through dates are duration-agnostic.
   const current = accountSummary
@@ -141,154 +131,19 @@ export function GuidedTopUpDialog({
   const savedSourceChain = SQUID_SOURCE_CHAINS.find(
     (sourceChain) => sourceChain.id === savedAcquisition?.sourceChainId,
   );
-  const automaticRecovery = useSquidAcquisitionRecovery(savedAcquisition, address);
   useEffect(() => {
-    // The controller advances this value when another tab changes recovery
-    // storage, forcing the snapshot below to be reloaded even while open.
+    void address;
     void recoveryRevision;
-    let cancelled = false;
-    const applySavedAcquisition = (saved: SquidAcquisition | null, hasSaved: boolean) => {
-      if (cancelled) return;
-      const hasInvalidSavedAcquisition = hasSaved && saved === null;
-      setSavedAcquisition(saved);
-      setHasInvalidAcquisition(hasInvalidSavedAcquisition);
-      setAcquisitionCoordinationError(null);
-      setAutomaticRecoveryError(null);
-      setAcquisitionOwner(saved?.owner ?? null);
-      setAcquiredAmount(saved?.status === "acquired" ? getSquidDepositAmount(saved) : null);
-      setAcquisitionState(
-        saved?.status === "acquired" ? "acquired" : saved || hasInvalidSavedAcquisition ? "blocked" : "idle",
-      );
-    };
-
     setIsSubmitting(false);
-    if (!address) {
-      setAcquiredAmount(null);
-      setAcquisitionOwner(null);
-      setSavedAcquisition(null);
-      setHasInvalidAcquisition(false);
-      setAcquisitionCoordinationError(null);
-      setAutomaticRecoveryError(null);
-      setAcquisitionState("idle");
-      return;
-    }
-
-    try {
-      const hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
-      const saved = loadSquidAcquisition(window.localStorage, address);
-      applySavedAcquisition(saved, hasSavedAcquisition);
-      if (!open || saved?.status !== "processing" || saved.executionStage !== "preparing") return;
-
-      void withSquidAcquisitionLock(globalThis.navigator?.locks, saved.owner, () => {
-        const current = loadSquidAcquisition(window.localStorage, saved.owner);
-        if (
-          current?.status === "processing" &&
-          current.executionStage === "preparing" &&
-          hasSameSquidAcquisitionSnapshot(current, saved)
-        ) {
-          clearSquidAcquisition(window.localStorage, current);
-        }
-      })
-        .then(() => {
-          const hasCurrent = hasSavedSquidAcquisition(window.localStorage, saved.owner);
-          applySavedAcquisition(loadSquidAcquisition(window.localStorage, saved.owner), hasCurrent);
-        })
-        .catch((error) => {
-          if (cancelled) return;
-          try {
-            const hasCurrent = hasSavedSquidAcquisition(window.localStorage, saved.owner);
-            applySavedAcquisition(loadSquidAcquisition(window.localStorage, saved.owner), hasCurrent);
-          } catch {
-            setSavedAcquisition(null);
-            setHasInvalidAcquisition(false);
-            setAcquisitionOwner(null);
-            setAcquiredAmount(null);
-            setAcquisitionState("blocked");
-          }
-          setAcquisitionCoordinationError(
-            error instanceof Error ? error.message : "Funding coordination is unavailable in this tab",
-          );
-        });
-    } catch {
-      setAcquiredAmount(null);
-      setAcquisitionOwner(null);
-      setSavedAcquisition(null);
-      setHasInvalidAcquisition(false);
-      setAcquisitionCoordinationError(null);
-      setAutomaticRecoveryError(null);
-      setAcquisitionState("blocked");
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [address, open, recoveryRevision]);
+  }, [address, recoveryRevision]);
 
   useEffect(() => {
-    const pending = savedAcquisition;
-    const deliveredAmount = automaticRecovery.data;
-    if (
-      !isAutomaticSquidRecoveryCandidate(pending) ||
-      deliveredAmount === undefined ||
-      deliveredAmount === null ||
-      automaticRecovery.dataUpdatedAt === 0
-    ) {
-      return;
+    if (open && !wasOpen.current && acquiredAmount === null) {
+      setAmount("");
+      didPrefillAmount.current = false;
     }
-    let cancelled = false;
-    setAutomaticRecoveryError(null);
-    void withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, () =>
-      markSquidAcquired(window.localStorage, pending, deliveredAmount),
-    )
-      .then((acquired) => {
-        if (cancelled || latestAddress.current?.toLowerCase() !== acquired.owner.toLowerCase()) return;
-        setSavedAcquisition(acquired);
-        setAcquisitionOwner(acquired.owner);
-        setAcquiredAmount(getSquidDepositAmount(acquired));
-        setAcquisitionState("acquired");
-      })
-      .catch((error) => {
-        if (cancelled || latestAddress.current?.toLowerCase() !== pending.owner.toLowerCase()) return;
-        try {
-          const latest = loadSquidAcquisition(window.localStorage, pending.owner);
-          if (latest && !hasSameSquidAcquisitionSnapshot(latest, pending)) {
-            setSavedAcquisition(latest);
-            setAcquisitionOwner(latest.owner);
-            setAcquiredAmount(latest.status === "acquired" ? getSquidDepositAmount(latest) : null);
-            setAcquisitionState(latest.status === "acquired" ? "acquired" : "blocked");
-            setAutomaticRecoveryError(null);
-            return;
-          }
-        } catch {
-          // Surface the original transition error below. The next poll retries
-          // both the storage read and the exact-snapshot transition.
-        }
-        setAutomaticRecoveryError(error instanceof Error ? error.message : "Automatic recovery could not continue");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [automaticRecovery.data, automaticRecovery.dataUpdatedAt, savedAcquisition]);
-
-  useEffect(() => {
-    // Reset the amount on open; the prefill effect below fills it once the
-    // on-chain summary is available.
-    if (open && !wasOpen.current) {
-      originalChainId.current = chainId;
-      isAwaitingOriginalChainId.current = chainId === undefined;
-      if (acquiredAmount === null) {
-        setAmount("");
-        didPrefillAmount.current = false;
-      }
-    }
-    // An auto-opened dialog can render before Wagmi hydrates. Capture only the
-    // first defined chain so later route-driven switches cannot replace it.
-    if (open && isAwaitingOriginalChainId.current && chainId !== undefined) {
-      originalChainId.current = chainId;
-      isAwaitingOriginalChainId.current = false;
-    }
-    if (!open) isAwaitingOriginalChainId.current = false;
     wasOpen.current = open;
-  }, [acquiredAmount, chainId, open]);
+  }, [acquiredAmount, open]);
 
   // Prefill the amount with the slider's default suggestion once per open, so
   // the projection is live immediately instead of dashes until the user acts.
@@ -315,80 +170,44 @@ export function GuidedTopUpDialog({
 
     try {
       await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, async () => {
-        let pendingAcquisition: SquidAcquisition;
-        try {
-          pendingAcquisition = markSquidDepositPending(window.localStorage, savedAcquisition);
-          setSavedAcquisition(pendingAcquisition);
-        } catch {
-          toast.error("Browser storage is unavailable. The deposit cannot start safely without recovery state.");
-          return;
-        }
         const depositOwner = acquisitionOwner;
         const isCurrentDepositOwner = () => latestAddress.current?.toLowerCase() === depositOwner.toLowerCase();
-        let didBroadcast = false;
         setIsSubmitting(true);
-        try {
-          const { receipt } = await synapse.payments.fundSync({
-            amount: acquiredAmount,
-            onHash: (hash) => {
-              didBroadcast = true;
-              try {
-                pendingAcquisition = markSquidDepositPending(window.localStorage, pendingAcquisition, hash);
-                if (isCurrentDepositOwner()) setSavedAcquisition(pendingAcquisition);
-              } catch {
-                if (isCurrentDepositOwner()) {
-                  toast.error("The transaction was submitted, but its recovery state could not be updated.");
-                }
-              }
-              if (isCurrentDepositOwner()) toast.info("Top-up transaction submitted");
-            },
-          });
-          if (receipt.status !== "success") throw new Error("Top-up transaction reverted");
-          await invalidateTopUpQueries(queryClient, accountId, depositOwner);
-          try {
-            clearSquidAcquisition(window.localStorage, pendingAcquisition);
-          } catch {
+        const outcome = await runSquidDeposit({
+          acquisition: savedAcquisition,
+          amount: acquiredAmount,
+          fund: (deposit, onHash) => synapse.payments.fundSync({ amount: deposit, onHash }),
+          invalidate: (owner) => invalidateTopUpQueries(queryClient, accountId, owner),
+          onRecoveryStateError: () => {
             if (isCurrentDepositOwner()) {
-              toast.warning("Top-up succeeded, but the saved acquisition could not be cleared.");
+              toast.warning("The transaction recovery state could not be updated.");
             }
-          }
-          if (isCurrentDepositOwner()) {
+          },
+          onSubmitted: (_hash, pending) => {
+            if (isCurrentDepositOwner()) {
+              acquisition.recordPending(pending);
+              toast.info("Top-up transaction submitted");
+            }
+          },
+          storage: window.localStorage,
+        });
+        if (isCurrentDepositOwner()) {
+          if (outcome.status === "succeeded") {
             toast.success("USDFC top-up confirmed");
-            setAcquiredAmount(null);
-            setAcquisitionOwner(null);
-            setSavedAcquisition(null);
-            setHasInvalidAcquisition(false);
-            setAcquisitionState("idle");
+            acquisition.reset();
             closeDialog();
-          }
-        } catch (error) {
-          if (!didBroadcast && isUserRejectedRequest(error)) {
-            try {
-              const acquired = resetSquidDeposit(window.localStorage, pendingAcquisition);
-              if (isCurrentDepositOwner()) {
-                setSavedAcquisition(acquired);
-                setAcquisitionState("acquired");
-              }
-            } catch {
-              if (isCurrentDepositOwner()) {
-                setAcquiredAmount(null);
-                setAcquisitionState("blocked");
-              }
-            }
-          } else if (isCurrentDepositOwner()) {
-            setAcquiredAmount(null);
-            setAcquisitionState("blocked");
-          }
-          if (isCurrentDepositOwner()) {
+          } else {
+            if (outcome.status === "rejected") acquisition.recordAcquired(outcome.acquisition);
+            else acquisition.recordBlocked(outcome.acquisition);
             toast.error("USDFC top-up failed", {
-              description: walletErrorMessage(error, "Your wallet did not complete the request."),
+              description: walletErrorMessage(outcome.error, "Your wallet did not complete the request."),
             });
           }
-        } finally {
-          if (isCurrentDepositOwner()) setIsSubmitting(false);
+          setIsSubmitting(false);
         }
       });
     } catch (error) {
+      setIsSubmitting(false);
       toast.error("The deposit cannot start safely.", {
         description: error instanceof Error ? error.message : undefined,
       });
@@ -405,33 +224,16 @@ export function GuidedTopUpDialog({
       return;
     }
     try {
-      if (!savedAcquisition) return;
-      await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, () =>
-        clearSquidAcquisition(window.localStorage, savedAcquisition),
-      );
+      if (await acquisition.clearBlocked()) closeDialog();
     } catch {
       toast.error("Browser storage is unavailable. The saved acquisition could not be cleared.");
-      return;
     }
-    setAcquiredAmount(null);
-    setAcquisitionOwner(null);
-    const completedDeposit = savedAcquisition?.status === "depositing";
-    setSavedAcquisition(null);
-    setHasInvalidAcquisition(false);
-    setAutomaticRecoveryError(null);
-    setAcquisitionState("idle");
-    if (completedDeposit) closeDialog();
   };
 
   const clearInvalidAcquisition = async () => {
     if (!address || !window.confirm("Clear the invalid saved acquisition data from this browser?")) return;
     try {
-      await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
-        clearInvalidSquidAcquisition(window.localStorage, address),
-      );
-      setHasInvalidAcquisition(false);
-      setAutomaticRecoveryError(null);
-      setAcquisitionState("idle");
+      await acquisition.clearInvalid();
     } catch (error) {
       toast.error("The invalid saved acquisition could not be cleared.", {
         description: error instanceof Error ? error.message : undefined,
@@ -440,29 +242,8 @@ export function GuidedTopUpDialog({
   };
 
   const continueWithAcquiredUsdfc = async () => {
-    if (savedAcquisition?.status !== "processing") return;
     try {
-      await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, async () => {
-        if (savedAcquisition.destinationBalanceBefore !== undefined) {
-          if (!destinationClient) throw new Error("Filecoin balance client is unavailable");
-          const currentBalance = await readUsdfcBalance(
-            destinationClient,
-            mainnet.contracts.usdfc.address,
-            savedAcquisition.owner,
-          );
-          const acquired = markSquidAcquiredFromBalance(window.localStorage, savedAcquisition, currentBalance);
-          setSavedAcquisition(acquired);
-          setAcquisitionOwner(acquired.owner);
-          setAcquiredAmount(getSquidDepositAmount(acquired));
-          setAcquisitionState("acquired");
-          return;
-        }
-        const acquired = markSquidAcquired(window.localStorage, savedAcquisition);
-        setSavedAcquisition(acquired);
-        setAcquisitionOwner(acquired.owner);
-        setAcquiredAmount(getSquidDepositAmount(acquired));
-        setAcquisitionState("acquired");
-      });
+      await acquisition.continueWithAcquired();
     } catch (error) {
       toast.error("The acquisition could not be recovered safely.", {
         description: error instanceof Error ? error.message : undefined,
@@ -471,16 +252,9 @@ export function GuidedTopUpDialog({
   };
 
   const retryFilecoinDeposit = async () => {
-    if (savedAcquisition?.status !== "depositing") return;
     if (!window.confirm("Retry only after confirming the saved Filecoin transaction did not complete.")) return;
     try {
-      const acquired = await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, () =>
-        resetSquidDeposit(window.localStorage, savedAcquisition),
-      );
-      setSavedAcquisition(acquired);
-      setAcquisitionOwner(acquired.owner);
-      setAcquiredAmount(getSquidDepositAmount(acquired));
-      setAcquisitionState("acquired");
+      await acquisition.retryDeposit();
     } catch {
       toast.error("Browser storage is unavailable. The deposit could not be recovered safely.");
     }
@@ -500,9 +274,7 @@ export function GuidedTopUpDialog({
   };
 
   const closeDialog = () => {
-    const chainIdToRestore = originalChainId.current;
-    originalChainId.current = undefined;
-    isAwaitingOriginalChainId.current = false;
+    const chainIdToRestore = takeOriginalChainId();
     onOpenChange(false);
     if (chainIdToRestore === undefined || chainIdToRestore === chainId) return;
     void switchChainAsync({ chainId: chainIdToRestore }).catch((error) => {
@@ -588,109 +360,33 @@ export function GuidedTopUpDialog({
             </RunwayCard>
           )}
           {acquisitionState === "blocked" && (
-            <div className='grid gap-2 rounded-md border border-destructive/30 p-3 text-sm'>
-              {savedAcquisition ? (
-                <>
-                  <p className='font-medium text-destructive'>A saved transaction needs verification.</p>
-                  {savedAcquisition.status === "depositing" ? (
-                    <p>
-                      Check the Filecoin deposit transaction before retrying or clearing it:
-                      {savedAcquisition.depositTransactionHash ? (
-                        <code className='mt-1 block break-all'>{savedAcquisition.depositTransactionHash}</code>
-                      ) : (
-                        <span className='mt-1 block'>The wallet request may not have returned a transaction hash.</span>
-                      )}
-                    </p>
-                  ) : (
-                    <>
-                      <p>Check {savedSourceChain?.name ?? `chain ${savedAcquisition.sourceChainId}`} for the swap.</p>
-                      {acquisitionCoordinationError && (
-                        <p className='text-muted-foreground' role='status'>
-                          {acquisitionCoordinationError}
-                        </p>
-                      )}
-                      {savedAcquisition.transactionHashes.map((hash) => (
-                        <code className='block break-all' key={hash}>
-                          {hash}
-                        </code>
-                      ))}
-                      {savedAcquisition.transactionHashes.length === 0 && (
-                        <p>The wallet request may have been submitted without returning a transaction hash.</p>
-                      )}
-                      {automaticRecovery.isEligible && !automaticRecovery.error && !automaticRecoveryError && (
-                        <p className='inline-flex items-center gap-2 text-muted-foreground' role='status'>
-                          {automaticRecovery.isFetching && <Loader2 className='h-4 w-4 animate-spin' />}
-                          Automatically checking the source transaction and Filecoin USDFC balance…
-                        </p>
-                      )}
-                      {automaticRecovery.isEligible && (automaticRecovery.error || automaticRecoveryError) && (
-                        <div className='grid gap-2' role='alert'>
-                          <p className='text-destructive'>
-                            Automatic recovery {automaticRecovery.isPermanentError ? "stopped" : "will retry"}:{" "}
-                            {automaticRecoveryError || automaticRecovery.error?.message}
-                          </p>
-                          {!automaticRecovery.isPermanentError && (
-                            <Button
-                              onClick={() => {
-                                setAutomaticRecoveryError(null);
-                                void automaticRecovery.refetch();
-                              }}
-                              size='compact'
-                              type='button'
-                              variant='tertiary'
-                            >
-                              Retry automatic check now
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div className='flex flex-wrap gap-2'>
-                    {savedAcquisition.status === "processing" && !automaticRecovery.isEligible && (
-                      <Button onClick={continueWithAcquiredUsdfc} size='compact' type='button' variant='tertiary'>
-                        USDFC arrived, continue to deposit
-                      </Button>
-                    )}
-                    {savedAcquisition.status === "depositing" && (
-                      <Button onClick={retryFilecoinDeposit} size='compact' type='button' variant='tertiary'>
-                        Deposit failed, retry
-                      </Button>
-                    )}
-                    <Button onClick={clearBlockedAcquisition} size='compact' type='button' variant='tertiary'>
-                      {savedAcquisition.status === "depositing"
-                        ? "Deposit completed, clear"
-                        : "USDFC did not arrive, clear"}
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className='text-destructive'>
-                    {hasInvalidAcquisition
-                      ? "The saved acquisition data is invalid and must be cleared before funding can continue."
-                      : "Browser storage is unavailable, so funding cannot continue safely."}
-                  </p>
-                  {hasInvalidAcquisition && (
-                    <Button onClick={clearInvalidAcquisition} size='compact' type='button' variant='tertiary'>
-                      Clear invalid saved acquisition
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+            <SquidRecoveryPanel
+              acquisition={savedAcquisition}
+              automaticError={automaticRecovery.error}
+              coordinationError={acquisitionCoordinationError}
+              hasInvalidAcquisition={hasInvalidAcquisition}
+              isAutomaticEligible={automaticRecovery.isEligible}
+              isAutomaticFetching={automaticRecovery.isFetching}
+              isAutomaticPermanentError={automaticRecovery.isPermanentError}
+              onClear={() => void clearBlockedAcquisition()}
+              onClearInvalid={() => void clearInvalidAcquisition()}
+              onContinue={() => void continueWithAcquiredUsdfc()}
+              onRetryAutomatic={() => {
+                acquisition.setAutomaticRecoveryError(null);
+                void automaticRecovery.refetch();
+              }}
+              onRetryDeposit={() => void retryFilecoinDeposit()}
+              recoveryError={automaticRecoveryError}
+              sourceChainName={savedSourceChain?.name}
+            />
           )}
           {acquiredAmount === null && acquisitionState !== "blocked" && (
             <SquidQuoteReview
               acquisitionState={acquisitionState}
               destinationAmount={depositAmount}
-              onAcquired={(acquired) => {
-                setSavedAcquisition(acquired);
-                setAcquiredAmount(getSquidDepositAmount(acquired));
-                setAcquisitionOwner(acquired.owner);
-              }}
-              onAcquisitionStateChange={setAcquisitionState}
-              onBlocked={setSavedAcquisition}
+              onAcquired={acquisition.recordAcquired}
+              onAcquisitionStateChange={acquisition.setAcquisitionState}
+              onBlocked={acquisition.recordBlocked}
               onNetworkSwitchingChange={setIsSwitchingNetwork}
             />
           )}

@@ -3,22 +3,13 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
-import {
-  fetchSourceTokens,
-  NATIVE_TOKEN_ADDRESS,
-  SQUID_ROUTER_ADDRESS,
-  type SquidPublicClient,
-  type SquidWalletClient,
-} from "@filecoin-project/squid-evm-funding";
-import { useQuery } from "@tanstack/react-query";
+import { NATIVE_TOKEN_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useDebounce } from "use-debounce";
-import { erc20Abi, formatUnits } from "viem";
-import { estimateTotalFee } from "viem/op-stack";
-import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
+import { useEffect, useState } from "react";
+import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
-import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 import { formatUsdfcAmount, USDFC_DECIMALS } from "../data/funding-runway";
 import {
@@ -29,29 +20,18 @@ import {
   isBridgeNativeFee,
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
-import {
-  hasUnknownSourceTokenBalances,
-  readSourceTokenBalance,
-  readSourceTokenBalances,
-  sourceTokenBalance,
-  sourceTokenBalancesQueryKey,
-  visibleSourceTokens,
-} from "../data/source-token-balances";
 import type { SquidAcquisition } from "../data/squid-acquisition";
-import { runSquidAcquisition } from "../data/squid-acquisition-flow";
-import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
-import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
-import { planSquidTopUp, squidFetch } from "../data/squid-quote";
-import { readUsdfcBalance } from "../data/usdfc-balance";
+import { sourceTokenBalance } from "../data/source-token-balances";
+import { useSquidExecution } from "../hooks/useSquidExecution";
+import { useSquidQuotePlan } from "../hooks/useSquidQuotePlan";
+import { useSquidSourceData } from "../hooks/useSquidSourceData";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
 
-const QUOTE_DEBOUNCE_MS = 500;
+export { excludeDestinationUsdfc } from "../hooks/useSquidSourceData";
 
 // Squid 429s recover slowly, so the quote fails fast with copy telling the
 // user when to refresh; only the token catalog retries a burst.
 const isRateLimited = (error: unknown) => error instanceof Error && error.message.includes("(429)");
-const rateLimitRetry = (failureCount: number, error: unknown) => isRateLimited(error) && failureCount < 2;
-const rateLimitRetryDelay = (failureCount: number) => 15_000 * (failureCount + 1);
 
 const SOURCE_CHAIN_OPTIONS: readonly SearchableOption[] = SQUID_SOURCE_CHAINS.map((chain) => ({
   label: chain.name,
@@ -77,12 +57,6 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   return "No supported tokens on this network.";
 }
 
-export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
-  return sourceChainId === mainnet.id
-    ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
-    : [...tokens];
-}
-
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
@@ -98,66 +72,52 @@ export function SquidQuoteReview({
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [showAllSourceTokensFor, setShowAllSourceTokensFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [switchError, setSwitchError] = useState<string | null>(null);
-  const latestAddress = useRef(address);
-  latestAddress.current = address;
-  const [debouncedDestinationAmount] = useDebounce(destinationAmount, QUOTE_DEBOUNCE_MS);
   const sourceChain = Number(sourceChainId);
   const sourceTokenScope = `${address ?? ""}:${sourceChain}`;
   const showAllSourceTokens = showAllSourceTokensFor === sourceTokenScope;
-  const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
-  // Follow the connected chain so switching networks refreshes a wallet-client
-  // query that may previously have failed because the selected chain differed.
-  const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
-  const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
-  const destinationClient = usePublicClient({ chainId: mainnet.id });
   const integratorId =
     process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
-  const {
-    data: tokens = [],
-    error: tokenLoadError,
-    isError: isTokenLoadError,
-    isFetching: isLoadingTokens,
-    refetch: refetchTokens,
-  } = useQuery({
-    enabled: !quotesUnavailable && SQUID_SOURCE_CHAINS.some((chain) => chain.id === sourceChain),
-    queryFn: () => fetchSourceTokens(sourceChain, { fetch: squidFetch, integratorId }),
-    queryKey: ["squid", "source-tokens", sourceChain],
-    retry: rateLimitRetry,
-    retryDelay: rateLimitRetryDelay,
-    staleTime: 300_000,
+  const sourceData = useSquidSourceData({
+    address,
+    integratorId,
+    showAllTokens: showAllSourceTokens,
+    sourceChain,
+    sourceTokenAddress,
   });
-  const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
-  const selectableTokens = excludeDestinationUsdfc(tokens, sourceChain);
+  const { allowanceQuery, inventoryQuery, nativeBalanceQuery, sourceBalanceQuery, tokenQuery } = sourceData;
+  const {
+    data: sourceAllowance,
+    isError: isSourceAllowanceError,
+    isFetching: isLoadingSourceAllowance,
+  } = allowanceQuery;
   const {
     data: sourceTokenBalances,
     isError: isTokenBalanceError,
     isFetching: isLoadingTokenBalances,
-    refetch: refetchTokenBalances,
-  } = useQuery({
-    enabled: !!address && !!sourcePublicClient && selectableTokens.length > 0,
-    queryFn: () => {
-      if (!address || !sourcePublicClient) throw new Error("Source network client is unavailable");
-      return readSourceTokenBalances(sourcePublicClient, address, selectableTokens);
-    },
-    queryKey: sourceTokenBalancesQueryKey(
-      address ?? "0x0000000000000000000000000000000000000000",
-      sourceChain,
-      selectableTokens,
-    ),
-  });
-  const hasUnknownTokenBalances = sourceTokenBalances
-    ? hasUnknownSourceTokenBalances(selectableTokens, sourceTokenBalances)
-    : false;
-  const canFilterWalletTokens = !!sourceTokenBalances && !hasUnknownTokenBalances && !isTokenBalanceError;
-  const visibleTokens = visibleSourceTokens(
+  } = inventoryQuery;
+  const { isError: isNativeBalanceError, isFetching: isLoadingNativeBalance } = nativeBalanceQuery;
+  const { isError: isSeparateSourceBalanceError, isFetching: isLoadingSeparateSourceBalance } = sourceBalanceQuery;
+  const {
+    error: tokenLoadError,
+    isError: isTokenLoadError,
+    isFetching: isLoadingTokens,
+    refetch: refetchTokens,
+  } = tokenQuery;
+  const {
+    canFilterWalletTokens,
+    hasInventoriedSourceBalance,
+    hasUnknownTokenBalances,
+    isNativeSource,
+    nativeBalance,
     selectableTokens,
-    isTokenBalanceError ? undefined : sourceTokenBalances,
-    showAllSourceTokens,
-    sourceTokenAddress,
-  );
+    source,
+    sourceBalance,
+    tokens,
+    visibleTokens,
+  } = sourceData;
+  const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
   const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
     const balance = sourceTokenBalance(sourceTokenBalances, token.token);
     return {
@@ -173,110 +133,23 @@ export function SquidQuoteReview({
   });
   const isLoadingWalletTokenInventory =
     !!address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances;
-  const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
-  const inventoriedSourceBalance = source ? sourceTokenBalance(sourceTokenBalances, source.token) : undefined;
-  const hasInventoriedSourceBalance = typeof inventoriedSourceBalance === "bigint";
   const isBusy = acquisitionState !== "idle";
-  const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
-  const isQuoteDebouncing = destinationAmount !== debouncedDestinationAmount;
-  const readSelectedBalance = () => {
-    if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
-    return readSourceTokenBalance(sourcePublicClient, address, source);
-  };
-  const {
-    data: separatelyLoadedSourceBalance,
-    isError: isSeparateSourceBalanceError,
-    isFetching: isLoadingSeparateSourceBalance,
-    refetch: refetchSourceBalance,
-  } = useQuery({
-    enabled: !!address && !!source && !!sourcePublicClient && !hasInventoriedSourceBalance,
-    queryFn: readSelectedBalance,
-    queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
-  });
-  const sourceBalance = hasInventoriedSourceBalance ? inventoriedSourceBalance : separatelyLoadedSourceBalance;
   const isSourceBalanceError = !hasInventoriedSourceBalance && isSeparateSourceBalanceError;
   const isLoadingSourceBalance = !hasInventoriedSourceBalance && isLoadingSeparateSourceBalance;
-  const {
-    data: separateNativeBalance,
-    isError: isNativeBalanceError,
-    isFetching: isLoadingNativeBalance,
-    refetch: refetchNativeBalance,
-  } = useQuery({
-    enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
-    queryFn: async () => {
-      if (!sourcePublicClient || !address) throw new Error("Source network client is unavailable");
-      return sourcePublicClient.getBalance({ address });
-    },
-    queryKey: ["squid", "native-balance", sourceChain, address],
-  });
-  const {
-    data: sourceAllowance,
-    isError: isSourceAllowanceError,
-    isFetching: isLoadingSourceAllowance,
-    refetch: refetchSourceAllowance,
-  } = useQuery({
-    enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
-    queryFn: async () => {
-      if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
-      return sourcePublicClient.readContract({
-        abi: erc20Abi,
-        address: source.token,
-        args: [address, SQUID_ROUTER_ADDRESS],
-        functionName: "allowance",
-      });
-    },
-    queryKey: ["squid", "source-allowance", sourceChain, sourceTokenAddress, address, SQUID_ROUTER_ADDRESS],
-  });
   const sourceAmount = sourceBalance ?? null;
-  const nativeBalance = isNativeSource ? sourceBalance : separateNativeBalance;
+  const quotePlan = useSquidQuotePlan({
+    acquisitionState,
+    address,
+    destinationAmount,
+    integratorId,
+    source,
+    sourceAmount,
+  });
+  const { debouncedDestinationAmount, isQuoteDebouncing, isReviewing, plan, quoteError, refetchQuote } = quotePlan;
   const insufficientBalance =
     source && debouncedDestinationAmount !== null
       ? `You don't have enough ${source.symbol} to receive ${formatUsdfcAmount(debouncedDestinationAmount)} USDFC.`
       : null;
-  const {
-    data: quotedPlan,
-    error: quoteError,
-    isFetching: isReviewing,
-    refetch: refetchQuote,
-  } = useQuery({
-    enabled:
-      !quotesUnavailable &&
-      !isBusy &&
-      !isQuoteDebouncing &&
-      !!address &&
-      !!source &&
-      debouncedDestinationAmount !== null &&
-      debouncedDestinationAmount > 0n &&
-      sourceAmount !== null &&
-      sourceAmount > 0n,
-    queryFn: async () => {
-      if (!address || !source || debouncedDestinationAmount === null || sourceAmount === null) {
-        throw new Error("Select a source token and enter the USDFC amount.");
-      }
-      return planSquidTopUp({
-        destinationAmount: debouncedDestinationAmount,
-        destinationToken: mainnet.contracts.usdfc.address,
-        integratorId,
-        owner: address,
-        source,
-        sourceAmount,
-      });
-    },
-    queryKey: [
-      "squid",
-      "top-up-plan",
-      address,
-      mainnet.contracts.usdfc.address,
-      debouncedDestinationAmount?.toString() ?? "",
-      sourceChain,
-      sourceTokenAddress,
-      sourceAmount?.toString() ?? "",
-    ],
-    refetchOnWindowFocus: false,
-    retry: false,
-    staleTime: 30_000,
-  });
-  const plan = isQuoteDebouncing ? undefined : quotedPlan;
   const quote = plan?.quotes[0];
   const quoteCosts = plan?.quotes.flatMap((item) => item.costs) ?? [];
   const bridgeNativeFees = plan ? getPlanBridgeNativeFees(plan) : { estimated: 0n, maximum: 0n };
@@ -348,18 +221,42 @@ export function SquidQuoteReview({
       ? insufficientBalance
       : null;
 
+  const execution = useSquidExecution({
+    acquisitionState,
+    bridgeFeeMaximum: bridgeNativeFees.maximum,
+    integratorId,
+    isNativeSource: isNativeSource === true,
+    networkGasMaximum: networkGas.maximum,
+    onAcquired,
+    onAcquisitionStateChange,
+    onBlocked,
+    onNetworkSwitchingChange,
+    plan,
+    refetchNativeBalance: async () => {
+      const result = await nativeBalanceQuery.refetch();
+      return { data: result.data, isError: result.isError };
+    },
+    refetchSourceAllowance: async () => {
+      const result = await allowanceQuery.refetch();
+      return { data: result.data, isError: result.isError };
+    },
+    refetchSourceBalance: sourceData.refetchSelectedBalance,
+    requiredNativeBalance,
+    source,
+    sourceChainName: sourceChainMeta?.name,
+    sourceNativeCurrencySymbol: sourceChainMeta?.nativeCurrency.symbol,
+  });
+  const clearErrors = () => {
+    setError(null);
+    execution.clearError();
+  };
+
   useEffect(() => {
     if (tokenLoadError) console.error("Failed to load Squid token catalog:", tokenLoadError);
   }, [tokenLoadError]);
 
-  useEffect(() => {
-    if (chainId === sourceChain) {
-      setSwitchError(null);
-    }
-  }, [chainId, sourceChain]);
-
   const review = () => {
-    setError(null);
+    clearErrors();
     if (quotesUnavailable) return setError("Squid quotes are not configured for this deployment.");
     if (!address || !source || destinationAmount === null)
       return setError("Select a source token and enter the USDFC amount.");
@@ -367,134 +264,6 @@ export function SquidQuoteReview({
     if (sourceBalance === undefined) return setError("Your source-token balance is still loading. Try again shortly.");
     if (sourceAmount === null || sourceAmount <= 0n) return setError(insufficientBalance);
     void refetchQuote();
-  };
-
-  const switchToSourceNetwork = async () => {
-    setError(null);
-    setSwitchError(null);
-    if (!source || !sourceChainMeta) return setError("Select a source network and token first.");
-    onNetworkSwitchingChange(true);
-    try {
-      await switchChainAsync({ chainId: source.chainId });
-    } catch (switchError) {
-      setSwitchError(
-        isUserRejectedRequest(switchError)
-          ? "Network switch cancelled in your wallet."
-          : walletErrorMessage(switchError, `Could not switch your wallet to ${sourceChainMeta.name}.`),
-      );
-    } finally {
-      onNetworkSwitchingChange(false);
-    }
-  };
-
-  const refetchSelectedBalance = async () => {
-    if (!source) return { data: undefined, isError: true };
-    try {
-      return { data: await readSelectedBalance(), isError: false };
-    } catch {
-      return { data: undefined, isError: true };
-    }
-  };
-
-  const acquire = async () => {
-    setError(null);
-    if (acquisitionState === "blocked")
-      return setError("Check your source wallet activity before starting another acquisition.");
-    if (acquisitionState !== "idle") return setError("This acquisition is already complete or in progress.");
-    if (!address || !source || !plan || !quote || destinationAmount === null)
-      return setError("Review a route before acquiring USDFC.");
-    if (chainId !== source.chainId)
-      return setError("Switch your wallet to the selected source network before confirming.");
-    if (!sourcePublicClient || !sourceWalletClient || !destinationClient)
-      return setError("Wallet or network client is unavailable.");
-    if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
-      return setError("Wallet account changed before confirming.");
-    const latestBalanceResult = await refetchSelectedBalance();
-    if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
-      return setError("Could not refresh your source-token balance. Try again before confirming.");
-    }
-    if (quote.sourceAmount > latestBalanceResult.data) {
-      return setError(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
-    }
-    const latestNativeBalanceResult = isNativeSource ? latestBalanceResult : await refetchNativeBalance();
-    if (latestNativeBalanceResult.isError || latestNativeBalanceResult.data === undefined) {
-      return setError("Could not refresh your source-network gas balance. Try again before confirming.");
-    }
-    if (networkGas.maximum === 0n) {
-      return setError("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
-    }
-    if (networkGas.maximum === null) {
-      return setError("Your source-token allowance is still loading. Try again shortly.");
-    }
-    const reviewedNetworkGasMaximum = networkGas.maximum;
-    if (!isNativeSource) {
-      const latestAllowanceResult = await refetchSourceAllowance();
-      if (latestAllowanceResult.isError || latestAllowanceResult.data === undefined) {
-        return setError("Could not refresh your source-token allowance. Try again before confirming.");
-      }
-      const latestNetworkGas = getPlanNetworkGas(plan, latestAllowanceResult.data);
-      if (latestNetworkGas.maximum !== reviewedNetworkGasMaximum) {
-        return setError(
-          "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.",
-        );
-      }
-    }
-    if (latestNativeBalanceResult.data < requiredNativeBalance) {
-      return setError(
-        `Your ${sourceChainMeta?.nativeCurrency.symbol ?? "native-token"} balance does not cover the reviewed maximum native requirement.`,
-      );
-    }
-
-    const publicClient =
-      source.chainId === 10 || source.chainId === 8453
-        ? {
-            ...sourcePublicClient,
-            estimateTotalFee: (request: Parameters<typeof estimateTotalFee>[1]) =>
-              estimateTotalFee(sourcePublicClient, request),
-          }
-        : sourcePublicClient;
-    const isCurrentExecutionOwner = () => latestAddress.current?.toLowerCase() === address.toLowerCase();
-    try {
-      const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
-        runSquidAcquisition({
-          execute: ({ onSwapAttempt, onSwapBroadcast }) =>
-            executeSquidTopUp({
-              destinationClient: destinationClient as unknown as SquidPublicClient,
-              integratorId,
-              maxNativeFee: reviewedNetworkGasMaximum,
-              maxTotalNativeRouteFee: bridgeNativeFees.maximum,
-              onSwapAttempt,
-              onSwapBroadcast,
-              plan,
-              sourcePublicClient: publicClient as unknown as SquidPublicClient,
-              sourceWalletClient: sourceWalletClient as SquidWalletClient,
-            }),
-          minimumDestinationAmount: quote.requirement.amount,
-          onStarted: () => {
-            if (isCurrentExecutionOwner()) onAcquisitionStateChange("processing");
-          },
-          owner: address,
-          readDestinationBalance: () => readUsdfcBalance(destinationClient, mainnet.contracts.usdfc.address, address),
-          sourceChainId: source.chainId,
-          storage: window.localStorage,
-        }),
-      );
-      if (!isCurrentExecutionOwner()) return;
-      if (outcome.status === "acquired") {
-        onAcquisitionStateChange("acquired");
-        onAcquired(outcome.acquisition);
-        return;
-      }
-      if (outcome.status === "blocked") {
-        onBlocked(outcome.acquisition);
-        onAcquisitionStateChange("blocked");
-      } else {
-        onAcquisitionStateChange("idle");
-      }
-      setError(walletErrorMessage(outcome.error, "Squid could not complete the acquisition."));
-    } catch (executionError) {
-      if (isCurrentExecutionOwner()) setError(walletErrorMessage(executionError, "Squid could not start safely."));
-    }
   };
 
   return (
@@ -532,8 +301,7 @@ export function SquidQuoteReview({
         <Select
           disabled={isBusy}
           onValueChange={(value) => {
-            setError(null);
-            setSwitchError(null);
+            clearErrors();
             if (value !== sourceChainId) {
               setSourceChainId(value);
               setSourceTokenAddress("");
@@ -591,7 +359,7 @@ export function SquidQuoteReview({
             invalidMessage='Choose a source token from the suggestions.'
             key={sourceChainId}
             onValueChange={(value) => {
-              setError(null);
+              clearErrors();
               setSourceTokenAddress(value);
             }}
             options={sourceTokenOptions}
@@ -609,7 +377,7 @@ export function SquidQuoteReview({
             <span>Some wallet balances could not be checked. The complete token catalog is shown.</span>
             <Button
               disabled={isLoadingTokenBalances}
-              onClick={() => void refetchTokenBalances()}
+              onClick={() => void inventoryQuery.refetch()}
               size='compact'
               type='button'
               variant='tertiary'
@@ -671,8 +439,8 @@ export function SquidQuoteReview({
             <Button
               disabled={isLoadingSourceBalance}
               onClick={() => {
-                setError(null);
-                void refetchSourceBalance();
+                clearErrors();
+                void sourceBalanceQuery.refetch();
               }}
               size='compact'
               type='button'
@@ -702,8 +470,8 @@ export function SquidQuoteReview({
             <Button
               disabled={isLoadingNativeBalance}
               onClick={() => {
-                setError(null);
-                void refetchNativeBalance();
+                clearErrors();
+                void nativeBalanceQuery.refetch();
               }}
               size='compact'
               type='button'
@@ -735,8 +503,8 @@ export function SquidQuoteReview({
             <Button
               disabled={isLoadingSourceAllowance}
               onClick={() => {
-                setError(null);
-                void refetchSourceAllowance();
+                clearErrors();
+                void allowanceQuery.refetch();
               }}
               size='compact'
               type='button'
@@ -776,10 +544,22 @@ export function SquidQuoteReview({
         )}
       </Button>
 
-      {(error || switchError || quoteErrorMessage || capBlockedMessage || nativeBalanceBlockedMessage) && (
+      {(error ||
+        execution.error ||
+        execution.switchError ||
+        quoteErrorMessage ||
+        capBlockedMessage ||
+        nativeBalanceBlockedMessage) && (
         <div className='flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive' role='alert'>
           <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
-          <span>{error || switchError || quoteErrorMessage || capBlockedMessage || nativeBalanceBlockedMessage}</span>
+          <span>
+            {error ||
+              execution.error ||
+              execution.switchError ||
+              quoteErrorMessage ||
+              capBlockedMessage ||
+              nativeBalanceBlockedMessage}
+          </span>
         </div>
       )}
 
@@ -858,28 +638,28 @@ export function SquidQuoteReview({
           <Button
             disabled={
               isBusy ||
-              isSwitchingChain ||
+              execution.isSwitchingChain ||
               isSourceAllowanceBlocked ||
               isSeparateNativeBalanceBlocked ||
               nativeBalance === undefined ||
               networkGas.maximum === null ||
               networkGas.maximum === 0n ||
               nativeBalance < requiredNativeBalance ||
-              (chainId === sourceChain && isPreparingWallet)
+              (chainId === sourceChain && execution.isPreparingWallet)
             }
-            onClick={chainId === sourceChain ? acquire : switchToSourceNetwork}
+            onClick={chainId === sourceChain ? execution.acquire : execution.switchToSourceNetwork}
             size='compact'
             type='button'
             variant='primary'
           >
-            {isSwitchingChain ? (
+            {execution.isSwitchingChain ? (
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Switching network…
               </span>
             ) : chainId !== sourceChain ? (
               `Switch wallet to ${sourceChainMeta?.name ?? "source network"}`
-            ) : isPreparingWallet ? (
+            ) : execution.isPreparingWallet ? (
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Preparing wallet…
