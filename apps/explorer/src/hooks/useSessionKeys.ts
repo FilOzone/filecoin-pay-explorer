@@ -28,6 +28,8 @@ export interface SessionKeyWithStatus extends SessionKeyRecord {
 
 export interface SyncFromChainResult {
   addedCount: number;
+  /** Existing records healed from chain history */
+  updatedCount: number;
   skippedUnrecognized: number;
 }
 
@@ -114,10 +116,25 @@ export function useSessionKeys(network: Network, account: Hex) {
     });
   }, [records, reads]);
 
+  /**
+   * Adds a key, or merges into the existing record for the same address:
+   * re-authorizing (add-scopes flow) must union scopes and keep the original
+   * creation time, or the record under-reports what the key actually holds.
+   */
   const addKey = useCallback(
     (record: SessionKeyRecord) => {
+      const existing = records.find((r) => r.sessionKeyPublic.toLowerCase() === record.sessionKeyPublic.toLowerCase());
+      const merged = existing
+        ? {
+            ...existing,
+            ...record,
+            scopes: [...new Set([...existing.scopes, ...record.scopes])],
+            createdAt: existing.createdAt || record.createdAt,
+            name: existing.name || record.name,
+          }
+        : record;
       persist([
-        record,
+        merged,
         ...records.filter((r) => r.sessionKeyPublic.toLowerCase() !== record.sessionKeyPublic.toLowerCase()),
       ]);
     },
@@ -140,12 +157,12 @@ export function useSessionKeys(network: Network, account: Hex) {
   const syncFromChain = useCallback(async (): Promise<SyncFromChainResult> => {
     const events = await fetchAuthorizationEvents(network, registry, account);
     const { records: synced, skippedUnrecognized } = foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
-    const { merged, addedCount } = mergeSyncedRecords(records, synced);
-    if (addedCount > 0) {
+    const { merged, addedCount, updatedCount } = mergeSyncedRecords(records, synced);
+    if (addedCount > 0 || updatedCount > 0) {
       persist(merged);
       refetchStatuses();
     }
-    return { addedCount, skippedUnrecognized };
+    return { addedCount, updatedCount, skippedUnrecognized };
   }, [network, account, registry, records, persist, refetchStatuses]);
 
   return {

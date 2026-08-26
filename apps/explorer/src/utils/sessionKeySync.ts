@@ -46,7 +46,9 @@ function compareEvents(a: DecodedAuthorizationEvent, b: DecodedAuthorizationEven
  * Folds every `AuthorizationsUpdated` event ever emitted for one wallet's
  * identity into one inventory row per signer (session key address).
  *
- * - `name` is the origin string of the latest login (an event with `expiry > 0`).
+ * - `name` is the latest NON-EMPTY origin across logins: re-authorizations
+ *   (add-scopes flow, remediation links) often carry an empty origin, and an
+ *   empty string must never erase the name the key was created with.
  * - `scopes` is the union of every recognized scope ever granted, across all logins.
  * - `createdAt` is the timestamp of the first grant.
  * - `revokedAt` is the timestamp of the latest revoke (`expiry === 0`), if one exists.
@@ -94,11 +96,11 @@ export function foldAuthorizationEvents(
     }
 
     const firstGrant = grants[0];
-    const latestGrant = grants[grants.length - 1];
     const latestRevoke = revokes.length > 0 ? revokes[revokes.length - 1] : undefined;
+    const latestNamedGrant = [...grants].reverse().find((grant) => grant.origin !== "");
 
     records.push({
-      name: latestGrant.origin,
+      name: latestNamedGrant?.origin ?? "",
       sessionKeyPublic: firstGrant.signer as `0x${string}`,
       scopes: [...scopes],
       createdAt: firstGrant.timestamp * 1000,
@@ -113,17 +115,39 @@ export function foldAuthorizationEvents(
 export interface MergeResult {
   merged: SessionKeyRecord[];
   addedCount: number;
+  /** Existing records whose empty name, scope list, or revoke time the chain filled in. */
+  updatedCount: number;
 }
 
 /**
- * Merges synced records into the local inventory. Dedupes by session-key
- * address, case-insensitively; a local record always wins in full — sync
- * only ever adds signers the browser's local inventory doesn't already have.
+ * Merges synced records into the local inventory, deduped by session-key
+ * address (case-insensitive). Local records win for everything they know —
+ * name, createdAt — but the chain fills what they lack: an empty name is
+ * healed and scopes are unioned, since a local record only witnessed the
+ * grants made in this browser and re-authorization means it can
+ * under-report what the key actually holds.
  */
 export function mergeSyncedRecords(local: SessionKeyRecord[], synced: SyncedSessionKeyRecord[]): MergeResult {
+  const syncedByAddress: Record<string, SyncedSessionKeyRecord> = Object.fromEntries(
+    synced.map((record) => [record.sessionKeyPublic.toLowerCase(), record]),
+  );
+  let updatedCount = 0;
+  const healed = local.map((record) => {
+    const fromChain = syncedByAddress[record.sessionKeyPublic.toLowerCase()];
+    if (!fromChain) return record;
+    const scopes = [...new Set([...record.scopes, ...fromChain.scopes])];
+    const name = record.name || fromChain.name;
+    const revokedAt = record.revokedAt ?? fromChain.revokedAt;
+    if (scopes.length === record.scopes.length && name === record.name && revokedAt === record.revokedAt) {
+      return record;
+    }
+    updatedCount += 1;
+    return { ...record, name, scopes, ...(revokedAt !== undefined ? { revokedAt } : {}) };
+  });
+
   const localAddresses = new Set(local.map((record) => record.sessionKeyPublic.toLowerCase()));
   // fold yields one record per signer, so synced needs no dedupe of its own.
   const toAdd = synced.filter((record) => !localAddresses.has(record.sessionKeyPublic.toLowerCase()));
 
-  return { merged: [...local, ...toAdd], addedCount: toAdd.length };
+  return { merged: [...healed, ...toAdd], addedCount: toAdd.length, updatedCount };
 }

@@ -71,6 +71,17 @@ export function deriveKeyStatus(expiries: bigint[], nowSec: bigint): SessionKeyS
   return "expired";
 }
 
+/**
+ * True when every granted scope shares the same expiry
+ * False once scopes diverge (e.g. scopes were added to an existing key at a different
+ * expiry than its original grant), at which point each scope needs its own
+ * date rather than one shared summary.
+ */
+export function hasUniformExpiry(scopes: ScopeId[], scopeExpiries: Partial<Record<ScopeId, bigint>>): boolean {
+  const values = new Set(scopes.map((id) => (scopeExpiries[id] ?? 0n).toString()));
+  return values.size <= 1;
+}
+
 export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
   { label: "7 days", seconds: 7 * 86400 },
   { label: "30 days", seconds: 30 * 86400 },
