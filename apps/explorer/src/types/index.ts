@@ -10,6 +10,7 @@ export type TransactionType =
   | "settleRail"
   | "terminateRail"
   | "createSessionKey"
+  | "authorizeSessionKey"
   | "revokeSessionKey";
 
 export type Network = "calibration" | "mainnet";

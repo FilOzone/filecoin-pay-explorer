@@ -136,3 +136,68 @@ describe("mergeSyncedRecords", () => {
     assert.equal(addedCount, 0);
   });
 });
+
+describe("re-authorization consequences (PR3)", () => {
+  const grant = (signer: string, origin: string, ts: number, permissions: string[] = [ADD_TYPEHASH]) => ({
+    signer,
+    expiry: 100n,
+    permissions,
+    origin,
+    timestamp: ts,
+    blockNumber: BigInt(ts),
+    logIndex: 0,
+  });
+
+  it("fold keeps the created name when a later re-auth carries an empty origin", () => {
+    const { records } = foldAuthorizationEvents(
+      [grant("0xAA", "ci-uploader", 100), grant("0xAA", "", 200)],
+      SESSION_KEY_SCOPES,
+    );
+    assert.equal(records[0]?.name, "ci-uploader");
+  });
+
+  it("fold still honors a deliberate later rename", () => {
+    const { records } = foldAuthorizationEvents(
+      [grant("0xAA", "old", 100), grant("0xAA", "new", 200)],
+      SESSION_KEY_SCOPES,
+    );
+    assert.equal(records[0]?.name, "new");
+  });
+
+  it("merge heals an empty local name and unions scopes from chain", () => {
+    const local = [
+      { name: "", sessionKeyPublic: "0xAA" as const, scopes: ["schedulePieceRemovals" as const], createdAt: 5 },
+    ];
+    const synced = [
+      {
+        name: "ci-uploader",
+        sessionKeyPublic: "0xAA" as const,
+        scopes: ["createDataSet" as const, "addPieces" as const],
+        createdAt: 1,
+        source: "chain" as const,
+      },
+    ];
+    const { merged, addedCount, updatedCount } = mergeSyncedRecords(local, synced);
+    assert.equal(addedCount, 0);
+    assert.equal(updatedCount, 1);
+    assert.equal(merged[0]?.name, "ci-uploader");
+    assert.deepEqual(merged[0]?.scopes.sort(), ["addPieces", "createDataSet", "schedulePieceRemovals"]);
+    assert.equal(merged[0]?.createdAt, 5);
+  });
+
+  it("merge leaves complete local records untouched and reports zero updates", () => {
+    const local = [{ name: "kept", sessionKeyPublic: "0xAA" as const, scopes: ["addPieces" as const], createdAt: 5 }];
+    const synced = [
+      {
+        name: "chain",
+        sessionKeyPublic: "0xAA" as const,
+        scopes: ["addPieces" as const],
+        createdAt: 1,
+        source: "chain" as const,
+      },
+    ];
+    const { merged, updatedCount } = mergeSyncedRecords(local, synced);
+    assert.equal(updatedCount, 0);
+    assert.equal(merged[0]?.name, "kept");
+  });
+});

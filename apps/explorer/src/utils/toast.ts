@@ -137,6 +137,24 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
         },
       }[status];
 
+    case "authorizeSessionKey":
+      return {
+        pending: {
+          title: metadata.keyName ? `Adding scopes to "${metadata.keyName}"` : "Adding scopes to session key",
+          description: "Waiting for confirmation...",
+        },
+        success: {
+          title: "Scopes Added",
+          description: metadata.keyName
+            ? `"${metadata.keyName}" now holds the new scopes`
+            : "The session key now holds the new scopes",
+        },
+        error: {
+          title: "Adding Scopes Failed",
+          description: "The login transaction was rejected or failed",
+        },
+      }[status];
+
     case "revokeSessionKey":
       return {
         pending: {
