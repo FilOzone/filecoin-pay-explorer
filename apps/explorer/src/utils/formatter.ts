@@ -181,3 +181,13 @@ export const formatTimestampToTime = (timestamp: bigint | number): string =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+/** Date + time in one string (ms input), in the user's own locale. */
+export const formatDateTime = (ms: number): string =>
+  new Date(ms).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });

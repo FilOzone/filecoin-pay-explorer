@@ -4,11 +4,14 @@ import type { Hex } from "viem";
 import { useReadContracts } from "wagmi";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
+import { fetchAuthorizationEvents } from "@/utils/sessionKeyChain";
+import { foldAuthorizationEvents, mergeSyncedRecords } from "@/utils/sessionKeySync";
 import {
   deriveKeyStatus,
   isScopeActive,
   SCOPE_BY_ID,
   type ScopeId,
+  SESSION_KEY_SCOPES,
   type SessionKeyRecord,
   type SessionKeyStatus,
   sanitizeRecords,
@@ -21,6 +24,11 @@ export interface SessionKeyWithStatus extends SessionKeyRecord {
   /** Latest expiry across granted scopes (0n if revoked/never). */
   maxExpiry: bigint;
   scopeActive: Partial<Record<ScopeId, boolean>>;
+}
+
+export interface SyncFromChainResult {
+  addedCount: number;
+  skippedUnrecognized: number;
 }
 
 const storageKey = (network: Network, account: Hex) => `fp-session-keys:${network}:${account.toLowerCase()}`;
@@ -124,10 +132,27 @@ export function useSessionKeys(network: Network, account: Hex) {
     [records, persist],
   );
 
+  /**
+   * Imports session-key history from the registry's onchain event log. Only
+   * ever adds signers this browser doesn't already know about — an existing
+   * local record always wins over the synced version of the same address.
+   */
+  const syncFromChain = useCallback(async (): Promise<SyncFromChainResult> => {
+    const events = await fetchAuthorizationEvents(network, registry, account);
+    const { records: synced, skippedUnrecognized } = foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
+    const { merged, addedCount } = mergeSyncedRecords(records, synced);
+    if (addedCount > 0) {
+      persist(merged);
+      refetchStatuses();
+    }
+    return { addedCount, skippedUnrecognized };
+  }, [network, account, registry, records, persist, refetchStatuses]);
+
   return {
     keys,
     addKey,
     removeKey,
+    syncFromChain,
     refetchStatuses,
     registry,
   };
