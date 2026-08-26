@@ -326,6 +326,14 @@ export const createRateChangeQueue = (
   return new RateChangeQueueWithIsNew(rateChangeQueue, isNew);
 };
 
+export function latestRateChangeEpoch(rateChanges: RateChangeQueue[], fallback: GraphBN): GraphBN {
+  let latest = fallback;
+  for (let i = 0; i < rateChanges.length; i++) {
+    if (rateChanges[i].untilEpoch.gt(latest)) latest = rateChanges[i].untilEpoch;
+  }
+  return latest;
+}
+
 export function updateOperatorLockup(
   operatorApproval: OperatorApproval | null,
   oldLockup: GraphBN,
