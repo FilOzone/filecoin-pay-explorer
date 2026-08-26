@@ -10,8 +10,9 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Wallet } from "lucide-react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import DepositTokenPicker, {
@@ -19,6 +20,14 @@ import DepositTokenPicker, {
   type PickerToken,
   type TokenPickerMode,
 } from "@/components/UserConsole/DepositTokenPicker";
+import { FundingRunwaySlider, RunwayCard } from "@/components/UserConsole/FundsSection/components/RunwayCard";
+import {
+  calculateFundingRunway,
+  calculateProjectedFundingRunway,
+  defaultTopUpSuggestion,
+  ONE_YEAR_EPOCHS,
+} from "@/components/UserConsole/FundsSection/data/funding-runway";
+import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -75,6 +84,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const [customAddress, setCustomAddress] = useState("");
   const [selectedUserToken, setSelectedUserToken] = useState<UserToken | null>(null);
   const [pickerMode, setPickerMode] = useState<TokenPickerMode>("collapsed");
+  const didPrefillAmount = useRef(false);
   /**
    * Covers the whole of `handleDeposit`, which `isExecuting` does not: that only
    * turns true once `execute` reaches `writeContract`, leaving the permit
@@ -122,6 +132,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setSelectedUserToken(null);
     setPickerMode("collapsed");
     setIsSubmitting(false);
+    didPrefillAmount.current = false;
   }, [open]);
 
   const trimmedCustomAddress = customAddress.trim();
@@ -215,6 +226,13 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     },
   });
 
+  const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
+    enabled: open && isUsdfcDeposit && Boolean(userAddress) && synapse?.chain.id === constants.chain.id,
+    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
+    queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
+  });
+
   // Amounts are denominated in the token that was on screen when they were
   // typed, so any change of token clears the field rather than reinterpreting it.
   const handleSelectToken = (userToken: UserToken) => {
@@ -222,12 +240,14 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setCustomAddress("");
     setAmount("");
     setPickerMode("collapsed");
+    didPrefillAmount.current = false;
   };
 
   const handleModeChange = (mode: TokenPickerMode) => {
     if (mode === "custom") {
       setSelectedUserToken(null);
       setAmount("");
+      didPrefillAmount.current = false;
     }
 
     setPickerMode(mode);
@@ -236,6 +256,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const handleCustomAddressChange = (value: string) => {
     setCustomAddress(value);
     setAmount("");
+    didPrefillAmount.current = false;
   };
 
   /**
@@ -347,6 +368,31 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
 
   const canDeposit = Boolean(currentToken) && Boolean(amount) && !isBusy;
 
+  const runwayCurrent =
+    isUsdfcDeposit && accountSummary
+      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
+      : null;
+  const usdfcDepositAmount = isUsdfcDeposit ? parseTopUpAmount(amount) : null;
+  const runwayProjected =
+    accountSummary && runwayCurrent && usdfcDepositAmount !== null
+      ? calculateProjectedFundingRunway(
+          accountSummary,
+          usdfcDepositAmount,
+          ONE_YEAR_EPOCHS,
+          constants.chain.genesisTimestamp,
+        )
+      : null;
+  const defaultSuggestion =
+    isUsdfcDeposit && accountSummary && balance !== undefined
+      ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp, balance)
+      : "";
+
+  useEffect(() => {
+    if (!open || !defaultSuggestion || didPrefillAmount.current) return;
+    didPrefillAmount.current = true;
+    setAmount((previous) => (previous === "" ? defaultSuggestion : previous));
+  }, [defaultSuggestion, open]);
+
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
@@ -436,6 +482,24 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
               </p>
             </div>
           ) : null}
+
+          {isUsdfcDeposit && accountSummary && runwayCurrent ? (
+            <>
+              <FundingRunwaySlider
+                accountSummary={accountSummary}
+                amount={amount}
+                disabled={isBusy}
+                genesisTimestamp={constants.chain.genesisTimestamp}
+                maxAmount={balance}
+                onSelect={setAmount}
+              />
+              <RunwayCard current={runwayCurrent} projected={runwayProjected}>
+                <p className='text-muted-foreground'>Target deposit: {amount || "—"} USDFC.</p>
+              </RunwayCard>
+            </>
+          ) : isUsdfcDeposit && isAccountSummaryLoading ? (
+            <p className='text-sm text-muted-foreground'>Loading funding runway…</p>
+          ) : null}
         </div>
 
         <DialogFooter>
@@ -444,8 +508,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           </Button>
           <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
             {isBusy ? (
-              <span className='flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
+              <span className='inline-flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
                 Processing...
               </span>
             ) : (

@@ -1,13 +1,14 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConnection } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
-import { getNetworkFromChainId } from "@/utils/network";
 import {
+  AddFundsDialog,
+  type AddFundsMethod,
   FundsEmptyState,
   FundsErrorState,
   FundsLoadingState,
@@ -18,6 +19,8 @@ import {
 
 type FundsSectionProps = {
   account: Account;
+  network: Network;
+  onGuidedTopUp?: () => void;
 };
 
 /**
@@ -40,7 +43,8 @@ const findDefaultToken = (userTokens: UserToken[], usdfcAddress: string): UserTo
   return usdfc ?? userTokens[0];
 };
 
-export const FundsSection = ({ account }: FundsSectionProps) => {
+export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionProps) => {
+  const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
 
@@ -50,9 +54,7 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { chainId } = useConnection();
   const { constants } = useSynapse();
-  const walletNetwork = getNetworkFromChainId(chainId);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -64,7 +66,7 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
 
   // Fetch up to 100 tokens for this account (single page, no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
-    networkOverride: walletNetwork,
+    networkOverride: network,
     pageSize: TOKEN_SELECTOR_PAGE_SIZE,
   });
 
@@ -84,10 +86,32 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
   // updates cannot change a part-filled form's target. Keep the snapshots after
   // close so WithdrawDialog remains mounted while tracking its receipt and both
   // dialogs retain a consistent lifecycle. The next open replaces the snapshot.
-  const handleOpenDeposit = useCallback(() => {
+  const openDirectDeposit = useCallback(() => {
     setDepositToken(selectedToken);
     setDepositDialogOpen(true);
   }, [selectedToken]);
+
+  const canUseGuidedTopUp = network === "mainnet" && Boolean(onGuidedTopUp);
+
+  const handleOpenDeposit = useCallback(() => {
+    if (canUseGuidedTopUp) {
+      setAddFundsOpen(true);
+      return;
+    }
+    openDirectDeposit();
+  }, [canUseGuidedTopUp, openDirectDeposit]);
+
+  const handleChooseMethod = useCallback(
+    (method: AddFundsMethod) => {
+      setAddFundsOpen(false);
+      if (method === "deposit") {
+        openDirectDeposit();
+        return;
+      }
+      onGuidedTopUp?.();
+    },
+    [onGuidedTopUp, openDirectDeposit],
+  );
 
   const handleOpenWithdraw = useCallback(() => {
     if (!selectedToken) return;
@@ -123,6 +147,15 @@ export const FundsSection = ({ account }: FundsSectionProps) => {
   return (
     <>
       {renderSection()}
+
+      {canUseGuidedTopUp ? (
+        <AddFundsDialog
+          onOpenChange={setAddFundsOpen}
+          onSelect={handleChooseMethod}
+          open={addFundsOpen}
+          squidAvailable
+        />
+      ) : null}
 
       {/* A null token opens the picker expanded, the first-deposit path for an empty account. */}
       <DepositDialog

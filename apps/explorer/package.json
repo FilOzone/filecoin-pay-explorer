@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "biome check --write",
     "format": "biome format --write",
-    "test": "vitest run"
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@filecoin-foundation/ui-filecoin": "^0.9.0",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
+    "@filecoin-project/squid-evm-funding": "^0.3.3",
     "@filoz/synapse-sdk": "^0.41.0",
     "@phosphor-icons/react": "^2.1.10",
     "@rainbow-me/rainbowkit": "^2.2.11",
@@ -38,7 +40,9 @@
     "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/react-test-renderer": "19.1.0",
     "frontmatter-markdown-loader": "^3.7.0",
+    "react-test-renderer": "19.2.6",
     "tailwindcss": "^4",
     "typescript": "^6",
     "vitest": "^4.1.0"
