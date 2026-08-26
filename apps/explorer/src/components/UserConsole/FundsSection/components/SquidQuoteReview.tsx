@@ -29,6 +29,14 @@ import {
   isBridgeNativeFee,
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
+import {
+  hasUnknownSourceTokenBalances,
+  readSourceTokenBalance,
+  readSourceTokenBalances,
+  sourceTokenBalance,
+  sourceTokenBalancesQueryKey,
+  visibleSourceTokens,
+} from "../data/source-token-balances";
 import type { SquidAcquisition } from "../data/squid-acquisition";
 import { runSquidAcquisition } from "../data/squid-acquisition-flow";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
@@ -69,14 +77,6 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   return "No supported tokens on this network.";
 }
 
-export function nativeTokenFirst<T extends { token: string }>(tokens: readonly T[]): T[] {
-  const nativeAddress = NATIVE_TOKEN_ADDRESS.toLowerCase();
-  return [...tokens].sort(
-    (left, right) =>
-      Number(right.token.toLowerCase() === nativeAddress) - Number(left.token.toLowerCase() === nativeAddress),
-  );
-}
-
 export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
   return sourceChainId === mainnet.id
     ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
@@ -96,12 +96,15 @@ export function SquidQuoteReview({
   const { address, chainId } = useAccount();
   const [sourceChainId, setSourceChainId] = useState("");
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
+  const [showAllSourceTokensFor, setShowAllSourceTokensFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const latestAddress = useRef(address);
   latestAddress.current = address;
   const [debouncedDestinationAmount] = useDebounce(destinationAmount, QUOTE_DEBOUNCE_MS);
   const sourceChain = Number(sourceChainId);
+  const sourceTokenScope = `${address ?? ""}:${sourceChain}`;
+  const showAllSourceTokens = showAllSourceTokensFor === sourceTokenScope;
   const sourcePublicClient = usePublicClient({ chainId: sourceChain || undefined });
   // Follow the connected chain so switching networks refreshes a wallet-client
   // query that may previously have failed because the selected chain differed.
@@ -128,36 +131,61 @@ export function SquidQuoteReview({
   });
   const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
   const selectableTokens = excludeDestinationUsdfc(tokens, sourceChain);
-  const sourceTokenOptions: readonly SearchableOption[] = nativeTokenFirst(selectableTokens).map((token) => ({
+  const {
+    data: sourceTokenBalances,
+    isError: isTokenBalanceError,
+    isFetching: isLoadingTokenBalances,
+    refetch: refetchTokenBalances,
+  } = useQuery({
+    enabled: !!address && !!sourcePublicClient && selectableTokens.length > 0,
+    queryFn: () => {
+      if (!address || !sourcePublicClient) throw new Error("Source network client is unavailable");
+      return readSourceTokenBalances(sourcePublicClient, address, selectableTokens);
+    },
+    queryKey: sourceTokenBalancesQueryKey(
+      address ?? "0x0000000000000000000000000000000000000000",
+      sourceChain,
+      selectableTokens,
+    ),
+  });
+  const hasUnknownTokenBalances = sourceTokenBalances
+    ? hasUnknownSourceTokenBalances(selectableTokens, sourceTokenBalances)
+    : false;
+  const canFilterWalletTokens = !!sourceTokenBalances && !hasUnknownTokenBalances && !isTokenBalanceError;
+  const visibleTokens = visibleSourceTokens(
+    selectableTokens,
+    isTokenBalanceError ? undefined : sourceTokenBalances,
+    showAllSourceTokens,
+    sourceTokenAddress,
+  );
+  const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => ({
     aliases: [token.symbol, token.token],
     label: `${token.symbol} (${formatAddress(token.token)})`,
     value: token.token,
   }));
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
+  const inventoriedSourceBalance = source ? sourceTokenBalance(sourceTokenBalances, source.token) : undefined;
+  const hasInventoriedSourceBalance = typeof inventoriedSourceBalance === "bigint";
   const isBusy = acquisitionState !== "idle";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
   const isQuoteDebouncing = destinationAmount !== debouncedDestinationAmount;
+  const readSelectedBalance = () => {
+    if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
+    return readSourceTokenBalance(sourcePublicClient, address, source);
+  };
   const {
-    data: sourceBalance,
-    isError: isSourceBalanceError,
-    isFetching: isLoadingSourceBalance,
+    data: separatelyLoadedSourceBalance,
+    isError: isSeparateSourceBalanceError,
+    isFetching: isLoadingSeparateSourceBalance,
     refetch: refetchSourceBalance,
   } = useQuery({
-    enabled: !!address && !!source && !!sourcePublicClient,
-    queryFn: async () => {
-      if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
-      if (source.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()) {
-        return sourcePublicClient.getBalance({ address });
-      }
-      return sourcePublicClient.readContract({
-        abi: erc20Abi,
-        address: source.token,
-        args: [address],
-        functionName: "balanceOf",
-      });
-    },
+    enabled: !!address && !!source && !!sourcePublicClient && !hasInventoriedSourceBalance,
+    queryFn: readSelectedBalance,
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
   });
+  const sourceBalance = hasInventoriedSourceBalance ? inventoriedSourceBalance : separatelyLoadedSourceBalance;
+  const isSourceBalanceError = !hasInventoriedSourceBalance && isSeparateSourceBalanceError;
+  const isLoadingSourceBalance = !hasInventoriedSourceBalance && isLoadingSeparateSourceBalance;
   const {
     data: separateNativeBalance,
     isError: isNativeBalanceError,
@@ -349,6 +377,15 @@ export function SquidQuoteReview({
     }
   };
 
+  const refetchSelectedBalance = async () => {
+    if (!source) return { data: undefined, isError: true };
+    try {
+      return { data: await readSelectedBalance(), isError: false };
+    } catch {
+      return { data: undefined, isError: true };
+    }
+  };
+
   const acquire = async () => {
     setError(null);
     if (acquisitionState === "blocked")
@@ -362,7 +399,7 @@ export function SquidQuoteReview({
       return setError("Wallet or network client is unavailable.");
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
-    const latestBalanceResult = await refetchSourceBalance();
+    const latestBalanceResult = await refetchSelectedBalance();
     if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
       return setError("Could not refresh your source-token balance. Try again before confirming.");
     }
@@ -490,6 +527,7 @@ export function SquidQuoteReview({
             if (value !== sourceChainId) {
               setSourceChainId(value);
               setSourceTokenAddress("");
+              setShowAllSourceTokensFor(null);
             }
           }}
           value={sourceChainId}
@@ -512,7 +550,20 @@ export function SquidQuoteReview({
       </div>
 
       <div className='grid gap-1'>
-        <Label htmlFor='squid-source-token'>Source token</Label>
+        <div className='flex items-center justify-between gap-2'>
+          <Label htmlFor='squid-source-token'>Source token</Label>
+          {canFilterWalletTokens && (
+            <Button
+              disabled={isBusy}
+              onClick={() => setShowAllSourceTokensFor(showAllSourceTokens ? null : sourceTokenScope)}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              {showAllSourceTokens ? "Show wallet tokens" : "Show all tokens"}
+            </Button>
+          )}
+        </div>
         <SearchableSelect
           aria-describedby={source && !isSourceBalanceError ? "squid-source-token-balance" : undefined}
           disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
@@ -527,6 +578,30 @@ export function SquidQuoteReview({
           placeholder={isLoadingTokens ? "Loading tokens…" : "Search tokens"}
           value={sourceTokenAddress}
         />
+        {address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances && (
+          <p aria-live='polite' className='text-xs text-muted-foreground' role='status'>
+            Checking this wallet for supported token balances. All tokens remain searchable while this loads.
+          </p>
+        )}
+        {canFilterWalletTokens && !showAllSourceTokens && visibleTokens.length === 0 && (
+          <p className='text-xs text-muted-foreground'>
+            No supported tokens with a balance. Show all tokens to browse.
+          </p>
+        )}
+        {(isTokenBalanceError || hasUnknownTokenBalances) && (
+          <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground' role='status'>
+            <span>Some wallet balances could not be checked. The complete token catalog is shown.</span>
+            <Button
+              disabled={isLoadingTokenBalances}
+              onClick={() => void refetchTokenBalances()}
+              size='compact'
+              type='button'
+              variant='tertiary'
+            >
+              {isLoadingTokenBalances ? "Retrying…" : "Retry balances"}
+            </Button>
+          </div>
+        )}
         {sourceChainId !== "" && !quotesUnavailable && tokens.length === 0 && !isLoadingTokens && !tokenLoadFailed && (
           <p className='text-sm text-muted-foreground'>
             {sourceTokenCatalogMessage(!quotesUnavailable, isTokenLoadError)}
