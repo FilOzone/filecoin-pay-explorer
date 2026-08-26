@@ -8,4 +8,13 @@ export const knownAddresses: Record<string, string> = {
   "0x8408502033c418e1bbc97ce9ac48e5528f371a9f": "FWSS",
   "0xa53bbc04a0a2b7a7e62a78a24dd6c9280f611b97": "Qave",
   "0xf88c59cf5ba1e904079079c8ce03148490cb09f8": "Filosign",
+  // FIL One (Filecoin Foundation's storage subsidiary) pays its storage vendor
+  // over Filecoin Pay under a reserved-capacity MSA.
+  // Operator: named service contract (implements IFilecoinServiceMetadata,
+  // Sourcify-verified; name() returns "FIL One Storage").
+  "0x9d4f07b948e87941a4bf4ab335d7a7d854843d75": "FIL One Storage",
+  // Validator: clamps settlement to owner-signed delivery attestations.
+  "0x4f9e434c5842d16f4f9ed92213ba4eb3a6ffc383": "FIL One Delivery Validator",
+  // Payer: FIL One's operating wallet (payer on FIL One Storage rails).
+  "0x5b27dbc6efefbb5ba8106fb19433048d60d6878f": "FIL One",
 };

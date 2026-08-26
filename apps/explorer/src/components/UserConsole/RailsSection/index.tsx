@@ -7,12 +7,11 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
-import { useMemo, useState } from "react";
-import { useChainId } from "wagmi";
+import { useCallback, useMemo, useState } from "react";
 import { getChain } from "@/constants/chains";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
-import { getNetworkFromChainId } from "@/utils/network";
+import type { Network } from "@/types";
 import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
 import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
@@ -21,26 +20,21 @@ import type { RailTableRow } from "./types";
 
 interface RailsSectionProps {
   account: Account;
+  network: Network;
   userAddress: string;
 }
 
-export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress }) => {
+export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, userAddress }) => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
+  const [currentEpoch, setCurrentEpoch] = useState<bigint>();
 
-  const chainId = useChainId();
-  const { chain, walletNetwork } = useMemo(() => {
-    const walletNetwork = getNetworkFromChainId(chainId);
-    return {
-      walletNetwork,
-      chain: getChain(walletNetwork),
-    };
-  }, [chainId]);
+  const chain = useMemo(() => getChain(network), [network]);
 
-  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: walletNetwork });
+  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: network });
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,
@@ -48,10 +42,11 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
-  const handleSettle = (rail: Rail) => {
+  const handleSettle = useCallback((rail: Rail, epoch: bigint | undefined) => {
     setSelectedRail(rail);
+    setCurrentEpoch(epoch);
     setSettleDialogOpen(true);
-  };
+  }, []);
 
   const handleSearch = (query: string, filterType: SearchFilterType) => {
     setSearchQuery(query.toLowerCase());
@@ -84,12 +79,11 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
     });
   }, [data, searchQuery, searchFilter]);
 
-  // Prepare table data with userAddress, settlement state, and isPayer calculation
+  // Prepare table data with settlement state and the user's role.
   const tableData = useMemo<RailTableRow[]>(
     () =>
       filteredRails.map((rail) => ({
         ...rail,
-        userAddress,
         isPayer: rail.payer.address.toLowerCase() === userAddress.toLowerCase(),
         isSettling: settlements.has(rail.railId.toString()),
       })),
@@ -125,7 +119,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
           <RailsEmptyNoResults searchFilter={searchFilter} />
         ) : (
           <>
-            <SettleRailProvider onSettle={handleSettle}>
+            <SettleRailProvider chainId={chain.id} onSettle={handleSettle}>
               <RailsTable data={tableData} />
             </SettleRailProvider>
 
@@ -173,6 +167,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, userAddress
         <SettleRailDialog
           rail={selectedRail}
           userAddress={userAddress}
+          currentEpoch={currentEpoch}
           open={settleDialogOpen}
           onOpenChange={setSettleDialogOpen}
           isSettling={isSettling(selectedRail.railId.toString())}

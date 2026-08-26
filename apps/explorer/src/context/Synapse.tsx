@@ -21,12 +21,12 @@ export const SynapseProvider = ({ children }: { children: React.ReactNode }) => 
   }, [chainId]);
 
   useEffect(() => {
-    if (!client) {
+    if (!client || !supportedChains.some((chain) => chain.id === chainId)) {
       setSynapse(null);
       return;
     }
     setSynapse(new Synapse({ client: asClient(client), source: "filecoin-pay-explorer" }));
-  }, [client]);
+  }, [chainId, client]);
 
   return (
     <SynapseContext.Provider

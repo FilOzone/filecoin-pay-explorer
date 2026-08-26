@@ -1,29 +1,60 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
-import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConnection } from "wagmi";
-import { AlertsStatus } from "@/components/UserConsole/AlertsStatus";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
+import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
-import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
-import { FundsEmptyState, FundsErrorState, FundsLoadingState, FundsTable } from "./components";
+import {
+  AddFundsDialog,
+  type AddFundsMethod,
+  FundsEmptyState,
+  FundsErrorState,
+  FundsLoadingState,
+  FundsOverview,
+  FundsSectionLayout,
+  TokenSelect,
+} from "./components";
 
-interface FundsSectionProps {
+type FundsSectionProps = {
   account: Account;
-  subscribed: boolean;
-}
+  network: Network;
+  onGuidedTopUp?: () => void;
+};
 
-export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed }) => {
+/**
+ * Temporary bounded fetch, not an exhaustive one. The console shows one token at
+ * a time but must be able to select any of them, and the subgraph orders by
+ * balance descending, so the default page of ten would drop a zero-balance USDFC
+ * off the end and silently default the overview to the wrong token. A wider
+ * single page makes that unreachable in practice; an account holding more than
+ * this many tokens still truncates. Replace with paging driven by
+ * `account.totalTokens` when that becomes realistic.
+ */
+const TOKEN_SELECTOR_PAGE_SIZE = 100;
+
+/**
+ * Picks the token the overview opens on: USDFC matched by contract address, so a
+ * look-alike symbol can't win, falling back to the first token on the account.
+ */
+const findDefaultToken = (userTokens: UserToken[], usdfcAddress: string): UserToken => {
+  const usdfc = userTokens.find((userToken) => userToken.token.id.toLowerCase() === usdfcAddress.toLowerCase());
+  return usdfc ?? userTokens[0];
+};
+
+export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionProps) => {
+  const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [depositDialogOpen, setDepositDialogOpen] = useState(false);
+  const [depositToken, setDepositToken] = useState<UserToken | null>(null);
+
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
+  const [withdrawToken, setWithdrawToken] = useState<UserToken | null>(null);
+
+  const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { chainId } = useConnection();
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+  const { constants } = useSynapse();
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -33,74 +64,111 @@ export const FundsSection: React.FC<FundsSectionProps> = ({ account, subscribed 
     return () => window.clearInterval(intervalId);
   }, []);
 
-  // Fetch all tokens for this account (no pagination for console view)
-  const { data, isLoading, isError } = useAccountTokens(account.id, 1, { networkOverride: walletNetwork });
+  // Fetch up to 100 tokens for this account (single page, no pagination for console view)
+  const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
+    networkOverride: network,
+    pageSize: TOKEN_SELECTOR_PAGE_SIZE,
+  });
 
-  const handleDeposit = useCallback((userToken: UserToken) => {
-    setSelectedToken(userToken);
+  const userTokens = data?.userTokens;
+
+  /**
+   * Selection is held as an id and resolved against the current list, so a
+   * refetch can't leave a stale token object on screen.
+   */
+  const selectedToken = useMemo(() => {
+    if (!userTokens || userTokens.length === 0) return null;
+    const selected = userTokens.find((userToken) => userToken.id === selectedTokenId);
+    return selected ?? findDefaultToken(userTokens, constants.contracts.usdfc);
+  }, [userTokens, selectedTokenId, constants.contracts.usdfc]);
+
+  // Snapshot each transaction token when its dialog opens so query and selector
+  // updates cannot change a part-filled form's target. Keep the snapshots after
+  // close so WithdrawDialog remains mounted while tracking its receipt and both
+  // dialogs retain a consistent lifecycle. The next open replaces the snapshot.
+  const openDirectDeposit = useCallback(() => {
+    setDepositToken(selectedToken);
     setDepositDialogOpen(true);
-  }, []);
+  }, [selectedToken]);
 
-  const handleWithdraw = useCallback((userToken: UserToken) => {
-    setSelectedToken(userToken);
-    setWithdrawDialogOpen(true);
-  }, []);
+  const canUseGuidedTopUp = network === "mainnet" && Boolean(onGuidedTopUp);
 
   const handleOpenDeposit = useCallback(() => {
-    setDepositDialogOpen(true);
-  }, []);
+    if (canUseGuidedTopUp) {
+      setAddFundsOpen(true);
+      return;
+    }
+    openDirectDeposit();
+  }, [canUseGuidedTopUp, openDirectDeposit]);
 
-  // Prepare data with action handlers
-  const tableData = useMemo(
-    () =>
-      data?.userTokens.map((token) => ({
-        ...token,
-        currentTimestamp,
-        onDeposit: handleDeposit,
-        onWithdraw: handleWithdraw,
-      })) || [],
-    [currentTimestamp, data?.userTokens, handleDeposit, handleWithdraw],
+  const handleChooseMethod = useCallback(
+    (method: AddFundsMethod) => {
+      setAddFundsOpen(false);
+      if (method === "deposit") {
+        openDirectDeposit();
+        return;
+      }
+      onGuidedTopUp?.();
+    },
+    [onGuidedTopUp, openDirectDeposit],
   );
 
-  if (isLoading) {
-    return <FundsLoadingState onDeposit={handleOpenDeposit} />;
-  }
+  const handleOpenWithdraw = useCallback(() => {
+    if (!selectedToken) return;
 
-  if (isError) {
-    return <FundsErrorState onDeposit={handleOpenDeposit} />;
-  }
+    setWithdrawToken(selectedToken);
+    setWithdrawDialogOpen(true);
+  }, [selectedToken]);
 
-  if (!data || data.userTokens.length === 0) {
-    return <FundsEmptyState onDeposit={handleOpenDeposit} />;
-  }
+  const renderSection = () => {
+    if (isLoading) {
+      return <FundsLoadingState onDeposit={handleOpenDeposit} />;
+    }
+
+    if (isError) {
+      return <FundsErrorState onDeposit={handleOpenDeposit} />;
+    }
+
+    if (!selectedToken || !userTokens) {
+      return <FundsEmptyState onDeposit={handleOpenDeposit} />;
+    }
+
+    return (
+      <FundsSectionLayout
+        handleOpenDeposit={handleOpenDeposit}
+        handleOpenWithdraw={handleOpenWithdraw}
+        tokenSelector={<TokenSelect tokens={userTokens} selectedToken={selectedToken} onSelect={setSelectedTokenId} />}
+      >
+        <FundsOverview userToken={selectedToken} currentTimestamp={currentTimestamp} />
+      </FundsSectionLayout>
+    );
+  };
 
   return (
     <>
-      <div className='flex flex-col gap-4'>
-        <div className='flex items-center justify-between'>
-          <h3 className='text-2xl font-medium'>Funds</h3>
-          {isNotificationsEligible && <AlertsStatus subscribed={subscribed} />}
-        </div>
+      {renderSection()}
 
-        <FundsTable data={tableData} />
+      {canUseGuidedTopUp ? (
+        <AddFundsDialog
+          onOpenChange={setAddFundsOpen}
+          onSelect={handleChooseMethod}
+          open={addFundsOpen}
+          squidAvailable
+        />
+      ) : null}
 
-        <button
-          type='button'
-          onClick={handleOpenDeposit}
-          title='Deposit any supported token to your account'
-          className='flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-sm text-muted-foreground/60 transition-colors hover:border-muted-foreground/40 hover:text-muted-foreground'
-        >
-          <Plus className='size-3.5' />
-          Add token
-        </button>
-      </div>
+      {/* A null token opens the picker expanded, the first-deposit path for an empty account. */}
+      <DepositDialog
+        depositToken={depositToken}
+        tokens={userTokens ?? []}
+        open={depositDialogOpen}
+        onOpenChange={setDepositDialogOpen}
+      />
 
-      {/* Deposit Dialogs */}
-      <DepositDialog userToken={selectedToken} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
-
-      {selectedToken && (
-        <WithdrawDialog userToken={selectedToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
-      )}
+      {/* Mounted only once a token is captured, so WithdrawDialog keeps a non-nullable prop. */}
+      {withdrawToken ? (
+        <WithdrawDialog userToken={withdrawToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
+      ) : null}
     </>
   );
 };

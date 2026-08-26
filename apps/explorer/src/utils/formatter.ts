@@ -29,6 +29,26 @@ export function formatToken(
   return `${formatCompactNumber(unitValue, decimals)} ${symbol}`;
 }
 
+/**
+ * Formats a token amount by truncating to `decimals` fractional digits, computed exactly via
+ * BigInt division. Unlike `formatToken`, this never rounds up through a float `Number()`
+ * conversion, so the display can't show more than the underlying amount actually is.
+ */
+export function formatTokenTruncated(
+  value: bigint,
+  tokenDecimals: number | bigint,
+  symbol: string = "",
+  decimals: number = 2,
+): string {
+  const negative = value < 0n;
+  const absValue = negative ? -value : value;
+  const divisor = 10n ** BigInt(tokenDecimals);
+  const whole = absValue / divisor;
+  const fraction = (absValue % divisor).toString().padStart(Number(tokenDecimals), "0").slice(0, decimals);
+  const amount = `${whole}.${fraction.padEnd(decimals, "0")}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+  return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
+}
+
 export const formatFIL = (attoFil: string | bigint) => {
   if (!attoFil || attoFil === "0") return "0 FIL";
 
@@ -116,13 +136,22 @@ export const formatFutureTimestamp = (
     return `~${diffYears} years`;
   }
 
-  if (diffDays > 1) {
+  // Inclusive bounds: a full day out is a date, a full hour out is an hour. The
+  // exclusive form left each unit's first value to the branch below it, so a day
+  // away read "31h 12m" beside a "in 1 day" detail line, and 90 minutes read
+  // "90m" — the more precise reading, but not the one the caller asked for.
+  if (diffDays >= 1) {
+    // The year is only worth its width when it isn't the current one: "Aug 31,
+    // 2026" overflows a narrow card, and on a phone that clipped to "Aug 31,…"
+    // — the same information the year was there to add, minus the day.
+    const isSameYear = date.getFullYear() === new Date(now).getFullYear();
+
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: "numeric",
+      ...(isSameYear ? {} : { year: "numeric" }),
     });
-  } else if (diffHours > 1) {
+  } else if (diffHours >= 1) {
     return `${diffHours}h ${diffMinutes % 60}m`;
   } else {
     return `${diffMinutes}m`;
