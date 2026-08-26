@@ -4,7 +4,8 @@
  * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol`;
  * the unit tests recompute them from the preimages to guard against drift.
  *
- * NOTE: this module stays free of `@/` imports so `node --test` can run it directly.
+ * NOTE: this module stays free of `@/` imports and side effects so its logic
+ \* stays unit-testable in isolation.
  */
 
 export type ScopeId = "createDataSet" | "addPieces" | "schedulePieceRemovals" | "terminateService";
@@ -82,6 +83,48 @@ export interface SessionKeyRecord {
   scopes: ScopeId[];
   createdAt: number;
   txHash?: string;
+}
+
+/**
+ * Guards against forged or drifted localStorage: one malformed record must
+ * never crash the page that revokes keys. Unknown scope ids are dropped
+ * (SCOPE_BY_ID lookups on them would throw); records without a valid
+ * address or any known scope are rejected entirely.
+ */
+export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
+  if (!Array.isArray(value)) return [];
+  const out: SessionKeyRecord[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const r = item as Record<string, unknown>;
+    if (typeof r.sessionKeyPublic !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(r.sessionKeyPublic)) continue;
+    if (!Array.isArray(r.scopes)) continue;
+    const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && s in SCOPE_BY_ID);
+    if (scopes.length === 0) continue;
+    // Rebuilds records field-by-field: fields not listed here are DROPPED on
+    // every load, so a new SessionKeyRecord field must be added here too.
+    out.push({
+      name: typeof r.name === "string" ? r.name : "",
+      sessionKeyPublic: r.sessionKeyPublic as `0x${string}`,
+      scopes,
+      createdAt: typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : 0,
+      ...(typeof r.txHash === "string" ? { txHash: r.txHash } : {}),
+    });
+  }
+  return out;
+}
+
+/**
+ * Key names reach trusted chrome (toast titles, dialog titles, the download
+ * filename) and are stored onchain as the public `origin` field. Cap the
+ * length and strip control + bidi-override codepoints so a crafted name
+ * can't spoof UI text or disguise the downloaded file's extension.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping controls is the point
+const UNSAFE_NAME_CHARS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+
+export function normalizeKeyName(name: string): string {
+  return name.replace(UNSAFE_NAME_CHARS, "").trim().slice(0, 64);
 }
 
 /**

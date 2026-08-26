@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { keccak256, toBytes } from "viem";
-import { buildEnvSnippet, deriveKeyStatus, EXPIRY_PRESETS, isScopeActive, SESSION_KEY_SCOPES } from "./sessionKeys.ts";
+import { describe, it } from "vitest";
+import {
+  buildEnvSnippet,
+  deriveKeyStatus,
+  EXPIRY_PRESETS,
+  isScopeActive,
+  normalizeKeyName,
+  SESSION_KEY_SCOPES,
+  sanitizeRecords,
+} from "./sessionKeys.ts";
 
 const CREATE_PREIMAGE =
   "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)";
@@ -89,5 +97,47 @@ describe("env snippet", () => {
       if (trimmed === "" || trimmed.startsWith("#")) continue;
       assert.match(trimmed, /^[A-Z_]+=\S+$/);
     }
+  });
+});
+
+describe("sanitizeRecords", () => {
+  const good = { name: "ci", sessionKeyPublic: SIGNER, scopes: ["addPieces"], createdAt: 1 };
+
+  it("passes well-formed records through unchanged", () => {
+    assert.deepEqual(sanitizeRecords([good]), [good]);
+  });
+
+  it("returns [] for non-array payloads", () => {
+    assert.deepEqual(sanitizeRecords({ length: 1 }), []);
+    assert.deepEqual(sanitizeRecords("[]"), []);
+    assert.deepEqual(sanitizeRecords(null), []);
+  });
+
+  it("drops records with a malformed address or no scope array", () => {
+    assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: "0xnot-an-address" }]), []);
+    assert.deepEqual(sanitizeRecords([{ ...good, scopes: "addPieces" }]), []);
+  });
+
+  it("strips unknown scope ids and drops records left with none", () => {
+    assert.deepEqual(sanitizeRecords([{ ...good, scopes: ["evil", "addPieces"] }])[0]?.scopes, ["addPieces"]);
+    assert.deepEqual(sanitizeRecords([{ ...good, scopes: ["evil"] }]), []);
+  });
+
+  it("coerces missing name/createdAt instead of crashing", () => {
+    const [rec] = sanitizeRecords([{ sessionKeyPublic: SIGNER, scopes: ["addPieces"] }]);
+    assert.equal(rec?.name, "");
+    assert.equal(rec?.createdAt, 0);
+  });
+});
+
+describe("normalizeKeyName", () => {
+  it("strips control and bidi-override characters", () => {
+    assert.equal(normalizeKeyName("ci\u202Evne.yek"), "civne.yek");
+    assert.equal(normalizeKeyName("a\u0000b\nc\u200F"), "abc");
+  });
+
+  it("trims and caps at 64 characters", () => {
+    assert.equal(normalizeKeyName("  ci  "), "ci");
+    assert.equal(normalizeKeyName("x".repeat(80)).length, 64);
   });
 });

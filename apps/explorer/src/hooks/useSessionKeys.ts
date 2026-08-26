@@ -11,6 +11,7 @@ import {
   type ScopeId,
   type SessionKeyRecord,
   type SessionKeyStatus,
+  sanitizeRecords,
 } from "@/utils/sessionKeys";
 
 export interface SessionKeyWithStatus extends SessionKeyRecord {
@@ -28,7 +29,9 @@ function loadRecords(network: Network, account: Hex): SessionKeyRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(storageKey(network, account));
-    return raw ? (JSON.parse(raw) as SessionKeyRecord[]) : [];
+    // sanitizeRecords: localStorage is same-origin-writable and schema-drifts
+    // across releases; a malformed record must never crash the revoke page.
+    return raw ? sanitizeRecords(JSON.parse(raw)) : [];
   } catch {
     return [];
   }
