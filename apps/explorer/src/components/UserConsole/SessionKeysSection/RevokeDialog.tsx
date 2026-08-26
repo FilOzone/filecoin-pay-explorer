@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Loader2 } from "lucide-react";
+import { useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeyWithStatus } from "@/hooks/useSessionKeys";
@@ -23,27 +24,55 @@ interface RevokeDialogProps {
 
 /**
  * Whole-key revoke: one click, one tx, all granted scopes -> expiry 0.
+ *
+ * In-flight revokes are tracked PER KEY: reopening the dialog for a key
+ * whose revoke is still confirming shows "Revoking…", while other keys get
+ * a clean dialog — several revokes can confirm concurrently, each resolving
+ * its own toast and row refresh.
  */
 export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenChange, registry, onRevoked }) => {
-  const { execute, isExecuting } = useContractTransaction({
+  // Lowercased addresses with a submitted, still-confirming revoke.
+  const [pendingRevokes, setPendingRevokes] = useState<Set<string>>(new Set());
+  // Current dialog target, readable from receipt callbacks that outlive the
+  // submit-time closure (the dialog may have moved to another key since).
+  const targetRef = useRef<string | null>(null);
+  targetRef.current = sessionKey?.sessionKeyPublic.toLowerCase() ?? null;
+
+  const { execute } = useContractTransaction({
     contractAddress: registry.address,
     abi: registry.abi,
-    onSuccess: () => {
-      onRevoked();
-      onOpenChange(false);
-    },
   });
 
+  const revokePending = sessionKey != null && pendingRevokes.has(sessionKey.sessionKeyPublic.toLowerCase());
+
   const handleRevoke = async () => {
-    if (!sessionKey) return;
+    if (!sessionKey || revokePending) return;
+    const key = sessionKey.sessionKeyPublic.toLowerCase();
+    const clearPending = () =>
+      setPendingRevokes((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+
+    setPendingRevokes((prev) => new Set(prev).add(key));
     try {
       await execute({
         functionName: "revoke",
         args: [sessionKey.sessionKeyPublic, sessionKey.scopes.map((id) => SCOPE_BY_ID[id].typehash), sessionKey.name],
         metadata: { type: "revokeSessionKey", keyName: sessionKey.name },
+        onConfirmed: () => {
+          clearPending();
+          onRevoked();
+          // Auto-close only when the dialog still shows the key this receipt
+          // belongs to — never yank a dialog opened for a different key.
+          if (targetRef.current === key) onOpenChange(false);
+        },
+        onReverted: clearPending,
       });
     } catch {
-      // toast already shown by useContractTransaction
+      // wallet rejected / submission failed: nothing onchain, toast already shown
+      clearPending();
     }
   };
 
@@ -77,11 +106,11 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenCh
         <DialogFooter>
           <button
             type='button'
-            disabled={isExecuting}
+            disabled={revokePending}
             onClick={handleRevoke}
             className='rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5'
           >
-            {isExecuting ? (
+            {revokePending ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' /> Revoking…
               </span>
