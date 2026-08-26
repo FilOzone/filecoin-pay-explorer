@@ -13,7 +13,7 @@ import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
-import { pickRevokeTarget, SCOPE_BY_ID } from "@/utils/sessionKeys";
+import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -21,6 +21,9 @@ interface SessionKeysSectionProps {
   network: Network;
   /** Undefined while no wallet is connected; the section then shows a prompt instead of the list. */
   account?: Hex;
+  prefillAddress?: Hex | null;
+  prefillScopes?: ScopeId[] | null;
+  prefillNetwork?: Network | null;
 }
 
 type ConnectedProps = SessionKeysSectionProps & { account: Hex };
@@ -52,7 +55,7 @@ const SOURCE_CODE_URL = "https://github.com/FilOzone/SessionKeyRegistry";
  * dialogs, not routes. List = local inventory (keys created in this browser);
  * status = live chain reads.
  */
-const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
+const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
   if (!account) {
     return (
       <EmptyStateCard
@@ -63,10 +66,10 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
       />
     );
   }
-  return <ConnectedSessionKeys network={network} account={account} />;
+  return <ConnectedSessionKeys account={account} {...rest} />;
 };
 
-const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
+const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes, prefillNetwork }: ConnectedProps) => {
   const { keys, addKey, removeKey, syncFromChain, refetchStatuses, markConfirmed, registry } = useSessionKeys(
     network,
     account,
@@ -94,15 +97,36 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
     .slice()
     .sort((a, b) => b.createdAt - a.createdAt);
 
+  // URL request (?authorize=) guards
+  const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
+  const isNetworkMismatch = prefillAddress != null && prefillNetwork != null && prefillNetwork !== network;
+  const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
+  // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
+  const existingForPrefill = cliPrefill
+    ? keys.find((k) => k.sessionKeyPublic.toLowerCase() === cliPrefill.toLowerCase())
+    : undefined;
+  const existingKeyForPrefill = existingForPrefill
+    ? {
+        name: existingForPrefill.name,
+        expirySec:
+          existingForPrefill.status === "active" && existingForPrefill.maxExpiry > 0n
+            ? existingForPrefill.maxExpiry
+            : null,
+      }
+    : null;
+
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const { addedCount, skippedUnrecognized } = await syncFromChain();
-      if (addedCount === 0 && skippedUnrecognized === 0) {
+      const { addedCount, updatedCount, skippedUnrecognized } = await syncFromChain();
+      if (addedCount === 0 && updatedCount === 0 && skippedUnrecognized === 0) {
         toast.success("Everything already up to date");
       } else {
-        const skippedPart = skippedUnrecognized > 0 ? ` Skipped ${skippedUnrecognized} with unrecognized scopes.` : "";
-        toast.success(`Imported ${addedCount} session key${addedCount === 1 ? "" : "s"}.${skippedPart}`);
+        const parts = [];
+        if (addedCount > 0) parts.push(`Imported ${addedCount} session key${addedCount === 1 ? "" : "s"}.`);
+        if (updatedCount > 0) parts.push(`Updated ${updatedCount} from chain history.`);
+        if (skippedUnrecognized > 0) parts.push(`Skipped ${skippedUnrecognized} with unrecognized scopes.`);
+        toast.success(parts.join(" "));
       }
     } catch (err) {
       toast.error("Sync failed", {
@@ -133,6 +157,47 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
 
   return (
     <div className='flex flex-col gap-4'>
+      {cliPrefill && (
+        <div className='rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start justify-between gap-4 flex-wrap'>
+          <div>
+            <p className='font-semibold'>
+              A link is requesting authorization for <span className='font-mono break-all'>{cliPrefill}</span>
+            </p>
+            <p className='text-xs mt-1'>
+              This page can't verify who sent this link — review before you authorize.
+              {prefillScopes && prefillScopes.length > 0 && (
+                <>
+                  {" "}
+                  Requested scopes: <b>{prefillScopes.map((id) => SCOPE_BY_ID[id].label).join(", ")}</b>.
+                </>
+              )}
+            </p>
+          </div>
+          <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
+            Review &amp; authorize
+          </Button>
+        </div>
+      )}
+      {isSelfAuthRequest && (
+        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+          <p className='font-semibold'>Authorization request ignored: it names your connected wallet address.</p>
+          <p className='text-xs mt-1'>A session key must be a separate keypair, retry with a new address.</p>
+        </div>
+      )}
+      {isNetworkMismatch && !isSelfAuthRequest && (
+        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+          <p className='font-semibold'>
+            This authorization request is for <span className='capitalize'>{prefillNetwork}</span>, but your wallet is
+            connected to <span className='capitalize'>{network}</span>.
+          </p>
+          <p className='text-xs mt-1'>
+            Nothing was added — approving it here would grant the scopes on{" "}
+            <span className='capitalize'>{network}</span> instead. Switch your wallet to{" "}
+            <span className='capitalize'>{prefillNetwork}</span> to review the request.
+          </p>
+        </div>
+      )}
+
       <div className='flex items-start justify-between gap-4 flex-wrap'>
         <div>
           <h3 className='text-2xl font-medium'>Session keys</h3>
@@ -206,83 +271,115 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                 </tr>
               </thead>
               <tbody>
-                {visibleKeys.map((key) => (
-                  <tr
-                    key={key.sessionKeyPublic}
-                    className='border-b border-zinc-100 dark:border-zinc-800 last:border-0'
-                  >
-                    <td className='px-4 py-3'>
-                      {key.name ? (
-                        <span className='font-medium'>{key.name}</span>
-                      ) : (
-                        <span className='text-zinc-500'>(unnamed)</span>
-                      )}
-                      {key.source === "chain" && (
-                        <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 align-middle'>
-                          Imported
-                        </span>
-                      )}
-                      {key.createdAt > 0 && (
-                        <span className='block text-xs text-zinc-500'>created {formatDateTime(key.createdAt)}</span>
-                      )}
-                    </td>
-                    <td className='px-4 py-3 font-mono text-xs' title={key.sessionKeyPublic}>
-                      <span className='inline-flex items-center gap-1.5'>
-                        {formatAddress(key.sessionKeyPublic)}
-                        <CopyButton
-                          value={key.sessionKeyPublic}
-                          tooltipText='Copy session key address'
-                          successMessage='Session key address copied'
-                        />
-                      </span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='text-xs text-zinc-700 dark:text-zinc-300 whitespace-nowrap'>
-                        {key.scopes.map((scopeId, i) => (
-                          <span
-                            key={scopeId}
-                            className={clsx(key.scopeActive[scopeId] === false && "text-zinc-400 dark:text-zinc-500")}
-                          >
-                            {/* Two scopes per line: comma within a pair, line break between pairs. */}
-                            {i > 0 && (i % 2 === 0 ? <br /> : ", ")}
-                            {SCOPE_BY_ID[scopeId].label}
+                {visibleKeys.map((key) => {
+                  const uniformExpiry = hasUniformExpiry(key.scopes, key.scopeExpiries);
+                  return (
+                    <tr
+                      key={key.sessionKeyPublic}
+                      className='border-b border-zinc-100 dark:border-zinc-800 last:border-0'
+                    >
+                      <td className='px-4 py-3'>
+                        {key.name ? (
+                          <span className='font-medium'>{key.name}</span>
+                        ) : (
+                          <span className='text-zinc-500'>(unnamed)</span>
+                        )}
+                        {key.source === "chain" && (
+                          <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 align-middle'>
+                            Imported
                           </span>
-                        ))}
-                      </span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span
-                        className={clsx("rounded-full px-2.5 py-0.5 text-xs font-semibold", STATUS_STYLES[key.status])}
-                      >
-                        {STATUS_LABELS[key.status]}
-                      </span>
-                      {key.status === "active" && key.maxExpiry > 0n && (
-                        <span className='block text-xs text-zinc-500 mt-1'>
-                          until {formatDateTime(Number(key.maxExpiry) * 1000)}
+                        )}
+                        {key.createdAt > 0 && (
+                          <span className='block text-xs text-zinc-500'>created {formatDateTime(key.createdAt)}</span>
+                        )}
+                      </td>
+                      <td className='px-4 py-3 font-mono text-xs' title={key.sessionKeyPublic}>
+                        <span className='inline-flex items-center gap-1.5'>
+                          {formatAddress(key.sessionKeyPublic)}
+                          <CopyButton
+                            value={key.sessionKeyPublic}
+                            tooltipText='Copy session key address'
+                            successMessage='Session key address copied'
+                          />
                         </span>
-                      )}
-                      {key.status === "expired" && key.maxExpiry > 0n && (
-                        <span className='block text-xs text-zinc-500 mt-1'>
-                          {formatDateTime(Number(key.maxExpiry) * 1000)}
-                        </span>
-                      )}
-                      {key.status === "revoked" && key.revokedAt !== undefined && (
-                        <span className='block text-xs text-zinc-500 mt-1'>{formatDateTime(key.revokedAt)}</span>
-                      )}
-                    </td>
-                    <td className='px-4 py-3 text-right'>
-                      {key.status === "active" && (
-                        <button
-                          type='button'
-                          onClick={() => setRevokeTarget(key)}
-                          className='rounded-full border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 text-xs font-medium px-3 py-1'
+                      </td>
+                      <td className='px-4 py-3'>
+                        {uniformExpiry ? (
+                          <div className='text-xs text-zinc-700 dark:text-zinc-300'>
+                            <span className='whitespace-nowrap'>
+                              {key.scopes.map((scopeId, i) => (
+                                <span
+                                  key={scopeId}
+                                  className={clsx(
+                                    key.scopeActive[scopeId] === false && "text-zinc-400 dark:text-zinc-500",
+                                  )}
+                                >
+                                  {/* Two scopes per line: comma within a pair, line break between pairs. */}
+                                  {i > 0 && (i % 2 === 0 ? <br /> : ", ")}
+                                  {SCOPE_BY_ID[scopeId].label}
+                                </span>
+                              ))}
+                            </span>
+                            {/* Shared across every scope here by definition (that's what "uniform" means) — one line,
+                                not repeated per scope. Expired-key case shows no date: nothing here is still granted. */}
+                            {key.status === "active" && key.maxExpiry > 0n && (
+                              <span className='block text-zinc-500 mt-1'>
+                                until {formatDateTime(Number(key.maxExpiry) * 1000)}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className='flex flex-col gap-0.5 text-xs text-zinc-700 dark:text-zinc-300'>
+                            {key.scopes.map((scopeId) => {
+                              const scopeExpiry = key.scopeExpiries[scopeId];
+                              const scopeIsActive = key.scopeActive[scopeId] === true;
+                              return (
+                                <div
+                                  key={scopeId}
+                                  className={clsx(
+                                    "flex items-baseline gap-1.5",
+                                    !scopeIsActive && "text-zinc-400 dark:text-zinc-500",
+                                  )}
+                                >
+                                  <span>{SCOPE_BY_ID[scopeId].label}</span>
+                                  {scopeIsActive && scopeExpiry != null && scopeExpiry > 0n && (
+                                    <span className='text-[10px] whitespace-nowrap'>
+                                      until {formatDateTime(Number(scopeExpiry) * 1000)}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      <td className='px-4 py-3'>
+                        <span
+                          className={clsx(
+                            "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            STATUS_STYLES[key.status],
+                          )}
                         >
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {STATUS_LABELS[key.status]}
+                        </span>
+                        {key.status === "revoked" && key.revokedAt !== undefined && (
+                          <span className='block text-xs text-zinc-500 mt-1'>{formatDateTime(key.revokedAt)}</span>
+                        )}
+                      </td>
+                      <td className='px-4 py-3 text-right'>
+                        {key.status === "active" && (
+                          <button
+                            type='button'
+                            onClick={() => setRevokeTarget(key)}
+                            className='rounded-full border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950 text-xs font-medium px-3 py-1'
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {visibleKeys.length === 0 && (
                   <tr>
                     <td colSpan={5} className='px-4 py-6 text-center text-sm text-zinc-500'>
@@ -307,6 +404,9 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
         account={account}
         registry={registry}
         explorerUrl={explorerUrl}
+        prefillAddress={cliPrefill}
+        prefillScopes={cliPrefill ? prefillScopes : null}
+        existingKey={existingKeyForPrefill}
         onCreated={addKey}
         onConfirmed={markConfirmed}
         onFailed={removeKey}
