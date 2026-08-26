@@ -12,13 +12,15 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import clsx from "clsx";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
+import { presetScopeStates } from "@/utils/authorizeParam";
 import { download } from "@/utils/download";
+import { formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   EXPIRY_PRESETS,
@@ -35,6 +37,13 @@ interface CreateKeyFlowProps {
   onOpenChange: (open: boolean) => void;
   account: Hex;
   registry: { address: Hex; abi: Abi };
+
+  prefillAddress?: Hex | null;
+  prefillScopes?: ScopeId[] | null;
+  /**
+   * Turns the dialog into an add-scopes flow
+   */
+  existingKey?: { name: string; expirySec: bigint | null } | null;
   onCreated: (record: SessionKeyRecord) => void;
   /** Fires when the login tx is confirmed onchain (used to refresh chain-read statuses). */
   onConfirmed?: () => void;
@@ -66,6 +75,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   onOpenChange,
   account,
   registry,
+  prefillAddress,
+  prefillScopes,
+  existingKey,
   onCreated,
   onConfirmed,
   onFailed,
@@ -84,6 +96,13 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // when the dialog is closed mid-flight so late receipts don't mutate a fresh
   // form; the row-removal on failure runs regardless (the row exists either way).
   const inFlightRef = useRef<{ address: Hex; uiActive: boolean } | null>(null);
+
+  const requestPresets = useMemo(
+    () => (prefillAddress ? presetScopeStates(prefillScopes ?? []) : null),
+    [prefillAddress, prefillScopes],
+  );
+  const isExistingKey = prefillAddress != null && existingKey != null;
+  const nameLocked = isExistingKey;
 
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
@@ -108,7 +127,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
-  const expiryChoice = () => resolveExpiry(presetIndex, customDate, Date.now());
+  const inheritExpiry = existingKey?.expirySec ?? null;
+  const existingKeyName = existingKey?.name ?? null;
+
+  const expiryChoice = () => inheritExpiry ?? resolveExpiry(presetIndex, customDate, Date.now());
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
@@ -118,6 +140,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // characters and cap the length once, here, before any of those sinks.
   const cleanName = normalizeKeyName(name);
   const displayName = cleanName || "(unnamed)";
+  const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
   const handleCreate = async () => {
     const expiry = expiryChoice();
@@ -144,7 +167,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       const txHash = await execute({
         functionName: "login",
         args: [signerAddress, expiry, selectedScopes.map((id) => SCOPE_BY_ID[id].typehash), cleanName],
-        metadata: { type: "createSessionKey", keyName: cleanName },
+        metadata: { type: isExistingKey ? "authorizeSessionKey" : "createSessionKey", keyName: cleanName },
       });
       onCreated({
         name: cleanName,
@@ -192,6 +215,25 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     if (open) resetFormState();
   }, [open, resetFormState]);
 
+  // Declared AFTER the fresh-attempt
+  // reset effect: both fire on the open transition and run in declaration
+  // order, so the reset must never clobber the request's prefill.
+  useEffect(() => {
+    if (open && prefillAddress) {
+      setSignerMode("own");
+      setOwnAddress(prefillAddress);
+      if (existingKeyName != null) setName(existingKeyName);
+      if (requestPresets) {
+        setCheckedScopes(
+          Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
+            ScopeId,
+            boolean
+          >,
+        );
+      }
+    }
+  }, [open, prefillAddress, existingKeyName, requestPresets]);
+
   const closeDialog = () => {
     reset();
     onOpenChange(false);
@@ -219,7 +261,6 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   const expiryDate = expirySec > 0n ? new Date(Number(expirySec) * 1000) : null;
-  const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
   const txBanner =
     txState === "pending" ? (
@@ -247,8 +288,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         {step === "form" && (
           <>
             <DialogHeader>
-              <DialogTitle>New session key</DialogTitle>
-              <DialogDescription>One wallet transaction. All selected scopes share the same expiry.</DialogDescription>
+              <DialogTitle>{isExistingKey ? "Add scopes to session key" : "New session key"}</DialogTitle>
+              <DialogDescription>
+                {isExistingKey
+                  ? "Newly selected scopes are added to this key."
+                  : "All selected scopes share the same expiry."}
+              </DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
             {txState === "failed" && txBanner}
@@ -256,97 +301,144 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-name'>
-                  Name <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
+                  Name{" "}
+                  {!nameLocked && <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>}
                 </Label>
-                <Input id='sk-name' placeholder='e.g. ci-uploader' value={name} onChange={setName} />
-                <p className='text-xs text-zinc-500'>
-                  Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
-                </p>
+                <Input
+                  id='sk-name'
+                  placeholder='e.g. ci-uploader'
+                  value={name}
+                  onChange={setName}
+                  disabled={nameLocked}
+                />
+                {nameLocked ? (
+                  <p className='text-xs text-zinc-500'>Existing key name.</p>
+                ) : (
+                  <p className='text-xs text-zinc-500'>
+                    Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
+                  </p>
+                )}
               </div>
 
               <div className='flex flex-col gap-2'>
                 <Label>Scopes</Label>
-                {SESSION_KEY_SCOPES.map((scope) => (
-                  <label
-                    key={scope.id}
-                    className={clsx(
-                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer",
-                      scope.destructive
-                        ? "border-amber-300 dark:border-amber-800"
-                        : "border-zinc-200 dark:border-zinc-700",
-                    )}
-                  >
-                    <input
-                      type='checkbox'
-                      className='mt-1'
-                      checked={checkedScopes[scope.id]}
-                      onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
-                    />
-                    <span>
-                      <span className='block text-sm font-medium'>
-                        {scope.label}
-                        {scope.destructive && (
-                          <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
-                            destructive
+                {SESSION_KEY_SCOPES.map((scope) => {
+                  const preset = requestPresets?.[scope.id] ?? null;
+                  const lockedOff = preset === "locked-off";
+                  return (
+                    <label
+                      key={scope.id}
+                      className={clsx(
+                        "flex items-start gap-3 rounded-lg border p-3",
+                        lockedOff ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                        scope.destructive
+                          ? "border-amber-300 dark:border-amber-800"
+                          : "border-zinc-200 dark:border-zinc-700",
+                      )}
+                    >
+                      <input
+                        type='checkbox'
+                        className='mt-1'
+                        disabled={lockedOff}
+                        checked={checkedScopes[scope.id]}
+                        onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
+                      />
+                      <span>
+                        <span className='block text-sm font-medium'>
+                          {scope.label}
+                          {scope.destructive && (
+                            <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
+                              destructive
+                            </span>
+                          )}
+                          {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
+                        </span>
+                        <span className='block text-xs text-zinc-500'>{scope.description}</span>
+                        {preset === "requested-unchecked" && !checkedScopes[scope.id] && (
+                          <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
+                            Requested, check to include
                           </span>
                         )}
                       </span>
-                      <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                    </span>
-                  </label>
-                ))}
-                <p className='text-xs text-zinc-500'>
-                  Pick only what the key holder needs. Uploads need "Create data set" and "Add pieces". The two marked
-                  destructive let the holder remove data or end service.
-                </p>
+                    </label>
+                  );
+                })}
+                {requestPresets ? (
+                  prefillScopes == null || prefillScopes.length === 0 ? (
+                    <p className='text-xs text-amber-700 dark:text-amber-400'>
+                      This link didn't request any scopes — every scope is unchecked.
+                    </p>
+                  ) : (
+                    prefillScopes.some((id) => !checkedScopes[id]) && (
+                      <p className='text-xs text-amber-700 dark:text-amber-400'>
+                        Granting fewer scopes than requested — some operations may fail.
+                      </p>
+                    )
+                  )
+                ) : (
+                  <p className='text-xs text-zinc-500'>
+                    Pick only what the key holder needs. Uploads need "Create data set" and "Add pieces". The two marked
+                    destructive let the holder remove data or end service.
+                  </p>
+                )}
               </div>
 
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-expiry'>Expiration</Label>
-                <select
-                  id='sk-expiry'
-                  className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                  value={presetIndex}
-                  onChange={(e) => setPresetIndex(e.target.value)}
-                >
-                  {EXPIRY_PRESETS.map((preset, i) => (
-                    <option key={preset.label} value={String(i)}>
-                      {preset.label}
-                    </option>
-                  ))}
-                  <option value='custom'>Custom date…</option>
-                </select>
-                {presetIndex === "custom" && (
-                  <input
-                    type='date'
-                    aria-label='Custom expiry date'
-                    className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                  />
+                {inheritExpiry != null ? (
+                  <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
+                ) : (
+                  <>
+                    <select
+                      id='sk-expiry'
+                      className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
+                      value={presetIndex}
+                      onChange={(e) => setPresetIndex(e.target.value)}
+                    >
+                      {EXPIRY_PRESETS.map((preset, i) => (
+                        <option key={preset.label} value={String(i)}>
+                          {preset.label}
+                        </option>
+                      ))}
+                      <option value='custom'>Custom date…</option>
+                    </select>
+                    {presetIndex === "custom" && (
+                      <input
+                        type='date'
+                        aria-label='Custom expiry date'
+                        className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                      />
+                    )}
+                    <p className='text-xs text-zinc-500'>
+                      The key stops working on this date. Every key has to expire.
+                    </p>
+                  </>
                 )}
-                <p className='text-xs text-zinc-500'>The key stops working on this date. Every key has to expire.</p>
               </div>
 
               <div className='flex flex-col gap-2'>
                 <Label>Session signer</Label>
-                <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
-                  <input
-                    type='radio'
-                    name='sk-signer'
-                    className='mt-1'
-                    checked={signerMode === "generate"}
-                    onChange={() => setSignerMode("generate")}
-                  />
-                  <span>
-                    <span className='block text-sm font-medium'>Generate for me (default)</span>
-                    <span className='block text-xs text-zinc-500'>
-                      Creates a <b>private key + public address keypair</b> in your browser. The private key is revealed
-                      on the next screen but is never stored, so <b>make sure you save it somewhere safe immediately</b>
-                      .
+                {!isExistingKey && (
+                  <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
+                    <input
+                      type='radio'
+                      name='sk-signer'
+                      className='mt-1'
+                      checked={signerMode === "generate"}
+                      onChange={() => setSignerMode("generate")}
+                    />
+                    <span>
+                      <span className='block text-sm font-medium'>Generate for me (default)</span>
+                      <span className='block text-xs text-zinc-500'>
+                        Creates a <b>private key + public address keypair</b> in your browser. The private key is
+                        revealed on the next screen but is never stored, so{" "}
+                        <b>make sure you save it somewhere safe immediately</b>.
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                )}
                 <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
                   <input
                     type='radio'
@@ -373,6 +465,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     {signerMode === "own" && ownAddress.length > 0 && !isAddress(ownAddress) && (
                       <span className='block text-xs text-red-600 mt-1'>Not a valid address.</span>
                     )}
+                    {signerMode === "own" && prefillAddress != null && ownAddress === prefillAddress && (
+                      <span className='block text-xs text-amber-700 dark:text-amber-400 mt-1'>
+                        Only approve if this matches the address you are adding.
+                      </span>
+                    )}
                   </span>
                 </label>
               </div>
@@ -384,6 +481,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <span className='flex items-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
+                ) : isExistingKey ? (
+                  "Authorize scopes"
+                ) : prefillAddress ? (
+                  "Review & authorize"
                 ) : (
                   "Create session key"
                 )}

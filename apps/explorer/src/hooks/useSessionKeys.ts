@@ -18,6 +18,8 @@ export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
 export interface SyncFromChainResult {
   addedCount: number;
+  /** Existing records healed from chain history */
+  updatedCount: number;
   skippedUnrecognized: number;
 }
 
@@ -130,12 +132,12 @@ export function useSessionKeys(network: Network, account: Hex) {
   const syncFromChain = useCallback(async (): Promise<SyncFromChainResult> => {
     const events = await fetchAuthorizationEvents(network, registry, account);
     const { records: synced, skippedUnrecognized } = foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
-    const { merged, addedCount } = mergeSyncedRecords(records, synced);
-    if (addedCount > 0) {
+    const { merged, addedCount, updatedCount } = mergeSyncedRecords(records, synced);
+    if (addedCount > 0 || updatedCount > 0) {
       persist(() => merged);
       refetchStatuses();
     }
-    return { addedCount, skippedUnrecognized };
+    return { addedCount, updatedCount, skippedUnrecognized };
   }, [network, account, registry, records, persist, refetchStatuses]);
 
   return {
