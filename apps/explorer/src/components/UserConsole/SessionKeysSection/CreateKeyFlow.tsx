@@ -12,7 +12,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import clsx from "clsx";
 import { Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
@@ -80,7 +80,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // form; the row-removal on failure runs regardless (the row exists either way).
   const inFlightRef = useRef<{ address: Hex; uiActive: boolean } | null>(null);
 
-  const { execute, isExecuting } = useContractTransaction({
+  const { execute } = useContractTransaction({
     contractAddress: registry.address,
     abi: registry.abi,
     onSuccess: () => {
@@ -111,7 +111,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   // name is optional: the chain doesn't require an origin
-  const canCreate = selectedScopes.length > 0 && resolveExpiry() !== null && !isExecuting;
+  const canCreate = selectedScopes.length > 0 && resolveExpiry() !== null && txState !== "pending";
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -155,8 +155,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     }
   };
 
-  const reset = () => {
-    if (inFlightRef.current) inFlightRef.current.uiActive = false; // pending tx keeps confirming in the background
+  // Shared by `reset` (dialog closing) and the open-transition effect below
+  // (dialog reopening). Never touches inFlightRef: a previous attempt's tx
+  // keeps resolving its optimistic row/toast independently of what the
+  // dialog currently shows.
+  const resetFormState = useCallback(() => {
     setStep("form");
     setTxState("idle");
     setName("");
@@ -165,7 +168,19 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setCustomDate("");
     setGenerated(null);
     setExpirySec(0n);
+  }, []);
+
+  const reset = () => {
+    if (inFlightRef.current) inFlightRef.current.uiActive = false; // pending tx keeps confirming in the background
+    resetFormState();
   };
+
+  // Reopening always starts a fresh attempt, regardless of how the dialog was
+  // last closed. A submitted tx needs nothing from the dialog to resolve, so
+  // there's nothing to preserve here.
+  useEffect(() => {
+    if (open) resetFormState();
+  }, [open, resetFormState]);
 
   const closeDialog = () => {
     reset();
@@ -306,7 +321,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
             <DialogFooter>
               <Button variant='primary' size='compact' disabled={!canCreate} onClick={handleCreate}>
-                {isExecuting ? (
+                {txState === "pending" ? (
                   <span className='flex items-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' /> Confirming onchain…
                   </span>
