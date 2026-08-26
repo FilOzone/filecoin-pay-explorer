@@ -1,3 +1,4 @@
+import { NATIVE_TOKEN_ADDRESS, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +41,7 @@ const controls = vi.hoisted(() => ({
     | undefined,
 }));
 const fetchSourceTokens = vi.hoisted(() => vi.fn());
+const planSquidTopUp = vi.hoisted(() => vi.fn());
 const readSourceTokenBalances = vi.hoisted(() => vi.fn());
 const publicClient = vi.hoisted(() => ({
   getBalance: vi.fn().mockResolvedValue(1n),
@@ -54,6 +56,10 @@ vi.mock("@filecoin-project/squid-evm-funding", async (importOriginal) => ({
 vi.mock("../data/source-token-balances", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../data/source-token-balances")>()),
   readSourceTokenBalances,
+}));
+vi.mock("../data/squid-quote", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../data/squid-quote")>()),
+  planSquidTopUp,
 }));
 vi.mock("use-debounce", () => ({ useDebounce: <T,>(value: T) => [value] }));
 vi.mock("wagmi", () => ({
@@ -96,14 +102,14 @@ function button(renderer: ReactTestRenderer, label: string) {
   return renderer.root.findAllByType("button").find((item) => item.children.includes(label));
 }
 
-async function renderReview(queryClient: QueryClient) {
+async function renderReview(queryClient: QueryClient, destinationAmount: bigint | null = null) {
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
       <QueryClientProvider client={queryClient}>
         <SquidQuoteReview
           acquisitionState='idle'
-          destinationAmount={null}
+          destinationAmount={destinationAmount}
           onAcquired={vi.fn()}
           onAcquisitionStateChange={vi.fn()}
           onBlocked={vi.fn()}
@@ -135,6 +141,7 @@ describe("SquidQuoteReview token inventory", () => {
         [usdt.token, 0n],
       ]),
     );
+    planSquidTopUp.mockReset();
   });
 
   afterEach(() => {
@@ -256,5 +263,53 @@ describe("SquidQuoteReview token inventory", () => {
     );
     await expectTokenOptions([opToken.token]);
     renderer.unmount();
+  });
+
+  it("does not publish a maximum without gas and labels the two receive floors accurately", async () => {
+    const fundingPlan: SquidFundingPlan = {
+      maxSourceAmount: 2n,
+      owner: ownerA,
+      quotes: [
+        {
+          actions: [],
+          costs: [
+            {
+              amount: 0n,
+              kind: "gas",
+              name: "Source gas",
+              token: { address: NATIVE_TOKEN_ADDRESS, chainId: 8453, decimals: 18, symbol: "ETH" },
+            },
+          ],
+          destinationAmount: 2_000_000_000_000_000_000n,
+          id: "quote",
+          requirement: {
+            amount: 1_000_000_000_000_000_000n,
+            chainId: 314,
+            id: "requirement",
+            recipient: ownerA,
+            token: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+          },
+          sourceAmount: 1n,
+        },
+      ],
+      slippage: 1,
+      source: usdc,
+    };
+    planSquidTopUp.mockResolvedValue(fundingPlan);
+
+    const renderer = await renderReview(queryClient, 1_000_000_000_000_000_000n);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    await act(async () => controls.token?.onValueChange(usdc.token));
+    await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
+
+    const text = () => renderer.root.findAllByType("span").map(({ children }) => children.join(""));
+    await vi.waitFor(() => expect(text()).toContain("Route minimum received"));
+    expect(text()).toContain("2 USDFC");
+    expect(text()).toContain("Required amount");
+    expect(text()).toContain("1 USDFC");
+    expect(text()).toContain("Maximum native fees required");
+    expect(text()).toContain("Unavailable");
+    expect(text()).not.toContain("Calculating…");
   });
 });
