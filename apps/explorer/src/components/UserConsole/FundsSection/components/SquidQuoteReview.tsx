@@ -265,6 +265,10 @@ export function SquidQuoteReview({
     if (sourceAmount === null || sourceAmount <= 0n) return setError(insufficientBalance);
     void refetchQuote();
   };
+  const execute = () => {
+    setError(null);
+    void (chainId === sourceChain ? execution.acquire() : execution.switchToSourceNetwork());
+  };
 
   return (
     <section aria-label='Swap quote review' className='grid gap-3 rounded-md border p-3 text-sm'>
@@ -647,7 +651,7 @@ export function SquidQuoteReview({
               nativeBalance < requiredNativeBalance ||
               (chainId === sourceChain && execution.isPreparingWallet)
             }
-            onClick={chainId === sourceChain ? execution.acquire : execution.switchToSourceNetwork}
+            onClick={execute}
             size='compact'
             type='button'
             variant='primary'

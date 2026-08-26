@@ -1,3 +1,4 @@
+import { NATIVE_TOKEN_ADDRESS, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,11 +43,13 @@ const controls = vi.hoisted(() => ({
     | undefined,
 }));
 const fetchSourceTokens = vi.hoisted(() => vi.fn());
+const planSquidTopUp = vi.hoisted(() => vi.fn());
 const readSourceTokenBalances = vi.hoisted(() => vi.fn());
+const switchChainAsync = vi.hoisted(() => vi.fn());
 const publicClient = vi.hoisted(() => ({
-  getBalance: vi.fn().mockResolvedValue(1n),
+  getBalance: vi.fn().mockResolvedValue(100n),
   multicall: vi.fn(),
-  readContract: vi.fn().mockResolvedValue(1n),
+  readContract: vi.fn().mockResolvedValue(1_000_000n),
 }));
 
 vi.mock("@filecoin-project/squid-evm-funding", async (importOriginal) => ({
@@ -57,11 +60,15 @@ vi.mock("../data/source-token-balances", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../data/source-token-balances")>()),
   readSourceTokenBalances,
 }));
+vi.mock("../data/squid-quote", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../data/squid-quote")>()),
+  planSquidTopUp,
+}));
 vi.mock("use-debounce", () => ({ useDebounce: <T,>(value: T) => [value] }));
 vi.mock("wagmi", () => ({
   useAccount: () => wallet,
   usePublicClient: () => publicClient,
-  useSwitchChain: () => ({ isPending: false, switchChainAsync: vi.fn() }),
+  useSwitchChain: () => ({ isPending: false, switchChainAsync }),
   useWalletClient: () => ({ data: undefined, isPending: false }),
 }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -98,14 +105,14 @@ function button(renderer: ReactTestRenderer, label: string) {
   return renderer.root.findAllByType("button").find((item) => item.children.includes(label));
 }
 
-async function renderReview(queryClient: QueryClient) {
+async function renderReview(queryClient: QueryClient, destinationAmount: bigint | null = null) {
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
       <QueryClientProvider client={queryClient}>
         <SquidQuoteReview
           acquisitionState='idle'
-          destinationAmount={null}
+          destinationAmount={destinationAmount}
           onAcquired={vi.fn()}
           onAcquisitionStateChange={vi.fn()}
           onBlocked={vi.fn()}
@@ -137,6 +144,7 @@ describe("SquidQuoteReview token inventory", () => {
         [usdt.token, 0n],
       ]),
     );
+    switchChainAsync.mockRejectedValue({ code: 4001 });
   });
 
   afterEach(() => {
@@ -292,6 +300,69 @@ describe("SquidQuoteReview token inventory", () => {
       ),
     );
     await expectTokenOptions([opToken.token]);
+    renderer.unmount();
+  });
+
+  it("clears a stale balance error before reporting a rejected network switch", async () => {
+    const destinationAmount = 1_000_000_000_000_000_000n;
+    const plan: SquidFundingPlan = {
+      maxSourceAmount: 2_000_000n,
+      owner: ownerA,
+      quotes: [
+        {
+          actions: [],
+          costs: [
+            {
+              amount: 1n,
+              kind: "gas",
+              name: "Source gas",
+              token: { address: NATIVE_TOKEN_ADDRESS, chainId: 8453, decimals: 18, symbol: "ETH" },
+            },
+          ],
+          destinationAmount,
+          id: "quote",
+          requirement: {
+            amount: destinationAmount,
+            chainId: 314,
+            id: "requirement",
+            recipient: ownerA,
+            token: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+          },
+          sourceAmount: 1_000_000n,
+        },
+      ],
+      slippage: 1,
+      source: usdc,
+    };
+    wallet.chainId = 10;
+    readSourceTokenBalances.mockResolvedValue(balances([[usdc.token, 0n]]));
+    planSquidTopUp.mockResolvedValue(plan);
+    const renderer = await renderReview(queryClient, destinationAmount);
+    await chooseNetwork(8453);
+    await act(async () => button(renderer, "Show all tokens")?.props.onClick());
+    await expectTokenOptions([usdc.token, usdt.token]);
+    await act(async () => controls.token?.onValueChange(usdc.token));
+    await act(async () => button(renderer, "Get estimate")?.props.onClick());
+    expect(renderer.root.findByProps({ role: "alert" }).findByType("span").children.join("")).toContain(
+      "You don't have enough USDC",
+    );
+
+    await act(async () => {
+      queryClient.setQueryData(
+        sourceTokenBalancesQueryKey(ownerA, 8453, [usdc, usdt]),
+        balances([
+          [usdc.token, 2_000_000n],
+          [usdt.token, 0n],
+        ]),
+      );
+    });
+    await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(button(renderer, "Switch wallet to Base")?.props.disabled).toBe(false));
+    await act(async () => button(renderer, "Switch wallet to Base")?.props.onClick());
+
+    expect(renderer.root.findByProps({ role: "alert" }).findByType("span").children.join("")).toBe(
+      "Network switch cancelled in your wallet.",
+    );
     renderer.unmount();
   });
 });
