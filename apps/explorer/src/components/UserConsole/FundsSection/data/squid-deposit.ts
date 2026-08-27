@@ -12,6 +12,7 @@ type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 export type SquidDepositOutcome =
   | { acquisition: SquidAcquisition; status: "succeeded" }
   | { acquisition: SquidAcquisition; error: unknown; status: "blocked" | "rejected" };
+export type SquidRecoveryStateError = "cleanup" | "hash-persistence";
 
 export async function runSquidDeposit({
   acquisition,
@@ -26,7 +27,7 @@ export async function runSquidDeposit({
   amount: bigint;
   fund: (amount: bigint, onHash: (hash: Hash) => void) => Promise<{ receipt: { status: string } }>;
   invalidate: (owner: Address) => Promise<unknown>;
-  onRecoveryStateError?: () => void;
+  onRecoveryStateError?: (reason: SquidRecoveryStateError) => void;
   onSubmitted?: (hash: Hash, acquisition: SquidAcquisition) => void;
   storage: AcquisitionStorage;
 }): Promise<SquidDepositOutcome> {
@@ -39,7 +40,7 @@ export async function runSquidDeposit({
       try {
         pending = markSquidDepositPending(storage, pending, hash);
       } catch {
-        onRecoveryStateError?.();
+        onRecoveryStateError?.("hash-persistence");
       }
       onSubmitted?.(hash, pending);
     });
@@ -48,7 +49,7 @@ export async function runSquidDeposit({
     try {
       clearSquidAcquisition(storage, pending);
     } catch {
-      onRecoveryStateError?.();
+      onRecoveryStateError?.("cleanup");
     }
     return { acquisition: pending, status: "succeeded" };
   } catch (error) {

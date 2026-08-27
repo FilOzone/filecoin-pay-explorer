@@ -76,4 +76,47 @@ describe("runSquidDeposit", () => {
       expect.objectContaining({ depositTransactionHash: hash, status: "depositing" }),
     );
   });
+
+  it("reports whether hash persistence or cleanup failed", async () => {
+    const hashStorage = createStorage();
+    const acquiredForHash = acquired(hashStorage);
+    const hashErrors: string[] = [];
+    const failingHashStorage = {
+      ...hashStorage,
+      setItem: (key: string, value: string) => {
+        if (value.includes("depositTransactionHash")) throw new Error("write failed");
+        hashStorage.setItem(key, value);
+      },
+    };
+    await runSquidDeposit({
+      acquisition: acquiredForHash,
+      amount: 12n,
+      fund: async (_amount, onHash) => {
+        onHash(hash);
+        return { receipt: { status: "success" } };
+      },
+      invalidate: vi.fn(),
+      onRecoveryStateError: (reason) => hashErrors.push(reason),
+      storage: failingHashStorage,
+    });
+
+    const cleanupStorage = createStorage();
+    const cleanupErrors: string[] = [];
+    await runSquidDeposit({
+      acquisition: acquired(cleanupStorage),
+      amount: 12n,
+      fund: vi.fn().mockResolvedValue({ receipt: { status: "success" } }),
+      invalidate: vi.fn(),
+      onRecoveryStateError: (reason) => cleanupErrors.push(reason),
+      storage: {
+        ...cleanupStorage,
+        removeItem: () => {
+          throw new Error("remove failed");
+        },
+      },
+    });
+
+    expect(hashErrors).toEqual(["hash-persistence"]);
+    expect(cleanupErrors).toEqual(["cleanup"]);
+  });
 });

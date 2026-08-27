@@ -178,9 +178,13 @@ export function GuidedTopUpDialog({
           amount: acquiredAmount,
           fund: (deposit, onHash) => synapse.payments.fundSync({ amount: deposit, onHash }),
           invalidate: (owner) => invalidateTopUpQueries(queryClient, accountId, owner),
-          onRecoveryStateError: () => {
+          onRecoveryStateError: (reason) => {
             if (isCurrentDepositOwner()) {
-              toast.warning("The transaction recovery state could not be updated.");
+              toast.warning(
+                reason === "hash-persistence"
+                  ? "The transaction was submitted, but its hash could not be saved. Verify it in your wallet before retrying."
+                  : "The deposit succeeded, but its saved recovery state could not be cleared.",
+              );
             }
           },
           onSubmitted: (_hash, pending) => {
