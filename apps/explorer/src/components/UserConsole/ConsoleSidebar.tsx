@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, HardDrive, LayoutDashboard } from "lucide-react";
+import { Bell, BellOff, Compass, HardDrive, LayoutDashboard, Pin, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -36,6 +36,25 @@ const AlertsIcon = ({ isSubscribed }: { isSubscribed: boolean | undefined }) => 
 
   return isSubscribed ? <Bell className='size-4 fill-current' /> : <BellOff className='size-4' />;
 };
+
+/**
+ * Group labels and the Services/Billing split follow the FOC Platform Model &
+ * IA: the console is Dashboard, Services (per-service sections), and Billing
+ * (Filecoin Pay), with the explorer one click away as the onchain view.
+ */
+const SidebarGroupLabel = ({ children }: { children: ReactNode }) => (
+  <p className='mt-3 mb-1 pl-3 text-xs font-medium uppercase tracking-wide text-muted-foreground'>{children}</p>
+);
+
+const SidebarComingSoon = ({ icon, label }: { icon: ReactNode; label: string }) => (
+  <div className='flex items-center gap-2.5 border-l-2 border-transparent py-2 pl-3 text-sm text-muted-foreground/60'>
+    {icon}
+    <span className='flex items-baseline gap-1.5'>
+      {label}
+      <span className='text-xs'>soon</span>
+    </span>
+  </div>
+);
 
 const SidebarLink = ({ href, isActive, onNavigate, children }: SidebarLinkProps) => (
   <Link
@@ -77,10 +96,16 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
         Dashboard
       </SidebarLink>
 
+      <SidebarGroupLabel>Services</SidebarGroupLabel>
+
       <SidebarLink href='/console/services/warm-storage' isActive={isWarmStorageActive} onNavigate={onNavigate}>
         <HardDrive className='size-4' />
         Warm Storage
       </SidebarLink>
+      <SidebarComingSoon icon={<Zap className='size-4' />} label='Beam' />
+      <SidebarComingSoon icon={<Pin className='size-4' />} label='Filecoin Pin' />
+
+      <SidebarGroupLabel>Account</SidebarGroupLabel>
 
       {isNotificationsEligible ? (
         <SidebarLink href='/console/notifications' isActive={isAlertsActive} onNavigate={onNavigate}>
