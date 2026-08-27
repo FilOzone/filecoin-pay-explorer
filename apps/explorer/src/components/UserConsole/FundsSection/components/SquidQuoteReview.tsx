@@ -158,11 +158,21 @@ export function SquidQuoteReview({
     showAllSourceTokens,
     sourceTokenAddress,
   );
-  const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => ({
-    aliases: [token.symbol, token.token],
-    label: `${token.symbol} (${formatAddress(token.token)})`,
-    value: token.token,
-  }));
+  const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
+    const balance = sourceTokenBalance(sourceTokenBalances, token.token);
+    return {
+      aliases: [token.symbol, token.token],
+      detail: address
+        ? typeof balance === "bigint"
+          ? displayAmount(balance, token.decimals, token.symbol)
+          : "Unavailable"
+        : undefined,
+      label: `${token.symbol} (${formatAddress(token.token)})`,
+      value: token.token,
+    };
+  });
+  const isLoadingWalletTokenInventory =
+    !!address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances;
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
   const inventoriedSourceBalance = source ? sourceTokenBalance(sourceTokenBalances, source.token) : undefined;
   const hasInventoriedSourceBalance = typeof inventoriedSourceBalance === "bigint";
@@ -564,24 +574,30 @@ export function SquidQuoteReview({
             </Button>
           )}
         </div>
-        <SearchableSelect
-          aria-describedby={source && !isSourceBalanceError ? "squid-source-token-balance" : undefined}
-          disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
-          id='squid-source-token'
-          invalidMessage='Choose a source token from the suggestions.'
-          key={sourceChainId}
-          onValueChange={(value) => {
-            setError(null);
-            setSourceTokenAddress(value);
-          }}
-          options={sourceTokenOptions}
-          placeholder={isLoadingTokens ? "Loading tokens…" : "Search tokens"}
-          value={sourceTokenAddress}
-        />
-        {address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances && (
-          <p aria-live='polite' className='text-xs text-muted-foreground' role='status'>
-            Checking this wallet for supported token balances. All tokens remain searchable while this loads.
-          </p>
+        {isLoadingWalletTokenInventory ? (
+          <div
+            aria-live='polite'
+            className='flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground'
+            role='status'
+          >
+            <Loader2 aria-hidden='true' className='size-4 animate-spin' />
+            Checking wallet balances…
+          </div>
+        ) : (
+          <SearchableSelect
+            aria-describedby={source && !isSourceBalanceError ? "squid-source-token-balance" : undefined}
+            disabled={isBusy || quotesUnavailable || sourceChainId === "" || isLoadingTokens || tokenLoadFailed}
+            id='squid-source-token'
+            invalidMessage='Choose a source token from the suggestions.'
+            key={sourceChainId}
+            onValueChange={(value) => {
+              setError(null);
+              setSourceTokenAddress(value);
+            }}
+            options={sourceTokenOptions}
+            placeholder={isLoadingTokens ? "Loading tokens…" : "Search tokens"}
+            value={sourceTokenAddress}
+          />
         )}
         {canFilterWalletTokens && !showAllSourceTokens && visibleTokens.length === 0 && (
           <p className='text-xs text-muted-foreground'>

@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 
 export type SearchableOption = {
   aliases?: readonly string[];
+  detail?: string;
   label: string;
   value: string;
 };
@@ -140,7 +141,10 @@ export function SearchableSelect({
                 role='option'
                 type='button'
               >
-                {option.label}
+                <span className='flex items-center justify-between gap-3'>
+                  <span className='min-w-0 truncate'>{option.label}</span>
+                  {option.detail && <span className='shrink-0 text-xs text-muted-foreground'>{option.detail}</span>}
+                </span>
               </button>
             ))
           )}

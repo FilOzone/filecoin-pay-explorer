@@ -17,7 +17,7 @@ vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
 }));
 
 const options = [
-  { aliases: ["USDC", "0x123"], label: "USDC (0x123…456)", value: "0x123" },
+  { aliases: ["USDC", "0x123"], detail: "1.25 USDC", label: "USDC (0x123…456)", value: "0x123" },
   { aliases: ["USDC", "0x789"], label: "USDC (0x789…abc)", value: "0x789" },
   { aliases: ["ETH", "0xeee"], label: "ETH (0xeee…eee)", value: "0xeee" },
 ];
@@ -74,6 +74,7 @@ describe("SearchableSelect", () => {
     expect(input.props.onFocus).toBeUndefined();
     await act(async () => input.props.onClick());
     expect(input.props["aria-expanded"]).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("1.25 USDC");
   });
 
   it("keeps the menu open while its scrollbar is used and handles wheel scrolling", async () => {

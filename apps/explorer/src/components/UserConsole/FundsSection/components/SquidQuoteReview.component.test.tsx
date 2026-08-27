@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatAddress } from "@/utils/formatter";
 import { sourceTokenBalancesQueryKey } from "../data/source-token-balances";
+import type { SearchableOption } from "./SearchableSelect";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
 const ownerA = "0x1111111111111111111111111111111111111111" as const;
@@ -34,7 +36,7 @@ const controls = vi.hoisted(() => ({
   token: undefined as
     | {
         onValueChange: (value: string) => void;
-        options: readonly { label: string; value: string }[];
+        options: readonly SearchableOption[];
         value: string;
       }
     | undefined,
@@ -83,7 +85,7 @@ vi.mock("@filecoin-pay/ui/components/select", () => ({
 vi.mock("./SearchableSelect", () => ({
   SearchableSelect: (props: NonNullable<typeof controls.token>) => {
     controls.token = props;
-    return null;
+    return <input aria-expanded={false} role='combobox' />;
   },
 }));
 vi.mock("@/components/shared/CopyButton", () => ({ default: () => null }));
@@ -131,7 +133,7 @@ describe("SquidQuoteReview token inventory", () => {
     fetchSourceTokens.mockImplementation(async (chainId: number) => (chainId === 10 ? [opToken] : [usdc, usdt]));
     readSourceTokenBalances.mockResolvedValue(
       balances([
-        [usdc.token, 2n],
+        [usdc.token, 2_000_000n],
         [usdt.token, 0n],
       ]),
     );
@@ -149,6 +151,14 @@ describe("SquidQuoteReview token inventory", () => {
     const renderer = await renderReview(queryClient);
     await chooseNetwork(8453);
     await expectTokenOptions([usdc.token]);
+    expect(controls.token?.options).toEqual([
+      {
+        aliases: [usdc.symbol, usdc.token],
+        detail: "2 USDC",
+        label: `${usdc.symbol} (${formatAddress(usdc.token)})`,
+        value: usdc.token,
+      },
+    ]);
 
     await act(async () => button(renderer, "Show all tokens")?.props.onClick());
     await expectTokenOptions([usdc.token, usdt.token]);
@@ -166,6 +176,33 @@ describe("SquidQuoteReview token inventory", () => {
     });
     await expectTokenOptions([usdt.token]);
     expect(controls.token?.value).toBe(usdt.token);
+  });
+
+  it("shows a loading state instead of the catalog until wallet balances resolve", async () => {
+    let resolveBalances!: (value: ReturnType<typeof balances>) => void;
+    readSourceTokenBalances.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBalances = resolve;
+        }),
+    );
+    const renderer = await renderReview(queryClient);
+
+    await chooseNetwork(8453);
+    await vi.waitFor(() => expect(readSourceTokenBalances).toHaveBeenCalledOnce());
+    expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Checking wallet balances");
+
+    await act(async () =>
+      resolveBalances(
+        balances([
+          [usdc.token, 2_000_000n],
+          [usdt.token, 0n],
+        ]),
+      ),
+    );
+    await expectTokenOptions([usdc.token]);
+    expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(1);
   });
 
   it("keeps the complete catalog available while a failed balance inventory is retried", async () => {
