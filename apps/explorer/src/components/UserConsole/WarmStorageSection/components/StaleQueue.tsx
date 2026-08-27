@@ -48,7 +48,7 @@ export const StaleQueue = ({ datasets, onKeep, onRelease }: StaleQueueProps) => 
                 {daysInactive(dataset)} days ago · {formatUSD(wastedSpendUSD(dataset))} spent since
               </span>
             </div>
-            <div className='flex shrink-0 gap-2'>
+            <div className='flex shrink-0 gap-2' data-tour='dispositions'>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant='ghost' onClick={() => onKeep(dataset)}>

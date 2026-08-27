@@ -6,6 +6,7 @@ import {
   ReleaseDatasetDialog,
   ServiceMetricCards,
   StaleQueue,
+  WarmStorageTourAutoStart,
 } from "@/components/UserConsole/WarmStorageSection/components";
 import { MOCK_DATASETS, type MockDataset } from "./data/mockDatasets";
 import { isStale } from "./utils/datasetLifecycle";
@@ -36,13 +37,21 @@ export const WarmStorageSection = () => {
 
   return (
     <div className='flex flex-col gap-6'>
-      <ServiceMetricCards datasets={datasets} />
+      <WarmStorageTourAutoStart />
+
+      <div data-tour='metrics'>
+        <ServiceMetricCards datasets={datasets} />
+      </div>
 
       {staleDatasets.length > 0 ? (
-        <StaleQueue datasets={staleDatasets} onKeep={handleKeep} onRelease={handleRelease} />
+        <div data-tour='stale-queue'>
+          <StaleQueue datasets={staleDatasets} onKeep={handleKeep} onRelease={handleRelease} />
+        </div>
       ) : null}
 
-      <DatasetsTable datasets={datasets} onRelease={handleRelease} />
+      <div data-tour='datasets-table'>
+        <DatasetsTable datasets={datasets} onRelease={handleRelease} />
+      </div>
 
       <ReleaseDatasetDialog
         dataset={releaseTarget}

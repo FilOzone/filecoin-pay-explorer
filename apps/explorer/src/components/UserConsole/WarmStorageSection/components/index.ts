@@ -3,3 +3,4 @@ export { DatasetsTable } from "./DatasetsTable";
 export { ReleaseDatasetDialog } from "./ReleaseDatasetDialog";
 export { ServiceMetricCards } from "./ServiceMetricCards";
 export { StaleQueue } from "./StaleQueue";
+export { startWarmStorageTour, WarmStorageTourAutoStart, WarmStorageTourButton } from "./WarmStorageTour";

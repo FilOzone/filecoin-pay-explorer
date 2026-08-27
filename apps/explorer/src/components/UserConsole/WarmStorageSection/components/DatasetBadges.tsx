@@ -31,11 +31,11 @@ const PROVING_CONFIG: Record<ProvingStatus, BadgeConfig> = {
 
 const DOT_BADGE_TEXT = "text-sm font-medium text-slate-800 dark:text-slate-200";
 
-const DotBadge = ({ config, className }: { config: BadgeConfig; className?: string }) => (
+const DotBadge = ({ config, className, dataTour }: { config: BadgeConfig; className?: string; dataTour?: string }) => (
   <Tooltip>
     <TooltipTrigger asChild>
       {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
-      <div tabIndex={0} className={cn("inline-flex cursor-help items-center gap-2", className)}>
+      <div tabIndex={0} data-tour={dataTour} className={cn("inline-flex cursor-help items-center gap-2", className)}>
         <div className={cn("h-2.5 w-2.5 rounded-full", config.dotColor)} />
         <span className={DOT_BADGE_TEXT}>{config.label}</span>
       </div>
@@ -45,7 +45,7 @@ const DotBadge = ({ config, className }: { config: BadgeConfig; className?: stri
 );
 
 export const ProvingBadge = ({ status, className }: { status: ProvingStatus; className?: string }) => (
-  <DotBadge config={PROVING_CONFIG[status]} className={className} />
+  <DotBadge config={PROVING_CONFIG[status]} className={className} dataTour='proving-badge' />
 );
 
 const RETRIEVAL_STALE_AFTER_DAYS = 90;
@@ -57,11 +57,12 @@ const RETRIEVAL_STALE_AFTER_DAYS = 90;
  */
 export const RetrievalBadge = ({ dataset, className }: { dataset: MockDataset; className?: string }) => {
   if (!dataset.retrieval) {
+    const wrapperClassName = cn("inline-flex cursor-help items-center gap-2", className);
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
-          <div tabIndex={0} className={cn("inline-flex cursor-help items-center gap-2", className)}>
+          <div tabIndex={0} data-tour='retrieval-badge' className={wrapperClassName}>
             <div className='h-2.5 w-2.5 rounded-full border border-dashed border-muted-foreground' />
             <span className='text-sm text-muted-foreground'>No signal</span>
           </div>
