@@ -59,6 +59,18 @@ describe("searchable option filtering", () => {
 });
 
 describe("SearchableSelect", () => {
+  it("opens on click when focus did not keep the popover open", async () => {
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<ControlledSearchableSelect />);
+    });
+
+    const input = renderer.root.findByType("input");
+    expect(input.props["aria-expanded"]).toBe(false);
+    await act(async () => input.props.onClick());
+    expect(input.props["aria-expanded"]).toBe(true);
+  });
+
   it("preserves replacement text and clears it when the option scope changes", async () => {
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
