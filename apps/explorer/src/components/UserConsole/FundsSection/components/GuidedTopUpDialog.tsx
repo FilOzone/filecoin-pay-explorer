@@ -16,7 +16,7 @@ import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useConnection, usePublicClient, useSwitchChain } from "wagmi";
-import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { mainnet } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 import {
   calculateFundingRunway,
@@ -99,16 +99,7 @@ export function GuidedTopUpDialog({
   const latestAddress = useRef(address);
   latestAddress.current = address;
   const acquisition = useGuidedSquidAcquisition({ address, destinationClient, open, recoveryRevision });
-  const {
-    acquiredAmount,
-    acquisitionOwner,
-    acquisitionState,
-    automaticRecovery,
-    automaticRecoveryError,
-    coordinationError: acquisitionCoordinationError,
-    hasInvalidAcquisition,
-    savedAcquisition,
-  } = acquisition;
+  const { acquiredAmount, acquisitionOwner, acquisitionState, recoveryPanelState, savedAcquisition } = acquisition;
   // The runway duration only affects the slider's suggestions (computed inside
   // FundingRunwaySlider); the displayed funded-through dates are duration-agnostic.
   const current = accountSummary
@@ -128,9 +119,6 @@ export function GuidedTopUpDialog({
   const step: 1 | 2 = acquiredAmount === null ? 1 : 2;
   const acquisitionOwnerMatches =
     acquisitionOwner === null || (address !== undefined && acquisitionOwner.toLowerCase() === address.toLowerCase());
-  const savedSourceChain = SQUID_SOURCE_CHAINS.find(
-    (sourceChain) => sourceChain.id === savedAcquisition?.sourceChainId,
-  );
   useEffect(() => {
     void address;
     void recoveryRevision;
@@ -264,6 +252,44 @@ export function GuidedTopUpDialog({
     }
   };
 
+  const renderRecoveryPanel = () => {
+    if (!recoveryPanelState) return null;
+    switch (recoveryPanelState.kind) {
+      case "invalid-storage":
+        return <SquidRecoveryPanel onClearInvalid={() => void clearInvalidAcquisition()} state={recoveryPanelState} />;
+      case "storage-unavailable":
+        return <SquidRecoveryPanel state={recoveryPanelState} />;
+      case "manual-verification":
+        return (
+          <SquidRecoveryPanel
+            onClear={() => void clearBlockedAcquisition()}
+            onContinue={() => void continueWithAcquiredUsdfc()}
+            state={recoveryPanelState}
+          />
+        );
+      case "automatic-check":
+        return <SquidRecoveryPanel onClear={() => void clearBlockedAcquisition()} state={recoveryPanelState} />;
+      case "automatic-permanent-error":
+        return <SquidRecoveryPanel onClear={() => void clearBlockedAcquisition()} state={recoveryPanelState} />;
+      case "automatic-retryable-error":
+        return (
+          <SquidRecoveryPanel
+            onClear={() => void clearBlockedAcquisition()}
+            onRetryAutomatic={() => void acquisition.retryAutomaticRecovery()}
+            state={recoveryPanelState}
+          />
+        );
+      case "deposit-recovery":
+        return (
+          <SquidRecoveryPanel
+            onClear={() => void clearBlockedAcquisition()}
+            onRetryDeposit={() => void retryFilecoinDeposit()}
+            state={recoveryPanelState}
+          />
+        );
+    }
+  };
+
   const switchToFilecoin = async () => {
     setIsSwitchingNetwork(true);
     try {
@@ -363,26 +389,7 @@ export function GuidedTopUpDialog({
               </p>
             </RunwayCard>
           )}
-          {acquisitionState === "blocked" && (
-            <SquidRecoveryPanel
-              acquisition={savedAcquisition}
-              automaticError={automaticRecovery.error}
-              coordinationError={acquisitionCoordinationError}
-              hasInvalidAcquisition={hasInvalidAcquisition}
-              isAutomaticEligible={automaticRecovery.isEligible}
-              isAutomaticFetching={automaticRecovery.isFetching}
-              isAutomaticPermanentError={automaticRecovery.isPermanentError}
-              onClear={() => void clearBlockedAcquisition()}
-              onClearInvalid={() => void clearInvalidAcquisition()}
-              onContinue={() => void continueWithAcquiredUsdfc()}
-              onRetryAutomatic={() => {
-                void acquisition.retryAutomaticRecovery();
-              }}
-              onRetryDeposit={() => void retryFilecoinDeposit()}
-              recoveryError={automaticRecoveryError}
-              sourceChainName={savedSourceChain?.name}
-            />
-          )}
+          {renderRecoveryPanel()}
           {acquiredAmount === null && acquisitionState !== "blocked" && (
             <SquidQuoteReview
               acquisitionState={acquisitionState}

@@ -4,20 +4,35 @@ const STORAGE_PREFIX = "filecoin-pay:squid-acquisition:v1";
 
 type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
-export type SquidAcquisition = {
+type SquidAcquisitionBase = {
   acquisitionId?: string;
-  depositTransactionHash?: Hash;
-  deliveredAmount?: bigint;
   destinationBalanceBefore?: bigint;
   destinationAmount: bigint;
-  executionStage?: SquidAcquisitionExecutionStage;
   owner: Address;
   sourceChainId: number;
-  status: "acquired" | "depositing" | "processing";
   transactionHashes: Hash[];
 };
 
 export type SquidAcquisitionExecutionStage = "preparing" | "swap-broadcast" | "swap-requested";
+export type ProcessingSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: never;
+  depositTransactionHash?: never;
+  executionStage: SquidAcquisitionExecutionStage;
+  status: "processing";
+};
+export type AcquiredSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: bigint;
+  depositTransactionHash?: never;
+  executionStage?: SquidAcquisitionExecutionStage;
+  status: "acquired";
+};
+export type DepositingSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: bigint;
+  depositTransactionHash?: Hash;
+  executionStage?: SquidAcquisitionExecutionStage;
+  status: "depositing";
+};
+export type SquidAcquisition = AcquiredSquidAcquisition | DepositingSquidAcquisition | ProcessingSquidAcquisition;
 
 export function getSquidAcquisitionStorageKey(owner: Address) {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
@@ -115,7 +130,7 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
       sourceChainId: acquisition.sourceChainId,
       status: acquisition.status,
       transactionHashes: acquisition.transactionHashes as Hash[],
-    };
+    } as SquidAcquisition;
   } catch {
     return null;
   }

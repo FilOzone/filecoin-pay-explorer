@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address, PublicClient } from "viem";
-import { mainnet } from "@/constants/chains";
+import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import {
   clearInvalidSquidAcquisition,
   clearSquidAcquisition,
+  type DepositingSquidAcquisition,
   getSquidDepositAmount,
   hasSameSquidAcquisitionSnapshot,
   hasSavedSquidAcquisition,
   loadSquidAcquisition,
   markSquidAcquired,
   markSquidAcquiredFromBalance,
+  type ProcessingSquidAcquisition,
   resetSquidDeposit,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
@@ -19,6 +21,34 @@ import { readUsdfcBalance } from "../data/usdfc-balance";
 import { useSquidAcquisitionRecovery } from "./useSquidAcquisitionRecovery";
 
 export type SquidAcquisitionState = "acquired" | "blocked" | "idle" | "processing";
+export type SquidRecoveryPanelState =
+  | { kind: "invalid-storage" }
+  | { kind: "storage-unavailable" }
+  | {
+      acquisition: ProcessingSquidAcquisition;
+      coordinationError: string | null;
+      kind: "manual-verification";
+      sourceChainName?: string;
+    }
+  | {
+      acquisition: ProcessingSquidAcquisition;
+      isFetching: boolean;
+      kind: "automatic-check";
+      sourceChainName?: string;
+    }
+  | {
+      acquisition: ProcessingSquidAcquisition;
+      kind: "automatic-retryable-error";
+      message: string;
+      sourceChainName?: string;
+    }
+  | {
+      acquisition: ProcessingSquidAcquisition;
+      kind: "automatic-permanent-error";
+      message: string;
+      sourceChainName?: string;
+    }
+  | { acquisition: DepositingSquidAcquisition; kind: "deposit-recovery" };
 
 export function useGuidedSquidAcquisition({
   address,
@@ -228,6 +258,45 @@ export function useGuidedSquidAcquisition({
   };
 
   const reset = () => applySavedAcquisition(null, false);
+  const sourceChainName = SQUID_SOURCE_CHAINS.find((chain) => chain.id === savedAcquisition?.sourceChainId)?.name;
+  const automaticErrorMessage =
+    automaticRecoveryError ??
+    (automaticRecovery.error instanceof Error
+      ? automaticRecovery.error.message
+      : automaticRecovery.error
+        ? "Automatic recovery could not continue"
+        : null);
+  let recoveryPanelState: SquidRecoveryPanelState | null = null;
+  if (acquisitionState === "blocked") {
+    if (hasInvalidAcquisition) {
+      recoveryPanelState = { kind: "invalid-storage" };
+    } else if (savedAcquisition?.status === "depositing") {
+      recoveryPanelState = { acquisition: savedAcquisition, kind: "deposit-recovery" };
+    } else if (savedAcquisition?.status === "processing") {
+      recoveryPanelState = automaticRecovery.isEligible
+        ? automaticErrorMessage
+          ? {
+              acquisition: savedAcquisition,
+              kind: automaticRecovery.isPermanentError ? "automatic-permanent-error" : "automatic-retryable-error",
+              message: automaticErrorMessage,
+              sourceChainName,
+            }
+          : {
+              acquisition: savedAcquisition,
+              isFetching: automaticRecovery.isFetching,
+              kind: "automatic-check",
+              sourceChainName,
+            }
+        : {
+            acquisition: savedAcquisition,
+            coordinationError,
+            kind: "manual-verification",
+            sourceChainName,
+          };
+    } else {
+      recoveryPanelState = { kind: "storage-unavailable" };
+    }
+  }
 
   return {
     acquiredAmount,
@@ -247,6 +316,7 @@ export function useGuidedSquidAcquisition({
     reset,
     retryAutomaticRecovery,
     retryDeposit,
+    recoveryPanelState,
     savedAcquisition,
     startProcessing,
   };
