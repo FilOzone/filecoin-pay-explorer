@@ -2,12 +2,14 @@
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { Archive } from "lucide-react";
 import type { MockDataset } from "../data/mockDatasets";
 import { daysInactive, formatUSD, STALE_AFTER_DAYS, wastedSpendUSD } from "../utils/datasetLifecycle";
 
 type StaleQueueProps = {
   datasets: MockDataset[];
+  onKeep: (dataset: MockDataset) => void;
   onRelease: (dataset: MockDataset) => void;
 };
 
@@ -16,8 +18,13 @@ type StaleQueueProps = {
  * by spend since their last activity signal. Ranking uses last write for
  * datasets without FilBeam, retrieval recency where FilBeam data exists — each
  * row names its signal so "inactive" is never overstated.
+ *
+ * Every row closes with exactly one disposition: Keep (affirm intentional
+ * storage, mute inactivity alerts), Export (get the data out), or Release
+ * (stop paying). Keep is deliberately not "Extend": funding is account-level
+ * in Filecoin Pay, so a per-dataset top-up cannot promise anything.
  */
-export const StaleQueue = ({ datasets, onRelease }: StaleQueueProps) => {
+export const StaleQueue = ({ datasets, onKeep, onRelease }: StaleQueueProps) => {
   const ranked = [...datasets].sort((a, b) => wastedSpendUSD(b) - wastedSpendUSD(a));
   if (ranked.length === 0) return null;
 
@@ -42,7 +49,16 @@ export const StaleQueue = ({ datasets, onRelease }: StaleQueueProps) => {
               </span>
             </div>
             <div className='flex shrink-0 gap-2'>
-              <Button variant='ghost'>Extend</Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant='ghost' onClick={() => onKeep(dataset)}>
+                    Keep
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side='top'>
+                  Marks this dataset as intentionally stored and mutes inactivity alerts for it.
+                </TooltipContent>
+              </Tooltip>
               <Button variant='ghost'>Export</Button>
               <Button variant='ghost' className='text-destructive' onClick={() => onRelease(dataset)}>
                 Release
