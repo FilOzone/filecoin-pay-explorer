@@ -1,20 +1,21 @@
 import type { Address, Hash } from "viem";
 import {
+  type AcquiredSquidAcquisition,
   beginSquidAcquisition,
   clearSquidAcquisition,
   loadSquidAcquisition,
   markSquidAcquiredFromBalance,
   markSquidBroadcast,
   markSquidSwapRequested,
-  type SquidAcquisition,
+  type ProcessingSquidAcquisition,
 } from "./squid-acquisition";
 import { canClearSquidAcquisitionAfterError } from "./squid-execution";
 
 type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 export type SquidAcquisitionOutcome =
-  | { acquisition: SquidAcquisition; status: "acquired" }
-  | { acquisition: SquidAcquisition; error: unknown; status: "blocked" }
+  | { acquisition: AcquiredSquidAcquisition; status: "acquired" }
+  | { acquisition: ProcessingSquidAcquisition; error: unknown; status: "blocked" }
   | { error: unknown; status: "failed" };
 
 export async function runSquidAcquisition({
@@ -28,7 +29,7 @@ export async function runSquidAcquisition({
 }: {
   execute: (callbacks: { onSwapAttempt: () => void; onSwapBroadcast: (hash: Hash) => void }) => Promise<unknown>;
   minimumDestinationAmount: bigint;
-  onStarted?: (acquisition: SquidAcquisition) => void;
+  onStarted?: (acquisition: ProcessingSquidAcquisition) => void;
   owner: Address;
   readDestinationBalance: () => Promise<bigint>;
   sourceChainId: number;
@@ -41,7 +42,7 @@ export async function runSquidAcquisition({
     return { error, status: "failed" };
   }
 
-  let acquisition: SquidAcquisition;
+  let acquisition: ProcessingSquidAcquisition;
   try {
     acquisition = beginSquidAcquisition(
       storage,
@@ -79,9 +80,11 @@ export async function runSquidAcquisition({
         // Preserve the latest recoverable state below.
       }
     }
-    let latestAcquisition = acquisition;
+    let latestAcquisition: ProcessingSquidAcquisition = acquisition;
     try {
-      latestAcquisition = loadSquidAcquisition(storage, owner) ?? acquisition;
+      const saved = loadSquidAcquisition(storage, owner);
+      if (saved?.status === "acquired") return { acquisition: saved, status: "acquired" };
+      if (saved?.status === "processing") latestAcquisition = saved;
     } catch {
       // Storage may have become unavailable after the durable marker was
       // created. Return the in-memory marker so the UI still leaves its

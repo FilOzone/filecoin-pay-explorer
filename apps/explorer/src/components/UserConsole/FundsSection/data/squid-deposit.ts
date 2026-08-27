@@ -1,17 +1,19 @@
 import type { Address, Hash } from "viem";
 import {
+  type AcquiredSquidAcquisition,
   clearSquidAcquisition,
+  type DepositingSquidAcquisition,
   markSquidDepositPending,
   resetSquidDeposit,
-  type SquidAcquisition,
 } from "./squid-acquisition";
 import { isUserRejectedRequest } from "./squid-execution";
 
 type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 export type SquidDepositOutcome =
-  | { acquisition: SquidAcquisition; status: "succeeded" }
-  | { acquisition: SquidAcquisition; error: unknown; status: "blocked" | "rejected" };
+  | { acquisition: DepositingSquidAcquisition; status: "succeeded" }
+  | { acquisition: DepositingSquidAcquisition; error: unknown; status: "blocked" }
+  | { acquisition: AcquiredSquidAcquisition; error: unknown; status: "rejected" };
 export type SquidRecoveryStateError = "cleanup" | "hash-persistence";
 
 export async function runSquidDeposit({
@@ -23,12 +25,12 @@ export async function runSquidDeposit({
   onSubmitted,
   storage,
 }: {
-  acquisition: SquidAcquisition;
+  acquisition: AcquiredSquidAcquisition;
   amount: bigint;
   fund: (amount: bigint, onHash: (hash: Hash) => void) => Promise<{ receipt: { status: string } }>;
   invalidate: (owner: Address) => Promise<unknown>;
   onRecoveryStateError?: (reason: SquidRecoveryStateError) => void;
-  onSubmitted?: (hash: Hash, acquisition: SquidAcquisition) => void;
+  onSubmitted?: (hash: Hash, acquisition: DepositingSquidAcquisition) => void;
   storage: AcquisitionStorage;
 }): Promise<SquidDepositOutcome> {
   let pending = markSquidDepositPending(storage, acquisition);

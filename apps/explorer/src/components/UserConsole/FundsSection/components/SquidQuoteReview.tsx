@@ -21,7 +21,7 @@ import {
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
 import { sourceTokenBalance } from "../data/source-token-balances";
-import type { SquidAcquisition } from "../data/squid-acquisition";
+import type { AcquiredSquidAcquisition, ProcessingSquidAcquisition } from "../data/squid-acquisition";
 import { useSquidExecution } from "../hooks/useSquidExecution";
 import { useSquidQuotePlan } from "../hooks/useSquidQuotePlan";
 import { useSquidSourceData } from "../hooks/useSquidSourceData";
@@ -41,11 +41,11 @@ const SOURCE_CHAIN_OPTIONS: readonly SearchableOption[] = SQUID_SOURCE_CHAINS.ma
 type SquidQuoteReviewProps = {
   acquisitionState: "acquired" | "blocked" | "idle" | "processing";
   destinationAmount: bigint | null;
-  onAcquired: (acquisition: SquidAcquisition) => void;
-  onBlocked: (acquisition: SquidAcquisition) => void;
+  onAcquired: (acquisition: AcquiredSquidAcquisition) => void;
+  onBlocked: (acquisition: ProcessingSquidAcquisition) => void;
   onNetworkSwitchingChange: (isSwitching: boolean) => void;
   onRejected: () => void;
-  onStarted: (acquisition: SquidAcquisition) => void;
+  onStarted: (acquisition: ProcessingSquidAcquisition) => void;
 };
 
 function displayAmount(amount: bigint, decimals: number, symbol: string) {

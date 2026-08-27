@@ -152,7 +152,7 @@ export function GuidedTopUpDialog({
       isSubmitting ||
       !acquisitionOwner ||
       !acquisitionOwnerMatches ||
-      !savedAcquisition
+      savedAcquisition?.status !== "acquired"
     )
       return;
 

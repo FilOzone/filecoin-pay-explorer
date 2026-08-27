@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address, PublicClient } from "viem";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import {
+  type AcquiredSquidAcquisition,
   clearInvalidSquidAcquisition,
   clearSquidAcquisition,
   type DepositingSquidAcquisition,
@@ -187,8 +188,8 @@ export function useGuidedSquidAcquisition({
     };
   }, [applySavedAcquisition, automaticRecovery.data, automaticRecovery.dataUpdatedAt, savedAcquisition]);
 
-  const recordAcquired = (acquisition: SquidAcquisition) => applySavedAcquisition(acquisition);
-  const startProcessing = (acquisition: SquidAcquisition) => {
+  const recordAcquired = (acquisition: AcquiredSquidAcquisition) => applySavedAcquisition(acquisition);
+  const startProcessing = (acquisition: ProcessingSquidAcquisition) => {
     setSavedAcquisition(acquisition);
     setHasInvalidAcquisition(false);
     setCoordinationError(null);
@@ -197,7 +198,7 @@ export function useGuidedSquidAcquisition({
     setAcquiredAmount(null);
     setAcquisitionState("processing");
   };
-  const recordBlocked = (acquisition: SquidAcquisition) => {
+  const recordBlocked = (acquisition: DepositingSquidAcquisition | ProcessingSquidAcquisition) => {
     setSavedAcquisition(acquisition);
     setHasInvalidAcquisition(false);
     setAutomaticRecoveryError(null);
@@ -205,7 +206,7 @@ export function useGuidedSquidAcquisition({
     setAcquiredAmount(null);
     setAcquisitionState("blocked");
   };
-  const recordPending = (acquisition: SquidAcquisition) => setSavedAcquisition(acquisition);
+  const recordPending = (acquisition: DepositingSquidAcquisition) => setSavedAcquisition(acquisition);
   const recordRejected = () => applySavedAcquisition(null, false);
   const retryAutomaticRecovery = () => {
     setAutomaticRecoveryError(null);
@@ -302,13 +303,9 @@ export function useGuidedSquidAcquisition({
     acquiredAmount,
     acquisitionOwner,
     acquisitionState,
-    automaticRecovery,
-    automaticRecoveryError,
     clearBlocked,
     clearInvalid,
     continueWithAcquired,
-    coordinationError,
-    hasInvalidAcquisition,
     recordAcquired,
     recordBlocked,
     recordPending,

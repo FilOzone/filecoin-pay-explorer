@@ -42,7 +42,7 @@ export function hasSavedSquidAcquisition(storage: AcquisitionStorage, owner: Add
   return storage.getItem(getSquidAcquisitionStorageKey(owner)) !== null;
 }
 
-function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+function save<T extends SquidAcquisition>(storage: AcquisitionStorage, acquisition: T) {
   storage.setItem(
     getSquidAcquisitionStorageKey(acquisition.owner),
     JSON.stringify({
