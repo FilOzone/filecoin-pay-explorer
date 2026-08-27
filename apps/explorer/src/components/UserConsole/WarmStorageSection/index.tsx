@@ -1,6 +1,5 @@
 "use client";
 
-import { Alert } from "@filecoin-foundation/ui-filecoin/Alert";
 import { useCallback, useState } from "react";
 import {
   DatasetsTable,
@@ -37,10 +36,10 @@ export const WarmStorageSection = () => {
 
   return (
     <div className='flex flex-col gap-6'>
-      <Alert
-        title='Proof of concept'
-        description='Everything below renders mock data. Real rows come from indexed contract events (last write, proving) and FilBeam (retrieval).'
-      />
+      <p className='text-xs text-muted-foreground'>
+        Proof of concept: mock data. Real rows come from indexed contract events (last write, proving) and FilBeam
+        (retrieval).
+      </p>
 
       <ServiceMetricCards datasets={datasets} />
 
