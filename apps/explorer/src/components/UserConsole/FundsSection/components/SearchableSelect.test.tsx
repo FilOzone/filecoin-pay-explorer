@@ -6,7 +6,11 @@ import { filterSearchableOptions, resolveSearchableOption, SearchableSelect } fr
 vi.mock("@filecoin-pay/ui/components/popover", () => ({
   Popover: ({ children }: { children: React.ReactNode }) => children,
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => children,
-  PopoverContent: ({ children }: { children: React.ReactNode }) => children,
+  PopoverContent: ({ children, ...props }: React.ComponentProps<"div">) => (
+    <div data-testid='popover-content' {...props}>
+      {children}
+    </div>
+  ),
 }));
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
   Input: (props: Record<string, unknown>) => <input {...props} />,
@@ -70,6 +74,24 @@ describe("SearchableSelect", () => {
     expect(input.props.onFocus).toBeUndefined();
     await act(async () => input.props.onClick());
     expect(input.props["aria-expanded"]).toBe(true);
+  });
+
+  it("keeps the menu open while its scrollbar is used and handles wheel scrolling", async () => {
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<ControlledSearchableSelect />);
+    });
+
+    const input = renderer.root.findByType("input");
+    await act(async () => input.props.onClick());
+    await act(async () => input.props.onBlur());
+    expect(input.props["aria-expanded"]).toBe(true);
+
+    const stopPropagation = vi.fn();
+    await act(async () =>
+      renderer.root.findByProps({ "data-testid": "popover-content" }).props.onWheelCapture({ stopPropagation }),
+    );
+    expect(stopPropagation).toHaveBeenCalledOnce();
   });
 
   it("preserves replacement text and clears it when the option scope changes", async () => {

@@ -81,10 +81,7 @@ export function SearchableSelect({
           autoComplete='off'
           disabled={disabled}
           id={id}
-          onBlur={() => {
-            setIsTouched(true);
-            setIsOpen(false);
-          }}
+          onBlur={() => setIsTouched(true)}
           onChange={(nextQuery) => {
             setQuery(nextQuery);
             setIsTouched(false);
@@ -119,6 +116,10 @@ export function SearchableSelect({
         align='start'
         className='max-h-72 w-[var(--radix-popover-trigger-width)] overflow-y-auto p-1'
         onOpenAutoFocus={(event) => event.preventDefault()}
+        onWheelCapture={(event) => {
+          // Keep the dialog's scroll lock from consuming this portalled list's wheel events.
+          event.stopPropagation();
+        }}
         sideOffset={4}
       >
         <div aria-label='Source tokens' id={listId} role='listbox'>
