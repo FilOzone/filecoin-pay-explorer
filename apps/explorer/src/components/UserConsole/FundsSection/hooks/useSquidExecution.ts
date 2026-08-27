@@ -25,9 +25,10 @@ export function useSquidExecution({
   isNativeSource,
   networkGasMaximum,
   onAcquired,
-  onAcquisitionStateChange,
   onBlocked,
   onNetworkSwitchingChange,
+  onRejected,
+  onStarted,
   plan,
   refetchNativeBalance,
   refetchSourceAllowance,
@@ -43,9 +44,10 @@ export function useSquidExecution({
   isNativeSource: boolean;
   networkGasMaximum: bigint | null;
   onAcquired: (acquisition: SquidAcquisition) => void;
-  onAcquisitionStateChange: (state: SquidAcquisitionState) => void;
   onBlocked: (acquisition: SquidAcquisition) => void;
   onNetworkSwitchingChange: (isSwitching: boolean) => void;
+  onRejected: () => void;
+  onStarted: (acquisition: SquidAcquisition) => void;
   plan?: SquidFundingPlan;
   refetchNativeBalance: BigIntRefetch;
   refetchSourceAllowance: BigIntRefetch;
@@ -152,8 +154,8 @@ export function useSquidExecution({
               sourceWalletClient: sourceWalletClient as SquidWalletClient,
             }),
           minimumDestinationAmount: quote.requirement.amount,
-          onStarted: () => {
-            if (isCurrentOwner()) onAcquisitionStateChange("processing");
+          onStarted: (acquisition) => {
+            if (isCurrentOwner()) onStarted(acquisition);
           },
           owner: address,
           readDestinationBalance: () => readUsdfcBalance(destinationClient, mainnet.contracts.usdfc.address, address),
@@ -163,15 +165,13 @@ export function useSquidExecution({
       );
       if (!isCurrentOwner()) return;
       if (outcome.status === "acquired") {
-        onAcquisitionStateChange("acquired");
         onAcquired(outcome.acquisition);
         return;
       }
       if (outcome.status === "blocked") {
         onBlocked(outcome.acquisition);
-        onAcquisitionStateChange("blocked");
       } else {
-        onAcquisitionStateChange("idle");
+        onRejected();
       }
       setError(walletErrorMessage(outcome.error, "Squid could not complete the acquisition."));
     } catch (cause) {

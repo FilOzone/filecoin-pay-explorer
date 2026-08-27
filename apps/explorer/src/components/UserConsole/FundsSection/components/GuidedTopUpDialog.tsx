@@ -372,8 +372,7 @@ export function GuidedTopUpDialog({
               onClearInvalid={() => void clearInvalidAcquisition()}
               onContinue={() => void continueWithAcquiredUsdfc()}
               onRetryAutomatic={() => {
-                acquisition.setAutomaticRecoveryError(null);
-                void automaticRecovery.refetch();
+                void acquisition.retryAutomaticRecovery();
               }}
               onRetryDeposit={() => void retryFilecoinDeposit()}
               recoveryError={automaticRecoveryError}
@@ -385,9 +384,10 @@ export function GuidedTopUpDialog({
               acquisitionState={acquisitionState}
               destinationAmount={depositAmount}
               onAcquired={acquisition.recordAcquired}
-              onAcquisitionStateChange={acquisition.setAcquisitionState}
               onBlocked={acquisition.recordBlocked}
               onNetworkSwitchingChange={setIsSwitchingNetwork}
+              onRejected={acquisition.recordRejected}
+              onStarted={acquisition.startProcessing}
             />
           )}
           {acquiredAmount !== null && !acquisitionOwnerMatches && (

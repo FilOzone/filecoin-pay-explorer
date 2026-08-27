@@ -42,9 +42,10 @@ type SquidQuoteReviewProps = {
   acquisitionState: "acquired" | "blocked" | "idle" | "processing";
   destinationAmount: bigint | null;
   onAcquired: (acquisition: SquidAcquisition) => void;
-  onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
   onBlocked: (acquisition: SquidAcquisition) => void;
   onNetworkSwitchingChange: (isSwitching: boolean) => void;
+  onRejected: () => void;
+  onStarted: (acquisition: SquidAcquisition) => void;
 };
 
 function displayAmount(amount: bigint, decimals: number, symbol: string) {
@@ -61,9 +62,10 @@ export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
   onAcquired,
-  onAcquisitionStateChange,
   onBlocked,
   onNetworkSwitchingChange,
+  onRejected,
+  onStarted,
 }: SquidQuoteReviewProps) {
   // The flow is deliberately split into read-only route review and wallet execution.
   // Any execution that may have broadcast remains blocked until it is recovered or explicitly cleared.
@@ -228,9 +230,10 @@ export function SquidQuoteReview({
     isNativeSource: isNativeSource === true,
     networkGasMaximum: networkGas.maximum,
     onAcquired,
-    onAcquisitionStateChange,
     onBlocked,
     onNetworkSwitchingChange,
+    onRejected,
+    onStarted,
     plan,
     refetchNativeBalance: async () => {
       const result = await nativeBalanceQuery.refetch();

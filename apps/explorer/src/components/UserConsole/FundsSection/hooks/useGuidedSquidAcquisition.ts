@@ -158,13 +158,29 @@ export function useGuidedSquidAcquisition({
   }, [applySavedAcquisition, automaticRecovery.data, automaticRecovery.dataUpdatedAt, savedAcquisition]);
 
   const recordAcquired = (acquisition: SquidAcquisition) => applySavedAcquisition(acquisition);
+  const startProcessing = (acquisition: SquidAcquisition) => {
+    setSavedAcquisition(acquisition);
+    setHasInvalidAcquisition(false);
+    setCoordinationError(null);
+    setAutomaticRecoveryError(null);
+    setAcquisitionOwner(acquisition.owner);
+    setAcquiredAmount(null);
+    setAcquisitionState("processing");
+  };
   const recordBlocked = (acquisition: SquidAcquisition) => {
     setSavedAcquisition(acquisition);
+    setHasInvalidAcquisition(false);
+    setAutomaticRecoveryError(null);
     setAcquisitionOwner(acquisition.owner);
     setAcquiredAmount(null);
     setAcquisitionState("blocked");
   };
   const recordPending = (acquisition: SquidAcquisition) => setSavedAcquisition(acquisition);
+  const recordRejected = () => applySavedAcquisition(null, false);
+  const retryAutomaticRecovery = () => {
+    setAutomaticRecoveryError(null);
+    return automaticRecovery.refetch();
+  };
 
   const clearBlocked = async () => {
     if (!savedAcquisition) return false;
@@ -227,10 +243,11 @@ export function useGuidedSquidAcquisition({
     recordAcquired,
     recordBlocked,
     recordPending,
+    recordRejected,
     reset,
+    retryAutomaticRecovery,
     retryDeposit,
     savedAcquisition,
-    setAcquisitionState,
-    setAutomaticRecoveryError,
+    startProcessing,
   };
 }

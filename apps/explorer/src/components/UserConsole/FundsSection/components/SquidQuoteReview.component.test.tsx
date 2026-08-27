@@ -114,9 +114,10 @@ async function renderReview(queryClient: QueryClient, destinationAmount: bigint 
           acquisitionState='idle'
           destinationAmount={destinationAmount}
           onAcquired={vi.fn()}
-          onAcquisitionStateChange={vi.fn()}
           onBlocked={vi.fn()}
           onNetworkSwitchingChange={vi.fn()}
+          onRejected={vi.fn()}
+          onStarted={vi.fn()}
         />
       </QueryClientProvider>,
     );
@@ -256,9 +257,10 @@ describe("SquidQuoteReview token inventory", () => {
             acquisitionState='idle'
             destinationAmount={null}
             onAcquired={vi.fn()}
-            onAcquisitionStateChange={vi.fn()}
             onBlocked={vi.fn()}
             onNetworkSwitchingChange={vi.fn()}
+            onRejected={vi.fn()}
+            onStarted={vi.fn()}
           />
         </QueryClientProvider>,
       ),
