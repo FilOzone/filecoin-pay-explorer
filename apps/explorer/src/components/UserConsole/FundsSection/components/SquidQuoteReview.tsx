@@ -20,8 +20,8 @@ import {
   isBridgeNativeFee,
   shouldBlockOnSeparateNativeBalance,
 } from "../data/guided-top-up";
-import type { SquidAcquisition } from "../data/squid-acquisition";
 import { sourceTokenBalance } from "../data/source-token-balances";
+import type { SquidAcquisition } from "../data/squid-acquisition";
 import { useSquidExecution } from "../hooks/useSquidExecution";
 import { useSquidQuotePlan } from "../hooks/useSquidQuotePlan";
 import { useSquidSourceData } from "../hooks/useSquidSourceData";
