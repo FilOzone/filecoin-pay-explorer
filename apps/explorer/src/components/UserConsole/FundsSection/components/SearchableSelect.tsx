@@ -93,7 +93,6 @@ export function SearchableSelect({
             onValueChange(resolveSearchableOption(options, nextQuery));
           }}
           onClick={() => setIsOpen(true)}
-          onFocus={() => setIsOpen(true)}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown" && filteredOptions.length > 0) {
               event.preventDefault();

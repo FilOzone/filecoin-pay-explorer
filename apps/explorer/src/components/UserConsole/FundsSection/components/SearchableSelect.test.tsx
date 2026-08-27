@@ -59,7 +59,7 @@ describe("searchable option filtering", () => {
 });
 
 describe("SearchableSelect", () => {
-  it("opens on click when focus did not keep the popover open", async () => {
+  it("opens once on click without opening on focus", async () => {
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
       renderer = create(<ControlledSearchableSelect />);
@@ -67,6 +67,7 @@ describe("SearchableSelect", () => {
 
     const input = renderer.root.findByType("input");
     expect(input.props["aria-expanded"]).toBe(false);
+    expect(input.props.onFocus).toBeUndefined();
     await act(async () => input.props.onClick());
     expect(input.props["aria-expanded"]).toBe(true);
   });
