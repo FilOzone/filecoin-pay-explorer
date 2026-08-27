@@ -68,7 +68,9 @@ export const StaleQueue = ({ datasets, onKeep, onRelease }: StaleQueueProps) => 
                   Marks this dataset as intentionally stored and mutes inactivity alerts for it.
                 </TooltipContent>
               </Tooltip>
-              <Button variant='ghost'>Export</Button>
+              <Button variant='ghost' disabled title='Not wired up in this POC'>
+                Export
+              </Button>
               <Button variant='ghost' className='text-destructive' onClick={() => onRelease(dataset)}>
                 Release
               </Button>

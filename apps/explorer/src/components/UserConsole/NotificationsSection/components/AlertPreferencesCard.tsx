@@ -112,6 +112,7 @@ export const AlertPreferencesCard = ({ wallet }: { wallet: string }) => {
           onChange={(datasetInactive) => update({ datasetInactive })}
         >
           <select
+            aria-label='Days without activity before a dataset counts as inactive'
             value={prefs.inactiveAfterDays}
             onChange={(e) => update({ inactiveAfterDays: Number(e.target.value) })}
             disabled={!prefs.datasetInactive}

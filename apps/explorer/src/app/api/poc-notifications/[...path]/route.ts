@@ -10,10 +10,15 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const subscribedWallets = new Set<string>();
 
+const notInProduction = () =>
+  process.env.NODE_ENV === "production" ? NextResponse.json({ error: "not found" }, { status: 404 }) : null;
+
 const walletFromSiweMessage = (message: string): string | null =>
   message.match(/0x[a-fA-F0-9]{40}/)?.[0]?.toLowerCase() ?? null;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const blocked = notInProduction();
+  if (blocked) return blocked;
   const { path } = await params;
   if (path.join("/") !== "status") return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -23,6 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const blocked = notInProduction();
+  if (blocked) return blocked;
   const { path } = await params;
   const endpoint = path.join("/");
   const body: unknown = await request.json().catch(() => null);
