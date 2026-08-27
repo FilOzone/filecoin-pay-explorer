@@ -3,7 +3,8 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
-import { Archive } from "lucide-react";
+import { Archive, Bell } from "lucide-react";
+import Link from "next/link";
 import type { MockDataset } from "../data/mockDatasets";
 import { daysInactive, formatUSD, STALE_AFTER_DAYS, wastedSpendUSD } from "../utils/datasetLifecycle";
 
@@ -30,12 +31,20 @@ export const StaleQueue = ({ datasets, onKeep, onRelease }: StaleQueueProps) => 
 
   return (
     <Card className='flex flex-col gap-4 p-4'>
-      <div className='flex items-center gap-2.5'>
+      <div className='flex flex-wrap items-center gap-2.5'>
         <Archive className='size-4 text-muted-foreground' />
         <h3 className='font-medium'>Inactive datasets</h3>
         <span className='text-sm text-muted-foreground'>
           No activity for {STALE_AFTER_DAYS}+ days, ranked by spend since then
         </span>
+        <Link
+          href='/console/notifications'
+          data-tour='alerts-link'
+          className='ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline'
+        >
+          <Bell className='size-4' />
+          Email me when datasets go inactive
+        </Link>
       </div>
 
       <ul className='flex flex-col divide-y'>

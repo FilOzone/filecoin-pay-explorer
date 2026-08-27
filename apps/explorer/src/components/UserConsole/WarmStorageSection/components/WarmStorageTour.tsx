@@ -43,6 +43,14 @@ const buildTour = () =>
         },
       },
       {
+        element: "[data-tour='alerts-link']",
+        popover: {
+          title: "How you find out",
+          description:
+            "The queue is the landing page for an inactivity email. Alerts ride the console's existing Email Alerts subscription (one verified email per wallet); this page adds dataset-level alert categories there, and Keep is the per-dataset mute.",
+        },
+      },
+      {
         element: "[data-tour='dispositions']",
         popover: {
           title: "Three ways to close a row",
