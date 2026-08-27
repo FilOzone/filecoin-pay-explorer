@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, LayoutDashboard } from "lucide-react";
+import { Bell, BellOff, Compass, HardDrive, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -66,6 +66,7 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
 
   const isAlertsActive = pathname.startsWith("/console/notifications");
   const isDashboardActive = pathname === "/console";
+  const isWarmStorageActive = pathname.startsWith("/console/services/warm-storage");
 
   // Chrome (border, responsive visibility) belongs to the caller: this renders
   // both as the desktop column and inside the mobile drawer.
@@ -74,6 +75,11 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
       <SidebarLink href='/console' isActive={isDashboardActive} onNavigate={onNavigate}>
         <LayoutDashboard className='size-4' />
         Dashboard
+      </SidebarLink>
+
+      <SidebarLink href='/console/services/warm-storage' isActive={isWarmStorageActive} onNavigate={onNavigate}>
+        <HardDrive className='size-4' />
+        Warm Storage
       </SidebarLink>
 
       {isNotificationsEligible ? (
