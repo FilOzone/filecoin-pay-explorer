@@ -88,37 +88,39 @@ export function SquidQuoteReview({
     sourceChain,
     sourceTokenAddress,
   });
-  const { allowanceQuery, inventoryQuery, nativeBalanceQuery, sourceBalanceQuery, tokenQuery } = sourceData;
   const {
-    data: sourceAllowance,
-    isError: isSourceAllowanceError,
-    isFetching: isLoadingSourceAllowance,
-  } = allowanceQuery;
-  const {
-    data: sourceTokenBalances,
-    isError: isTokenBalanceError,
-    isFetching: isLoadingTokenBalances,
-  } = inventoryQuery;
-  const { isError: isNativeBalanceError, isFetching: isLoadingNativeBalance } = nativeBalanceQuery;
-  const { isError: isSeparateSourceBalanceError, isFetching: isLoadingSeparateSourceBalance } = sourceBalanceQuery;
-  const {
-    error: tokenLoadError,
-    isError: isTokenLoadError,
-    isFetching: isLoadingTokens,
-    refetch: refetchTokens,
-  } = tokenQuery;
-  const {
+    allowance: sourceAllowance,
+    allowanceError,
     canFilterWalletTokens,
-    hasInventoriedSourceBalance,
     hasUnknownTokenBalances,
+    isAllowanceLoading: isLoadingSourceAllowance,
+    isNativeBalanceLoading: isLoadingNativeBalance,
     isNativeSource,
+    isSourceBalanceLoading: isLoadingSourceBalance,
+    isTokenInventoryLoading: isLoadingTokenBalances,
+    isTokenLoading: isLoadingTokens,
+    isWalletTokenInventoryLoading: isLoadingWalletTokenInventory,
     nativeBalance,
-    selectableTokens,
+    nativeBalanceError,
+    refetchSelectedBalance,
+    retryAllowance,
+    retryNativeBalance,
+    retrySourceBalance,
+    retryTokenInventory,
+    retryTokens,
     source,
     sourceBalance,
+    sourceBalanceError,
+    sourceTokenBalances,
+    tokenInventoryError,
+    tokenLoadError,
     tokens,
     visibleTokens,
   } = sourceData;
+  const isSourceAllowanceError = !!allowanceError;
+  const isTokenBalanceError = !!tokenInventoryError;
+  const isNativeBalanceError = !!nativeBalanceError;
+  const isTokenLoadError = !!tokenLoadError;
   const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
   const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
     const balance = sourceTokenBalance(sourceTokenBalances, token.token);
@@ -133,11 +135,8 @@ export function SquidQuoteReview({
       value: token.token,
     };
   });
-  const isLoadingWalletTokenInventory =
-    !!address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances;
   const isBusy = acquisitionState !== "idle";
-  const isSourceBalanceError = !hasInventoriedSourceBalance && isSeparateSourceBalanceError;
-  const isLoadingSourceBalance = !hasInventoriedSourceBalance && isLoadingSeparateSourceBalance;
+  const isSourceBalanceError = !!sourceBalanceError;
   const sourceAmount = sourceBalance ?? null;
   const quotePlan = useSquidQuotePlan({
     acquisitionState,
@@ -235,15 +234,9 @@ export function SquidQuoteReview({
     onRejected,
     onStarted,
     plan,
-    refetchNativeBalance: async () => {
-      const result = await nativeBalanceQuery.refetch();
-      return { data: result.data, isError: result.isError };
-    },
-    refetchSourceAllowance: async () => {
-      const result = await allowanceQuery.refetch();
-      return { data: result.data, isError: result.isError };
-    },
-    refetchSourceBalance: sourceData.refetchSelectedBalance,
+    refetchNativeBalance: retryNativeBalance,
+    refetchSourceAllowance: retryAllowance,
+    refetchSourceBalance: refetchSelectedBalance,
     requiredNativeBalance,
     source,
     sourceChainName: sourceChainMeta?.name,
@@ -384,7 +377,7 @@ export function SquidQuoteReview({
             <span>Some wallet balances could not be checked. The complete token catalog is shown.</span>
             <Button
               disabled={isLoadingTokenBalances}
-              onClick={() => void inventoryQuery.refetch()}
+              onClick={() => void retryTokenInventory()}
               size='compact'
               type='button'
               variant='tertiary'
@@ -403,7 +396,7 @@ export function SquidQuoteReview({
             <span>{sourceTokenCatalogMessage(true, true)}</span>
             <Button
               disabled={isLoadingTokens}
-              onClick={() => void refetchTokens()}
+              onClick={() => void retryTokens()}
               size='compact'
               type='button'
               variant='tertiary'
@@ -447,7 +440,7 @@ export function SquidQuoteReview({
               disabled={isLoadingSourceBalance}
               onClick={() => {
                 clearErrors();
-                void sourceBalanceQuery.refetch();
+                void retrySourceBalance();
               }}
               size='compact'
               type='button'
@@ -478,7 +471,7 @@ export function SquidQuoteReview({
               disabled={isLoadingNativeBalance}
               onClick={() => {
                 clearErrors();
-                void nativeBalanceQuery.refetch();
+                void retryNativeBalance();
               }}
               size='compact'
               type='button'
@@ -511,7 +504,7 @@ export function SquidQuoteReview({
               disabled={isLoadingSourceAllowance}
               onClick={() => {
                 clearErrors();
-                void allowanceQuery.refetch();
+                void retryAllowance();
               }}
               size='compact'
               type='button'

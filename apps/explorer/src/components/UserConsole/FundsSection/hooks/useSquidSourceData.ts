@@ -112,21 +112,42 @@ export function useSquidSourceData({
     }
   };
 
+  const retryAllowance = async () => {
+    const result = await allowanceQuery.refetch();
+    return { data: result.data, isError: result.isError };
+  };
+  const retryNativeBalance = async () => {
+    const result = await nativeBalanceQuery.refetch();
+    return { data: result.data, isError: result.isError };
+  };
+
   return {
-    allowanceQuery,
+    allowance: allowanceQuery.data,
+    allowanceError: allowanceQuery.error,
     canFilterWalletTokens,
     hasUnknownTokenBalances,
-    hasInventoriedSourceBalance,
-    inventoryQuery,
+    isAllowanceLoading: allowanceQuery.isFetching,
     isNativeSource,
+    isNativeBalanceLoading: nativeBalanceQuery.isFetching,
+    isSourceBalanceLoading: !hasInventoriedSourceBalance && sourceBalanceQuery.isFetching,
+    isTokenInventoryLoading: inventoryQuery.isFetching,
+    isTokenLoading: tokenQuery.isFetching,
+    isWalletTokenInventoryLoading:
+      !!address && selectableTokens.length > 0 && inventoryQuery.isFetching && !inventoryQuery.data,
     nativeBalance: isNativeSource ? sourceBalance : nativeBalanceQuery.data,
-    nativeBalanceQuery,
+    nativeBalanceError: nativeBalanceQuery.error,
     refetchSelectedBalance,
-    selectableTokens,
+    retryAllowance,
+    retryNativeBalance,
+    retrySourceBalance: sourceBalanceQuery.refetch,
+    retryTokenInventory: inventoryQuery.refetch,
+    retryTokens: tokenQuery.refetch,
     source,
     sourceBalance,
-    sourceBalanceQuery,
-    tokenQuery,
+    sourceBalanceError: hasInventoriedSourceBalance ? null : sourceBalanceQuery.error,
+    sourceTokenBalances: inventoryQuery.data,
+    tokenInventoryError: inventoryQuery.error,
+    tokenLoadError: tokenQuery.error,
     tokens,
     visibleTokens,
   };
