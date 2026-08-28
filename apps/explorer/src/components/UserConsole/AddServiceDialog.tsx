@@ -58,7 +58,7 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
       <span className='font-medium text-sm'>{service.name}</span>
       <span className='flex items-center gap-1 text-muted-foreground'>
         <Users className='h-3 w-3' />
-        {service.payerCount} paying accounts
+        {service.payerCount} users
       </span>
     </div>
     {service.description && <p className='text-muted-foreground'>{service.description}</p>}
