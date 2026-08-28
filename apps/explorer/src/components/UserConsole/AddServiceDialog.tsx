@@ -26,7 +26,6 @@ import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
-import { explorerUrls } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
 import { getNetworkFromChainId } from "@/utils/network";
 import { getPermitSignature } from "@/utils/permit";
@@ -50,7 +49,7 @@ interface TokenDetails {
   decimals: number;
 }
 
-const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl: string }> = ({
+const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: string }> = ({
   service,
   explorerUrl,
 }) => (
@@ -65,14 +64,18 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl: st
     {service.description && <p className='text-muted-foreground'>{service.description}</p>}
     <div className='flex items-center gap-1 text-muted-foreground'>
       <span>Contract:</span>
-      <a
-        href={`${explorerUrl}/address/${service.address}`}
-        target='_blank'
-        rel='noreferrer'
-        className='font-mono text-primary hover:underline'
-      >
-        {formatAddress(service.address)}
-      </a>
+      {explorerUrl ? (
+        <a
+          href={`${explorerUrl}/address/${service.address}`}
+          target='_blank'
+          rel='noreferrer'
+          className='font-mono text-primary hover:underline'
+        >
+          {formatAddress(service.address)}
+        </a>
+      ) : (
+        <span className='font-mono'>{formatAddress(service.address)}</span>
+      )}
       <CopyButton value={service.address} tooltipText='Copy contract address' />
     </div>
     {/* Homepage is untrusted contract text: plain text with a copy affordance, never a hyperlink. */}
@@ -115,14 +118,12 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const walletNetwork = getNetworkFromChainId(chainId);
   const { services, isLoading: isLoadingServices } = useApprovableServices({ networkOverride: walletNetwork });
   const knownTokens = paymentTokensByChainId[constants.chain.id] ?? [];
-  // Filfox for the service contract link (project convention for contract
-  // addresses); the chain's default explorer stays on transaction toasts.
-  const contractExplorerUrl = explorerUrls[walletNetwork];
+  const explorerUrl = constants.chain.blockExplorers?.default.url;
 
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    explorerUrl,
   });
 
   useEffect(() => {
@@ -311,7 +312,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
               </SelectContent>
             </Select>
 
-            {selectedService && <ServiceDetailsCard service={selectedService} explorerUrl={contractExplorerUrl} />}
+            {selectedService && <ServiceDetailsCard service={selectedService} explorerUrl={explorerUrl} />}
 
             {serviceChoice === CUSTOM_OPTION && (
               <div className='grid gap-2'>
