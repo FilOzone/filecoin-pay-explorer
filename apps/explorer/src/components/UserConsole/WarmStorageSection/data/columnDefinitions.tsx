@@ -2,6 +2,7 @@
 
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
+import type { Network } from "@/types";
 import { TerminateButton } from "../components/TerminateButton";
 import { formatDaysAgo, formatUSD } from "../utils/datasetLifecycle";
 import type { MockDataset } from "./mockDatasets";
@@ -9,10 +10,10 @@ import type { MockDataset } from "./mockDatasets";
 const columnHelper = createColumnHelper<MockDataset>();
 
 // Proving detail lives in the PDP Explorer rather than duplicated here.
-// TODO(POC): real per-dataset deep link once the PDP Explorer URL shape is confirmed.
-const PDP_EXPLORER_URL = "https://pdp.vxb.ai";
+const pdpExplorerDatasetUrl = (network: Network, datasetId: string): string =>
+  `https://pdp.filecoin.cloud/${network}/dataset/${datasetId}`;
 
-export const buildDatasetColumns = (onTerminate: (dataset: MockDataset) => void) => [
+export const buildDatasetColumns = (onTerminate: (dataset: MockDataset) => void, network: Network) => [
   columnHelper.accessor("name", {
     header: "Dataset",
     cell: (info) => (
@@ -37,9 +38,9 @@ export const buildDatasetColumns = (onTerminate: (dataset: MockDataset) => void)
   columnHelper.display({
     id: "proving",
     header: "Proving",
-    cell: () => (
+    cell: (info) => (
       <a
-        href={PDP_EXPLORER_URL}
+        href={pdpExplorerDatasetUrl(network, info.row.original.id)}
         target='_blank'
         rel='noopener noreferrer'
         className='inline-flex items-center gap-1 text-sm text-primary hover:underline'

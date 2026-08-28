@@ -31,7 +31,7 @@ export const MOCK_ACCOUNT = {
 
 export const MOCK_DATASETS: MockDataset[] = [
   {
-    id: "ds-101",
+    id: "101",
     name: "production-media",
     rootCid: "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
     sizeGiB: 512,
@@ -42,7 +42,7 @@ export const MOCK_DATASETS: MockDataset[] = [
     lockedUSD: 61.5,
   },
   {
-    id: "ds-102",
+    id: "102",
     name: "site-backups",
     rootCid: "bafybeihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
     sizeGiB: 1024,
@@ -53,7 +53,7 @@ export const MOCK_DATASETS: MockDataset[] = [
     lockedUSD: 118.2,
   },
   {
-    id: "ds-103",
+    id: "103",
     name: "event-photos-2025",
     rootCid: "bafybeibxm2nsadl3fnxv2sxcxmxaco2jl53wpeorjdzidjwf5aqdg7wa6u",
     sizeGiB: 340,
@@ -64,7 +64,7 @@ export const MOCK_DATASETS: MockDataset[] = [
     lockedUSD: 40.9,
   },
   {
-    id: "ds-104",
+    id: "104",
     name: "ml-training-snapshots",
     rootCid: "bafybeif7ztnhq65lumvvtr4ekcwd2ifwgm3awq4zfr3srh462rwyinlb4y",
     sizeGiB: 2048,
@@ -75,7 +75,7 @@ export const MOCK_DATASETS: MockDataset[] = [
     lockedUSD: 241.7,
   },
   {
-    id: "ds-105",
+    id: "105",
     name: "staging-fixtures",
     rootCid: "bafybeiczsscdsbs7ffqz55asqdf3smv6klcw3gofszvwlyarci47bgf354",
     sizeGiB: 96,
@@ -86,7 +86,7 @@ export const MOCK_DATASETS: MockDataset[] = [
     lockedUSD: 11.6,
   },
   {
-    id: "ds-106",
+    id: "106",
     name: "podcast-archive",
     rootCid: "bafybeigrf2dwtpjkiovnigysyto3d55opf6qkdikx6d65onrqnfzwgdkfa",
     sizeGiB: 780,

@@ -61,7 +61,7 @@ export const WarmStorageSection = () => {
           <h3 className='font-medium'>Datasets</h3>
           <PocChip label='mock data — real rows need the FWSS subgraph' />
         </div>
-        <DatasetsTable datasets={datasets} onTerminate={handleTerminate} />
+        <DatasetsTable datasets={datasets} network={network} onTerminate={handleTerminate} />
       </div>
 
       {staleDatasets.length > 0 ? (
