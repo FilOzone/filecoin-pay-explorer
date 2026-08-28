@@ -176,8 +176,6 @@ export function SquidQuoteReview({
   const isLoadingWalletTokenInventory =
     !!address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances;
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
-  const inventoriedSourceBalance = source ? sourceTokenBalance(sourceTokenBalances, source.token) : undefined;
-  const hasInventoriedSourceBalance = typeof inventoriedSourceBalance === "bigint";
   const isBusy = acquisitionState !== "idle";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
   const isQuoteDebouncing = destinationAmount !== debouncedDestinationAmount;
@@ -186,18 +184,15 @@ export function SquidQuoteReview({
     return readSourceTokenBalance(sourcePublicClient, address, source);
   };
   const {
-    data: separatelyLoadedSourceBalance,
-    isError: isSeparateSourceBalanceError,
-    isFetching: isLoadingSeparateSourceBalance,
+    data: sourceBalance,
+    isError: isSourceBalanceError,
+    isFetching: isLoadingSourceBalance,
     refetch: refetchSourceBalance,
   } = useQuery({
-    enabled: !!address && !!source && !!sourcePublicClient && !hasInventoriedSourceBalance,
+    enabled: !!address && !!source && !!sourcePublicClient,
     queryFn: readSelectedBalance,
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
   });
-  const sourceBalance = hasInventoriedSourceBalance ? inventoriedSourceBalance : separatelyLoadedSourceBalance;
-  const isSourceBalanceError = !hasInventoriedSourceBalance && isSeparateSourceBalanceError;
-  const isLoadingSourceBalance = !hasInventoriedSourceBalance && isLoadingSeparateSourceBalance;
   const {
     data: separateNativeBalance,
     isError: isNativeBalanceError,
@@ -389,15 +384,6 @@ export function SquidQuoteReview({
     }
   };
 
-  const refetchSelectedBalance = async () => {
-    if (!source) return { data: undefined, isError: true };
-    try {
-      return { data: await readSelectedBalance(), isError: false };
-    } catch {
-      return { data: undefined, isError: true };
-    }
-  };
-
   const acquire = async () => {
     setError(null);
     if (acquisitionState === "blocked")
@@ -411,7 +397,7 @@ export function SquidQuoteReview({
       return setError("Wallet or network client is unavailable.");
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
-    const latestBalanceResult = await refetchSelectedBalance();
+    const latestBalanceResult = await refetchSourceBalance();
     if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
       return setError("Could not refresh your source-token balance. Try again before confirming.");
     }

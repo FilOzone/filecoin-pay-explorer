@@ -130,6 +130,9 @@ describe("SquidQuoteReview token inventory", () => {
 
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === "balanceOf" ? 3_000_000n : 1n,
+    );
     fetchSourceTokens.mockImplementation(async (chainId: number) => (chainId === 10 ? [opToken] : [usdc, usdt]));
     readSourceTokenBalances.mockResolvedValue(
       balances([
@@ -176,6 +179,17 @@ describe("SquidQuoteReview token inventory", () => {
     });
     await expectTokenOptions([usdt.token]);
     expect(controls.token?.value).toBe(usdt.token);
+  });
+
+  it("uses the selected-token query instead of the inventory snapshot", async () => {
+    const renderer = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+
+    await act(async () => controls.token?.onValueChange(usdc.token));
+
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC"));
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance2 USDC");
   });
 
   it("reuses a fresh wallet inventory when the review remounts", async () => {
