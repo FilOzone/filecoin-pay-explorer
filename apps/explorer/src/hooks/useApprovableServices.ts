@@ -17,7 +17,7 @@ const HOMEPAGE_PATTERN = /^https?:\/\/\S+$/i;
 interface ApprovedOperatorClientsResponse {
   operatorApprovals: Array<{
     client: { id: string };
-    operator: { id: string; address: string };
+    operator: { address: string };
   }>;
 }
 

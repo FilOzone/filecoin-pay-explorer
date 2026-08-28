@@ -79,7 +79,6 @@ export const GET_APPROVED_OPERATOR_CLIENTS = gql`
         id
       }
       operator {
-        id
         address
       }
     }

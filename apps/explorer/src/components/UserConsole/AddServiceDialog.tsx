@@ -19,6 +19,7 @@ import {
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { erc20Abi, formatUnits, type Hex, isAddress, maxUint256, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
@@ -27,8 +28,7 @@ import { type ApprovableService, useApprovableServices } from "@/hooks/useApprov
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
-import { getNetworkFromChainId } from "@/utils/network";
-import { getPermitSignature } from "@/utils/permit";
+import { getPermitSignature, type PermitSignature } from "@/utils/permit";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -110,13 +110,17 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { address: userAddress, chainId } = useAccount();
+  const { address: userAddress } = useAccount();
   const { constants } = useSynapse();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const { services, isLoading: isLoadingServices } = useApprovableServices({ networkOverride: walletNetwork });
+  // Everything in this dialog — service list, token list, payments contract,
+  // permit domain — derives from the same useSynapse chain so a wallet/app
+  // network divergence can't mix networks within one submission.
+  const { services, isLoading: isLoadingServices } = useApprovableServices({
+    networkOverride: constants.chain.slug,
+  });
   const knownTokens = paymentTokensByChainId[constants.chain.id] ?? [];
   const explorerUrl = constants.chain.blockExplorers?.default.url;
 
@@ -153,11 +157,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
     tokenChoice === CUSTOM_OPTION && isAddress(customTokenInput.trim()) ? (customTokenInput.trim() as Hex) : null;
   const tokenAddress: `0x${string}` | undefined = knownToken?.address ?? customTokenAddress ?? undefined;
 
-  const {
-    data: customTokenData,
-    isLoading: isLoadingTokenDetails,
-    isError: isTokenDetailsError,
-  } = useReadContracts({
+  const { data: customTokenData, isLoading: isLoadingTokenDetails } = useReadContracts({
     contracts: customTokenAddress
       ? [
           { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
@@ -169,13 +169,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const tokenDetails: TokenDetails | null = (() => {
     if (knownToken) return { symbol: knownToken.symbol, decimals: knownToken.decimals };
-    if (customTokenAddress && customTokenData && !isTokenDetailsError) {
-      return {
-        symbol: (customTokenData[0]?.result as string) || "",
-        decimals: Number(customTokenData[1]?.result || 0),
-      };
-    }
-    return null;
+    if (!customTokenAddress || !customTokenData) return null;
+    const [symbolResult, decimalsResult] = customTokenData;
+    // useReadContracts defaults to allowFailure: true, so one reverting call
+    // (e.g. a token without decimals()) reports per-result failure while the
+    // aggregate isError stays false — a decimals fallback of 0 would mis-scale
+    // deposits, so both reads must succeed.
+    if (symbolResult?.status !== "success" || decimalsResult?.status !== "success") return null;
+    return { symbol: symbolResult.result as string, decimals: Number(decimalsResult.result) };
   })();
 
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
@@ -196,33 +197,57 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   })();
   const isDepositing = parsedDeposit !== null && parsedDeposit > 0n;
 
-  const handleSubmit = async () => {
-    if (!operatorAddress || !tokenAddress || !tokenDetails) return;
+  // Parsed like the deposit amount: <input type=number> accepts values viem
+  // rejects (e.g. 1e5), and an uncaught parseUnits throw in submit would abort
+  // with no UI feedback.
+  const parseLimit = (input: string): bigint | null => {
+    if (!input.trim()) return 0n;
+    if (!tokenDetails) return null;
+    try {
+      return parseUnits(input.trim(), tokenDetails.decimals);
+    } catch {
+      return null;
+    }
+  };
+  const lockupInWei = isUnlimited ? maxUint256 : parseLimit(lockupAllowance);
+  const rateInWei = isUnlimited ? maxUint256 : parseLimit(rateAllowance);
+  // A 0-rate/0-lockup grant is an on-chain no-op that still costs gas —
+  // switching off the unlimited default requires a real limit.
+  const areLimitsValid =
+    lockupInWei !== null && rateInWei !== null && (isUnlimited || lockupInWei > 0n || rateInWei > 0n);
 
-    const lockupInWei = isUnlimited
-      ? maxUint256
-      : lockupAllowance
-        ? parseUnits(lockupAllowance, tokenDetails.decimals)
-        : 0n;
-    const rateInWei = isUnlimited ? maxUint256 : rateAllowance ? parseUnits(rateAllowance, tokenDetails.decimals) : 0n;
+  const handleSubmit = async () => {
+    if (!operatorAddress || !tokenAddress || !tokenDetails || lockupInWei === null || rateInWei === null) return;
 
     setIsSubmitting(true);
     try {
       if (isDepositing) {
         if (!walletClient || !publicClient || !userAddress) return;
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
-        const permitSignature = await getPermitSignature(
-          {
-            tokenAddress,
-            ownerAddress: userAddress,
-            spenderAddress: constants.contracts.payments.address,
-            amount: parsedDeposit,
-            deadline,
-            chainId: constants.chain.id,
-          },
-          walletClient,
-          publicClient,
-        );
+        // execute() toasts its own failures; the permit signature is the one
+        // step before it that can throw (signature declined, or a custom token
+        // without EIP-2612 support), so surface that here.
+        let permitSignature: PermitSignature;
+        try {
+          permitSignature = await getPermitSignature(
+            {
+              tokenAddress,
+              ownerAddress: userAddress,
+              spenderAddress: constants.contracts.payments.address,
+              amount: parsedDeposit,
+              deadline,
+              chainId: constants.chain.id,
+            },
+            walletClient,
+            publicClient,
+          );
+        } catch (err) {
+          console.error("Permit signature failed:", err);
+          toast.error("Deposit authorization failed", {
+            description: "The signature was declined, or this token does not support gasless approval (EIP-2612).",
+          });
+          return;
+        }
 
         await execute({
           functionName: "depositWithPermitAndApproveOperator",
@@ -275,7 +300,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const isOperatorValid = !!operatorAddress;
   const isTokenValid = !!tokenAddress && !!tokenDetails && !isLoadingTokenDetails;
   const isDepositValid = !depositAmount.trim() || isDepositing;
-  const canSubmit = isOperatorValid && isTokenValid && isDepositValid && !isSubmitting && !isExecuting;
+  const canSubmit =
+    isOperatorValid && isTokenValid && isDepositValid && areLimitsValid && !isSubmitting && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -377,11 +403,6 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                       <Loader2 className='h-4 w-4 animate-spin' />
                       <span>Loading token details…</span>
                     </div>
-                  ) : isTokenDetailsError ? (
-                    <div className='flex items-center gap-2 text-sm text-destructive'>
-                      <AlertCircle className='h-4 w-4' />
-                      <span>Failed to load token details</span>
-                    </div>
                   ) : tokenDetails ? (
                     <div className='flex items-center gap-2 text-sm text-green-600 dark:text-green-400'>
                       <CheckCircle2 className='h-4 w-4' />
@@ -389,7 +410,12 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                         {tokenDetails.symbol} · {tokenDetails.decimals} decimals
                       </span>
                     </div>
-                  ) : null)}
+                  ) : (
+                    <div className='flex items-center gap-2 text-sm text-destructive'>
+                      <AlertCircle className='h-4 w-4' />
+                      <span>Failed to load token details</span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>
