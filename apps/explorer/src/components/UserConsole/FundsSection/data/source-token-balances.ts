@@ -94,8 +94,9 @@ export function visibleSourceTokens(
   showAll: boolean,
   selectedToken = "",
 ) {
+  if (showAll) return nativeTokenFirst(tokens);
   const ordered = balances ? orderSourceTokensByBalance(tokens, balances) : nativeTokenFirst(tokens);
-  if (!balances || showAll || hasUnknownSourceTokenBalances(tokens, balances)) return ordered;
+  if (!balances || hasUnknownSourceTokenBalances(tokens, balances)) return ordered;
   return ordered.filter(
     (token) => (sourceTokenBalance(balances, token.token) ?? 0n) > 0n || key(token.token) === key(selectedToken),
   );

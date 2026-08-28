@@ -232,7 +232,7 @@ describe("SquidQuoteReview token inventory", () => {
     second.unmount();
   });
 
-  it("shows a loading state instead of the catalog until wallet balances resolve", async () => {
+  it("offers the stable catalog while wallet balances load", async () => {
     let resolveBalances!: (value: ReturnType<typeof balances>) => void;
     readSourceTokenBalances.mockImplementation(
       () =>
@@ -247,6 +247,10 @@ describe("SquidQuoteReview token inventory", () => {
     expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(0);
     expect(JSON.stringify(renderer.toJSON())).toContain("Checking wallet balances");
 
+    await act(async () => button(renderer, "Show all tokens")?.props.onClick());
+    await expectTokenOptions([usdc.token, usdt.token]);
+    expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(1);
+
     await act(async () =>
       resolveBalances(
         balances([
@@ -255,8 +259,11 @@ describe("SquidQuoteReview token inventory", () => {
         ]),
       ),
     );
-    await expectTokenOptions([usdc.token]);
+    await expectTokenOptions([usdc.token, usdt.token]);
     expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(1);
+
+    await act(async () => button(renderer, "Show wallet tokens")?.props.onClick());
+    await expectTokenOptions([usdc.token]);
   });
 
   it("keeps the complete catalog available while a failed balance inventory is retried", async () => {

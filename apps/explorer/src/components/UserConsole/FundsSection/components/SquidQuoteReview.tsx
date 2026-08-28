@@ -154,6 +154,8 @@ export function SquidQuoteReview({
     ? hasUnknownSourceTokenBalances(selectableTokens, sourceTokenBalances)
     : false;
   const canFilterWalletTokens = !!sourceTokenBalances && !hasUnknownTokenBalances && !isTokenBalanceError;
+  const canToggleWalletTokens =
+    !!address && selectableTokens.length > 0 && !hasUnknownTokenBalances && !isTokenBalanceError;
   const visibleTokens = visibleSourceTokens(
     selectableTokens,
     isTokenBalanceError ? undefined : sourceTokenBalances,
@@ -552,7 +554,7 @@ export function SquidQuoteReview({
       <div className='grid gap-1'>
         <div className='flex items-center justify-between gap-2'>
           <Label htmlFor='squid-source-token'>Source token</Label>
-          {canFilterWalletTokens && (
+          {canToggleWalletTokens && (
             <Button
               disabled={isBusy}
               onClick={() => setShowAllSourceTokensFor(showAllSourceTokens ? null : sourceTokenScope)}
@@ -564,7 +566,7 @@ export function SquidQuoteReview({
             </Button>
           )}
         </div>
-        {isLoadingWalletTokenInventory ? (
+        {isLoadingWalletTokenInventory && !showAllSourceTokens ? (
           <div
             aria-live='polite'
             className='flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground'

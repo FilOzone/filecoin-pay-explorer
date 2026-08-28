@@ -121,6 +121,17 @@ describe("source token balance inventory", () => {
       visibleSourceTokens([usdc, usdt], { [usdc.token.toLowerCase()]: 0n, [usdt.token.toLowerCase()]: 2n }, true),
     ).toHaveLength(2);
     expect(
+      visibleSourceTokens(
+        [usdc, native, usdt],
+        {
+          [NATIVE_TOKEN_ADDRESS.toLowerCase()]: 0n,
+          [usdc.token.toLowerCase()]: 1n,
+          [usdt.token.toLowerCase()]: 2n,
+        },
+        true,
+      ).map(({ symbol }) => symbol),
+    ).toEqual(["ETH", "USDC", "USDT"]);
+    expect(
       visibleSourceTokens([usdc, usdt], { [usdc.token.toLowerCase()]: 0n, [usdt.token.toLowerCase()]: null }, false),
     ).toHaveLength(2);
   });
