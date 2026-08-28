@@ -66,7 +66,8 @@ export const SpendingLimits = () => {
           Dashboard
         </Link>{" "}
         · full payment history and transaction details live in the{" "}
-        <Link href='/' className='text-primary hover:underline'>
+        {/* Prefilled deep link into this wallet's explorer account page. */}
+        <Link href={`/${network}/accounts/${address}`} className='text-primary hover:underline'>
           Pay Explorer
         </Link>
       </p>

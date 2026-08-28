@@ -16,9 +16,10 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import DepositTokenPicker, {
-  type CustomTokenStatus,
+  getCustomTokenStatus,
   type PickerToken,
   type TokenPickerMode,
+  toPickerToken,
 } from "@/components/UserConsole/DepositTokenPicker";
 import { FundingRunwaySlider, RunwayCard } from "@/components/UserConsole/FundsSection/components/RunwayCard";
 import {
@@ -33,37 +34,6 @@ import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
 
 const PERMIT_DEADLINE_SECONDS = 3600;
-
-/**
- * How far the hand-entered address has got towards a usable token.
- *
- * The checks are ordered by precedence and each one assumes those above it
- * passed, so an empty field never reports as invalid and an in-flight read never
- * reports as an error. `loaded` is the only state left once every check clears.
- */
-const getCustomTokenStatus = ({
-  address,
-  isValidAddress,
-  isLoadingReads,
-  isReadsError,
-  token,
-}: {
-  /** The trimmed contract address as typed. */
-  address: string;
-  isValidAddress: boolean;
-  isLoadingReads: boolean;
-  isReadsError: boolean;
-  /** The token those reads resolved to, or null if they did not resolve one. */
-  token: PickerToken | null;
-}): CustomTokenStatus => {
-  if (!address) return "idle";
-  if (!isValidAddress) return "invalid";
-  if (isLoadingReads) return "loading";
-  // A well-formed address that resolves nothing is an error too: the reads came
-  // back, but not from something this dialog can deposit.
-  if (isReadsError || !token) return "error";
-  return "loaded";
-};
 
 type DepositDialogProps = {
   /**
@@ -416,11 +386,14 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
         {/* `min-h-0` lets this shrink below its content so `overflow-y-auto` engages. */}
         <div className='grid min-h-0 gap-4 overflow-y-auto py-4'>
           <DepositTokenPicker
-            tokens={tokens}
+            tokens={tokens.map(toPickerToken)}
             token={currentToken}
             mode={pickerMode}
             onModeChange={handleModeChange}
-            onSelectToken={handleSelectToken}
+            onSelectToken={(picked) => {
+              const userToken = tokens.find((t) => t.token.id.toLowerCase() === picked.address.toLowerCase());
+              if (userToken) handleSelectToken(userToken);
+            }}
             customAddress={customAddress}
             onCustomAddressChange={handleCustomAddressChange}
             customTokenStatus={customTokenStatus}

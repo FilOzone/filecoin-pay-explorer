@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
-import { useServiceMetadata } from "@/hooks/useServiceMetadata";
+import { useWarmStorageMetadata } from "@/hooks/useServiceMetadata";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 
 type ConsoleSidebarProps = {
@@ -76,7 +76,7 @@ const SidebarLink = ({ href, isActive, onNavigate, children }: SidebarLinkProps)
 export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   const pathname = usePathname();
   const { address, chainId } = useConnection();
-  const { name: warmStorageName } = useServiceMetadata();
+  const { name: warmStorageName } = useWarmStorageMetadata();
 
   const walletNetwork = getNetworkFromChainId(chainId);
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
@@ -131,7 +131,12 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
 
       <hr className='my-3 border-t' />
 
-      <SidebarLink href='/' isActive={false} onNavigate={onNavigate}>
+      {/* Deep link to the connected wallet's own explorer account page when possible. */}
+      <SidebarLink
+        href={address ? `/${walletNetwork}/accounts/${address}` : "/"}
+        isActive={false}
+        onNavigate={onNavigate}
+      >
         <Compass className='size-4' />
         Pay Explorer
       </SidebarLink>

@@ -8,13 +8,13 @@ import {
   ServicePricingChips,
   WarmStorageTourButton,
 } from "@/components/UserConsole/WarmStorageSection/components";
-import { useServiceMetadata } from "@/hooks/useServiceMetadata";
+import { useWarmStorageMetadata } from "@/hooks/useServiceMetadata";
 
 const WarmStoragePage = () => {
   const { address, chainId } = useConnection();
   // Name, description, and homepage come from the service contract's
   // IFilecoinServiceMetadata getters, not hardcoded copy.
-  const { name, description, homepage } = useServiceMetadata();
+  const { name, description, homepage } = useWarmStorageMetadata();
 
   function renderContent() {
     // Connection gating lives in the console layout; by here the wallet is connected.

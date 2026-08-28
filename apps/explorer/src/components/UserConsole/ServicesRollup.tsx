@@ -9,7 +9,7 @@ import { PocChip } from "@/components/UserConsole/PocChip";
 import { knownAddresses } from "@/constants/known-addresses";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useAccountRunway } from "@/hooks/useAccountRunway";
-import { useServiceMetadata } from "@/hooks/useServiceMetadata";
+import { useWarmStorageMetadata } from "@/hooks/useServiceMetadata";
 import useSynapse from "@/hooks/useSynapse";
 import type { Network } from "@/types";
 import { formatAddress, formatTokenTruncated } from "@/utils/formatter";
@@ -32,7 +32,7 @@ type ServicesRollupProps = {
 export const ServicesRollup = ({ account, network }: ServicesRollupProps) => {
   const { constants } = useSynapse();
   const fwssAddress = constants.chain.contracts.fwss.address.toLowerCase();
-  const { name: fwssName } = useServiceMetadata();
+  const { name: fwssName } = useWarmStorageMetadata();
 
   const { data: railsData } = useAccountRails(account.id, 1, { networkOverride: network });
   const runway = useAccountRunway(account.id, network);
