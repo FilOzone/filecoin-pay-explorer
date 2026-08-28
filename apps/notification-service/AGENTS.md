@@ -16,6 +16,17 @@ One pnpm/Turbo workspace package (`@filecoin-pay/notification-service`) that shi
 
 Hono is only in `api/`. The scheduler and processor are plain `ExportedHandler`s — do not add Hono to them.
 
+## The alert pipeline (runtime model)
+
+The three workers form one pipeline; know where a change lands before editing:
+
+1. **`alert-scheduler`** fires on cron, reads every subscribed wallet from D1 (paged, never all in memory), and publishes one queue message per wallet to `ALERT_QUEUE`. It sets a `deduplicationId` per message so a double cron fire can't enqueue the same wallet twice within the dedup window. It fails fast if D1 is unreachable rather than pushing a partial list.
+2. **`alert-processor`** consumes the queue. Per message: read on-chain account state via RPC → derive a health tier → dedup-check → send the alert email → record the send.
+
+**Deduplication lives in KV + D1, never in the queue.** The processor does not write back to the queue. Order in `process-message.ts`: `getAlertState(KV)` fast pre-check → `shouldSend(...)` suppresses within the tier window → send → `recordSent(KV, D1)` writes the durable record. `notification_log` (D1) is ground truth; KV is a fast cache backfilled from it. Send-first is deliberate: a rare duplicate email is preferred over a missed solvency alert.
+
+**The queue handler must never throw out of the batch.** `processMessage` catches everything and maps it to `"ack"` or `"retry"` (`ack` = done/skip, `retry` = transient, redeliver). A per-message failure logs and moves on so one bad wallet can't fail the other 99. The only code that runs *outside* the per-message try/catch is the batch-level setup at the top of `queue()` — `createReadClient(env.RPC_URL, env.NETWORK)` and `createDb(env.DB)`. If those throw, the whole batch fails; keep them dependency-light.
+
 ## The `--env` rule (most important thing here)
 
 **Bindings are not inherited by named environments.** Every binding (`DB`, `KV`, `ALERT_QUEUE`), every `var` (`NETWORK`), and every cron lives *inside* `env.staging` and `env.production`. The top-level config has none. So any wrangler command run without `--env` operates on an empty, binding-less environment.
@@ -51,11 +62,46 @@ After changing any `wrangler.jsonc`, rerun `pnpm run types` — the `Env` type d
 
 ## Config conventions
 
-Network is bound at deploy time via Wrangler environments, never in runtime logic: `staging` = calibration, `production` = mainnet. Worker code reads `env.NETWORK` and derives everything else. The FilecoinPay contract address is **not** stored in config — it comes from `@filoz/synapse-sdk` via `shared/chain.ts` (`filecoinPayAddress(network)`), the same source the explorer uses. `NETWORK` is the only `var`.
+Network is bound at deploy time via Wrangler environments, never in runtime logic: `staging` = calibration, `production` = mainnet. Worker code reads `env.NETWORK` and derives everything else. The FilecoinPay contract address is **not** stored in config — it comes from `@filoz/synapse-sdk` via `shared/chain.ts` (`filecoinPayAddress(network)`), the same source the explorer uses. The `vars` are `NETWORK` and `FRONTEND_ORIGIN` (per env); everything else is a binding or secret.
+
+**`FRONTEND_ORIGIN` is exact-match critical.** The `api` CORS middleware only emits `Access-Control-Allow-Origin` when the request origin matches `env.FRONTEND_ORIGIN` byte-for-byte, and SIWE derives its expected `domain` from that same value. staging must be the staging Vercel URL (`https://filecoin-pay-explorer-staging.vercel.app`), production the canonical domain (`https://pay.filecoin.cloud`). A mismatch surfaces as a browser CORS error, not a server log. `alert-processor` also reads `FRONTEND_ORIGIN` (for the top-up link in emails); keep the two in sync per env.
+
+**`wrangler deploy` overwrites live `vars` from config** unless you pass `--keep-vars`. A dashboard-edited var is silently reverted on the next deploy — change vars in `wrangler.jsonc`, not the dashboard.
 
 **Secrets are per-worker**, not shared across the package. `RPC_URL` is read only by `alert-processor`, so it's set on that worker with `pnpm run secret:rpc-url:staging|production` (which pass `-c alert-processor/wrangler.jsonc`). Never hardcode a secret in config or source, and never pass a secret value as a CLI argument — use the interactive prompt. If a second worker later needs RPC, revisit Cloudflare Secrets Store rather than duplicating the secret.
 
 Resource naming grammar: `filecoin-pay-<domain>-<type|purpose>-<env>` for account-global resources (e.g. `filecoin-pay-notification-db-staging`), generic stable names for in-code bindings (`DB`, `KV`, `ALERT_QUEUE`). Worker names follow `<domain>-[capability]-<role>`.
+
+## Deploying
+
+Order for a **first-time** deploy of an environment:
+
+1. Create resources (D1, KV, queue + DLQ) if not auto-provisioned, and apply D1 migrations (`pnpm run db:migrate:<env>`).
+2. Deploy `alert-processor` **with the secret supplied inline**, because both `alert-processor` wranglers set `secrets: { required: ["RPC_URL"] }` and that check runs against the deploy. On a first deploy the worker has no secret store yet, so `wrangler secret put` first, then `deploy` does **not** work — the deploy fails the required-secret check. Supply it in the same command instead:
+
+   ```bash
+   wrangler deploy -c alert-processor/wrangler.jsonc --env <env> --secrets-file path/to/rpc.env
+   ```
+
+   `--secrets-file` (JSON or `.env` format) uploads the secret with that version. Secrets apply additively and are never deleted by later deploys, so subsequent deploys don't need the file, and you rotate `RPC_URL` afterward with `pnpm run secret:rpc-url:<env>`. Keep the secrets file out of git — it holds a live secret; delete it once the deploy succeeds.
+
+CI (`.github/workflows/notification-service.yml`) runs `ci` (type-check + test, no secrets) then env-gated deploy jobs: `staging` on push to `staging`, `production` on push to `main`. Each deploy job runs the D1 migration step *before* the worker deploys, and a migration failure fails the job. Fork PRs get a read-only token and no secrets, so they cannot deploy. **All wrangler calls in this workflow go through `cloudflare/wrangler-action@v4`** (deploys and migrations alike) — do not swap them for `run: pnpm ...` steps.
+
+A wrong `RPC_URL` (e.g. an endpoint that rejects the request) is not a deploy error — every processor read fails at runtime, logs *"Failed to read account state from chain"*, and returns `retry`, so the batch reports `outcome: ok` while silently making no progress. When production alerts stop, check the RPC endpoint first.
+
+## Observability & debugging
+
+`observability` is applied **at deploy time**. If you enable or change it in config, the running worker keeps the old setting until the next `deploy` — a stale deploy shows only Cloudflare's synthetic invocation events, never your `console.log`/evlog output. When one env shows structured logs and another doesn't with identical config, the quiet one is behind on deploys; redeploy it.
+
+Reading logs:
+
+- **Events view (dashboard):** each row is an invocation. Cloudflare's own error markers (`type: cf-worker`, `origin: queue`, contentless `"error": "error"`) always appear regardless of observability — they are *not* your logs. Your evlog lines (`message`, `why`, `internal`, `log.set` fields) appear only when observability is live on that deploy.
+- **`wrangler tail -c <worker>/wrangler.jsonc --env <env>`:** streams the real console output live, bypassing dashboard sampling and the deploy-time gate. Fastest way to read an error's actual `message`/`why`. Drop `--status error` while debugging — a per-message failure can ride on an invocation whose overall `outcome` is `ok`.
+
+**Logging serialization traps** (evlog stringifies with `JSON.stringify`):
+
+- `JSON.stringify(Infinity)` is `null`. `runwayDays: null` in a `healthy` log is the serialized form of `Number.POSITIVE_INFINITY` — an account with no active spend, not a missing value.
+- `JSON.stringify(bigint)` **throws**. The account summary is bigint-heavy (`runwayInEpochs`, `lockupRatePerEpoch`, `debt`, `epoch`). Never pass a raw bigint into `log.set(...)` or a `createError` `internal` — convert to `Number`/`String` first, or a logging call becomes an uncaught throw with no readable message.
 
 ## D1 transactions
 
