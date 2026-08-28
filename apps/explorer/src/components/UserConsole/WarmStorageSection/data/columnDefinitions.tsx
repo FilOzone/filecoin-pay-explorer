@@ -33,7 +33,17 @@ export const buildDatasetColumns = (onTerminate: (dataset: MockDataset) => void,
   }),
   columnHelper.accessor("burnPerDayUSD", {
     header: "Spend / mo",
-    cell: (info) => <span className='tabular-nums'>{formatUSD(info.getValue() * 30)}</span>,
+    cell: (info) => {
+      const ops = info.row.original.oneTimeOpsUSD;
+      return (
+        <div className='flex flex-col'>
+          <span className='tabular-nums'>{formatUSD(info.getValue() * 30)}</span>
+          {ops > 0 ? (
+            <span className='text-xs text-muted-foreground tabular-nums'>+ {formatUSD(ops)} ops (30d)</span>
+          ) : null}
+        </div>
+      );
+    },
   }),
   columnHelper.display({
     id: "proving",

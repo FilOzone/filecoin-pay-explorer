@@ -26,7 +26,7 @@ export const ServiceMetricCards = ({ rollup }: { rollup: ServiceRollup | undefin
       <MetricCard
         label='Spend / month — this service'
         value={formatTokenTruncated(rollup?.monthlyRate ?? 0n, decimals, symbol)}
-        detail={`${rollup?.activeRailCount ?? 0} active rails (of ${rollup?.railCount ?? 0}) · ${formatTokenTruncated(
+        detail={`${rollup?.activeRailCount ?? 0} recurring payments · ${formatTokenTruncated(
           rollup?.oneTimeTotal ?? 0n,
           decimals,
           symbol,
@@ -35,7 +35,7 @@ export const ServiceMetricCards = ({ rollup }: { rollup: ServiceRollup | undefin
       <MetricCard
         label='Locked for this service'
         value={formatTokenTruncated(rollup?.streamingLockup ?? 0n, decimals, symbol)}
-        detail='Reserved for active rails — returned to your available balance when datasets are terminated or rails settle; not spendable while locked'
+        detail='Reserved for the service’s recurring payments — returned to your available balance when datasets are terminated or payments settle; not spendable while locked'
       />
     </div>
   );

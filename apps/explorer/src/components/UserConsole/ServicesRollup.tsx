@@ -65,14 +65,14 @@ export const ServicesRollup = ({ account, network }: ServicesRollupProps) => {
               <span className='truncate font-medium'>{serviceName(rollup.operatorAddress)}</span>
               <span className='text-xs text-muted-foreground tabular-nums'>
                 {formatTokenTruncated(rollup.monthlyRate, rollup.tokenDecimals, rollup.tokenSymbol)} / mo ·{" "}
-                {rollup.activeRailCount} active rails ·{" "}
+                {rollup.activeRailCount} recurring payments ·{" "}
                 {formatTokenTruncated(rollup.streamingLockup, rollup.tokenDecimals, rollup.tokenSymbol)} locked
               </span>
               {rollup.terminatedRailCount > 0 ? (
                 // The payer's one real rail job: finalize terminated rails to get the
                 // remaining lockup back. Rail-level detail stays in the Pay Explorer.
                 <span className='flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500'>
-                  {rollup.terminatedRailCount} terminated rails hold reclaimable funds
+                  {rollup.terminatedRailCount} ended payments still hold locked funds
                   <Button variant='ghost' size='compact' disabled title='Finalize flow ships with batch settle'>
                     Reclaim
                   </Button>

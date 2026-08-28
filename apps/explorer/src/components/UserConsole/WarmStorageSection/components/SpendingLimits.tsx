@@ -65,7 +65,7 @@ export const SpendingLimits = () => {
         <Link href='/console' className='text-primary hover:underline'>
           Dashboard
         </Link>{" "}
-        · payment rails live in the{" "}
+        · full payment history and transaction details live in the{" "}
         <Link href='/' className='text-primary hover:underline'>
           Pay Explorer
         </Link>
