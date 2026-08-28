@@ -121,6 +121,56 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
         },
       }[status];
 
+    case "createSessionKey":
+      return {
+        pending: {
+          title: metadata.keyName ? `Creating session key "${metadata.keyName}"` : "Creating session key",
+          description: "Waiting for confirmation...",
+        },
+        success: {
+          title: "Session Key Created",
+          description: metadata.keyName ? `"${metadata.keyName}" is now active` : "Your session key is now active",
+        },
+        error: {
+          title: "Session Key Creation Failed",
+          description: "The login transaction was rejected or failed",
+        },
+      }[status];
+
+    case "authorizeSessionKey":
+      return {
+        pending: {
+          title: metadata.keyName ? `Adding scopes to "${metadata.keyName}"` : "Adding scopes to session key",
+          description: "Waiting for confirmation...",
+        },
+        success: {
+          title: "Scopes Added",
+          description: metadata.keyName
+            ? `"${metadata.keyName}" now holds the new scopes`
+            : "The session key now holds the new scopes",
+        },
+        error: {
+          title: "Adding Scopes Failed",
+          description: "The login transaction was rejected or failed",
+        },
+      }[status];
+
+    case "revokeSessionKey":
+      return {
+        pending: {
+          title: metadata.keyName ? `Revoking session key "${metadata.keyName}"` : "Revoking session key",
+          description: "Waiting for confirmation...",
+        },
+        success: {
+          title: "Session Key Revoked",
+          description: metadata.keyName ? `"${metadata.keyName}" can no longer sign` : "The key can no longer sign",
+        },
+        error: {
+          title: "Revoke Failed",
+          description: "The revoke transaction was rejected or failed",
+        },
+      }[status];
+
     default:
       return {
         pending: {

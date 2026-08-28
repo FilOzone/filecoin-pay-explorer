@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, HardDrive, LayoutDashboard, Pin } from "lucide-react";
+import { Bell, BellOff, Compass, HardDrive, KeyRound, LayoutDashboard, Pin } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -86,6 +86,7 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   const isSubscribed = notificationStatus?.subscribed;
 
   const isAlertsActive = pathname.startsWith("/console/notifications");
+  const isSessionKeysActive = pathname.startsWith("/console/session-keys");
   const isDashboardActive = pathname === "/console";
   const isWarmStorageActive = pathname.startsWith("/console/services/warm-storage");
 
@@ -98,16 +99,12 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
         Dashboard
       </SidebarLink>
 
-      <SidebarGroupLabel>Services</SidebarGroupLabel>
-
-      <SidebarLink href='/console/services/warm-storage' isActive={isWarmStorageActive} onNavigate={onNavigate}>
-        <HardDrive className='size-4 shrink-0' />
-        {/* Service name comes from the contract's metadata getter, not hardcoded. */}
-        <span className='truncate'>{warmStorageName ?? "Warm Storage"}</span>
-      </SidebarLink>
-      <SidebarComingSoon icon={<Pin className='size-4' />} label='Filecoin Pin' />
-
       <SidebarGroupLabel>Account</SidebarGroupLabel>
+
+      <SidebarLink href='/console/session-keys' isActive={isSessionKeysActive} onNavigate={onNavigate}>
+        <KeyRound className='size-4' />
+        Session Keys
+      </SidebarLink>
 
       {isNotificationsEligible ? (
         <SidebarLink href='/console/notifications' isActive={isAlertsActive} onNavigate={onNavigate}>
@@ -122,6 +119,15 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
           </span>
         </SidebarLink>
       ) : null}
+
+      <SidebarGroupLabel>Services</SidebarGroupLabel>
+
+      <SidebarLink href='/console/services/warm-storage' isActive={isWarmStorageActive} onNavigate={onNavigate}>
+        <HardDrive className='size-4 shrink-0' />
+        {/* Service name comes from the contract's metadata getter, not hardcoded. */}
+        <span className='truncate'>{warmStorageName ?? "Warm Storage"}</span>
+      </SidebarLink>
+      <SidebarComingSoon icon={<Pin className='size-4' />} label='Filecoin Pin' />
 
       <hr className='my-3 border-t' />
 
