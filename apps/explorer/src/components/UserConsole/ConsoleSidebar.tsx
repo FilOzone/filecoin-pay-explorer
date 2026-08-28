@@ -94,12 +94,12 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   // both as the desktop column and inside the mobile drawer.
   return (
     <nav aria-label='Console' className='sticky top-4 flex w-48 shrink-0 flex-col gap-1 self-start'>
+      <SidebarGroupLabel>Account</SidebarGroupLabel>
+
       <SidebarLink href='/console' isActive={isDashboardActive} onNavigate={onNavigate}>
         <LayoutDashboard className='size-4' />
         Dashboard
       </SidebarLink>
-
-      <SidebarGroupLabel>Account</SidebarGroupLabel>
 
       <SidebarLink href='/console/session-keys' isActive={isSessionKeysActive} onNavigate={onNavigate}>
         <KeyRound className='size-4' />
