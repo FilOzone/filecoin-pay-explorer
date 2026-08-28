@@ -1,6 +1,5 @@
-export { ProvingBadge, RetrievalBadge } from "./DatasetBadges";
 export { DatasetsTable } from "./DatasetsTable";
-export { ReleaseDatasetDialog } from "./ReleaseDatasetDialog";
 export { ServiceMetricCards } from "./ServiceMetricCards";
 export { StaleQueue } from "./StaleQueue";
+export { TerminateDatasetDialog } from "./TerminateDatasetDialog";
 export { startWarmStorageTour, WarmStorageTourAutoStart, WarmStorageTourButton } from "./WarmStorageTour";

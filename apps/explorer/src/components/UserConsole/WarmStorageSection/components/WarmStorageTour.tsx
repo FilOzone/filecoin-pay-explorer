@@ -11,7 +11,7 @@ const TOUR_SEEN_KEY = "warm-storage-poc-tour-seen";
 /**
  * Guided walkthrough of the POC so a shared link explains itself. Steps anchor
  * to [data-tour] attributes; a step whose element is missing (e.g. the stale
- * queue after every dataset is kept or released) is skipped by driver.js.
+ * queue after every inactive dataset is terminated) is skipped by driver.js.
  */
 const buildTour = () =>
   driver({
@@ -23,7 +23,7 @@ const buildTour = () =>
         popover: {
           title: "Warm Storage service page",
           description:
-            "A per-service management page: every dataset this wallet stores on Warm Storage, what each one costs, whether it is healthy, and which ones you are paying for without using. Everything here is mock data.",
+            "A per-service management page: every dataset this wallet stores on this service, what each one costs, and which ones deserve a look. The name, description, and homepage come from the service contract's onchain metadata; the datasets are mock data.",
         },
       },
       {
@@ -31,31 +31,7 @@ const buildTour = () =>
         popover: {
           title: "The service at a glance",
           description:
-            "Total spend, spend going to inactive datasets, locked deposits, and the next expiry. 'Locked' is a refundable buffer, not a charge: releasing a dataset returns its lockup. 'Inactive spend' is the money currently paying for data nobody touches.",
-        },
-      },
-      {
-        element: "[data-tour='stale-queue']",
-        popover: {
-          title: "Inactive datasets: the triage queue",
-          description:
-            "The inbox an inactivity email would link into. Datasets with no activity for 90+ days, ranked by money spent since. Each row names its signal honestly: retrieval recency where FilBeam serves the dataset, last write otherwise.",
-        },
-      },
-      {
-        element: "[data-tour='alerts-link']",
-        popover: {
-          title: "How you find out",
-          description:
-            "The queue is the landing page for an inactivity email. Alerts ride the console's existing Email Alerts subscription (one verified email per wallet); this page adds dataset-level alert categories there, and Keep is the per-dataset mute.",
-        },
-      },
-      {
-        element: "[data-tour='dispositions']",
-        popover: {
-          title: "Three ways to close a row",
-          description:
-            "Keep affirms the data is intentionally stored and mutes its inactivity alerts. Export pulls a copy out (inert in this POC). Release stops paying: it ends the dataset's payment rails and returns the locked deposit. Every row resolves with exactly one of these.",
+            "Monthly spend split into recurring streaming payments and one-time operation fees, your account-level runway (funds are shared across services, so runway belongs to the account, not a dataset), and the deposit locked for active rails — returned when datasets are terminated, not spendable while locked.",
         },
       },
       {
@@ -63,30 +39,30 @@ const buildTour = () =>
         popover: {
           title: "The full inventory",
           description:
-            "All datasets, active or not: size, last write, health, funding, and monthly spend. Funded-until turns amber under 30 days of runway and red under 14.",
+            "All datasets: size, last write (from indexed contract events), monthly spend, and a link to the PDP Explorer for proving detail. Terminate permanently stops payment for a dataset.",
         },
       },
       {
-        element: "[data-tour='retrieval-badge']",
+        element: "[data-tour='stale-queue']",
         popover: {
-          title: "Retrieval: only FilBeam can see it",
+          title: "Inactive datasets: the review queue",
           description:
-            "Active and Idle come from FilBeam retrieval logs. The dashed 'No signal' state means this dataset is not served through FilBeam, so retrieval activity is unknowable — the page says so instead of implying the data was never accessed.",
+            "The inbox an inactivity email links into: datasets with no writes for 90+ days, longest-quiet first. Inactivity is normal for archival data — a row resolves by terminating the dataset or simply leaving it stored.",
         },
       },
       {
-        element: "[data-tour='proving-badge']",
+        element: "[data-tour='alerts-link']",
         popover: {
-          title: "Proving: is the data really there?",
+          title: "How you find out",
           description:
-            "Storage providers must submit on-chain possession proofs. Proving means proofs arrive on schedule; Degraded means some periods were missed; Faulted means providers are failing proofs and your data may be at risk.",
+            "The queue is the landing page for an inactivity email. Alerts ride the console's existing Email Alerts subscription (one verified email per wallet); this page adds dataset-level alert categories there.",
         },
       },
       {
         popover: {
           title: "Try it",
           description:
-            "Click Keep on a queue row (it leaves the queue but stays in the table), then Release a dataset and watch the metric cards recalculate. Feedback goes to the epic doc this POC belongs to.",
+            "Terminate a dataset and watch the metric cards recalculate — the dialog spells out that termination is not recoverable. Feedback goes to the epic doc this POC belongs to.",
         },
       },
     ],

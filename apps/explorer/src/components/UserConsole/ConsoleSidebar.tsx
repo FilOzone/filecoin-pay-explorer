@@ -1,11 +1,12 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, HardDrive, LayoutDashboard, Pin, Zap } from "lucide-react";
+import { Bell, BellOff, Compass, HardDrive, LayoutDashboard, Pin } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
+import { useServiceMetadata } from "@/hooks/useServiceMetadata";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
 
 type ConsoleSidebarProps = {
@@ -75,6 +76,7 @@ const SidebarLink = ({ href, isActive, onNavigate, children }: SidebarLinkProps)
 export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   const pathname = usePathname();
   const { address, chainId } = useConnection();
+  const { name: warmStorageName } = useServiceMetadata();
 
   const walletNetwork = getNetworkFromChainId(chainId);
   const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
@@ -99,10 +101,10 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
       <SidebarGroupLabel>Services</SidebarGroupLabel>
 
       <SidebarLink href='/console/services/warm-storage' isActive={isWarmStorageActive} onNavigate={onNavigate}>
-        <HardDrive className='size-4' />
-        Warm Storage
+        <HardDrive className='size-4 shrink-0' />
+        {/* Service name comes from the contract's metadata getter, not hardcoded. */}
+        <span className='truncate'>{warmStorageName ?? "Warm Storage"}</span>
       </SidebarLink>
-      <SidebarComingSoon icon={<Zap className='size-4' />} label='Beam' />
       <SidebarComingSoon icon={<Pin className='size-4' />} label='Filecoin Pin' />
 
       <SidebarGroupLabel>Account</SidebarGroupLabel>

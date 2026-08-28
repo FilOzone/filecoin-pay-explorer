@@ -8,11 +8,11 @@ import type { MockDataset } from "../data/mockDatasets";
 
 type DatasetsTableProps = {
   datasets: MockDataset[];
-  onRelease: (dataset: MockDataset) => void;
+  onTerminate: (dataset: MockDataset) => void;
 };
 
-export const DatasetsTable = ({ datasets, onRelease }: DatasetsTableProps) => {
-  const columns = useMemo(() => buildDatasetColumns(onRelease), [onRelease]);
+export const DatasetsTable = ({ datasets, onTerminate }: DatasetsTableProps) => {
+  const columns = useMemo(() => buildDatasetColumns(onTerminate), [onTerminate]);
   const table = useReactTable({
     data: datasets,
     columns,
