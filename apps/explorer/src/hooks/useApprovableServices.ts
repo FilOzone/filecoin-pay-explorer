@@ -2,11 +2,13 @@ import { useMemo } from "react";
 import { GET_APPROVED_OPERATOR_CLIENTS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { useGraphQLQuery } from "./useGraphQLQuery";
+import useNetwork from "./useNetwork";
 import { useServiceMetadata } from "./useServiceMetadata";
 
 // Only operators with real adoption qualify for the curated "Select Service"
-// dropdown: more than this many distinct paying accounts.
-const MIN_UNIQUE_PAYERS = 10;
+// dropdown: at least this many distinct paying accounts. Calibration is a
+// testnet with a handful of real payers, so its bar is much lower.
+const MIN_UNIQUE_PAYERS: Record<Network, number> = { mainnet: 11, calibration: 3 };
 
 // Untrusted contract text: a homepage renders only when it looks like a plain
 // URL (no whitespace tricks), and even then as copy-only text, never a link.
@@ -28,13 +30,15 @@ export interface ApprovableService {
 }
 
 /**
- * Services eligible for the Add Service dropdown: operators with more than
- * {@link MIN_UNIQUE_PAYERS} unique payers (from subgraph approvals) that also
- * publish an onchain name via IFilecoinServiceMetadata (filecoin-services#551).
- * Anything unnamed or low-adoption stays reachable through the dialog's
- * custom-address entry instead.
+ * Services eligible for the Add Service dropdown: operators meeting the
+ * per-network {@link MIN_UNIQUE_PAYERS} bar (from subgraph approvals) that
+ * also publish an onchain name via IFilecoinServiceMetadata
+ * (filecoin-services#551). Anything unnamed or low-adoption stays reachable
+ * through the dialog's custom-address entry instead.
  */
 export function useApprovableServices(options?: { networkOverride?: Network }) {
+  const { network: contextNetwork } = useNetwork();
+  const network = options?.networkOverride ?? contextNetwork;
   const { data: approvals, isLoading } = useGraphQLQuery<
     ApprovedOperatorClientsResponse,
     ApprovedOperatorClientsResponse["operatorApprovals"]
@@ -57,9 +61,9 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
       payersByOperator.set(operator, payers);
     }
     return Array.from(payersByOperator.entries())
-      .filter(([, payers]) => payers.size > MIN_UNIQUE_PAYERS)
+      .filter(([, payers]) => payers.size >= MIN_UNIQUE_PAYERS[network])
       .map(([address, payers]) => ({ address, payerCount: payers.size }));
-  }, [approvals]);
+  }, [approvals, network]);
 
   const metadata = useServiceMetadata(candidates.map((candidate) => candidate.address));
 
