@@ -72,6 +72,19 @@ export const GET_RECENT_OPERATORS = gql`
     }
   }
 `;
+export const GET_APPROVED_OPERATOR_CLIENTS = gql`
+  query GetApprovedOperatorClients($first: Int = 1000) {
+    operatorApprovals(first: $first, where: { isApproved: true }) {
+      client {
+        id
+      }
+      operator {
+        id
+        address
+      }
+    }
+  }
+`;
 
 export const GET_OPERATORS_LEADERBOARD = gql`
   query GetOperatorsByUSDFCSettledAmount($first: Int = 10, $token: String) {
