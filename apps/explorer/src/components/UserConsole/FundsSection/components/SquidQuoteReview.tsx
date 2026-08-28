@@ -77,6 +77,12 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   return "No supported tokens on this network.";
 }
 
+export function compactTokenBalance(value: bigint, decimals: number) {
+  return new Intl.NumberFormat("en-US", { maximumSignificantDigits: 6, notation: "compact" }).format(
+    Number(formatUnits(value, decimals)),
+  );
+}
+
 export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
   return sourceChainId === mainnet.id
     ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
@@ -162,19 +168,6 @@ export function SquidQuoteReview({
     showAllSourceTokens,
     sourceTokenAddress,
   );
-  const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
-    const balance = sourceTokenBalance(sourceTokenBalances, token.token);
-    return {
-      aliases: [token.symbol, token.token],
-      detail: address
-        ? typeof balance === "bigint"
-          ? displayAmount(balance, token.decimals, token.symbol)
-          : "Unavailable"
-        : undefined,
-      label: `${token.symbol} (${formatAddress(token.token)})`,
-      value: token.token,
-    };
-  });
   const isLoadingWalletTokenInventory =
     !!address && selectableTokens.length > 0 && isLoadingTokenBalances && !sourceTokenBalances;
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
@@ -195,6 +188,17 @@ export function SquidQuoteReview({
     enabled: !!address && !!source && !!sourcePublicClient,
     queryFn: readSelectedBalance,
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
+  });
+  const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
+    const inventoryBalance = sourceTokenBalance(sourceTokenBalances, token.token);
+    const balance = token.token.toLowerCase() === source?.token.toLowerCase() ? sourceBalance : inventoryBalance;
+    return {
+      aliases: [token.symbol, token.token],
+      detail: address ? (typeof balance === "bigint" ? compactTokenBalance(balance, token.decimals) : "—") : undefined,
+      label: token.symbol,
+      secondaryLabel: formatAddress(token.token),
+      value: token.token,
+    };
   });
   const {
     data: separateNativeBalance,

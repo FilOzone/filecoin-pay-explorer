@@ -157,8 +157,9 @@ describe("SquidQuoteReview token inventory", () => {
     expect(controls.token?.options).toEqual([
       {
         aliases: [usdc.symbol, usdc.token],
-        detail: "2 USDC",
-        label: `${usdc.symbol} (${formatAddress(usdc.token)})`,
+        detail: "2",
+        label: usdc.symbol,
+        secondaryLabel: formatAddress(usdc.token),
         value: usdc.token,
       },
     ]);
