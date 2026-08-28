@@ -30,29 +30,64 @@ export type PickerToken = {
 };
 
 type DepositTokenPickerProps = {
-  /** Tokens already held by the account, supplied by the caller — never re-queried here. */
-  tokens: UserToken[];
-  /** The token the deposit will act on, from the list or from a resolved custom address. */
+  /** Tokens offered in the list — account-held or curated, resolved by the caller. */
+  tokens: PickerToken[];
+  /** The token the caller will act on, from the list or from a resolved custom address. */
   token: PickerToken | null;
   mode: TokenPickerMode;
   onModeChange: (mode: TokenPickerMode) => void;
-  onSelectToken: (userToken: UserToken) => void;
+  onSelectToken: (token: PickerToken) => void;
   customAddress: string;
   onCustomAddressChange: (value: string) => void;
   customTokenStatus: CustomTokenStatus;
   /** The connected network, named in the custom-address hint. */
   chainName: string;
   disabled?: boolean;
+  /** Heading above the picker. */
+  label?: string;
+  /** Shown when `tokens` is empty and the list is expanded. */
+  emptyListMessage?: string;
 };
 
 const rowClasses =
   "flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-50";
 
-const toPickerToken = (userToken: UserToken): PickerToken => ({
+export const toPickerToken = (userToken: UserToken): PickerToken => ({
   address: userToken.token.id,
   symbol: userToken.token.symbol,
   decimals: Number(userToken.token.decimals),
 });
+
+/**
+ * How far the hand-entered address has got towards a usable token.
+ *
+ * The checks are ordered by precedence and each one assumes those above it
+ * passed, so an empty field never reports as invalid and an in-flight read never
+ * reports as an error. `loaded` is the only state left once every check clears.
+ */
+export const getCustomTokenStatus = ({
+  address,
+  isValidAddress,
+  isLoadingReads,
+  isReadsError,
+  token,
+}: {
+  /** The trimmed contract address as typed. */
+  address: string;
+  isValidAddress: boolean;
+  isLoadingReads: boolean;
+  isReadsError: boolean;
+  /** The token those reads resolved to, or null if they did not resolve one. */
+  token: PickerToken | null;
+}): CustomTokenStatus => {
+  if (!address) return "idle";
+  if (!isValidAddress) return "invalid";
+  if (isLoadingReads) return "loading";
+  // A well-formed address that resolves nothing is an error too: the reads came
+  // back, but not from something the caller can act on.
+  if (isReadsError || !token) return "error";
+  return "loaded";
+};
 
 /**
  * Icon, symbol and truncated address — the one token presentation used everywhere here.
@@ -164,6 +199,8 @@ const DepositTokenPicker = ({
   customTokenStatus,
   chainName,
   disabled = false,
+  label = "Token",
+  emptyListMessage = "No tokens deposited yet.",
 }: DepositTokenPickerProps) => {
   const listId = useId();
   const addressInputId = useId();
@@ -172,7 +209,7 @@ const DepositTokenPicker = ({
   // The selected token is already shown on the collapsed trigger, so listing it
   // again would just be a row that does nothing when clicked.
   const selectableTokens = tokens.filter(
-    (userToken) => userToken.token.id.toLowerCase() !== token?.address.toLowerCase(),
+    (listToken) => listToken.address.toLowerCase() !== token?.address.toLowerCase(),
   );
 
   if (mode === "custom") {
@@ -209,7 +246,7 @@ const DepositTokenPicker = ({
 
   return (
     <div className='grid gap-2'>
-      <span className='text-sm font-medium text-foreground'>Token</span>
+      <span className='text-sm font-medium text-foreground'>{label}</span>
 
       {/* Trigger and expanded panel share one bordered box, so the list reads as
           a continuation of the selected row rather than a detached card. */}
@@ -244,28 +281,24 @@ const DepositTokenPicker = ({
                 on screen, and bounding them here keeps the "Add supported token"
                 row below pinned in view instead of buried at the end. */}
             {selectableTokens.length > 0 ? (
-              <ul aria-label='Other tokens in your account' className='max-h-64 divide-y overflow-y-auto'>
-                {selectableTokens.map((userToken) => {
-                  const listToken = toPickerToken(userToken);
-
-                  return (
-                    <li key={userToken.id}>
-                      <button
-                        type='button'
-                        onClick={() => onSelectToken(userToken)}
-                        disabled={disabled}
-                        className={cn(rowClasses, "justify-between")}
-                      >
-                        <TokenSummary token={listToken} />
-                        <TokenDecimals decimals={listToken.decimals} />
-                      </button>
-                    </li>
-                  );
-                })}
+              <ul aria-label='Available tokens' className='max-h-64 divide-y overflow-y-auto'>
+                {selectableTokens.map((listToken) => (
+                  <li key={listToken.address}>
+                    <button
+                      type='button'
+                      onClick={() => onSelectToken(listToken)}
+                      disabled={disabled}
+                      className={cn(rowClasses, "justify-between")}
+                    >
+                      <TokenSummary token={listToken} />
+                      <TokenDecimals decimals={listToken.decimals} />
+                    </button>
+                  </li>
+                ))}
               </ul>
             ) : null}
 
-            {tokens.length === 0 ? <p className='p-3 text-sm text-muted-foreground'>No tokens deposited yet.</p> : null}
+            {tokens.length === 0 ? <p className='p-3 text-sm text-muted-foreground'>{emptyListMessage}</p> : null}
 
             {/*
              * TODO: list the tokens supported by Filecoin Pay from the subgraph's
