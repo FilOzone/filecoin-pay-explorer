@@ -192,6 +192,32 @@ describe("SquidQuoteReview token inventory", () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance2 USDC");
   });
 
+  it("refreshes only the selected balance and keeps the previous value visible", async () => {
+    let balanceReads = 0;
+    let resolveRefresh!: (value: bigint) => void;
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName !== "balanceOf") return 1n;
+      balanceReads += 1;
+      if (balanceReads === 1) return 3_000_000n;
+      return new Promise<bigint>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    });
+    const renderer = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    await act(async () => controls.token?.onValueChange(usdc.token));
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC"));
+
+    await act(async () => button(renderer, "Refresh balance")?.props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC");
+    expect(button(renderer, "Refreshing…")).toBeDefined();
+
+    await act(async () => resolveRefresh(4_000_000n));
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("4 USDC"));
+    expect(readSourceTokenBalances).toHaveBeenCalledOnce();
+  });
+
   it("reuses a fresh wallet inventory when the review remounts", async () => {
     const first = await renderReview(queryClient);
     await chooseNetwork(8453);

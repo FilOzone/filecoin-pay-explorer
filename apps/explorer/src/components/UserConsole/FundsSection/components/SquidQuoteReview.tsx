@@ -186,7 +186,8 @@ export function SquidQuoteReview({
   const {
     data: sourceBalance,
     isError: isSourceBalanceError,
-    isFetching: isLoadingSourceBalance,
+    isFetching: isRefreshingSourceBalance,
+    isPending: isLoadingSourceBalance,
     refetch: refetchSourceBalance,
   } = useQuery({
     enabled: !!address && !!source && !!sourcePublicClient,
@@ -355,15 +356,16 @@ export function SquidQuoteReview({
     }
   }, [chainId, sourceChain]);
 
-  const review = () => {
+  const review = async () => {
     setError(null);
     if (quotesUnavailable) return setError("Squid quotes are not configured for this deployment.");
     if (!address || !source || destinationAmount === null)
       return setError("Select a source token and enter the USDFC amount.");
-    if (isSourceBalanceError) return setError("Could not load your source-token balance. Retry the balance read.");
-    if (sourceBalance === undefined) return setError("Your source-token balance is still loading. Try again shortly.");
-    if (sourceAmount === null || sourceAmount <= 0n) return setError(insufficientBalance);
-    void refetchQuote();
+    const latestBalance = await refetchSourceBalance();
+    if (latestBalance.isError || latestBalance.data === undefined)
+      return setError("Could not load your source-token balance. Retry the balance read.");
+    if (latestBalance.data <= 0n) return setError(insufficientBalance);
+    if (latestBalance.data === sourceBalance) void refetchQuote();
   };
 
   const switchToSourceNetwork = async () => {
@@ -646,10 +648,24 @@ export function SquidQuoteReview({
             role='status'
           >
             <span>Balance</span>
-            <span>
-              {isLoadingSourceBalance || sourceBalance === undefined
-                ? "Loading…"
-                : displayAmount(sourceBalance, source.decimals, source.symbol)}
+            <span className='flex items-center gap-2'>
+              <span>
+                {sourceBalance === undefined
+                  ? "Loading…"
+                  : displayAmount(sourceBalance, source.decimals, source.symbol)}
+              </span>
+              <Button
+                disabled={isBusy || isRefreshingSourceBalance}
+                onClick={() => {
+                  setError(null);
+                  void refetchSourceBalance();
+                }}
+                size='compact'
+                type='button'
+                variant='tertiary'
+              >
+                {isRefreshingSourceBalance ? "Refreshing…" : "Refresh balance"}
+              </Button>
             </span>
           </div>
         )}
@@ -657,7 +673,7 @@ export function SquidQuoteReview({
           <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
             <span>Could not load your source-token balance.</span>
             <Button
-              disabled={isLoadingSourceBalance}
+              disabled={isRefreshingSourceBalance}
               onClick={() => {
                 setError(null);
                 void refetchSourceBalance();
@@ -666,7 +682,7 @@ export function SquidQuoteReview({
               type='button'
               variant='tertiary'
             >
-              {isLoadingSourceBalance ? "Retrying…" : "Retry"}
+              {isRefreshingSourceBalance ? "Retrying…" : "Retry"}
             </Button>
           </div>
         )}
@@ -747,7 +763,7 @@ export function SquidQuoteReview({
           isLoadingSourceBalance ||
           sourceBalance === undefined
         }
-        onClick={review}
+        onClick={() => void review()}
         size='compact'
         type='button'
         variant='tertiary'
