@@ -6,6 +6,7 @@ import { WarmStorageSection } from "@/components/UserConsole/WarmStorageSection"
 import {
   RunwayBanner,
   ServicePricingChips,
+  SessionKeysLine,
   WarmStorageTourButton,
 } from "@/components/UserConsole/WarmStorageSection/components";
 import { useWarmStorageMetadata } from "@/hooks/useServiceMetadata";
@@ -43,8 +44,9 @@ const WarmStoragePage = () => {
           </div>
         ) : null}
         <ServicePricingChips />
-        <div className='mt-2'>
+        <div className='mt-2 flex flex-col gap-2'>
           <RunwayBanner />
+          <SessionKeysLine />
         </div>
       </div>
 
