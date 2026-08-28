@@ -3,12 +3,7 @@
 import { useConnection } from "wagmi";
 import { CopyButton } from "@/components/shared";
 import { WarmStorageSection } from "@/components/UserConsole/WarmStorageSection";
-import {
-  RunwayBanner,
-  ServicePricingChips,
-  SessionKeysLine,
-  WarmStorageTourButton,
-} from "@/components/UserConsole/WarmStorageSection/components";
+import { ServiceFacts, WarmStorageTourButton } from "@/components/UserConsole/WarmStorageSection/components";
 import { useWarmStorageMetadata } from "@/hooks/useServiceMetadata";
 
 const WarmStoragePage = () => {
@@ -43,10 +38,8 @@ const WarmStoragePage = () => {
             <CopyButton value={homepage} displayValue={homepage} showText tooltipText='Copy homepage URL' />
           </div>
         ) : null}
-        <ServicePricingChips />
-        <div className='mt-2 flex flex-col gap-2'>
-          <RunwayBanner />
-          <SessionKeysLine />
+        <div className='mt-2'>
+          <ServiceFacts />
         </div>
       </div>
 
