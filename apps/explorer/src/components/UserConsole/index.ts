@@ -9,5 +9,6 @@ export { IncreaseApprovalDialog } from "./IncreaseApprovalDialog";
 export { OperatorApprovalsSection } from "./OperatorApprovalsSection";
 export { RailsSearch } from "./RailsSearch";
 export { RailsSection } from "./RailsSection";
+export { ServicesRollup } from "./ServicesRollup";
 export { SettleRailDialog } from "./SettleRailDialog";
 export { WithdrawDialog } from "./WithdrawDialog";

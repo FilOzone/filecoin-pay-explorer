@@ -1,17 +1,42 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useConnection } from "wagmi";
 import {
   DatasetsTable,
   ServiceMetricCards,
+  SpendingLimits,
   StaleQueue,
   TerminateDatasetDialog,
   WarmStorageTourAutoStart,
 } from "@/components/UserConsole/WarmStorageSection/components";
+import { useAccountRails } from "@/hooks/useAccountDetails";
+import useSynapse from "@/hooks/useSynapse";
+import { getNetworkFromChainId } from "@/utils/network";
+import { rollupRailsByOperator } from "@/utils/railRollup";
 import { MOCK_DATASETS, type MockDataset } from "./data/mockDatasets";
 import { isStale } from "./utils/datasetLifecycle";
 
+const MockChip = () => (
+  <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'>
+    mock data — real rows need the FWSS subgraph
+  </span>
+);
+
 export const WarmStorageSection = () => {
+  const { address, chainId } = useConnection();
+  const network = getNetworkFromChainId(chainId);
+  const { constants } = useSynapse();
+  const fwssAddress = constants.chain.contracts.fwss.address.toLowerCase();
+
+  // Real money: this wallet's rails, rolled up to the FWSS operator.
+  // Page 1 only (10 rails) — the known rollup-pagination gap from the billing
+  // POC applies here too and ships with the aggregation fix, not this POC.
+  const { data: railsData } = useAccountRails(address?.toLowerCase() ?? "", 1, { networkOverride: network });
+  const rollup = address
+    ? rollupRailsByOperator(railsData?.rails ?? [], address).find((r) => r.operatorAddress === fwssAddress)
+    : undefined;
+
   const [datasets, setDatasets] = useState<MockDataset[]>(MOCK_DATASETS);
   const [terminateTarget, setTerminateTarget] = useState<MockDataset | null>(null);
 
@@ -33,10 +58,14 @@ export const WarmStorageSection = () => {
       <WarmStorageTourAutoStart />
 
       <div data-tour='metrics'>
-        <ServiceMetricCards datasets={datasets} />
+        <ServiceMetricCards rollup={rollup} />
       </div>
 
-      <div data-tour='datasets-table'>
+      <div data-tour='datasets-table' className='flex flex-col gap-2'>
+        <div className='flex items-center gap-2'>
+          <h3 className='font-medium'>Datasets</h3>
+          <MockChip />
+        </div>
         <DatasetsTable datasets={datasets} onTerminate={handleTerminate} />
       </div>
 
@@ -45,6 +74,8 @@ export const WarmStorageSection = () => {
           <StaleQueue datasets={staleDatasets} onTerminate={handleTerminate} />
         </div>
       ) : null}
+
+      <SpendingLimits />
 
       <TerminateDatasetDialog
         dataset={terminateTarget}

@@ -3,7 +3,11 @@
 import { useConnection } from "wagmi";
 import { CopyButton } from "@/components/shared";
 import { WarmStorageSection } from "@/components/UserConsole/WarmStorageSection";
-import { WarmStorageTourButton } from "@/components/UserConsole/WarmStorageSection/components";
+import {
+  RunwayBanner,
+  ServicePricingChips,
+  WarmStorageTourButton,
+} from "@/components/UserConsole/WarmStorageSection/components";
 import { useServiceMetadata } from "@/hooks/useServiceMetadata";
 
 const WarmStoragePage = () => {
@@ -19,8 +23,8 @@ const WarmStoragePage = () => {
   }
 
   return (
-    <div className='flex flex-col gap-15'>
-      <div>
+    <div className='flex flex-col gap-10'>
+      <div className='flex flex-col gap-2'>
         <div className='flex items-baseline justify-between'>
           <h2
             data-tour='page-title'
@@ -30,14 +34,18 @@ const WarmStoragePage = () => {
           </h2>
           <WarmStorageTourButton />
         </div>
-        {description ? <p className='mt-2 text-muted-foreground'>{description}</p> : null}
+        {description ? <p className='text-muted-foreground'>{description}</p> : null}
         {homepage ? (
           // Contract-supplied homepage is never hyperlinked — copy only.
-          <div className='mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground'>
+          <div className='flex items-center gap-1.5 text-sm text-muted-foreground'>
             <span>Homepage:</span>
             <CopyButton value={homepage} displayValue={homepage} showText tooltipText='Copy homepage URL' />
           </div>
         ) : null}
+        <ServicePricingChips />
+        <div className='mt-2'>
+          <RunwayBanner />
+        </div>
       </div>
 
       <div>{renderContent()}</div>

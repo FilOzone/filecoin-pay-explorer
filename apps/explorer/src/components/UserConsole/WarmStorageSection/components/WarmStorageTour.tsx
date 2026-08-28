@@ -31,7 +31,7 @@ const buildTour = () =>
         popover: {
           title: "The service at a glance",
           description:
-            "Monthly spend split into recurring streaming payments and one-time operation fees, your account-level runway (funds are shared across services, so runway belongs to the account, not a dataset), and the deposit locked for active rails — returned when datasets are terminated, not spendable while locked.",
+            "REAL money from your payment rails: monthly spend on this service (streaming rate across active rails, plus all-time one-time fees) and the deposit locked for its rails — returned when datasets are terminated, not spendable while locked. The runway banner above is account-level: funds are shared across services.",
         },
       },
       {
@@ -39,7 +39,7 @@ const buildTour = () =>
         popover: {
           title: "The full inventory",
           description:
-            "All datasets: size, last write (from indexed contract events), monthly spend, and a link to the PDP Explorer for proving detail. Terminate permanently stops payment for a dataset.",
+            "The datasets are mock data (real rows need the FWSS subgraph): size, last write, monthly spend, and a link to the PDP Explorer for proving detail. Terminate permanently stops payment for a dataset. Below the queue, Spending limits shows the real operator approval for this service.",
         },
       },
       {

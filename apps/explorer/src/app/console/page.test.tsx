@@ -78,6 +78,7 @@ vi.mock("@/components/UserConsole", () => ({
       </div>
     );
   },
+  ServicesRollup: () => null,
   OperatorApprovalsSection: ({ network }: { network: string }) => {
     sectionNetworks.approvals = network;
     return <div>Approvals</div>;

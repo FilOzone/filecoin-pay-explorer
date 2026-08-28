@@ -7,6 +7,7 @@ import {
   FundsSection,
   OperatorApprovalsSection,
   RailsSection,
+  ServicesRollup,
   TopUpDialogController,
 } from "@/components/UserConsole";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
@@ -68,6 +69,7 @@ const AccountSections = ({
         <FundsSection account={account} network={network} onGuidedTopUp={onGuidedTopUp} />
         {alertsBanner}
       </div>
+      <ServicesRollup account={account} network={network} />
       <RailsSection account={account} network={network} userAddress={userAddress} />
       <OperatorApprovalsSection account={account} network={network} />
 
