@@ -7,6 +7,8 @@ export type ServiceRollup = {
   operatorAddress: string;
   railCount: number;
   activeRailCount: number;
+  /** Terminated but not finalized: locked funds waiting to be reclaimed by finalizing. */
+  terminatedRailCount: number;
   /** Token base units per month across active rails. */
   monthlyRate: bigint;
   /** All-time one-time payments (operation fees + usage) across the operator's rails. */
@@ -39,6 +41,7 @@ export const rollupRailsByOperator = (rails: Rail[], payerAddress: string): Serv
         operatorAddress: operator,
         railCount: 0,
         activeRailCount: 0,
+        terminatedRailCount: 0,
         monthlyRate: 0n,
         oneTimeTotal: 0n,
         streamingLockup: 0n,
@@ -55,6 +58,8 @@ export const rollupRailsByOperator = (rails: Rail[], payerAddress: string): Serv
       const rate = BigInt(rail.paymentRate ?? 0);
       group.monthlyRate += rate * EPOCHS_PER_MONTH;
       group.streamingLockup += rate * BigInt(rail.lockupPeriod ?? 0);
+    } else if (rail.state === "TERMINATED") {
+      group.terminatedRailCount += 1;
     }
   }
 

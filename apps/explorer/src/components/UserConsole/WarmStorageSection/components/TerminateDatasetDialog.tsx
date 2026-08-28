@@ -3,6 +3,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@filecoin-pay/ui/components/dialog";
 import { AlertTriangle } from "lucide-react";
+import { PocChip } from "@/components/UserConsole/PocChip";
 import type { MockDataset } from "../data/mockDatasets";
 import { formatUSD } from "../utils/datasetLifecycle";
 
@@ -35,6 +36,7 @@ export const TerminateDatasetDialog = ({ dataset, onCancel, onConfirm }: Termina
           {dataset ? formatUSD(dataset.lockedUSD) : null} of locked deposit returns to your available balance. A receipt
           goes to your alerts email.
         </p>
+        <PocChip label='action not wired — no transaction is sent; the row is removed locally' />
       </div>
       <DialogFooter className='flex-row gap-3 sm:justify-stretch'>
         <Button variant='ghost' onClick={onCancel} className='flex-1'>

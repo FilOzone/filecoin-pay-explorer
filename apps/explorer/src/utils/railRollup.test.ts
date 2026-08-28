@@ -34,6 +34,7 @@ describe("rollupRailsByOperator", () => {
     const [rollup] = rollupRailsByOperator(rails, PAYER);
     expect(rollup.railCount).toBe(2);
     expect(rollup.activeRailCount).toBe(1);
+    expect(rollup.terminatedRailCount).toBe(1);
     expect(rollup.monthlyRate).toBe(100n * EPOCHS_PER_MONTH);
     expect(rollup.streamingLockup).toBe(100n * 2880n);
     expect(rollup.oneTimeTotal).toBe(12n);

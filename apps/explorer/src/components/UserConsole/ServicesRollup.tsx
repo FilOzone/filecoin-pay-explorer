@@ -5,6 +5,7 @@ import type { Account } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Hourglass } from "lucide-react";
 import Link from "next/link";
+import { PocChip } from "@/components/UserConsole/PocChip";
 import { knownAddresses } from "@/constants/known-addresses";
 import { useAccountRails } from "@/hooks/useAccountDetails";
 import { useAccountRunway } from "@/hooks/useAccountRunway";
@@ -60,17 +61,31 @@ export const ServicesRollup = ({ account, network }: ServicesRollupProps) => {
       <ul className='flex flex-col divide-y'>
         {rollups.map((rollup) => (
           <li key={rollup.operatorAddress} className='flex flex-wrap items-center gap-3 py-3'>
-            <div className='flex min-w-0 flex-1 flex-col'>
+            <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
               <span className='truncate font-medium'>{serviceName(rollup.operatorAddress)}</span>
               <span className='text-xs text-muted-foreground tabular-nums'>
                 {formatTokenTruncated(rollup.monthlyRate, rollup.tokenDecimals, rollup.tokenSymbol)} / mo ·{" "}
                 {rollup.activeRailCount} active rails ·{" "}
                 {formatTokenTruncated(rollup.streamingLockup, rollup.tokenDecimals, rollup.tokenSymbol)} locked
               </span>
+              {rollup.terminatedRailCount > 0 ? (
+                // The payer's one real rail job: finalize terminated rails to get the
+                // remaining lockup back. Rail-level detail stays in the Pay Explorer.
+                <span className='flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-500'>
+                  {rollup.terminatedRailCount} terminated rails hold reclaimable funds
+                  <Button variant='ghost' size='compact' disabled title='Finalize flow ships with batch settle'>
+                    Reclaim
+                  </Button>
+                  <PocChip label='action not wired' />
+                </span>
+              ) : null}
             </div>
-            <Button variant='ghost' disabled title='Batch settle is coming — settle per rail in the rails table below'>
-              Settle all ({rollup.railCount})
-            </Button>
+            <span className='flex items-center gap-1.5'>
+              <Button variant='ghost' size='compact' disabled title='Batch settle (multicall) is coming'>
+                Settle all ({rollup.railCount})
+              </Button>
+              <PocChip label='action not wired' />
+            </span>
             {rollup.operatorAddress === fwssAddress ? (
               <Link href='/console/services/warm-storage' className='text-sm font-medium text-primary hover:underline'>
                 View service →

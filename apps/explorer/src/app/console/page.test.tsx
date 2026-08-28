@@ -26,7 +26,6 @@ const topUpState = vi.hoisted(() => ({
 const sectionNetworks = vi.hoisted(() => ({
   approvals: "" as string,
   funds: "" as string,
-  rails: "" as string,
 }));
 
 vi.mock("wagmi", async (importOriginal) => ({
@@ -82,10 +81,6 @@ vi.mock("@/components/UserConsole", () => ({
   OperatorApprovalsSection: ({ network }: { network: string }) => {
     sectionNetworks.approvals = network;
     return <div>Approvals</div>;
-  },
-  RailsSection: ({ network }: { network: string }) => {
-    sectionNetworks.rails = network;
-    return <div>Rails</div>;
   },
   TopUpDialogController: ({
     accountId,
@@ -164,7 +159,6 @@ describe("UserConsole", () => {
     topUpState.unmounts = 0;
     sectionNetworks.approvals = "";
     sectionNetworks.funds = "";
-    sectionNetworks.rails = "";
   });
 
   it("keeps the unsupported-network console state on a Squid source chain", () => {
@@ -176,7 +170,6 @@ describe("UserConsole", () => {
     expect(markup).not.toContain("Funds");
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");
-    expect(markup).not.toContain("Rails");
   });
 
   it("keeps the full console on Filecoin", () => {
@@ -186,7 +179,7 @@ describe("UserConsole", () => {
     expect(markup).toContain("Funds");
     expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
     expect(markup).toContain("Approvals");
-    expect(markup).toContain("Rails");
+    expect(markup).not.toContain("Rails");
   });
 
   it("keeps the default Filecoin console while the wallet chain resolves", () => {
@@ -232,11 +225,10 @@ describe("UserConsole", () => {
     expect(topUpState.unmounts).toBe(0);
     expect(sourceMarkup).toContain("Funds");
     expect(sourceMarkup).toContain("Approvals");
-    expect(sourceMarkup).toContain("Rails");
     expect(sourceMarkup).not.toContain("Unsupported network");
     expect(accountState.requestedAddress).toBe(wallet.address);
     expect(accountState.requestedNetwork).toBe("mainnet");
-    expect(sectionNetworks).toEqual({ approvals: "mainnet", funds: "mainnet", rails: "mainnet" });
+    expect(sectionNetworks).toEqual({ approvals: "mainnet", funds: "mainnet" });
 
     act(() => topUpState.close?.());
     act(() => {

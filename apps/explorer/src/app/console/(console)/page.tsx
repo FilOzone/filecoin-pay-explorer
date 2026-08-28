@@ -6,7 +6,6 @@ import {
   AlertsBanner,
   FundsSection,
   OperatorApprovalsSection,
-  RailsSection,
   ServicesRollup,
   TopUpDialogController,
 } from "@/components/UserConsole";
@@ -26,7 +25,6 @@ type AccountSectionsProps = {
   isLoading: boolean;
   network: Network;
   onGuidedTopUp?: () => void;
-  userAddress: string;
   /**
    * Rendered below the funds overview rather than above the page: the prompt to
    * enable alerts lands better once the reader has seen the balances it protects.
@@ -36,15 +34,7 @@ type AccountSectionsProps = {
   alertsBanner: React.ReactNode;
 };
 
-const AccountSections = ({
-  account,
-  error,
-  isLoading,
-  network,
-  onGuidedTopUp,
-  userAddress,
-  alertsBanner,
-}: AccountSectionsProps) => {
+const AccountSections = ({ account, error, isLoading, network, onGuidedTopUp, alertsBanner }: AccountSectionsProps) => {
   if (isLoading) {
     return (
       <>
@@ -70,7 +60,10 @@ const AccountSections = ({
         {alertsBanner}
       </div>
       <ServicesRollup account={account} network={network} />
-      <RailsSection account={account} network={network} userAddress={userAddress} />
+      {/* Rails table killed (decision 2026-08-27): rails are operator-created,
+          SP-settled protocol objects with no payer verb except finalizing
+          terminated rails — that job lives on the service rows above as
+          Reclaim. Rail-level inspection belongs to the Pay Explorer. */}
       <OperatorApprovalsSection account={account} network={network} />
 
       {/* A failed background refetch still leaves the last good account on screen. */}
@@ -110,7 +103,6 @@ const UserConsole = () => {
         isLoading={accountQuery.isLoading}
         network={displayNetwork}
         onGuidedTopUp={onGuidedTopUp}
-        userAddress={address}
         alertsBanner={showAlertsBanner ? <AlertsBanner /> : null}
       />
     ) : null;

@@ -1,8 +1,8 @@
 "use client";
 
-import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
+import { TerminateButton } from "../components/TerminateButton";
 import { formatDaysAgo, formatUSD } from "../utils/datasetLifecycle";
 import type { MockDataset } from "./mockDatasets";
 
@@ -52,10 +52,6 @@ export const buildDatasetColumns = (onTerminate: (dataset: MockDataset) => void)
   columnHelper.display({
     id: "actions",
     header: "",
-    cell: (info) => (
-      <Button variant='ghost' className='text-destructive' onClick={() => onTerminate(info.row.original)}>
-        Terminate
-      </Button>
-    ),
+    cell: (info) => <TerminateButton onClick={() => onTerminate(info.row.original)} />,
   }),
 ];

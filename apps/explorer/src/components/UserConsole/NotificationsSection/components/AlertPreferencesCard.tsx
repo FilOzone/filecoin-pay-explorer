@@ -2,6 +2,7 @@
 
 import { Card } from "@filecoin-pay/ui/components/card";
 import { useEffect, useState } from "react";
+import { PocChip } from "@/components/UserConsole/PocChip";
 
 /**
  * POC-only alert categories, from the service-pages epic: dataset-level alerts
@@ -94,10 +95,11 @@ export const AlertPreferencesCard = ({ wallet }: { wallet: string }) => {
 
   return (
     <Card className='mt-4 flex flex-col gap-2 p-4'>
-      <h3 className='font-medium'>Alert preferences</h3>
-      <p className='text-sm text-muted-foreground'>
-        All alerts go to your verified email. Datasets marked Keep on a service page stay muted for inactivity alerts.
-      </p>
+      <div className='flex flex-wrap items-center gap-2'>
+        <h3 className='font-medium'>Alert preferences</h3>
+        <PocChip label='mock — saved in this browser only, no backend' />
+      </div>
+      <p className='text-sm text-muted-foreground'>All alerts go to your verified email.</p>
       <ul className='flex flex-col divide-y'>
         <PreferenceRow
           title='Account runway low'

@@ -1,11 +1,12 @@
 "use client";
 
-import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { Archive, Bell } from "lucide-react";
 import Link from "next/link";
+import { PocChip } from "@/components/UserConsole/PocChip";
 import type { MockDataset } from "../data/mockDatasets";
 import { daysSinceLastWrite, STALE_AFTER_DAYS } from "../utils/datasetLifecycle";
+import { TerminateButton } from "./TerminateButton";
 
 type StaleQueueProps = {
   datasets: MockDataset[];
@@ -28,6 +29,7 @@ export const StaleQueue = ({ datasets, onTerminate }: StaleQueueProps) => {
         <Archive className='size-4 text-muted-foreground' />
         <h3 className='font-medium'>Inactive datasets</h3>
         <span className='text-sm text-muted-foreground'>No writes for {STALE_AFTER_DAYS}+ days</span>
+        <PocChip label='mock data' />
         <Link
           href='/console/notifications'
           data-tour='alerts-link'
@@ -45,14 +47,9 @@ export const StaleQueue = ({ datasets, onTerminate }: StaleQueueProps) => {
               <span className='truncate font-medium'>{dataset.name}</span>
               <span className='text-xs text-muted-foreground'>Last write {daysSinceLastWrite(dataset)} days ago</span>
             </div>
-            <Button
-              variant='ghost'
-              className='shrink-0 text-destructive'
-              onClick={() => onTerminate(dataset)}
-              data-tour='dispositions'
-            >
-              Terminate
-            </Button>
+            <span className='shrink-0' data-tour='dispositions'>
+              <TerminateButton onClick={() => onTerminate(dataset)} />
+            </span>
           </li>
         ))}
       </ul>

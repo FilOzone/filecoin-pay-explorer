@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useConnection } from "wagmi";
+import { PocChip } from "@/components/UserConsole/PocChip";
 import {
   DatasetsTable,
   ServiceMetricCards,
@@ -16,12 +17,6 @@ import { getNetworkFromChainId } from "@/utils/network";
 import { rollupRailsByOperator } from "@/utils/railRollup";
 import { MOCK_DATASETS, type MockDataset } from "./data/mockDatasets";
 import { isStale } from "./utils/datasetLifecycle";
-
-const MockChip = () => (
-  <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'>
-    mock data — real rows need the FWSS subgraph
-  </span>
-);
 
 export const WarmStorageSection = () => {
   const { address, chainId } = useConnection();
@@ -64,7 +59,7 @@ export const WarmStorageSection = () => {
       <div data-tour='datasets-table' className='flex flex-col gap-2'>
         <div className='flex items-center gap-2'>
           <h3 className='font-medium'>Datasets</h3>
-          <MockChip />
+          <PocChip label='mock data — real rows need the FWSS subgraph' />
         </div>
         <DatasetsTable datasets={datasets} onTerminate={handleTerminate} />
       </div>
