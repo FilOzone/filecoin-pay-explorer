@@ -147,6 +147,8 @@ export function SquidQuoteReview({
       sourceChain,
       selectableTokens,
     ),
+    refetchOnWindowFocus: false,
+    staleTime: 300_000,
   });
   const hasUnknownTokenBalances = sourceTokenBalances
     ? hasUnknownSourceTokenBalances(selectableTokens, sourceTokenBalances)

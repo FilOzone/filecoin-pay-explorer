@@ -178,6 +178,20 @@ describe("SquidQuoteReview token inventory", () => {
     expect(controls.token?.value).toBe(usdt.token);
   });
 
+  it("reuses a fresh wallet inventory when the review remounts", async () => {
+    const first = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    first.unmount();
+
+    const second = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+
+    expect(readSourceTokenBalances).toHaveBeenCalledOnce();
+    second.unmount();
+  });
+
   it("shows a loading state instead of the catalog until wallet balances resolve", async () => {
     let resolveBalances!: (value: ReturnType<typeof balances>) => void;
     readSourceTokenBalances.mockImplementation(
