@@ -6,6 +6,7 @@ import { PocChip } from "@/components/UserConsole/PocChip";
 import {
   DatasetsTable,
   ServiceMetricCards,
+  SessionKeysLine,
   SpendingLimits,
   StaleQueue,
   TerminateDatasetDialog,
@@ -71,6 +72,8 @@ export const WarmStorageSection = () => {
       ) : null}
 
       <SpendingLimits />
+
+      <SessionKeysLine />
 
       <TerminateDatasetDialog
         dataset={terminateTarget}
