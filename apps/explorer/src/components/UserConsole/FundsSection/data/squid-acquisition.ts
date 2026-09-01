@@ -158,7 +158,7 @@ export function beginSquidAcquisition(
   });
 }
 
-export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: ProcessingSquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing" || !hasSameSquidAcquisitionSnapshot(current, acquisition)) {
     throw new Error("Saved Squid acquisition changed");
@@ -179,7 +179,7 @@ export function getDeliveredSquidAmount(acquisition: SquidAcquisition, currentDe
 
 export function markSquidAcquiredFromBalance(
   storage: AcquisitionStorage,
-  acquisition: SquidAcquisition,
+  acquisition: ProcessingSquidAcquisition,
   currentDestinationBalance: bigint,
 ) {
   const deliveredAmount = getDeliveredSquidAmount(acquisition, currentDestinationBalance);
@@ -187,7 +187,7 @@ export function markSquidAcquiredFromBalance(
   return markSquidAcquired(storage, acquisition, deliveredAmount);
 }
 
-export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash: Hash) {
+export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: ProcessingSquidAcquisition, hash: Hash) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
   if (current.executionStage === "swap-broadcast" && current.transactionHashes.includes(hash)) return current;
@@ -205,7 +205,7 @@ export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: Squ
 
 export function markSquidAcquired(
   storage: AcquisitionStorage,
-  acquisition: SquidAcquisition,
+  acquisition: ProcessingSquidAcquisition,
   deliveredAmount?: bigint,
 ) {
   const current = requireCurrent(storage, acquisition);
@@ -223,7 +223,11 @@ export function markSquidAcquired(
   return save(storage, { ...current, deliveredAmount, status: "acquired" });
 }
 
-export function markSquidDepositPending(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash?: Hash) {
+export function markSquidDepositPending(
+  storage: AcquisitionStorage,
+  acquisition: AcquiredSquidAcquisition | DepositingSquidAcquisition,
+  hash?: Hash,
+) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== acquisition.status) throw new Error("Saved Squid acquisition changed");
   if (current.status !== "acquired" && current.status !== "depositing") {
@@ -239,7 +243,7 @@ export function markSquidDepositPending(storage: AcquisitionStorage, acquisition
   });
 }
 
-export function resetSquidDeposit(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function resetSquidDeposit(storage: AcquisitionStorage, acquisition: DepositingSquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "depositing" || !isSameState(current, acquisition)) {
     throw new Error("Squid deposit is not the expected pending transaction");
