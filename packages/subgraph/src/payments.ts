@@ -28,6 +28,7 @@ import {
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   isNativeToken,
+  latestRateChangeEpoch,
   remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
@@ -319,16 +320,13 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   const rateChangeQueue = rail.rateChangeQueue.load();
+  const latestRateChange = latestRateChangeEpoch(rateChangeQueue, rail.settledUpto);
   if (oldRate.notEqual(newRate) && rail.settledUpto.notEqual(event.block.number)) {
     if (oldRate.equals(ZERO_BIG_INT) && rateChangeQueue.length === 0) {
       rail.settledUpto = event.block.number;
     } else {
-      if (
-        rateChangeQueue.length === 0 ||
-        event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)
-      ) {
-        const startEpoch =
-          rateChangeQueue.length === 0 ? rail.settledUpto : rateChangeQueue[rateChangeQueue.length - 1].untilEpoch;
+      if (rateChangeQueue.length === 0 || event.block.number.notEqual(latestRateChange)) {
+        const startEpoch = latestRateChange;
         const isNew = createRateChangeQueue(rail, startEpoch, event.block.number, oldRate).isNew;
         rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
       }
@@ -486,10 +484,10 @@ export function handleRailSettled(event: RailSettledEvent): void {
     }
 
     // Calculate lockup reduction from current rate (for epochs not covered by rate change queue)
-    // Start from the later of: last queue entry's untilEpoch OR previousSettledUpto
+    // Start from the later of: latest queue entry's untilEpoch OR previousSettledUpto.
+    // Derived relationship order is unspecified, so find the latest epoch explicitly.
     // This handles cases where the rail was already settled beyond the last rate change
-    const lastQueueEpoch = rateChangeCount > 0 ? rateChanges[rateChangeCount - 1].untilEpoch : previousSettledUpto;
-    const currentRateStartEpoch = lastQueueEpoch.gt(previousSettledUpto) ? lastQueueEpoch : previousSettledUpto;
+    const currentRateStartEpoch = latestRateChangeEpoch(rateChanges, previousSettledUpto);
     if (currentRateStartEpoch.lt(event.params.settledUpTo)) {
       const currentRateDuration = event.params.settledUpTo.minus(currentRateStartEpoch);
       lockupReduction = lockupReduction.plus(rail.paymentRate.times(currentRateDuration));
