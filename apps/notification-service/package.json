@@ -26,25 +26,25 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@filoz/synapse-core": "^0.7.1",
+    "@filoz/synapse-core": "^0.8.0",
     "@filoz/synapse-sdk": "^1.1.1",
     "@hono/zod-validator": "^0.9.0",
     "drizzle-orm": "1.0.0-rc.4",
-    "evlog": "^2.22.4",
-    "hono": "^4.12.27",
+    "evlog": "^2.27.0",
+    "hono": "^4.13.4",
     "jsx-email": "^3.2.1",
-    "viem": "^2.48.11",
+    "viem": "^2.55.19",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.18.7",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@filecoin-pay/configs": "workspace:^",
     "@types/node": "^26.1.1",
-    "@types/react": "^19.2.17",
+    "@types/react": "^19.2.18",
     "drizzle-kit": "1.0.0-rc.4",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "typescript": "^6",
-    "vitest": "^4.1.0",
-    "wrangler": "^4.111.0"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.126.0"
   }
 }
