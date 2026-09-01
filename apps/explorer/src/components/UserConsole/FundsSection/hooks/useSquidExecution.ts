@@ -17,41 +17,44 @@ import { readUsdfcBalance } from "../data/usdfc-balance";
 import type { SquidAcquisitionState } from "./useGuidedSquidAcquisition";
 import type { SquidExecutionInputs } from "./useSquidSourceData";
 
-export function useSquidExecution({
-  acquisitionState,
-  bridgeFeeMaximum,
-  integratorId,
-  isNativeSource,
-  networkGasMaximum,
-  onAcquired,
-  onBlocked,
-  onNetworkSwitchingChange,
-  onRejected,
-  onStarted,
-  plan,
-  refreshExecutionInputs,
-  requiredNativeBalance,
-  source,
-  sourceChainName,
-  sourceNativeCurrencySymbol,
-}: {
-  acquisitionState: SquidAcquisitionState;
-  bridgeFeeMaximum: bigint;
+export type UseSquidExecutionOptions = {
   integratorId: string;
-  isNativeSource: boolean;
-  networkGasMaximum: bigint | null;
-  onAcquired: (acquisition: AcquiredSquidAcquisition) => void;
-  onBlocked: (acquisition: ProcessingSquidAcquisition) => void;
+  lifecycle: {
+    state: SquidAcquisitionState;
+    onAcquired: (acquisition: AcquiredSquidAcquisition) => void;
+    onBlocked: (acquisition: ProcessingSquidAcquisition) => void;
+    onRejected: () => void;
+    onStarted: (acquisition: ProcessingSquidAcquisition) => void;
+  };
   onNetworkSwitchingChange: (isSwitching: boolean) => void;
-  onRejected: () => void;
-  onStarted: (acquisition: ProcessingSquidAcquisition) => void;
-  plan?: SquidFundingPlan;
-  refreshExecutionInputs: () => Promise<SquidExecutionInputs>;
-  requiredNativeBalance: bigint;
-  source?: SourceToken;
-  sourceChainName?: string;
-  sourceNativeCurrencySymbol?: string;
-}) {
+  route: {
+    bridgeFeeMaximum: bigint;
+    networkGasMaximum: bigint | null;
+    plan?: SquidFundingPlan;
+    requiredNativeBalance: bigint;
+  };
+  source: {
+    chainName?: string;
+    isNative: boolean;
+    nativeCurrencySymbol?: string;
+    refreshExecutionInputs: () => Promise<SquidExecutionInputs>;
+    token?: SourceToken;
+  };
+};
+
+export function useSquidExecution({
+  integratorId,
+  lifecycle: { state: acquisitionState, onAcquired, onBlocked, onRejected, onStarted },
+  onNetworkSwitchingChange,
+  route: { bridgeFeeMaximum, networkGasMaximum, plan, requiredNativeBalance },
+  source: {
+    chainName: sourceChainName,
+    isNative: isNativeSource,
+    nativeCurrencySymbol: sourceNativeCurrencySymbol,
+    refreshExecutionInputs,
+    token: source,
+  },
+}: UseSquidExecutionOptions) {
   const { address, chainId } = useAccount();
   const sourcePublicClient = usePublicClient({ chainId: source?.chainId });
   const destinationClient = usePublicClient({ chainId: mainnet.id });

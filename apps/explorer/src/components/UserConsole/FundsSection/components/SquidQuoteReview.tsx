@@ -237,22 +237,22 @@ export function SquidQuoteReview({
       : null;
 
   const execution = useSquidExecution({
-    acquisitionState,
-    bridgeFeeMaximum: bridgeNativeFees.maximum,
     integratorId,
-    isNativeSource: isNativeSource === true,
-    networkGasMaximum: networkGas.maximum,
-    onAcquired,
-    onBlocked,
+    lifecycle: { state: acquisitionState, onAcquired, onBlocked, onRejected, onStarted },
     onNetworkSwitchingChange,
-    onRejected,
-    onStarted,
-    plan,
-    refreshExecutionInputs,
-    requiredNativeBalance,
-    source,
-    sourceChainName: sourceChainMeta?.name,
-    sourceNativeCurrencySymbol: sourceChainMeta?.nativeCurrency.symbol,
+    route: {
+      bridgeFeeMaximum: bridgeNativeFees.maximum,
+      networkGasMaximum: networkGas.maximum,
+      plan,
+      requiredNativeBalance,
+    },
+    source: {
+      chainName: sourceChainMeta?.name,
+      isNative: isNativeSource === true,
+      nativeCurrencySymbol: sourceChainMeta?.nativeCurrency.symbol,
+      refreshExecutionInputs,
+      token: source,
+    },
   });
   const clearErrors = () => {
     setError(null);

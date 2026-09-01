@@ -96,24 +96,30 @@ function Harness({
 }) {
   const fundingPlan = plan();
   execution = useSquidExecution({
-    acquisitionState: "idle",
-    bridgeFeeMaximum: 1n,
     integratorId: "test",
-    isNativeSource: false,
-    networkGasMaximum: getPlanNetworkGas(fundingPlan, 0n).maximum,
-    onAcquired: callbacks.onAcquired,
-    onBlocked: callbacks.onBlocked,
+    lifecycle: {
+      state: "idle",
+      onAcquired: callbacks.onAcquired,
+      onBlocked: callbacks.onBlocked,
+      onRejected: callbacks.onRejected,
+      onStarted: callbacks.onStarted,
+    },
     onNetworkSwitchingChange: vi.fn(),
-    onRejected: callbacks.onRejected,
-    onStarted: callbacks.onStarted,
-    plan: fundingPlan,
-    refreshExecutionInputs: vi.fn().mockResolvedValue({
-      allowance: latestAllowance,
-      nativeBalance: 1_000n,
-      sourceBalance: latestBalance,
-    }),
-    requiredNativeBalance: 1n,
-    source: selectedSource,
+    route: {
+      bridgeFeeMaximum: 1n,
+      networkGasMaximum: getPlanNetworkGas(fundingPlan, 0n).maximum,
+      plan: fundingPlan,
+      requiredNativeBalance: 1n,
+    },
+    source: {
+      isNative: false,
+      refreshExecutionInputs: vi.fn().mockResolvedValue({
+        allowance: latestAllowance,
+        nativeBalance: 1_000n,
+        sourceBalance: latestBalance,
+      }),
+      token: selectedSource,
+    },
   });
   return execution.switchError;
 }
