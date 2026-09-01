@@ -95,41 +95,50 @@ export function SquidQuoteReview({
     sourceTokenAddress,
   });
   const {
-    allowance: sourceAllowance,
-    allowanceError,
-    canFilterWalletTokens,
-    canToggleWalletTokens,
-    hasUnknownTokenBalances,
-    isAllowanceLoading: isLoadingSourceAllowance,
-    isNativeBalanceLoading: isLoadingNativeBalance,
-    isNativeSource,
-    isSourceBalanceLoading: isLoadingSourceBalance,
-    isSourceBalanceRefreshing: isRefreshingSourceBalance,
-    isTokenInventoryLoading: isLoadingTokenBalances,
-    isTokenLoading: isLoadingTokens,
-    isWalletTokenInventoryLoading: isLoadingWalletTokenInventory,
-    nativeBalance,
-    nativeBalanceError,
-    refetchSelectedBalance,
-    retryAllowance,
-    retryNativeBalance,
-    retrySourceBalance,
-    retryTokenInventory,
-    retryTokens,
-    source,
-    sourceBalance,
-    sourceBalanceError,
-    sourceTokenBalances,
-    tokenInventoryError,
-    tokenLoadError,
-    tokens,
-    visibleTokens,
+    catalog: {
+      canFilterWalletTokens,
+      canToggleWalletTokens,
+      hasUnknownBalances: hasUnknownTokenBalances,
+      inventory,
+      retry: retryTokens,
+      status: tokenStatus,
+      tokenError: tokenLoadError,
+      tokens,
+      visibleTokens,
+    },
+    networkFunds: { allowance, nativeBalance: separateNativeBalance },
+    refreshExecutionInputs,
+    selectedToken: { balance: selectedBalance, isNative: isNativeSource, token: source },
   } = sourceData;
-  const isSourceAllowanceError = !!allowanceError;
-  const isTokenBalanceError = !!tokenInventoryError;
-  const isNativeBalanceError = !!nativeBalanceError;
+  const {
+    balances: sourceTokenBalances,
+    isInitialLoading: isLoadingWalletTokenInventory,
+    retry: retryTokenInventory,
+    status: inventoryStatus,
+  } = inventory;
+  const sourceBalance = selectedBalance.status === "ready" ? selectedBalance.value : undefined;
+  const isSourceBalanceError = selectedBalance.status === "error";
+  const isLoadingSourceBalance = selectedBalance.status === "loading";
+  const isRefreshingSourceBalance = selectedBalance.isRefreshing;
+  const retrySourceBalance = selectedBalance.retry;
+  const sourceAllowance = allowance.status === "ready" ? allowance.value : undefined;
+  const isSourceAllowanceError = allowance.status === "error";
+  const isLoadingSourceAllowance = allowance.status === "loading";
+  const retryAllowance = () => (allowance.status === "error" ? allowance.retry() : undefined);
+  const nativeBalance = isNativeSource
+    ? sourceBalance
+    : separateNativeBalance.status === "ready"
+      ? separateNativeBalance.value
+      : undefined;
+  const isNativeBalanceError = separateNativeBalance.status === "error";
+  const isLoadingNativeBalance = separateNativeBalance.status === "loading";
+  const retryNativeBalance = () =>
+    separateNativeBalance.status === "error" ? separateNativeBalance.retry() : undefined;
+  const isTokenBalanceError = inventoryStatus === "error";
+  const isLoadingTokenBalances = inventoryStatus === "loading";
+  const isLoadingTokens = tokenStatus === "loading";
   const isTokenLoadError = !!tokenLoadError;
-  const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
+  const tokenLoadFailed = tokenStatus === "error";
   const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
     const inventoryBalance = sourceTokenBalance(sourceTokenBalances, token.token);
     const balance = token.token.toLowerCase() === source?.token.toLowerCase() ? sourceBalance : inventoryBalance;
@@ -142,7 +151,6 @@ export function SquidQuoteReview({
     };
   });
   const isBusy = acquisitionState !== "idle";
-  const isSourceBalanceError = !!sourceBalanceError;
   const sourceAmount = sourceBalance ?? null;
   const quotePlan = useSquidQuotePlan({
     acquisitionState,
@@ -240,9 +248,7 @@ export function SquidQuoteReview({
     onRejected,
     onStarted,
     plan,
-    refetchNativeBalance: retryNativeBalance,
-    refetchSourceAllowance: retryAllowance,
-    refetchSourceBalance: refetchSelectedBalance,
+    refreshExecutionInputs,
     requiredNativeBalance,
     source,
     sourceChainName: sourceChainMeta?.name,

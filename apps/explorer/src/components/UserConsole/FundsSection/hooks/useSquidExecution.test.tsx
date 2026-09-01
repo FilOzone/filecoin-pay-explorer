@@ -107,9 +107,11 @@ function Harness({
     onRejected: callbacks.onRejected,
     onStarted: callbacks.onStarted,
     plan: fundingPlan,
-    refetchNativeBalance: vi.fn().mockResolvedValue({ data: 1_000n, isError: false }),
-    refetchSourceAllowance: vi.fn().mockResolvedValue({ data: latestAllowance, isError: false }),
-    refetchSourceBalance: vi.fn().mockResolvedValue({ data: latestBalance, isError: false }),
+    refreshExecutionInputs: vi.fn().mockResolvedValue({
+      allowance: latestAllowance,
+      nativeBalance: 1_000n,
+      sourceBalance: latestBalance,
+    }),
     requiredNativeBalance: 1n,
     source: selectedSource,
   });

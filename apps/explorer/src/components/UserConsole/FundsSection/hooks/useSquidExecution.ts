@@ -15,8 +15,7 @@ import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
 import { readUsdfcBalance } from "../data/usdfc-balance";
 import type { SquidAcquisitionState } from "./useGuidedSquidAcquisition";
-
-type BigIntRefetch = () => Promise<{ data?: bigint; isError: boolean }>;
+import type { SquidExecutionInputs } from "./useSquidSourceData";
 
 export function useSquidExecution({
   acquisitionState,
@@ -30,9 +29,7 @@ export function useSquidExecution({
   onRejected,
   onStarted,
   plan,
-  refetchNativeBalance,
-  refetchSourceAllowance,
-  refetchSourceBalance,
+  refreshExecutionInputs,
   requiredNativeBalance,
   source,
   sourceChainName,
@@ -49,9 +46,7 @@ export function useSquidExecution({
   onRejected: () => void;
   onStarted: (acquisition: ProcessingSquidAcquisition) => void;
   plan?: SquidFundingPlan;
-  refetchNativeBalance: BigIntRefetch;
-  refetchSourceAllowance: BigIntRefetch;
-  refetchSourceBalance: BigIntRefetch;
+  refreshExecutionInputs: () => Promise<SquidExecutionInputs>;
   requiredNativeBalance: bigint;
   source?: SourceToken;
   sourceChainName?: string;
@@ -103,28 +98,29 @@ export function useSquidExecution({
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
 
-    const latestBalance = await refetchSourceBalance();
-    if (latestBalance.isError || latestBalance.data === undefined)
-      return setError("Could not refresh your source-token balance. Try again before confirming.");
-    if (quote.sourceAmount > latestBalance.data)
+    let executionInputs: SquidExecutionInputs;
+    try {
+      executionInputs = await refreshExecutionInputs();
+    } catch (cause) {
+      return setError(
+        cause instanceof Error ? cause.message : "Could not refresh wallet balances. Try again before confirming.",
+      );
+    }
+    if (quote.sourceAmount > executionInputs.sourceBalance)
       return setError(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
 
-    const latestNativeBalance = isNativeSource ? latestBalance : await refetchNativeBalance();
-    if (latestNativeBalance.isError || latestNativeBalance.data === undefined)
-      return setError("Could not refresh your source-network gas balance. Try again before confirming.");
     if (networkGasMaximum === 0n)
       return setError("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
     if (networkGasMaximum === null) return setError("Your source-token allowance is still loading. Try again shortly.");
     if (!isNativeSource) {
-      const latestAllowance = await refetchSourceAllowance();
-      if (latestAllowance.isError || latestAllowance.data === undefined)
+      if (executionInputs.allowance === undefined)
         return setError("Could not refresh your source-token allowance. Try again before confirming.");
-      if (getPlanNetworkGas(plan, latestAllowance.data).maximum !== networkGasMaximum)
+      if (getPlanNetworkGas(plan, executionInputs.allowance).maximum !== networkGasMaximum)
         return setError(
           "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.",
         );
     }
-    if (latestNativeBalance.data < requiredNativeBalance)
+    if (executionInputs.nativeBalance < requiredNativeBalance)
       return setError(
         `Your ${sourceNativeCurrencySymbol ?? "source-network native-token"} balance does not cover the reviewed maximum native requirement.`,
       );

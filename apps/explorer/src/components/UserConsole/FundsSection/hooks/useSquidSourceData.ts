@@ -14,6 +14,12 @@ import { squidFetch } from "../data/squid-quote";
 
 const isRateLimited = (error: unknown) => error instanceof Error && error.message.includes("(429)");
 
+export type SquidExecutionInputs = {
+  allowance?: bigint;
+  nativeBalance: bigint;
+  sourceBalance: bigint;
+};
+
 export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
   return sourceChainId === mainnet.id
     ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
@@ -81,7 +87,6 @@ export function useSquidSourceData({
     queryFn: readSelectedBalance,
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
   });
-  const sourceBalance = sourceBalanceQuery.data;
   const nativeBalanceQuery = useQuery({
     enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
     queryFn: async () => {
@@ -104,51 +109,81 @@ export function useSquidSourceData({
     queryKey: ["squid", "source-allowance", sourceChain, sourceTokenAddress, address, SQUID_ROUTER_ADDRESS],
   });
 
-  const refetchSelectedBalance = async () => {
-    if (!source) return { data: undefined, isError: true };
-    const result = await sourceBalanceQuery.refetch();
-    return { data: result.data, isError: result.isError };
-  };
-
-  const retryAllowance = async () => {
-    const result = await allowanceQuery.refetch();
-    return { data: result.data, isError: result.isError };
-  };
-  const retryNativeBalance = async () => {
-    const result = await nativeBalanceQuery.refetch();
-    return { data: result.data, isError: result.isError };
+  const refreshExecutionInputs = async (): Promise<SquidExecutionInputs> => {
+    const sourceResult = await sourceBalanceQuery.refetch();
+    if (sourceResult.isError || sourceResult.data === undefined) {
+      throw new Error("Could not refresh your source-token balance. Try again before confirming.");
+    }
+    if (isNativeSource) {
+      return { nativeBalance: sourceResult.data, sourceBalance: sourceResult.data };
+    }
+    const [nativeResult, allowanceResult] = await Promise.all([nativeBalanceQuery.refetch(), allowanceQuery.refetch()]);
+    if (nativeResult.isError || nativeResult.data === undefined) {
+      throw new Error("Could not refresh your source-network gas balance. Try again before confirming.");
+    }
+    if (allowanceResult.isError || allowanceResult.data === undefined) {
+      throw new Error("Could not refresh your source-token allowance. Try again before confirming.");
+    }
+    return {
+      allowance: allowanceResult.data,
+      nativeBalance: nativeResult.data,
+      sourceBalance: sourceResult.data,
+    };
   };
 
   return {
-    allowance: allowanceQuery.data,
-    allowanceError: allowanceQuery.error,
-    canFilterWalletTokens,
-    canToggleWalletTokens,
-    hasUnknownTokenBalances,
-    isAllowanceLoading: allowanceQuery.isFetching,
-    isNativeSource,
-    isNativeBalanceLoading: nativeBalanceQuery.isFetching,
-    isSourceBalanceLoading: sourceBalanceQuery.isPending,
-    isSourceBalanceRefreshing: sourceBalanceQuery.isFetching,
-    isTokenInventoryLoading: inventoryQuery.isFetching,
-    isTokenLoading: tokenQuery.isFetching,
-    isWalletTokenInventoryLoading:
-      !!address && selectableTokens.length > 0 && inventoryQuery.isFetching && !inventoryQuery.data,
-    nativeBalance: isNativeSource ? sourceBalance : nativeBalanceQuery.data,
-    nativeBalanceError: nativeBalanceQuery.error,
-    refetchSelectedBalance,
-    retryAllowance,
-    retryNativeBalance,
-    retrySourceBalance: sourceBalanceQuery.refetch,
-    retryTokenInventory: inventoryQuery.refetch,
-    retryTokens: tokenQuery.refetch,
-    source,
-    sourceBalance,
-    sourceBalanceError: sourceBalanceQuery.error,
-    sourceTokenBalances: inventoryQuery.data,
-    tokenInventoryError: inventoryQuery.error,
-    tokenLoadError: tokenQuery.error,
-    tokens,
-    visibleTokens,
+    catalog: {
+      canFilterWalletTokens,
+      canToggleWalletTokens,
+      hasUnknownBalances: hasUnknownTokenBalances,
+      inventory: {
+        balances: inventoryQuery.data,
+        isInitialLoading: !!address && selectableTokens.length > 0 && inventoryQuery.isFetching && !inventoryQuery.data,
+        retry: inventoryQuery.refetch,
+        status: inventoryQuery.isError ? "error" : inventoryQuery.isFetching ? "loading" : "ready",
+      },
+      retry: tokenQuery.refetch,
+      status: tokenQuery.isError && tokens.length === 0 ? "error" : tokenQuery.isFetching ? "loading" : "ready",
+      tokenError: tokenQuery.error,
+      tokens,
+      visibleTokens,
+    },
+    networkFunds: {
+      allowance:
+        !source || isNativeSource
+          ? ({ status: "not-required" } as const)
+          : allowanceQuery.isError
+            ? ({ retry: allowanceQuery.refetch, status: "error" } as const)
+            : allowanceQuery.data === undefined
+              ? ({ status: "loading" } as const)
+              : ({ value: allowanceQuery.data, status: "ready" } as const),
+      nativeBalance:
+        !source || isNativeSource
+          ? ({ status: "not-required" } as const)
+          : nativeBalanceQuery.isError
+            ? ({ retry: nativeBalanceQuery.refetch, status: "error" } as const)
+            : nativeBalanceQuery.data === undefined
+              ? ({ status: "loading" } as const)
+              : ({ value: nativeBalanceQuery.data, status: "ready" } as const),
+    },
+    refreshExecutionInputs,
+    selectedToken: {
+      balance: sourceBalanceQuery.isError
+        ? ({ isRefreshing: sourceBalanceQuery.isFetching, retry: sourceBalanceQuery.refetch, status: "error" } as const)
+        : sourceBalanceQuery.data === undefined
+          ? ({
+              isRefreshing: sourceBalanceQuery.isFetching,
+              retry: sourceBalanceQuery.refetch,
+              status: "loading",
+            } as const)
+          : ({
+              isRefreshing: sourceBalanceQuery.isFetching,
+              retry: sourceBalanceQuery.refetch,
+              status: "ready",
+              value: sourceBalanceQuery.data,
+            } as const),
+      isNative: isNativeSource,
+      token: source,
+    },
   };
 }
