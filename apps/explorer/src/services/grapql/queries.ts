@@ -563,3 +563,41 @@ export const GET_STATS_DASHBOARD = gql`
     }
   }
 `;
+
+/**
+ * The rails this account pays for one token, with the rate history and one-time
+ * payments needed to integrate spend over past months.
+ *
+ * Every `first:` here is a cap, not a guarantee of completeness. The caps come in
+ * as variables so `hasReachedSpendHistoryLimit` can compare against the same
+ * numbers and the chart can flag a possibly partial history. These entities
+ * already have pageable top-level queries; using them here would require paging
+ * and joining records across the selected rails. Nested records are newest
+ * first so a capped response favours the six-month window being drawn.
+ */
+export const GET_ACCOUNT_SPEND_HISTORY = gql`
+  query GetAccountSpendHistory($accountId: Bytes!, $tokenId: Bytes!, $first: Int!, $nested: Int!) {
+    # The epoch the rails below were read at. Accrual stops here rather than at a
+    # clock-derived "now", so the ceiling can never run ahead of the rate history
+    # it is integrating.
+    _meta {
+      block {
+        number
+      }
+    }
+    rails(where: { payer: $accountId, token: $tokenId }, first: $first, orderBy: createdAt) {
+      paymentRate
+      endEpoch
+      createdAt
+      rateChangeQueue(first: $nested, orderBy: untilEpoch, orderDirection: desc) {
+        startEpoch
+        untilEpoch
+        rate
+      }
+      oneTimePayments(first: $nested, orderBy: createdAt, orderDirection: desc) {
+        totalAmount
+        createdAt
+      }
+    }
+  }
+`;

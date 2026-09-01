@@ -19,6 +19,8 @@ vi.mock("@/components/UserConsole/DepositDialog", () => ({
   DepositDialog: ({ open }: { open: boolean }) => (open ? <div data-direct-deposit /> : null),
 }));
 vi.mock("@/components/UserConsole/WithdrawDialog", () => ({ WithdrawDialog: () => null }));
+// Stubbed out: these tests are about guided funding, not the chart.
+vi.mock("@/components/UserConsole/SpendChart", () => ({ SpendChart: () => null }));
 vi.mock("./components", () => ({
   AddFundsDialog: ({ onSelect, open }: { onSelect: (method: "deposit" | "squid") => void; open: boolean }) =>
     open ? <button aria-label='Choose Squid funding' onClick={() => onSelect("squid")} type='button' /> : null,

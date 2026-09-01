@@ -3,6 +3,7 @@ import {
   GET_ACCOUNT_APPROVALS,
   GET_ACCOUNT_DETAILS,
   GET_ACCOUNT_RAILS,
+  GET_ACCOUNT_SPEND_HISTORY,
   GET_ACCOUNT_TOKEN,
   GET_ACCOUNT_TOKENS,
 } from "@/services/grapql/queries";
@@ -23,6 +24,26 @@ interface AccountRailsResponse {
 
 interface AccountApprovalsResponse {
   operatorApprovals: OperatorApproval[];
+}
+
+/** Raw shape of `GET_ACCOUNT_SPEND_HISTORY`; only `toRailSpendInput` reads it. */
+export interface SpendHistoryRailResponse {
+  paymentRate: string;
+  endEpoch: string;
+  /** Unix seconds. The subgraph stores no creation epoch, so it is derived from genesis. */
+  createdAt: string;
+  rateChangeQueue: Array<{ startEpoch: string; untilEpoch: string; rate: string }>;
+  oneTimePayments: Array<{ totalAmount: string; createdAt: string }>;
+}
+
+export interface AccountSpendHistoryResponse {
+  /**
+   * The epoch this response was read at — `block.number` is the Filecoin epoch,
+   * so it compares directly with `endEpoch` and segment bounds. Null while a
+   * deployment is still starting up.
+   */
+  _meta: { block: { number: number } } | null;
+  rails: SpendHistoryRailResponse[];
 }
 
 interface AccountDetailsOptions {
@@ -97,6 +118,29 @@ export const useAccountRails = (accountId: string, page: number = 1, options?: A
     }),
     enabled: !!accountId,
     networkOverride: options?.networkOverride,
+  });
+
+/**
+ * Caps on this spend-history read. The entities can be paged through top-level
+ * queries, but this first version deliberately makes one bounded request. A
+ * response that fills either cap may be incomplete —
+ * `hasReachedSpendHistoryLimit` compares against these so the chart can say so.
+ */
+export const SPEND_HISTORY_RAIL_LIMIT = 500;
+export const SPEND_HISTORY_NESTED_LIMIT = 1_000;
+
+/** Every figure is frozen at fetch time, and 30 minutes is the accepted staleness for the current month. */
+const SPEND_HISTORY_REFETCH_MS = 30 * 60 * 1_000;
+
+export const useAccountSpendHistory = (accountId: string, tokenId: string, options?: AccountDetailsOptions) =>
+  useGraphQLQuery<AccountSpendHistoryResponse>({
+    queryKey: ["account", accountId, "spend-history", tokenId],
+    query: GET_ACCOUNT_SPEND_HISTORY,
+    variables: { accountId, tokenId, first: SPEND_HISTORY_RAIL_LIMIT, nested: SPEND_HISTORY_NESTED_LIMIT },
+    enabled: !!accountId && !!tokenId,
+    networkOverride: options?.networkOverride,
+    staleTime: SPEND_HISTORY_REFETCH_MS,
+    refetchInterval: SPEND_HISTORY_REFETCH_MS,
   });
 
 export const useAccountApprovals = (accountId: string, page: number = 1, options?: AccountDetailsOptions) =>

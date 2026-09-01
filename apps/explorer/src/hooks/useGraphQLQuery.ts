@@ -13,6 +13,7 @@ export interface UseGraphQLQueryOptions<TData, TResult = TData> {
   queryKey: readonly unknown[];
   select?: (data: TData) => TResult;
   enabled?: boolean;
+  staleTime?: number;
   refetchInterval?: number | false;
 }
 
@@ -29,6 +30,7 @@ export function useGraphQLQuery<TData, TResult = TData>(options: UseGraphQLQuery
     },
     select: options.select,
     enabled: options.enabled,
+    staleTime: options.staleTime,
     refetchInterval: options.refetchInterval,
   });
 }
