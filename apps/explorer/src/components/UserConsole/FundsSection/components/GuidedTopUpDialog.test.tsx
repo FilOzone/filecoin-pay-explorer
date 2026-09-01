@@ -16,6 +16,7 @@ const wallet = vi.hoisted(() => ({
   chainId: 314 as number | undefined,
 }));
 const switchChainAsync = vi.hoisted(() => vi.fn(async (): Promise<void> => undefined));
+const destinationClient = vi.hoisted(() => ({ readContract: vi.fn() }));
 const dialog = vi.hoisted(() => ({ onOpenChange: undefined as ((open: boolean) => void) | undefined }));
 const sdk = vi.hoisted(() => ({
   fundSync: vi.fn(),
@@ -43,7 +44,7 @@ const lockManager = vi.hoisted(() => ({
 
 vi.mock("wagmi", () => ({
   useConnection: () => wallet,
-  usePublicClient: () => undefined,
+  usePublicClient: () => destinationClient,
   useSwitchChain: () => ({ switchChainAsync }),
 }));
 vi.mock("@tanstack/react-query", () => ({
@@ -130,6 +131,7 @@ afterEach(() => {
   automaticRecovery.isFetching = false;
   automaticRecovery.isPermanentError = false;
   automaticRecovery.refetch.mockReset();
+  destinationClient.readContract.mockReset();
   vi.unstubAllGlobals();
 });
 describe("GuidedTopUpDialog", () => {
@@ -382,6 +384,63 @@ describe("GuidedTopUpDialog", () => {
     );
     expect(JSON.stringify(renderer.toJSON())).toContain('"15"');
     expect(JSON.stringify(renderer.toJSON())).not.toContain("USDFC arrived, continue to deposit");
+  });
+
+  it("does not apply a manual recovery after the connected wallet changes", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const ownerA = "0x1111111111111111111111111111111111111111" as const;
+    const ownerB = "0x2222222222222222222222222222222222222222" as const;
+    markSquidBroadcast(
+      storage,
+      markSquidSwapRequested(
+        storage,
+        beginSquidAcquisition(
+          storage,
+          ownerA,
+          10n * 10n ** 18n,
+          100n * 10n ** 18n,
+          42161,
+          "11111111-1111-4111-8111-111111111111",
+        ),
+      ),
+      `0x${"3".repeat(64)}`,
+    );
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = ownerA;
+    destinationClient.readContract.mockResolvedValue(115n * 10n ** 18n);
+
+    let releaseLock!: () => Promise<void>;
+    lockManager.request.mockImplementationOnce(
+      (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
+        new Promise((resolve) => {
+          releaseLock = async () => resolve(await callback({} as Lock));
+        }),
+    );
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    const continueButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("USDFC arrived, continue to deposit"));
+
+    await act(async () => continueButton?.props.onClick());
+    wallet.address = ownerB;
+    await act(async () => {
+      renderer.update(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    await act(async () => releaseLock());
+
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Deposit acquired USDFC");
   });
 
   it("keeps a safe preflight marker until recovery is visible, then restarts cleanly", async () => {

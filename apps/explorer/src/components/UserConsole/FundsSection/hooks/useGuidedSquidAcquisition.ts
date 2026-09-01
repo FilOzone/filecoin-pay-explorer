@@ -212,6 +212,7 @@ export function useGuidedSquidAcquisition({
     setAutomaticRecoveryError(null);
     return automaticRecovery.refetch();
   };
+  const isCurrentOwner = (owner: Address) => latestAddress.current?.toLowerCase() === owner.toLowerCase();
 
   const clearBlocked = async () => {
     if (!savedAcquisition) return false;
@@ -234,28 +235,26 @@ export function useGuidedSquidAcquisition({
   };
 
   const continueWithAcquired = async () => {
-    if (savedAcquisition?.status !== "processing") return;
-    const acquired = await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, async () => {
-      if (savedAcquisition.destinationBalanceBefore === undefined) {
-        return markSquidAcquired(window.localStorage, savedAcquisition);
+    const pending = savedAcquisition;
+    if (pending?.status !== "processing") return;
+    const acquired = await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, async () => {
+      if (pending.destinationBalanceBefore === undefined) {
+        return markSquidAcquired(window.localStorage, pending);
       }
       if (!destinationClient) throw new Error("Filecoin balance client is unavailable");
-      const balance = await readUsdfcBalance(
-        destinationClient,
-        mainnet.contracts.usdfc.address,
-        savedAcquisition.owner,
-      );
-      return markSquidAcquiredFromBalance(window.localStorage, savedAcquisition, balance);
+      const balance = await readUsdfcBalance(destinationClient, mainnet.contracts.usdfc.address, pending.owner);
+      return markSquidAcquiredFromBalance(window.localStorage, pending, balance);
     });
-    recordAcquired(acquired);
+    if (isCurrentOwner(acquired.owner)) recordAcquired(acquired);
   };
 
   const retryDeposit = async () => {
-    if (savedAcquisition?.status !== "depositing") return;
-    const acquired = await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, () =>
-      resetSquidDeposit(window.localStorage, savedAcquisition),
+    const pending = savedAcquisition;
+    if (pending?.status !== "depositing") return;
+    const acquired = await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, () =>
+      resetSquidDeposit(window.localStorage, pending),
     );
-    recordAcquired(acquired);
+    if (isCurrentOwner(acquired.owner)) recordAcquired(acquired);
   };
 
   const reset = () => applySavedAcquisition(null, false);
