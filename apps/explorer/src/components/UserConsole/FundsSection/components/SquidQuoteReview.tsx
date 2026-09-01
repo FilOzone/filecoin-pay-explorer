@@ -68,6 +68,23 @@ function displayAmount(amount: bigint, decimals: number, symbol: string) {
   return `${formatUnits(amount, decimals)} ${symbol}`;
 }
 
+function QuoteMetric({
+  emphasized = false,
+  label,
+  value,
+}: {
+  emphasized?: boolean;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className='grid gap-0.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3'>
+      <dt className='text-muted-foreground'>{label}</dt>
+      <dd className={`min-w-0 break-words text-right tabular-nums${emphasized ? " font-medium" : ""}`}>{value}</dd>
+    </div>
+  );
+}
+
 export function SquidQuoteSummary({
   isNativeSource,
   maximumRequirement,
@@ -84,18 +101,16 @@ export function SquidQuoteSummary({
   return (
     <div className='grid gap-2 rounded-md bg-muted/40 p-3'>
       <h3 className='font-medium'>Quote summary</h3>
-      <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-        <span className='text-muted-foreground'>You pay</span>
-        <span className='text-right font-medium'>{pay}</span>
-        <span className='text-muted-foreground'>Execution minimum received</span>
-        <span className='text-right font-medium'>{minimumReceive}</span>
-        <span className='text-muted-foreground'>Current reviewed quote</span>
-        <span className='text-right font-medium'>{reviewedReceive}</span>
-        <span className='text-muted-foreground'>
-          {isNativeSource ? "Maximum total required" : "Maximum native fees required"}
-        </span>
-        <span className='text-right font-medium'>{maximumRequirement ?? "Calculating…"}</span>
-      </div>
+      <dl className='grid gap-2 sm:gap-1'>
+        <QuoteMetric emphasized label='You pay' value={pay} />
+        <QuoteMetric emphasized label='Execution minimum received' value={minimumReceive} />
+        <QuoteMetric emphasized label='Current reviewed quote' value={reviewedReceive} />
+        <QuoteMetric
+          emphasized
+          label={isNativeSource ? "Maximum total required" : "Maximum native fees required"}
+          value={maximumRequirement ?? "Calculating…"}
+        />
+      </dl>
     </div>
   );
 }
@@ -807,25 +822,20 @@ export function SquidQuoteReview({
               {bridgeFeeLabel && maximumBridgeFeeLabel && (
                 <div>
                   <h4 className='mb-1 font-medium'>Bridge fee</h4>
-                  <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-                    <span className='text-muted-foreground'>Estimated</span>
-                    <span className='text-right'>{bridgeFeeLabel}</span>
-                    <span className='text-muted-foreground'>Maximum</span>
-                    <span className='text-right'>{maximumBridgeFeeLabel}</span>
-                  </div>
+                  <dl className='grid gap-2 sm:gap-1'>
+                    <QuoteMetric label='Estimated' value={bridgeFeeLabel} />
+                    <QuoteMetric label='Maximum' value={maximumBridgeFeeLabel} />
+                  </dl>
                 </div>
               )}
               {estimatedNetworkFeeLabel && maximumNetworkFeeLabel && networkGas.transactionCount !== null && (
                 <div>
                   <h4 className='mb-1 font-medium'>Source-network gas</h4>
-                  <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-                    <span className='text-muted-foreground'>Estimated</span>
-                    <span className='text-right'>{estimatedNetworkFeeLabel}</span>
-                    <span className='text-muted-foreground'>Maximum</span>
-                    <span className='text-right'>{maximumNetworkFeeLabel}</span>
-                    <span className='text-muted-foreground'>Expected transactions</span>
-                    <span className='text-right'>{networkGas.transactionCount}</span>
-                  </div>
+                  <dl className='grid gap-2 sm:gap-1'>
+                    <QuoteMetric label='Estimated' value={estimatedNetworkFeeLabel} />
+                    <QuoteMetric label='Maximum' value={maximumNetworkFeeLabel} />
+                    <QuoteMetric label='Expected transactions' value={networkGas.transactionCount} />
+                  </dl>
                 </div>
               )}
               {otherSquidFeeCosts.length > 0 && (
@@ -833,9 +843,14 @@ export function SquidQuoteReview({
                   <h4 className='mb-1 font-medium'>Other Squid fees (estimated)</h4>
                   <ul className='grid gap-1'>
                     {otherSquidFeeCosts.map((cost, index) => (
-                      <li className='flex justify-between gap-3' key={`${cost.name}-${cost.token.chainId}-${index}`}>
+                      <li
+                        className='grid gap-0.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3'
+                        key={`${cost.name}-${cost.token.chainId}-${index}`}
+                      >
                         <span className='text-muted-foreground'>{cost.name}</span>
-                        <span>{displayAmount(cost.amount, cost.token.decimals, cost.token.symbol)}</span>
+                        <span className='min-w-0 break-words text-right tabular-nums'>
+                          {displayAmount(cost.amount, cost.token.decimals, cost.token.symbol)}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -846,18 +861,22 @@ export function SquidQuoteReview({
                   <h4 className='mb-1 font-medium'>Other network gas (estimated)</h4>
                   <ul className='grid gap-1'>
                     {otherNetworkGasCosts.map((cost, index) => (
-                      <li className='flex justify-between gap-3' key={`${cost.name}-${cost.token.chainId}-${index}`}>
+                      <li
+                        className='grid gap-0.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3'
+                        key={`${cost.name}-${cost.token.chainId}-${index}`}
+                      >
                         <span className='text-muted-foreground'>{cost.name}</span>
-                        <span>{displayAmount(cost.amount, cost.token.decimals, cost.token.symbol)}</span>
+                        <span className='min-w-0 break-words text-right tabular-nums'>
+                          {displayAmount(cost.amount, cost.token.decimals, cost.token.symbol)}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
-              <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
-                <span className='text-muted-foreground'>Slippage</span>
-                <span className='text-right'>1%</span>
-              </div>
+              <dl>
+                <QuoteMetric label='Slippage' value='1%' />
+              </dl>
               {maximumBridgeFeeLabel && maximumNetworkFeeLabel && (
                 <p className='text-xs text-muted-foreground'>
                   The route is refreshed before signing. Execution stops if its cumulative bridge fee exceeds the

@@ -118,14 +118,15 @@ describe("SquidQuoteReview quote summary", () => {
     await act(async () => controls.inputs["squid-source-token"](tokenLabel));
     await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
 
-    const text = renderer.root.findAllByType("span").map(({ children }) => children.join(""));
-    expect(text).toContain("Execution minimum received");
-    expect(text).toContain("1 USDFC");
-    expect(text).toContain("Current reviewed quote");
-    expect(text).toContain("2 USDFC");
-    expect(text).toContain("Maximum native fees required");
-    expect(text).toContain("Unavailable");
-    expect(text).not.toContain("Calculating…");
+    const labels = renderer.root.findAllByType("dt").map(({ children }) => children.join(""));
+    const values = renderer.root.findAllByType("dd").map(({ children }) => children.join(""));
+    expect(labels).toContain("Execution minimum received");
+    expect(labels).toContain("Current reviewed quote");
+    expect(labels).toContain("Maximum native fees required");
+    expect(values).toContain("1 USDFC");
+    expect(values).toContain("2 USDFC");
+    expect(values).toContain("Unavailable");
+    expect(values).not.toContain("Calculating…");
 
     renderer.unmount();
     queryClient.clear();

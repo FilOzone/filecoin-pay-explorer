@@ -60,6 +60,21 @@ describe("source token safety", () => {
 });
 
 describe("SquidQuoteSummary", () => {
+  it("stacks values on narrow screens and uses tabular numerals", () => {
+    const html = renderToStaticMarkup(
+      SquidQuoteSummary({
+        isNativeSource: true,
+        maximumRequirement: "0.123456789 ETH",
+        minimumReceive: "249 USDFC",
+        pay: "0.1 ETH",
+        reviewedReceive: "250 USDFC",
+      }),
+    );
+
+    expect(html.match(/grid gap-0.5 sm:grid-cols-\[auto_minmax\(0,1fr\)\]/g)).toHaveLength(4);
+    expect(html.match(/tabular-nums/g)).toHaveLength(4);
+  });
+
   it("shows one maximum total for a native-token route", () => {
     const html = renderToStaticMarkup(
       SquidQuoteSummary({
