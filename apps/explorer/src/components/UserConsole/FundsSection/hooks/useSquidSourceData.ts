@@ -7,7 +7,6 @@ import {
   hasUnknownSourceTokenBalances,
   readSourceTokenBalance,
   readSourceTokenBalances,
-  sourceTokenBalance,
   sourceTokenBalancesQueryKey,
   visibleSourceTokens,
 } from "../data/source-token-balances";
@@ -56,11 +55,15 @@ export function useSquidSourceData({
       sourceChain,
       selectableTokens,
     ),
+    refetchOnWindowFocus: false,
+    staleTime: 300_000,
   });
   const hasUnknownTokenBalances = inventoryQuery.data
     ? hasUnknownSourceTokenBalances(selectableTokens, inventoryQuery.data)
     : false;
   const canFilterWalletTokens = !!inventoryQuery.data && !hasUnknownTokenBalances && !inventoryQuery.isError;
+  const canToggleWalletTokens =
+    !!address && selectableTokens.length > 0 && !hasUnknownTokenBalances && !inventoryQuery.isError;
   const visibleTokens = visibleSourceTokens(
     selectableTokens,
     inventoryQuery.isError ? undefined : inventoryQuery.data,
@@ -68,19 +71,17 @@ export function useSquidSourceData({
     sourceTokenAddress,
   );
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
-  const inventoriedSourceBalance = source ? sourceTokenBalance(inventoryQuery.data, source.token) : undefined;
-  const hasInventoriedSourceBalance = typeof inventoriedSourceBalance === "bigint";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
   const readSelectedBalance = () => {
     if (!sourcePublicClient || !address || !source) throw new Error("Source network client is unavailable");
     return readSourceTokenBalance(sourcePublicClient, address, source);
   };
   const sourceBalanceQuery = useQuery({
-    enabled: !!address && !!source && !!sourcePublicClient && !hasInventoriedSourceBalance,
+    enabled: !!address && !!source && !!sourcePublicClient,
     queryFn: readSelectedBalance,
     queryKey: ["squid", "source-balance", sourceChain, sourceTokenAddress, address],
   });
-  const sourceBalance = hasInventoriedSourceBalance ? inventoriedSourceBalance : sourceBalanceQuery.data;
+  const sourceBalance = sourceBalanceQuery.data;
   const nativeBalanceQuery = useQuery({
     enabled: !!address && !!source && !isNativeSource && !!sourcePublicClient,
     queryFn: async () => {
@@ -105,11 +106,8 @@ export function useSquidSourceData({
 
   const refetchSelectedBalance = async () => {
     if (!source) return { data: undefined, isError: true };
-    try {
-      return { data: await readSelectedBalance(), isError: false };
-    } catch {
-      return { data: undefined, isError: true };
-    }
+    const result = await sourceBalanceQuery.refetch();
+    return { data: result.data, isError: result.isError };
   };
 
   const retryAllowance = async () => {
@@ -125,11 +123,13 @@ export function useSquidSourceData({
     allowance: allowanceQuery.data,
     allowanceError: allowanceQuery.error,
     canFilterWalletTokens,
+    canToggleWalletTokens,
     hasUnknownTokenBalances,
     isAllowanceLoading: allowanceQuery.isFetching,
     isNativeSource,
     isNativeBalanceLoading: nativeBalanceQuery.isFetching,
-    isSourceBalanceLoading: !hasInventoriedSourceBalance && sourceBalanceQuery.isFetching,
+    isSourceBalanceLoading: sourceBalanceQuery.isPending,
+    isSourceBalanceRefreshing: sourceBalanceQuery.isFetching,
     isTokenInventoryLoading: inventoryQuery.isFetching,
     isTokenLoading: tokenQuery.isFetching,
     isWalletTokenInventoryLoading:
@@ -144,7 +144,7 @@ export function useSquidSourceData({
     retryTokens: tokenQuery.refetch,
     source,
     sourceBalance,
-    sourceBalanceError: hasInventoriedSourceBalance ? null : sourceBalanceQuery.error,
+    sourceBalanceError: sourceBalanceQuery.error,
     sourceTokenBalances: inventoryQuery.data,
     tokenInventoryError: inventoryQuery.error,
     tokenLoadError: tokenQuery.error,

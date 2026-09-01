@@ -138,6 +138,9 @@ describe("SquidQuoteReview token inventory", () => {
 
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === "balanceOf" ? 3_000_000n : 1n,
+    );
     fetchSourceTokens.mockImplementation(async (chainId: number) => (chainId === 10 ? [opToken] : [usdc, usdt]));
     readSourceTokenBalances.mockResolvedValue(
       balances([
@@ -163,8 +166,9 @@ describe("SquidQuoteReview token inventory", () => {
     expect(controls.token?.options).toEqual([
       {
         aliases: [usdc.symbol, usdc.token],
-        detail: "2 USDC",
-        label: `${usdc.symbol} (${formatAddress(usdc.token)})`,
+        detail: "2",
+        label: usdc.symbol,
+        secondaryLabel: formatAddress(usdc.token),
         value: usdc.token,
       },
     ]);
@@ -187,7 +191,58 @@ describe("SquidQuoteReview token inventory", () => {
     expect(controls.token?.value).toBe(usdt.token);
   });
 
-  it("shows a loading state instead of the catalog until wallet balances resolve", async () => {
+  it("uses the selected-token query instead of the inventory snapshot", async () => {
+    const renderer = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+
+    await act(async () => controls.token?.onValueChange(usdc.token));
+
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC"));
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance2 USDC");
+  });
+
+  it("refreshes only the selected balance and keeps the previous value visible", async () => {
+    let balanceReads = 0;
+    let resolveRefresh!: (value: bigint) => void;
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName !== "balanceOf") return 1n;
+      balanceReads += 1;
+      if (balanceReads === 1) return 3_000_000n;
+      return new Promise<bigint>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    });
+    const renderer = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    await act(async () => controls.token?.onValueChange(usdc.token));
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC"));
+
+    await act(async () => button(renderer, "Refresh balance")?.props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain("3 USDC");
+    expect(button(renderer, "Refreshing…")).toBeDefined();
+
+    await act(async () => resolveRefresh(4_000_000n));
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("4 USDC"));
+    expect(readSourceTokenBalances).toHaveBeenCalledOnce();
+  });
+
+  it("reuses a fresh wallet inventory when the review remounts", async () => {
+    const first = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    first.unmount();
+
+    const second = await renderReview(queryClient);
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+
+    expect(readSourceTokenBalances).toHaveBeenCalledOnce();
+    second.unmount();
+  });
+
+  it("offers the stable catalog while wallet balances load", async () => {
     let resolveBalances!: (value: ReturnType<typeof balances>) => void;
     readSourceTokenBalances.mockImplementation(
       () =>
@@ -202,6 +257,10 @@ describe("SquidQuoteReview token inventory", () => {
     expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(0);
     expect(JSON.stringify(renderer.toJSON())).toContain("Checking wallet balances");
 
+    await act(async () => button(renderer, "Show all tokens")?.props.onClick());
+    await expectTokenOptions([usdc.token, usdt.token]);
+    expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(1);
+
     await act(async () =>
       resolveBalances(
         balances([
@@ -210,8 +269,11 @@ describe("SquidQuoteReview token inventory", () => {
         ]),
       ),
     );
-    await expectTokenOptions([usdc.token]);
+    await expectTokenOptions([usdc.token, usdt.token]);
     expect(renderer.root.findAllByProps({ role: "combobox" })).toHaveLength(1);
+
+    await act(async () => button(renderer, "Show wallet tokens")?.props.onClick());
+    await expectTokenOptions([usdc.token]);
   });
 
   it("keeps the complete catalog available while a failed balance inventory is retried", async () => {
@@ -337,6 +399,9 @@ describe("SquidQuoteReview token inventory", () => {
       source: usdc,
     };
     wallet.chainId = 10;
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === "balanceOf" ? 0n : 1n,
+    );
     readSourceTokenBalances.mockResolvedValue(balances([[usdc.token, 0n]]));
     planSquidTopUp.mockResolvedValue(plan);
     const renderer = await renderReview(queryClient, destinationAmount);
@@ -344,19 +409,14 @@ describe("SquidQuoteReview token inventory", () => {
     await act(async () => button(renderer, "Show all tokens")?.props.onClick());
     await expectTokenOptions([usdc.token, usdt.token]);
     await act(async () => controls.token?.onValueChange(usdc.token));
+    await vi.waitFor(() => expect(button(renderer, "Get estimate")?.props.disabled).toBe(false));
     await act(async () => button(renderer, "Get estimate")?.props.onClick());
     expect(renderer.root.findByProps({ role: "alert" }).findByType("span").children.join("")).toContain(
       "You don't have enough USDC",
     );
 
     await act(async () => {
-      queryClient.setQueryData(
-        sourceTokenBalancesQueryKey(ownerA, 8453, [usdc, usdt]),
-        balances([
-          [usdc.token, 2_000_000n],
-          [usdt.token, 0n],
-        ]),
-      );
+      queryClient.setQueryData(["squid", "source-balance", 8453, usdc.token, ownerA], 2_000_000n);
     });
     await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(button(renderer, "Switch wallet to Base")?.props.disabled).toBe(false));

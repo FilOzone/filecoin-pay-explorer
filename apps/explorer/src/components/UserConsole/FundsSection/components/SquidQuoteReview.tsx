@@ -58,6 +58,12 @@ export function sourceTokenCatalogMessage(isConfigured: boolean, hasError: boole
   return "No supported tokens on this network.";
 }
 
+export function compactTokenBalance(value: bigint, decimals: number) {
+  return new Intl.NumberFormat("en-US", { maximumSignificantDigits: 6, notation: "compact" }).format(
+    Number(formatUnits(value, decimals)),
+  );
+}
+
 export function SquidQuoteReview({
   acquisitionState,
   destinationAmount,
@@ -92,11 +98,13 @@ export function SquidQuoteReview({
     allowance: sourceAllowance,
     allowanceError,
     canFilterWalletTokens,
+    canToggleWalletTokens,
     hasUnknownTokenBalances,
     isAllowanceLoading: isLoadingSourceAllowance,
     isNativeBalanceLoading: isLoadingNativeBalance,
     isNativeSource,
     isSourceBalanceLoading: isLoadingSourceBalance,
+    isSourceBalanceRefreshing: isRefreshingSourceBalance,
     isTokenInventoryLoading: isLoadingTokenBalances,
     isTokenLoading: isLoadingTokens,
     isWalletTokenInventoryLoading: isLoadingWalletTokenInventory,
@@ -123,15 +131,13 @@ export function SquidQuoteReview({
   const isTokenLoadError = !!tokenLoadError;
   const tokenLoadFailed = isTokenLoadError && tokens.length === 0;
   const sourceTokenOptions: readonly SearchableOption[] = visibleTokens.map((token) => {
-    const balance = sourceTokenBalance(sourceTokenBalances, token.token);
+    const inventoryBalance = sourceTokenBalance(sourceTokenBalances, token.token);
+    const balance = token.token.toLowerCase() === source?.token.toLowerCase() ? sourceBalance : inventoryBalance;
     return {
       aliases: [token.symbol, token.token],
-      detail: address
-        ? typeof balance === "bigint"
-          ? displayAmount(balance, token.decimals, token.symbol)
-          : "Unavailable"
-        : undefined,
-      label: `${token.symbol} (${formatAddress(token.token)})`,
+      detail: address ? (typeof balance === "bigint" ? compactTokenBalance(balance, token.decimals) : "—") : undefined,
+      label: token.symbol,
+      secondaryLabel: formatAddress(token.token),
       value: token.token,
     };
   });
@@ -330,7 +336,7 @@ export function SquidQuoteReview({
       <div className='grid gap-1'>
         <div className='flex items-center justify-between gap-2'>
           <Label htmlFor='squid-source-token'>Source token</Label>
-          {canFilterWalletTokens && (
+          {canToggleWalletTokens && (
             <Button
               disabled={isBusy}
               onClick={() => setShowAllSourceTokensFor(showAllSourceTokens ? null : sourceTokenScope)}
@@ -342,7 +348,7 @@ export function SquidQuoteReview({
             </Button>
           )}
         </div>
-        {isLoadingWalletTokenInventory ? (
+        {isLoadingWalletTokenInventory && !showAllSourceTokens ? (
           <div
             aria-live='polite'
             className='flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground'
@@ -426,10 +432,24 @@ export function SquidQuoteReview({
             role='status'
           >
             <span>Balance</span>
-            <span>
-              {isLoadingSourceBalance || sourceBalance === undefined
-                ? "Loading…"
-                : displayAmount(sourceBalance, source.decimals, source.symbol)}
+            <span className='flex items-center gap-2'>
+              <span>
+                {sourceBalance === undefined
+                  ? "Loading…"
+                  : displayAmount(sourceBalance, source.decimals, source.symbol)}
+              </span>
+              <Button
+                disabled={isBusy || isRefreshingSourceBalance}
+                onClick={() => {
+                  clearErrors();
+                  void retrySourceBalance();
+                }}
+                size='compact'
+                type='button'
+                variant='tertiary'
+              >
+                {isRefreshingSourceBalance ? "Refreshing…" : "Refresh balance"}
+              </Button>
             </span>
           </div>
         )}
@@ -437,7 +457,7 @@ export function SquidQuoteReview({
           <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
             <span>Could not load your source-token balance.</span>
             <Button
-              disabled={isLoadingSourceBalance}
+              disabled={isRefreshingSourceBalance}
               onClick={() => {
                 clearErrors();
                 void retrySourceBalance();
@@ -446,7 +466,7 @@ export function SquidQuoteReview({
               type='button'
               variant='tertiary'
             >
-              {isLoadingSourceBalance ? "Retrying…" : "Retry"}
+              {isRefreshingSourceBalance ? "Retrying…" : "Retry"}
             </Button>
           </div>
         )}
