@@ -5,17 +5,10 @@ import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
-const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  if (!PRIVY_APP_ID) {
-    // Fail with a clear message instead of booting into an opaque Privy
-    // "invalid app ID" error screen on a misconfigured deploy.
-    throw new Error("NEXT_PUBLIC_PRIVY_APP_ID is not set; the console cannot initialize Privy without it.");
-  }
   return (
     <PrivyProvider
-      appId={PRIVY_APP_ID}
+      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? ""}
       clientId={process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID}
       config={{
         loginMethods: ["email", "google", "wallet"],

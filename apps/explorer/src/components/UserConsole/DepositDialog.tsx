@@ -273,7 +273,11 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
    * through here; see `onSubmitOnChain` below.
    */
   const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && isBusy) return;
+    // Closing is blocked only while a signature is pending in this dialog.
+    // A transaction that is merely confirming on-chain is tracked by the
+    // toast (that is what onSubmitOnChain relies on), so closing then is
+    // safe and the "already processing" notice promises it.
+    if (!nextOpen && isSubmitting) return;
     onOpenChange(nextOpen);
   };
 
@@ -342,50 +346,69 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       const amountInWei = parseUnits(amount, currentToken.decimals);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
 
-      console.log("[Deposit] Getting permit signature...");
+      // One signing round per attempt; retried once on a stale-replica revert.
+      // Load-balanced public RPCs can serve the permit nonce read (or run gas
+      // estimation) against a replica that hasn't caught up with the account's
+      // latest transactions, which surfaces on-chain as "EIP2612: invalid
+      // signature" even though the signature was correct for the nonce we
+      // read. A short wait plus a full re-sign with a freshly read nonce
+      // resolves it; a second failure is reported normally.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          console.log("[Deposit] Getting permit signature...");
 
-      const permitSignature = await getPermitSignature(
-        {
-          tokenAddress: currentToken.address as Hex,
-          // Set only for a token resolved from chain reads, where this is the
-          // contract's own `name()` and so the exact string the EIP-712 domain
-          // needs. Account-list tokens leave it undefined on purpose: their name
-          // comes from the subgraph, which stores "Unknown" for a reverting
-          // `name()`, and a domain built on that would produce a signature the
-          // token rejects. `getPermitSignature` re-reads it from chain instead.
-          tokenName: currentToken.name,
-          ownerAddress: userAddress,
-          spenderAddress: constants.contracts.payments.address,
-          amount: amountInWei,
-          deadline,
-          chainId: constants.chain.id,
-        },
-        walletClient,
-        publicClient,
-      );
+          const permitSignature = await getPermitSignature(
+            {
+              tokenAddress: currentToken.address as Hex,
+              // Set only for a token resolved from chain reads, where this is the
+              // contract's own `name()` and so the exact string the EIP-712 domain
+              // needs. Account-list tokens leave it undefined on purpose: their name
+              // comes from the subgraph, which stores "Unknown" for a reverting
+              // `name()`, and a domain built on that would produce a signature the
+              // token rejects. `getPermitSignature` re-reads it from chain instead.
+              tokenName: currentToken.name,
+              ownerAddress: userAddress,
+              spenderAddress: constants.contracts.payments.address,
+              amount: amountInWei,
+              deadline,
+              chainId: constants.chain.id,
+            },
+            walletClient,
+            publicClient,
+          );
 
-      console.log("[Deposit] Permit signature obtained, submitting transaction...");
+          console.log("[Deposit] Permit signature obtained, submitting transaction...");
 
-      await execute({
-        functionName: "depositWithPermit",
-        args: [
-          currentToken.address,
-          userAddress,
-          amountInWei,
-          permitSignature.deadline,
-          permitSignature.v,
-          permitSignature.r,
-          permitSignature.s,
-        ],
-        metadata: {
-          type: "deposit",
-          amount,
-          token: currentToken.symbol,
-        },
-        // The one close that must succeed while busy: the transaction is away and
-        // the toast tracks it from here. Bypasses the guard above on purpose.
-        onSubmitOnChain: () => onOpenChange(false),
-      });
+          await execute({
+            functionName: "depositWithPermit",
+            args: [
+              currentToken.address,
+              userAddress,
+              amountInWei,
+              permitSignature.deadline,
+              permitSignature.v,
+              permitSignature.r,
+              permitSignature.s,
+            ],
+            metadata: {
+              type: "deposit",
+              amount,
+              token: currentToken.symbol,
+            },
+            // The one close that must succeed while busy: the transaction is away and
+            // the toast tracks it from here. Bypasses the guard above on purpose.
+            onSubmitOnChain: () => onOpenChange(false),
+          });
+          break;
+        } catch (err) {
+          if (attempt === 0 && err instanceof Error && err.message.includes("EIP2612: invalid signature")) {
+            console.warn("[Deposit] Stale-replica permit revert; retrying once with a fresh nonce...");
+            await new Promise((resolve) => setTimeout(resolve, 4000));
+            continue;
+          }
+          throw err;
+        }
+      }
     } catch (err) {
       console.error("Deposit failed:", err);
     } finally {
@@ -431,7 +454,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           // The guard in `handleDialogOpenChange` already refuses these closes, but
           // stopping them at the source means no dismissal is even attempted while
           // a signature is pending, and the missing X says so before it is tried.
-          showCloseButton={!isBusy}
+          showCloseButton={!isSubmitting}
           onEscapeKeyDown={(event) => {
             if (isBusy) event.preventDefault();
           }}
@@ -533,9 +556,21 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
             ) : null}
           </div>
 
+          {isExecuting && !isSubmitting ? (
+            <p className='text-sm text-amber-700'>
+              A deposit is already processing — it's tracked in the corner notification and this form unlocks when it
+              completes. You can close this window.
+            </p>
+          ) : null}
+
           <DialogFooter>
-            <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
-              Cancel
+            <Button
+              variant='ghost'
+              onClick={() => handleDialogOpenChange(false)}
+              disabled={isSubmitting}
+              size='compact'
+            >
+              {isExecuting && !isSubmitting ? "Close" : "Cancel"}
             </Button>
             <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
               {isBusy ? (

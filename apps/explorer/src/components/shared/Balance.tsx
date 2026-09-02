@@ -102,6 +102,20 @@ const Balance = () => {
           <span className='text-base text-zinc-950 font-mono'>{address && formatAddress(address)}</span>
           {copied && <Check className='text-green-500 ml-auto' />}
         </DropdownMenuItem>
+        {isEmbeddedSigner ? (
+          <DropdownMenuItem
+            onSelect={(e) => e.preventDefault()}
+            onClick={() => {
+              const next = !reviewOn;
+              setReviewEnabled(next);
+              setReviewOn(next);
+            }}
+            className='cursor-pointer py-2'
+          >
+            <ShieldCheck className={reviewOn ? "text-green-600" : "text-zinc-400"} />
+            <span className='text-base text-zinc-950'>Review before signing: {reviewOn ? "On" : "Off"}</span>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           onClick={() => {
             // Privy sessions (email/social/SIWE) need logout; a wagmi
@@ -122,20 +136,6 @@ const Balance = () => {
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
-        {isEmbeddedSigner ? (
-          <DropdownMenuItem
-            onSelect={(e) => e.preventDefault()}
-            onClick={() => {
-              const next = !reviewOn;
-              setReviewEnabled(next);
-              setReviewOn(next);
-            }}
-            className='cursor-pointer py-2'
-          >
-            <ShieldCheck className={reviewOn ? "text-green-600" : "text-zinc-400"} />
-            <span className='text-base text-zinc-950'>Review before signing: {reviewOn ? "On" : "Off"}</span>
-          </DropdownMenuItem>
-        ) : null}
         {constants.faucets?.map((faucet) => (
           <DropdownMenuItem asChild key={faucet.name} className='py-2'>
             <a href={faucet.url} target='_blank' rel='noopener noreferrer' className='w-full cursor-pointer'>

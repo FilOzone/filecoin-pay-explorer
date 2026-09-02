@@ -1,4 +1,5 @@
 import type { Hex, PublicClient, WalletClient } from "viem";
+import { recoverTypedDataAddress } from "viem";
 
 export interface PermitParams {
   tokenAddress: Hex;
@@ -103,13 +104,40 @@ export async function getPermitSignature(
     deadline: deadline,
   } as const;
 
-  const signature = await walletClient.signTypedData({
-    account: ownerAddress,
-    domain,
-    types,
-    primaryType: "Permit",
-    message,
-  });
+  // Sign, then verify the signature actually recovers to the owner before
+  // anything goes on-chain. Privy embedded wallets on a not-yet-trusted
+  // device can sign with incomplete key state: the signature is well-formed
+  // but recovers to the wrong address, and the contract rejects it with
+  // "EIP2612: invalid signature" only after gas estimation. One retry
+  // usually succeeds (the wallet settles after its device prompt); if not,
+  // fail here with an explanation instead of a contract revert.
+  let signature: Hex | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const candidate = await walletClient.signTypedData({
+      account: ownerAddress,
+      domain,
+      types,
+      primaryType: "Permit",
+      message,
+    });
+    const recovered = await recoverTypedDataAddress({
+      domain,
+      types,
+      primaryType: "Permit",
+      message,
+      signature: candidate,
+    });
+    if (recovered.toLowerCase() === ownerAddress.toLowerCase()) {
+      signature = candidate;
+      break;
+    }
+    console.warn(`Permit signature recovered to ${recovered}, expected ${ownerAddress} (attempt ${attempt + 1})`);
+  }
+  if (!signature) {
+    throw new Error(
+      "Your wallet produced an invalid signature. If you just logged in on this device, complete any wallet verification prompt (e.g. \u201cTrust this device\u201d) and try again.",
+    );
+  }
 
   // Split signature into v, r, s components
   const r = `0x${signature.slice(2, 66)}` as Hex;
