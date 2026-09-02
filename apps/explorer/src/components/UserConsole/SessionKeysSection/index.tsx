@@ -74,8 +74,7 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
 };
 
 const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
-  "bad-checksum":
-    "The address in this link is not spelled the way the checksum expects. Nothing was added. Ask for a new link, or use an all-lowercase address.",
+  "bad-checksum": "The address in this link is misspelled, so nothing was added. Ask for a new link.",
   "not-an-address": "This link does not contain a valid address, so nothing was added. Ask for a new link.",
 };
 
@@ -213,7 +212,10 @@ const ConnectedSessionKeys = ({
         </Notice>
       )}
       {prefillError && (
-        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+        <div
+          role='alert'
+          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
+        >
           <p className='font-semibold'>Invalid address in link</p>
           <p className='text-xs mt-1'>{PREFILL_ERROR_COPY[prefillError]}</p>
         </div>
