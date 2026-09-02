@@ -1,16 +1,16 @@
 /**
  * Pure fold/merge logic for importing session-key history from the
  * SessionKeyRegistry's `AuthorizationsUpdated` events. The fetch + decode
- * client lives in `hooks/useSessionKeys.ts`; this module stays free of `@/`
+ * client lives in `utils/sessionKeyChain.ts`; this module stays free of `@/`
  * imports and side effects so its logic stays unit-testable in isolation.
  */
 
-import type { ScopeId, SessionKeyRecord } from "./sessionKeys";
+import { normalizeKeyName, type ScopeId, type SessionKeyRecord } from "./sessionKeys";
 
 /**
  * One decoded `AuthorizationsUpdated` log, already scoped to a single
  * wallet's identity (the caller is responsible for that filtering — see
- * the client-side re-check in `useSessionKeys.ts`).
+ * the client-side re-check in `sessionKeyChain.ts`).
  */
 export interface DecodedAuthorizationEvent {
   /** The session key address the login/revoke applies to. */
@@ -98,7 +98,8 @@ export function foldAuthorizationEvents(
     const latestRevoke = revokes.length > 0 ? revokes[revokes.length - 1] : undefined;
 
     records.push({
-      name: latestGrant.origin,
+      // Origin is written by whoever made the grant, so it gets the same cleanup as typed names.
+      name: normalizeKeyName(latestGrant.origin),
       sessionKeyPublic: firstGrant.signer as `0x${string}`,
       scopes: [...scopes],
       createdAt: firstGrant.timestamp * 1000,
