@@ -29,28 +29,26 @@ export const SESSION_KEY_SCOPES: SessionKeyScope[] = [
   {
     id: "createDataSet",
     label: "Create data set",
-    description: "Key may create new Warm Storage datasets billed to your account (signs CreateDataSet).",
+    description: "Key may create new Warm Storage data sets billed to your account.",
     typehash: "0x25ebf20299107c91b4624d5bac3a16d32cabf0db23b450ee09ab7732983b1dc9",
   },
   {
     id: "addPieces",
     label: "Add pieces",
-    description: "Key may add pieces to your existing datasets (signs AddPieces).",
+    description: "Key may add pieces to your existing data sets.",
     typehash: "0x954bdc254591a7eab1b73f03842464d9283a08352772737094d710a4428fd183",
   },
   {
     id: "schedulePieceRemovals",
     label: "Schedule piece removals",
-    description:
-      "Key may schedule pieces for removal from your datasets (signs SchedulePieceRemovals). Removed data is gone once the removal executes.",
+    description: "Key may schedule pieces for removal from your data sets. Removed data is gone once the removal runs.",
     typehash: "0x5415701e313bb627e755b16924727217bb356574fe20e7061442c200b0822b22",
     destructive: true,
   },
   {
     id: "terminateService",
     label: "Terminate service",
-    description:
-      "Key may terminate storage service for entire datasets (signs TerminateService). Ends proving and payment for the dataset.",
+    description: "Key may end storage service for whole data sets, which stops proving and payment for them.",
     typehash: "0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc",
     destructive: true,
   },

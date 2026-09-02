@@ -209,7 +209,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       <div className='rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900 p-3 text-sm text-blue-900 dark:text-blue-200 flex items-center gap-2'>
         <Loader2 className='h-4 w-4 animate-spin shrink-0' />
         <span>
-          <b>Confirming onchain…</b> keep this window open. Save your session key below in the meantime.
+          <b>Waiting for confirmation…</b> keep this window open. Save your session key below in the meantime.
         </span>
       </div>
     ) : txState === "failed" ? (
@@ -300,6 +300,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 {presetIndex === "custom" && (
                   <input
                     type='date'
+                    aria-label='Custom expiry date'
                     className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                     value={customDate}
                     onChange={(e) => setCustomDate(e.target.value)}
@@ -313,7 +314,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <Button variant='primary' size='compact' disabled={!canCreate} onClick={handleCreate}>
                 {txState === "pending" ? (
                   <span className='flex items-center gap-2'>
-                    <Loader2 className='h-4 w-4 animate-spin' /> Confirming onchain…
+                    <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
                 ) : (
                   "Create session key"

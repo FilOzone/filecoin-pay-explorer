@@ -84,8 +84,8 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
         <div>
           <h3 className='text-2xl font-medium'>Session keys</h3>
           <p className='text-sm text-zinc-500 max-w-xl mt-1'>
-            Scoped, expiring signing keys for apps and agents — like API tokens, but onchain. They can never move your
-            funds. Scopes currently apply to <b>Filecoin Warm Storage (FWSS)</b>. Open an issue to request support for
+            Scoped, expiring signing keys for apps and agents, like API tokens that live on chain. They can never move
+            your funds. Scopes currently apply to <b>Filecoin Warm Storage</b>. Open an issue to request support for
             other services.
           </p>
           <p className='text-xs mt-1.5 flex gap-4'>
@@ -120,8 +120,8 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
           A session key is a disposable keypair you authorize to sign specific Warm Storage actions on your behalf —
           exactly the scopes you pick when creating it — until an expiry you set. You give the key to an app, a CI job,
           or an agent instead of your wallet key. It can't withdraw funds, change approvals, or do anything outside its
-          scopes — and you can revoke it any time. The authorization lives onchain in the SessionKeyRegistry; the key
-          itself never leaves your hands.
+          scopes, and you can revoke it any time. The authorization lives on chain in the key registry; the key itself
+          never leaves your hands.
         </p>
       </details>
 
@@ -200,7 +200,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                       </span>
                     </td>
                     <td className='px-4 py-3 text-right'>
-                      {key.status === "active" && (
+                      {(key.status === "active" || key.status === "unknown") && (
                         <button
                           type='button'
                           onClick={() => setRevokeTarget(key)}

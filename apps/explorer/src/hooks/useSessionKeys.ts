@@ -78,8 +78,15 @@ export function useSessionKeys(network: Network, account: Hex) {
     query: { enabled: records.length > 0, refetchInterval: 30_000 },
   });
 
+  // Ticks with the poll so a key that expires while the page is open flips to
+  // "expired" even when the chain reads come back unchanged.
+  const [nowSec, setNowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  useEffect(() => {
+    const id = window.setInterval(() => setNowSec(BigInt(Math.floor(Date.now() / 1000))), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const keys: SessionKeyWithStatus[] = useMemo(() => {
-    const nowSec = BigInt(Math.floor(Date.now() / 1000));
     let cursor = 0;
     return records.map((record) => {
       const scopeExpiries: Partial<Record<ScopeId, bigint>> = {};
@@ -104,7 +111,7 @@ export function useSessionKeys(network: Network, account: Hex) {
       if (status === "revoked" && Date.now() - record.createdAt < 3 * 60_000) status = "unknown";
       return { ...record, status, scopeExpiries, scopeActive, maxExpiry };
     });
-  }, [records, reads]);
+  }, [records, reads, nowSec]);
 
   const addKey = useCallback(
     (record: SessionKeyRecord) => {
