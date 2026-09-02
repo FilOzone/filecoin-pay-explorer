@@ -340,7 +340,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     <span className='block text-sm font-medium'>Generate for me (default)</span>
                     <span className='block text-xs text-zinc-500'>
                       Creates a <b>private key + public address keypair</b> in your browser. The private key is revealed
-                      on the next screen — it never exists onchain, on our servers, or anywhere else.
+                      on the next screen but is never stored, so <b>make sure you save it somewhere safe immediately</b>
+                      .
                     </span>
                   </span>
                 </label>
@@ -355,8 +356,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <span className='flex-1'>
                     <span className='block text-sm font-medium'>I'll bring my own address</span>
                     <span className='block text-xs text-zinc-500'>
-                      Generate the keypair yourself and paste only the session key's <b>public address</b> — the private
-                      key never touches this console.
+                      Generate the keypair yourself and paste <b>only</b> the session key's <b>public address</b> — the
+                      private key should never touch this console.
                     </span>
                     {signerMode === "own" && (
                       <input
@@ -446,8 +447,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
-              <span className='font-mono break-all'>{ownAddress}</span> is now authorized. Its private key never touched
-              this console — keep using it wherever you generated it.
+              <span className='font-mono break-all'>{ownAddress}</span> is now authorized.
             </div>
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={() => handleOpenChange(false)}>
