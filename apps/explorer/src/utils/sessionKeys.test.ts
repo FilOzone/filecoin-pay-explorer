@@ -10,7 +10,7 @@ import {
   resolveExpiry,
   SESSION_KEY_SCOPES,
   sanitizeRecords,
-} from "./sessionKeys.ts";
+} from "./sessionKeys";
 
 const CREATE_PREIMAGE =
   "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)";

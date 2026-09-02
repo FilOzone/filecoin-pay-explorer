@@ -54,13 +54,13 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenCh
         <DialogHeader>
           <DialogTitle>Revoke “{sessionKey?.name}”?</DialogTitle>
           <DialogDescription>
-            Immediately disables every scope of this key. Apps still holding it will start failing signature checks.
+            Immediately disables every scope of this key. Apps still holding it will stop working.
           </DialogDescription>
         </DialogHeader>
 
         <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-200'>
-          <b>This cannot be undone.</b> Once revoked, the key is dead for good — if something still needs access, you'll
-          have to create a new session key and update it with the new secret.
+          <b>This cannot be undone.</b> Once revoked, the key is dead for good. If something still needs access, create
+          a new session key and give it the new secret.
         </div>
 
         {sessionKey && (
@@ -69,8 +69,6 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenCh
             <dd className='font-mono'>{formatAddress(sessionKey.sessionKeyPublic)}</dd>
             <dt className='text-zinc-500'>Scopes revoked</dt>
             <dd>{sessionKey.scopes.map((id) => SCOPE_BY_ID[id].label).join(" · ")}</dd>
-            <dt className='text-zinc-500'>Transaction</dt>
-            <dd className='font-mono text-xs'>revoke(signer, [all granted scopes], name)</dd>
           </dl>
         )}
 
