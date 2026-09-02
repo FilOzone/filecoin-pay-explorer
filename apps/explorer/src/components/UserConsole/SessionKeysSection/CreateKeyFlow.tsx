@@ -109,15 +109,21 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
 
-  // A link locks off every scope it did not name (reduce-only consent); a
-  // link without scopes is refused before this dialog ever opens.
-  const requestPresets = useMemo(
-    () => (prefillAddress && prefillScopes?.length ? presetScopeStates(prefillScopes) : null),
-    [prefillAddress, prefillScopes],
-  );
   const isExistingKey = prefillAddress != null && existingKey != null;
   // A known key with no live expiry is being renewed, not extended.
   const isRenewal = isExistingKey && existingKey.expirySec == null;
+  // A renewal also requests the scopes the key held, so ticking only the new
+  // one cannot leave the old ones expired by accident. Joined into a string so
+  // the memo below does not rebuild on every render.
+  const renewedScopes = isRenewal ? existingKey.scopes.join(",") : "";
+  // A link that names scopes locks the rest off (reduce-only consent); a link
+  // that names none leaves every scope selectable, like a manual create.
+  const requestPresets = useMemo(() => {
+    if (!prefillAddress) return null;
+    const renewed = renewedScopes ? (renewedScopes.split(",") as ScopeId[]) : [];
+    const requested = [...new Set([...(prefillScopes ?? []), ...renewed])];
+    return requested.length ? presetScopeStates(requested) : null;
+  }, [prefillAddress, prefillScopes, renewedScopes]);
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
 
@@ -335,7 +341,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </DialogTitle>
               <DialogDescription>
                 {isRenewal
-                  ? "This key has expired. Every scope you select gets the new expiry; unselected scopes stay expired."
+                  ? "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired."
                   : isExistingKey
                     ? "Newly selected scopes are added to this key."
                     : "All selected scopes share the same expiry."}
