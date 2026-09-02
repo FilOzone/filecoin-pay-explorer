@@ -132,7 +132,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         metadata: { type: "createSessionKey", keyName: cleanName },
       });
       onCreated({
-        name: displayName,
+        name: cleanName,
         sessionKeyPublic: signerAddress,
         scopes: selectedScopes,
         createdAt: Date.now(),
