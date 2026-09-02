@@ -1,6 +1,8 @@
 "use client";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { Account } from "@filecoin-pay/types";
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
+import { useMemo, useState } from "react";
 import { useConnection } from "wagmi";
 import {
   AlertsBanner,
@@ -9,13 +11,32 @@ import {
   RailsSection,
   TopUpDialogController,
 } from "@/components/UserConsole";
+import DepositAndApproveDialog, {
+  type DepositAndApprovePrefill,
+} from "@/components/UserConsole/DepositAndApproveDialog";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
-import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { getChain, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
+import { useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import type { Network } from "@/types";
+import { type DepositPrefill, parseDepositPrefill, resolveOperator } from "@/utils/depositParam";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
+
+// The lockup period filecoin-pin also leaves to the SDK default: 30 days of epochs.
+const DEFAULT_MAX_LOCKUP_PERIOD = String(TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS * TIME_CONSTANTS.EPOCHS_PER_DAY);
+
+/** Turns the link's values into dialog fields for the wallet's network. */
+function toDialogPrefill(link: DepositPrefill, network: Network): DepositAndApprovePrefill {
+  return {
+    token: getChain(network).contracts.usdfc.address,
+    amount: link.amount ?? undefined,
+    operator: link.operator ? resolveOperator(link.operator, network) : undefined,
+    unlimitedAllowances: true,
+    maxLockupPeriod: DEFAULT_MAX_LOCKUP_PERIOD,
+  };
+}
 
 type AccountSectionsProps = {
   account: Account | null | undefined;
@@ -115,8 +136,37 @@ const UserConsole = () => {
 
   const showTopUpTrigger = !accountQuery.isLoading && !accountQuery.error && !accountQuery.data;
 
+  const fundingLink = useConsumedSearchParams(["deposit", "operator"]);
+  const depositLink = useMemo(() => (fundingLink ? parseDepositPrefill(fundingLink) : null), [fundingLink]);
+  const [dialogDismissed, setDialogDismissed] = useState(false);
+  // Stable across renders: the dialog applies its prefill whenever the object changes.
+  const depositPrefill = useMemo(
+    () => (depositLink && !dialogDismissed && isFilecoinChain ? toDialogPrefill(depositLink, walletNetwork) : null),
+    [depositLink, dialogDismissed, isFilecoinChain, walletNetwork],
+  );
+
   return (
     <div className='flex flex-col gap-15'>
+      {fundingLink && !depositLink && (
+        <div
+          role='alert'
+          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
+        >
+          <p className='font-semibold'>This funding link could not be read</p>
+          <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
+        </div>
+      )}
+      {depositPrefill && (
+        <DepositAndApproveDialog
+          // A chain switch remounts the dialog so token and operator follow the wallet's network.
+          key={walletNetwork}
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialogDismissed(true);
+          }}
+          prefill={depositPrefill}
+        />
+      )}
       {/* The (console) layout gates on a connected wallet, so address is set here. */}
       {address && canMountTopUpController ? (
         <TopUpDialogController

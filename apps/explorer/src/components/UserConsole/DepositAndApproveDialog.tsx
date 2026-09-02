@@ -17,9 +17,20 @@ import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
 
+/** Values a caller can fill in before the dialog opens; the user can still edit every field. */
+export interface DepositAndApprovePrefill {
+  token?: Hex;
+  amount?: string;
+  operator?: Hex;
+  unlimitedAllowances?: boolean;
+  /** Epochs, as typed into the max lockup period field. */
+  maxLockupPeriod?: string;
+}
+
 interface DepositAndApproveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  prefill?: DepositAndApprovePrefill;
 }
 
 interface TokenDetails {
@@ -28,7 +39,7 @@ interface TokenDetails {
   name: string;
 }
 
-const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open, onOpenChange }) => {
+const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open, onOpenChange, prefill }) => {
   const [operatorInput, setOperatorInput] = useState("");
   const operatorRef = useRef<HTMLDivElement>(null);
   const [tokenInput, setTokenInput] = useState("");
@@ -55,12 +66,20 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
     if (!open) {
       setOperatorInput("");
       setTokenInput("");
+      setTokenAmount("");
       setLockupAllowance("");
       setRateAllowance("");
       setMaxLockupPeriod("");
       setIsUnlimited(false);
+      return;
     }
-  }, [open]);
+    if (!prefill) return;
+    setTokenInput(prefill.token ?? "");
+    setTokenAmount(prefill.amount ?? "");
+    setOperatorInput(prefill.operator ?? "");
+    setIsUnlimited(prefill.unlimitedAllowances ?? false);
+    setMaxLockupPeriod(prefill.maxLockupPeriod ?? "");
+  }, [open, prefill]);
 
   const operatorAddress = (() => {
     const trimmed = operatorInput.trim();
