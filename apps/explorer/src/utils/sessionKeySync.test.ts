@@ -137,7 +137,7 @@ describe("mergeSyncedRecords", () => {
   });
 });
 
-describe("re-authorization consequences (PR3)", () => {
+describe("re-authorizing a signer the fold already knows", () => {
   const grant = (signer: string, origin: string, ts: number, permissions: string[] = [ADD_TYPEHASH]) => ({
     signer,
     expiry: 100n,
