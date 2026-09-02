@@ -8,6 +8,7 @@ import {
   deriveKeyStatus,
   deriveSessionKeys,
   EXPIRY_PRESETS,
+  existingKeyPrefill,
   hasUniformExpiry,
   isScopeActive,
   normalizeKeyName,
@@ -304,5 +305,26 @@ describe("sanitizeRecords chain-sync fields", () => {
     ]);
     assert.equal("source" in rec, false);
     assert.equal("revokedAt" in rec, false);
+  });
+});
+
+describe("existingKeyPrefill", () => {
+  const base = { name: "ci", maxExpiry: 1_000n };
+
+  it("re-authorizes an expired key: same name, no inherited expiry, so a new one is picked", () => {
+    assert.deepEqual(existingKeyPrefill({ ...base, status: "expired" }), { name: "ci", expirySec: null });
+  });
+
+  it("keeps the expiry of an active key so added scopes line up with it", () => {
+    assert.deepEqual(existingKeyPrefill({ ...base, status: "active" }), { name: "ci", expirySec: 1_000n });
+  });
+
+  it("inherits nothing from a revoked or unresolved key", () => {
+    assert.deepEqual(existingKeyPrefill({ ...base, status: "revoked" }), { name: "ci", expirySec: null });
+    assert.deepEqual(existingKeyPrefill({ ...base, status: "unknown" }), { name: "ci", expirySec: null });
+  });
+
+  it("returns null when the list does not know the signer", () => {
+    assert.equal(existingKeyPrefill(undefined), null);
   });
 });
