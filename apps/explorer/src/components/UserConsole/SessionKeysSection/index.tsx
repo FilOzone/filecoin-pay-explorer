@@ -81,6 +81,13 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
     { label: "Source code", href: SOURCE_CODE_URL },
   ];
   const [createOpen, setCreateOpen] = useState(false);
+  // Only the banner's button carries the link's address and scopes into the
+  // dialog; "+ New session key" always opens a plain form.
+  const [createSource, setCreateSource] = useState<"link" | "manual">("manual");
+  const openCreate = (source: "link" | "manual") => {
+    setCreateSource(source);
+    setCreateOpen(true);
+  };
   // The target remembers the identity it was chosen under: a revoke is sent
   // by the connected wallet, so after a wallet or network switch the dialog
   // must not offer a signer the new wallet never authorized.
@@ -101,6 +108,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork != null && prefillNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
+  const linkPrefill = createSource === "link" ? cliPrefill : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
     ? keys.find((k) => k.sessionKeyPublic.toLowerCase() === cliPrefill.toLowerCase())
@@ -173,7 +181,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
               )}
             </p>
           </div>
-          <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
+          <Button variant='primary' size='compact' onClick={() => openCreate("link")}>
             Review &amp; authorize
           </Button>
         </div>
@@ -222,7 +230,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
         </div>
         <div className='flex gap-2 shrink-0 flex-wrap'>
           {syncButton}
-          <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
+          <Button variant='primary' size='compact' onClick={() => openCreate("manual")}>
             + New session key
           </Button>
         </div>
@@ -247,7 +255,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
           description='Create one to let an app or agent upload to your datasets without holding your wallet key.'
         >
           <div className='flex gap-2 justify-center'>
-            <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
+            <Button variant='primary' size='compact' onClick={() => openCreate("manual")}>
               + New session key
             </Button>
             {syncButton}
@@ -404,9 +412,9 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
         account={account}
         registry={registry}
         explorerUrl={explorerUrl}
-        prefillAddress={cliPrefill}
-        prefillScopes={cliPrefill ? prefillScopes : null}
-        existingKey={existingKeyForPrefill}
+        prefillAddress={linkPrefill}
+        prefillScopes={linkPrefill ? prefillScopes : null}
+        existingKey={linkPrefill ? existingKeyForPrefill : null}
         onCreated={addKey}
         onConfirmed={markConfirmed}
         onFailed={removeKey}

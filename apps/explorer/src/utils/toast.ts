@@ -151,7 +151,7 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
         },
         error: {
           title: "Adding Scopes Failed",
-          description: "The login transaction was rejected or failed",
+          description: "The transaction was rejected or failed",
         },
       }[status];
 
