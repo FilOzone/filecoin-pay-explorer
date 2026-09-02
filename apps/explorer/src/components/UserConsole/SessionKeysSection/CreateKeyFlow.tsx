@@ -28,6 +28,7 @@ import {
   buildEnvSnippet,
   buildLoginArgs,
   EXPIRY_PRESETS,
+  type ExistingKeyPrefill,
   isSameIdentity,
   normalizeKeyName,
   resolveExpiry,
@@ -50,7 +51,7 @@ interface CreateKeyFlowProps {
   /**
    * Turns the dialog into an add-scopes flow
    */
-  existingKey?: { name: string; expirySec: bigint | null } | null;
+  existingKey?: ExistingKeyPrefill | null;
   /** `identity` is the wallet and network at submit time, so a late callback still lands in the right inventory. */
   onCreated: (record: SessionKeyRecord, identity: SessionKeysIdentity) => void;
   /** Fires with the signer when its login tx is confirmed onchain. */
@@ -119,6 +120,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     [prefillAddress, prefillScopes],
   );
   const isExistingKey = prefillAddress != null && existingKey != null;
+  // A known key with no live expiry is being renewed, not extended.
+  const isRenewal = isExistingKey && existingKey.expirySec == null;
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
 
@@ -312,11 +315,15 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         {step === "form" && (
           <>
             <DialogHeader>
-              <DialogTitle>{isExistingKey ? "Add scopes to session key" : "New session key"}</DialogTitle>
+              <DialogTitle>
+                {isRenewal ? "Renew session key" : isExistingKey ? "Add scopes to session key" : "New session key"}
+              </DialogTitle>
               <DialogDescription>
-                {isExistingKey
-                  ? "Newly selected scopes are added to this key."
-                  : "All selected scopes share the same expiry."}
+                {isRenewal
+                  ? "This key has expired. Every scope you select gets the new expiry; unselected scopes stay expired."
+                  : isExistingKey
+                    ? "Newly selected scopes are added to this key."
+                    : "All selected scopes share the same expiry."}
               </DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
@@ -507,6 +514,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <span className='flex items-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
+                ) : isRenewal ? (
+                  "Renew key"
                 ) : isExistingKey ? (
                   "Authorize scopes"
                 ) : prefillAddress ? (
