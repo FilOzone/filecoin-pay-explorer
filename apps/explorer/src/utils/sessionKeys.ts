@@ -98,6 +98,60 @@ export function resolveExpiry(presetIndex: string, customDate: string, nowMs: nu
   return preset ? BigInt(nowSec + preset.seconds) : null;
 }
 
+export interface SessionKeyWithStatus extends SessionKeyRecord {
+  /** "unknown" until the first chain read resolves. */
+  status: SessionKeyStatus | "unknown";
+  scopeExpiries: Partial<Record<ScopeId, bigint>>;
+  /** Latest expiry across granted scopes (0n if revoked/never). */
+  maxExpiry: bigint;
+  scopeActive: Partial<Record<ScopeId, boolean>>;
+}
+
+/** One `authorizationExpiry` read, in the shape wagmi's useReadContracts returns. */
+export interface ExpiryRead {
+  status: "success" | "failure";
+  result?: unknown;
+}
+
+/** A key created this recently reads all-zero until its login confirms, so it is not yet "revoked". */
+const FRESH_KEY_MS = 3 * 60_000;
+
+/**
+ * Joins each record with its chain reads. `reads` is flat, one entry per
+ * record scope in record order, which is how the hook builds the contracts
+ * list. A missing or failed read leaves the key "unknown".
+ */
+export function deriveSessionKeys(
+  records: SessionKeyRecord[],
+  reads: readonly ExpiryRead[] | undefined,
+  nowSec: bigint,
+  nowMs: number,
+): SessionKeyWithStatus[] {
+  let cursor = 0;
+  return records.map((record) => {
+    const scopeExpiries: Partial<Record<ScopeId, bigint>> = {};
+    const scopeActive: Partial<Record<ScopeId, boolean>> = {};
+    const expiries: bigint[] = [];
+    let resolved = true;
+    for (const scopeId of record.scopes) {
+      const read = reads?.[cursor];
+      cursor += 1;
+      if (read?.status === "success" && typeof read.result === "bigint") {
+        scopeExpiries[scopeId] = read.result;
+        scopeActive[scopeId] = isScopeActive(read.result, nowSec);
+        expiries.push(read.result);
+      } else {
+        resolved = false;
+      }
+    }
+    const maxExpiry = expiries.reduce((max, e) => (e > max ? e : max), 0n);
+    let status: SessionKeyWithStatus["status"] =
+      resolved && expiries.length > 0 ? deriveKeyStatus(expiries, nowSec) : "unknown";
+    if (status === "revoked" && nowMs - record.createdAt < FRESH_KEY_MS) status = "unknown";
+    return { ...record, status, scopeExpiries, scopeActive, maxExpiry };
+  });
+}
+
 export interface SessionKeyRecord {
   name: string;
   sessionKeyPublic: `0x${string}`;

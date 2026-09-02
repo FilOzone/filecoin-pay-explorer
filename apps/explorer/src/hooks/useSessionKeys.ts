@@ -4,24 +4,9 @@ import type { Hex } from "viem";
 import { useReadContracts } from "wagmi";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
-import {
-  deriveKeyStatus,
-  isScopeActive,
-  SCOPE_BY_ID,
-  type ScopeId,
-  type SessionKeyRecord,
-  type SessionKeyStatus,
-  sanitizeRecords,
-} from "@/utils/sessionKeys";
+import { deriveSessionKeys, SCOPE_BY_ID, type SessionKeyRecord, sanitizeRecords } from "@/utils/sessionKeys";
 
-export interface SessionKeyWithStatus extends SessionKeyRecord {
-  /** "unknown" until the first chain read resolves. */
-  status: SessionKeyStatus | "unknown";
-  scopeExpiries: Partial<Record<ScopeId, bigint>>;
-  /** Latest expiry across granted scopes (0n if revoked/never). */
-  maxExpiry: bigint;
-  scopeActive: Partial<Record<ScopeId, boolean>>;
-}
+export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
 const storageKey = (network: Network, account: Hex) => `fp-session-keys:${network}:${account.toLowerCase()}`;
 
@@ -91,32 +76,7 @@ export function useSessionKeys(network: Network, account: Hex) {
     return () => window.clearInterval(id);
   }, []);
 
-  const keys: SessionKeyWithStatus[] = useMemo(() => {
-    let cursor = 0;
-    return records.map((record) => {
-      const scopeExpiries: Partial<Record<ScopeId, bigint>> = {};
-      const scopeActive: Partial<Record<ScopeId, boolean>> = {};
-      const expiries: bigint[] = [];
-      let resolved = true;
-      for (const scopeId of record.scopes) {
-        const read = reads?.[cursor];
-        cursor += 1;
-        if (read?.status === "success" && typeof read.result === "bigint") {
-          scopeExpiries[scopeId] = read.result;
-          scopeActive[scopeId] = isScopeActive(read.result, nowSec);
-          expiries.push(read.result);
-        } else {
-          resolved = false;
-        }
-      }
-      const maxExpiry = expiries.reduce((max, e) => (e > max ? e : max), 0n);
-      let status: SessionKeyWithStatus["status"] =
-        resolved && expiries.length > 0 ? deriveKeyStatus(expiries, nowSec) : "unknown";
-      // A just-created key reads all-zero until its login tx confirms (~1 epoch).
-      if (status === "revoked" && Date.now() - record.createdAt < 3 * 60_000) status = "unknown";
-      return { ...record, status, scopeExpiries, scopeActive, maxExpiry };
-    });
-  }, [records, reads, nowSec]);
+  const keys = useMemo(() => deriveSessionKeys(records, reads, nowSec, Date.now()), [records, reads, nowSec]);
 
   // A signer the list already knows keeps its earlier scopes: whole-key revoke
   // sends every scope in the record, so the record must hold all of them.
