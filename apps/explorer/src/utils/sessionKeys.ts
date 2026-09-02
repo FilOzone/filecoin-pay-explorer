@@ -111,6 +111,8 @@ export function hasUniformExpiry(scopes: ScopeId[], scopeExpiries: Partial<Recor
 /** What the consent dialog needs to know about a key this browser already lists. */
 export interface ExistingKeyPrefill {
   name: string;
+  /** Scopes the key holds or held; a renewal pre-checks them so none is left expired by accident. */
+  scopes: ScopeId[];
   /** Kept expiry for an active key; null means the owner picks a new one. */
   expirySec: bigint | null;
 }
@@ -122,11 +124,11 @@ export interface ExistingKeyPrefill {
  * and the same signer is granted again, so no new key is made.
  */
 export function existingKeyPrefill(
-  key: { name: string; status: SessionKeyStatus | "unknown"; maxExpiry: bigint } | undefined,
+  key: { name: string; scopes: ScopeId[]; status: SessionKeyStatus | "unknown"; maxExpiry: bigint } | undefined,
 ): ExistingKeyPrefill | null {
   if (!key) return null;
   const keepExpiry = key.status === "active" && key.maxExpiry > 0n;
-  return { name: key.name, expirySec: keepExpiry ? key.maxExpiry : null };
+  return { name: key.name, scopes: key.scopes, expirySec: keepExpiry ? key.maxExpiry : null };
 }
 
 export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
