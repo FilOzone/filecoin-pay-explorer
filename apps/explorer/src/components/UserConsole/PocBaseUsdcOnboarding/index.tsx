@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { useAddFunds, usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, Loader2, Repeat } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -64,8 +65,11 @@ async function readBaseUsdc(address: string): Promise<bigint> {
 
 export function PocBaseUsdcOnboarding() {
   const { address } = useConnection();
+  const { authenticated } = usePrivy();
+  const { addFunds } = useAddFunds();
   const { constants } = useSynapse();
   const searchParams = useSearchParams();
+  const [isFunding, setIsFunding] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [amount, setAmount] = useState("");
@@ -87,7 +91,58 @@ export function PocBaseUsdcOnboarding() {
   const balance = override ?? (realBalance !== undefined ? Number(formatUnits(realBalance, BASE_USDC_DECIMALS)) : 0);
   const isSimulatedBalance = override !== null;
 
-  if (!address || balance <= 0) return null;
+  // Privy's unified funding modal (card onramp, exchange transfer, crypto
+  // deposit - whichever methods the dashboard enables), targeting USDC on
+  // Base for the connected wallet. Real money, paid by the user in their own
+  // browser; nothing here signs or moves funds itself.
+  const getUsdcWithPrivy = async () => {
+    if (!address || isFunding) return;
+    setIsFunding(true);
+    try {
+      await addFunds({
+        destination: { address, chain: "eip155:8453", asset: BASE_USDC_ADDRESS },
+        fiat: { defaultAmount: "5" },
+        crypto: {},
+      });
+    } catch {
+      // User exited the flow; nothing to clean up.
+    } finally {
+      setIsFunding(false);
+    }
+  };
+
+  if (!address) return null;
+
+  // Fresh wallet, nothing on Base yet: for Privy-authenticated users, offer
+  // Privy funding as the entry point instead of hiding the rail entirely.
+  if (balance <= 0) {
+    if (!authenticated) return null;
+    return (
+      <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50/60 p-4'>
+        <div className='flex items-start gap-3'>
+          <span className='mt-0.5 rounded-full bg-amber-100 p-2 text-amber-700'>
+            <Repeat className='h-4 w-4' />
+          </span>
+          <div>
+            <p className='flex items-center gap-2 font-medium'>
+              Fund your wallet to get started
+              <PocBadge />
+            </p>
+            <p className='text-sm text-muted-foreground'>
+              Get USDC on Base with a card, an exchange transfer, or a crypto deposit - then swap it to USDFC here. No
+              FIL needed.
+            </p>
+          </div>
+        </div>
+        <Button disabled={isFunding} onClick={() => void getUsdcWithPrivy()} size='compact' variant='primary'>
+          <span className='flex items-center gap-2'>
+            {isFunding ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
+            Get USDC via Privy
+          </span>
+        </Button>
+      </div>
+    );
+  }
 
   const balanceLabel = balance.toLocaleString(undefined, { maximumFractionDigits: 2 });
   const parsedAmount = Number.parseFloat(amount);
