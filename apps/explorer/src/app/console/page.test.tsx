@@ -54,6 +54,12 @@ vi.mock("@/components/UserConsole/States", () => ({
   NotConnected: () => <div>Not connected</div>,
   UnsupportedChain: () => <div>Unsupported network</div>,
 }));
+// The POC onboarding rail reads Base RPC and search params; the page tests
+// exercise console gating, not the POC banner.
+vi.mock("@/components/UserConsole/PocBaseUsdcOnboarding", () => ({
+  default: () => null,
+  PocBaseUsdcOnboarding: () => null,
+}));
 vi.mock("@/components/UserConsole", () => ({
   AlertsBanner: () => null,
   BetaWarning: () => null,
