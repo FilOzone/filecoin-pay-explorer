@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
-import { type DecodedAuthorizationEvent, foldAuthorizationEvents, mergeSyncedRecords } from "./sessionKeySync.ts";
-import { SESSION_KEY_SCOPES } from "./sessionKeys.ts";
+import { type DecodedAuthorizationEvent, foldAuthorizationEvents, mergeSyncedRecords } from "./sessionKeySync";
+import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 const CREATE_TYPEHASH = SESSION_KEY_SCOPES[0].typehash;
 const ADD_TYPEHASH = SESSION_KEY_SCOPES[1].typehash;
@@ -101,7 +101,7 @@ describe("mergeSyncedRecords", () => {
   const synced = (overrides: Record<string, unknown> = {}) => ({
     name: "chain-app",
     sessionKeyPublic: SIGNER_A as `0x${string}`,
-    scopes: ["createDataSet"] as const,
+    scopes: ["createDataSet"] as ScopeId[],
     createdAt: 100,
     source: "chain" as const,
     ...overrides,
@@ -119,7 +119,7 @@ describe("mergeSyncedRecords", () => {
       {
         name: "my-local-name",
         sessionKeyPublic: SIGNER_A.toUpperCase() as `0x${string}`,
-        scopes: ["terminateService"] as const,
+        scopes: ["terminateService"] as ScopeId[],
         createdAt: 1,
       },
     ];
