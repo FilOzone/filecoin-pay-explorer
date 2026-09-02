@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
-import { ArrowSquareOutIcon, KeyIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, KeyIcon, WalletIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { useState } from "react";
 import type { Hex } from "viem";
@@ -14,8 +14,11 @@ import { RevokeDialog } from "./RevokeDialog";
 
 interface SessionKeysSectionProps {
   network: Network;
-  account: Hex;
+  /** Undefined while no wallet is connected; the section then shows a prompt instead of the list. */
+  account?: Hex;
 }
+
+type ConnectedProps = SessionKeysSectionProps & { account: Hex };
 
 const STATUS_STYLES: Record<SessionKeyWithStatus["status"], string> = {
   active: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
@@ -44,6 +47,20 @@ const SOURCE_CODE_URL = "https://github.com/FilOzone/SessionKeyRegistry";
  * status = live chain reads.
  */
 const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
+  if (!account) {
+    return (
+      <EmptyStateCard
+        titleTag='h3'
+        icon={WalletIcon}
+        title='Connect your wallet'
+        description='Session keys belong to a wallet. Connect one to see and manage its keys.'
+      />
+    );
+  }
+  return <ConnectedSessionKeys network={network} account={account} />;
+};
+
+const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
   const { keys, addKey, removeKey, refetchStatuses, registry } = useSessionKeys(network, account);
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<SessionKeyWithStatus | null>(null);

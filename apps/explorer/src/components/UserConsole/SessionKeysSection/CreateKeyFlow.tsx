@@ -17,16 +17,17 @@ import type { Abi, Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
+import { download } from "@/utils/download";
 import {
   buildEnvSnippet,
   EXPIRY_PRESETS,
   normalizeKeyName,
+  resolveExpiry,
   SCOPE_BY_ID,
   type ScopeId,
   SESSION_KEY_SCOPES,
   type SessionKeyRecord,
 } from "@/utils/sessionKeys";
-import { download } from "./download";
 
 interface CreateKeyFlowProps {
   open: boolean;
@@ -47,8 +48,8 @@ interface GeneratedKey {
 
 type TxState = "idle" | "pending" | "confirmed" | "failed";
 
-// Default selection: every scope on
-const FULL_SELECTION = Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, true])) as Record<ScopeId, boolean>;
+// Nothing is pre-selected: the owner ticks each scope the key holder needs.
+const EMPTY_SELECTION = Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, false])) as Record<ScopeId, boolean>;
 
 /**
  * Create flow + reveal. One wallet transaction calling the registry's
@@ -70,7 +71,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [step, setStep] = useState<"form" | "reveal">("form");
   const [txState, setTxState] = useState<TxState>("idle");
   const [name, setName] = useState("");
-  const [checkedScopes, setCheckedScopes] = useState<Record<ScopeId, boolean>>(FULL_SELECTION);
+  const [checkedScopes, setCheckedScopes] = useState<Record<ScopeId, boolean>>(EMPTY_SELECTION);
   const [presetIndex, setPresetIndex] = useState("1"); // default 30 days
   const [customDate, setCustomDate] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
@@ -100,18 +101,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
-  const resolveExpiry = (): bigint | null => {
-    if (presetIndex === "custom") {
-      if (!customDate) return null;
-      const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
-      return ts > Date.now() / 1000 ? BigInt(ts) : null;
-    }
-    const preset = EXPIRY_PRESETS[Number(presetIndex)];
-    return preset ? BigInt(Math.floor(Date.now() / 1000) + preset.seconds) : null;
-  };
+  const expiryChoice = () => resolveExpiry(presetIndex, customDate, Date.now());
 
   // name is optional: the chain doesn't require an origin
-  const canCreate = selectedScopes.length > 0 && resolveExpiry() !== null && txState !== "pending";
+  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && txState !== "pending";
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -119,7 +112,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const displayName = cleanName || "(unnamed)";
 
   const handleCreate = async () => {
-    const expiry = resolveExpiry();
+    const expiry = expiryChoice();
     if (!expiry) return;
     const privateKey = generatePrivateKey();
     const keyAccount = privateKeyToAccount(privateKey);
@@ -163,7 +156,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setStep("form");
     setTxState("idle");
     setName("");
-    setCheckedScopes(FULL_SELECTION);
+    setCheckedScopes(EMPTY_SELECTION);
     setPresetIndex("1");
     setCustomDate("");
     setGenerated(null);
@@ -221,7 +214,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       </div>
     ) : txState === "failed" ? (
       <div className='rounded-lg border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-900 p-3 text-sm text-red-900 dark:text-red-200'>
-        <b>Authorization failed.</b> The transaction did not land, so this key was never registered onchain — discard it
+        <b>Authorization failed.</b> The transaction did not go through, so this key was never registered. Discard it
         and try again.
       </div>
     ) : (
@@ -248,8 +241,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 </Label>
                 <Input id='sk-name' placeholder='e.g. ci-uploader' value={name} onChange={setName} />
                 <p className='text-xs text-zinc-500'>
-                  Stored as the <span className='font-mono'>origin</span> field of the onchain event —{" "}
-                  <b>public and permanent</b>, so no secrets here.
+                  Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
                 </p>
               </div>
 
@@ -285,8 +277,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   </label>
                 ))}
                 <p className='text-xs text-zinc-500'>
-                  All scopes are what the filecoin-pin CLI currently requires. Uncheck the destructive ones when the key
-                  holder should never be able to remove data or terminate service.
+                  Pick only what the key holder needs. Uploads need "Create data set" and "Add pieces". The two marked
+                  destructive let the holder remove data or end service.
                 </p>
               </div>
 
@@ -313,9 +305,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     onChange={(e) => setCustomDate(e.target.value)}
                   />
                 )}
-                <p className='text-xs text-zinc-500'>
-                  Enforced onchain — after this the key simply stops working. No “never expires” option, on purpose.
-                </p>
+                <p className='text-xs text-zinc-500'>The key stops working on this date. Every key has to expire.</p>
               </div>
             </div>
 
@@ -366,10 +356,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 </button>
               </div>
               <p className='text-xs text-amber-900/80 dark:text-amber-200/80'>
-                The <b>SESSION_KEY value is the secret (the key's private key)</b> — generated locally in your browser,
-                never stored by the console; only its address went onchain. The snippet above is a ready-to-paste env
-                file. Anyone holding the secret can use exactly the scopes above until expiry — treat it like a
-                password. It's shown only this once.
+                <b>SESSION_KEY is the secret.</b> It was made in your browser and is never stored here; only its address
+                went on chain. Anyone who has it can use the scopes above until the key expires, so treat it like a
+                password. The snippet above is a ready-to-paste env file. It is shown only once.
               </p>
             </div>
 

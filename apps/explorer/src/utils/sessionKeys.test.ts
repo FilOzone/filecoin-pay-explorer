@@ -7,6 +7,7 @@ import {
   EXPIRY_PRESETS,
   isScopeActive,
   normalizeKeyName,
+  resolveExpiry,
   SESSION_KEY_SCOPES,
   sanitizeRecords,
 } from "./sessionKeys.ts";
@@ -128,6 +129,11 @@ describe("sanitizeRecords", () => {
     assert.equal(rec?.name, "");
     assert.equal(rec?.createdAt, 0);
   });
+
+  it("re-normalizes a stored name on read", () => {
+    const [rec] = sanitizeRecords([{ ...good, name: "  ci\u202e.env " }]);
+    assert.equal(rec?.name, "ci.env");
+  });
 });
 
 describe("normalizeKeyName", () => {
@@ -139,5 +145,27 @@ describe("normalizeKeyName", () => {
   it("trims and caps at 64 characters", () => {
     assert.equal(normalizeKeyName("  ci  "), "ci");
     assert.equal(normalizeKeyName("x".repeat(80)).length, 64);
+  });
+});
+
+describe("resolveExpiry", () => {
+  const nowMs = 1_700_000_000_123;
+  const nowSec = 1_700_000_000n;
+
+  it("adds a preset duration to now", () => {
+    EXPIRY_PRESETS.forEach((preset, i) => {
+      assert.equal(resolveExpiry(String(i), "", nowMs), nowSec + BigInt(preset.seconds));
+    });
+  });
+
+  it("treats a custom date as the absolute end of that local day", () => {
+    const endOfDay = BigInt(Math.floor(new Date("2100-01-02T23:59:59").getTime() / 1000));
+    assert.equal(resolveExpiry("custom", "2100-01-02", nowMs), endOfDay);
+  });
+
+  it("rejects a custom date in the past, an empty custom date, and an unknown preset", () => {
+    assert.equal(resolveExpiry("custom", "2000-01-01", nowMs), null);
+    assert.equal(resolveExpiry("custom", "", nowMs), null);
+    assert.equal(resolveExpiry("99", "", nowMs), null);
   });
 });
