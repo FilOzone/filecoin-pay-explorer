@@ -188,6 +188,19 @@ export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: Squ
   });
 }
 
+export function markSquidIntermediateRouteCompleted(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+  const current = requireCurrent(storage, acquisition);
+  if (
+    current.status !== "processing" ||
+    current.executionStage !== "swap-broadcast" ||
+    current.transactionHashes.length === 0 ||
+    !hasSameSquidAcquisitionSnapshot(current, acquisition)
+  ) {
+    throw new Error("Saved Squid acquisition changed");
+  }
+  return save(storage, { ...current, executionStage: "preparing", transactionHashes: [] });
+}
+
 export function markSquidAcquired(
   storage: AcquisitionStorage,
   acquisition: SquidAcquisition,

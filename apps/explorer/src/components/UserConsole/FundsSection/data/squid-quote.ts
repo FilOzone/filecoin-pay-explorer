@@ -1,6 +1,15 @@
-import { planSquidFunding, type SourceToken, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
-import { type Address, formatUnits } from "viem";
+import {
+  NATIVE_TOKEN_ADDRESS,
+  planSquidFunding,
+  type SourceToken,
+  type SquidFundingPlan,
+} from "@filecoin-project/squid-evm-funding";
+import { type Address, formatUnits, parseEther } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
+
+export const FILECOIN_FIL_AMOUNT = parseEther("0.25");
+export const FILECOIN_FIL_REQUIREMENT_ID = "filecoin-wallet-network-fees";
+export const FILECOIN_USDFC_REQUIREMENT_ID = "filecoin-usdfc-top-up";
 
 const SQUID_TOKENS_PROXY_URL = "/api/squid/tokens";
 // Squid's /tokens response is chain-independent, changes rarely, and gets
@@ -25,6 +34,7 @@ export const squidFetch: typeof globalThis.fetch = async (input, init) => {
 export async function planSquidTopUp({
   destinationAmount,
   destinationToken,
+  includeFil = false,
   integratorId,
   owner,
   source,
@@ -32,6 +42,7 @@ export async function planSquidTopUp({
 }: {
   destinationAmount: bigint;
   destinationToken: Address;
+  includeFil?: boolean;
   integratorId: string;
   owner: Address;
   source: SourceToken;
@@ -42,15 +53,31 @@ export async function planSquidTopUp({
   }
   if (integratorId.trim() === "") throw new Error("Squid quotes are unavailable");
 
+  const isFilecoinFilSource =
+    source.chainId === 314 && source.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
+  const sourceCap = isFilecoinFilSource ? sourceAmount - FILECOIN_FIL_AMOUNT : sourceAmount;
+  if (sourceCap <= 0n) throw new Error("Keep 0.25 FIL in your wallet for Filecoin network fees");
+
   return planSquidFunding(
     {
-      maxSourceAmount: formatUnits(sourceAmount, source.decimals),
+      maxSourceAmount: formatUnits(sourceCap, source.decimals),
       owner,
       requirements: [
+        ...(includeFil && !isFilecoinFilSource
+          ? [
+              {
+                amount: FILECOIN_FIL_AMOUNT,
+                chainId: 314,
+                id: FILECOIN_FIL_REQUIREMENT_ID,
+                recipient: owner,
+                token: NATIVE_TOKEN_ADDRESS,
+              },
+            ]
+          : []),
         {
           amount: destinationAmount,
           chainId: 314,
-          id: "filecoin-usdfc-top-up",
+          id: FILECOIN_USDFC_REQUIREMENT_ID,
           recipient: owner,
           token: destinationToken,
         },

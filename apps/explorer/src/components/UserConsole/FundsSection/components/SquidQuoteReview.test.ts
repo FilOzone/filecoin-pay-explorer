@@ -3,7 +3,9 @@ import {
   excludeDestinationUsdfc,
   nativeTokenFirst,
   resolveSearchableOption,
+  shouldIncludeFilForFees,
   sourceTokenCatalogMessage,
+  totalQuotedSourceAmount,
 } from "./SquidQuoteReview";
 
 describe("searchable option resolution", () => {
@@ -55,5 +57,17 @@ describe("source token safety", () => {
 
     expect(excludeDestinationUsdfc(tokens, 314)).toEqual([tokens[1]]);
     expect(excludeDestinationUsdfc(tokens, 8453)).toEqual(tokens);
+  });
+});
+
+describe("Filecoin fee funding", () => {
+  it("defaults to FIL for zero or unreadable balances, but not a funded wallet", () => {
+    expect(shouldIncludeFilForFees(0n, false)).toBe(true);
+    expect(shouldIncludeFilForFees(undefined, true)).toBe(true);
+    expect(shouldIncludeFilForFees(1n, false)).toBe(false);
+  });
+
+  it("reviews the combined source spend for every requirement", () => {
+    expect(totalQuotedSourceAmount([{ sourceAmount: 2n }, { sourceAmount: 3n }])).toBe(5n);
   });
 });

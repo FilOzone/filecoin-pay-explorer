@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import { planSquidTopUp, squidFetch } from "./squid-quote";
+import {
+  FILECOIN_FIL_AMOUNT,
+  FILECOIN_FIL_REQUIREMENT_ID,
+  FILECOIN_USDFC_REQUIREMENT_ID,
+  planSquidTopUp,
+  squidFetch,
+} from "./squid-quote";
 
 const planSquidFunding = vi.hoisted(() => vi.fn());
 
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
+  NATIVE_TOKEN_ADDRESS: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   planSquidFunding,
 }));
 
@@ -34,7 +41,7 @@ describe("Squid quote review", () => {
     await expect(response.json()).resolves.toEqual({ tokens: [] });
   });
 
-  it("plans an explicit Filecoin source cap", async () => {
+  it("keeps a Filecoin gas reserve even when FIL inclusion defaults off", async () => {
     const quote = { id: "quote" };
     planSquidFunding.mockResolvedValue({
       maxSourceAmount: 2_000_000_000_000_000_000n,
@@ -61,7 +68,7 @@ describe("Squid quote review", () => {
     ).resolves.toMatchObject({ quotes: [{ id: "quote" }] });
     expect(planSquidFunding).toHaveBeenCalledWith(
       expect.objectContaining({
-        maxSourceAmount: "2",
+        maxSourceAmount: "1.75",
         sourceChainId: 314,
         sourceToken: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       }),
@@ -81,5 +88,73 @@ describe("Squid quote review", () => {
         sourceAmount: 1n,
       }),
     ).rejects.toThrow("Select a supported source network");
+  });
+
+  it("plans FIL before USDFC when wallet network fees are included", async () => {
+    planSquidFunding.mockResolvedValue({ quotes: [] });
+
+    await planSquidTopUp({
+      destinationAmount: 1_000_000_000_000_000_000n,
+      destinationToken: usdfc,
+      includeFil: true,
+      integratorId: "test",
+      owner,
+      source: {
+        chainId: 8453,
+        decimals: 6,
+        symbol: "USDC",
+        token: "0x3333333333333333333333333333333333333333",
+      },
+      sourceAmount: 2_000_000n,
+    });
+
+    expect(planSquidFunding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requirements: [
+          {
+            amount: FILECOIN_FIL_AMOUNT,
+            chainId: 314,
+            id: FILECOIN_FIL_REQUIREMENT_ID,
+            recipient: owner,
+            token: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          },
+          {
+            amount: 1_000_000_000_000_000_000n,
+            chainId: 314,
+            id: FILECOIN_USDFC_REQUIREMENT_ID,
+            recipient: owner,
+            token: usdfc,
+          },
+        ],
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("keeps 0.25 FIL instead of routing native Filecoin FIL back to the same wallet", async () => {
+    planSquidFunding.mockResolvedValue({ quotes: [] });
+
+    await planSquidTopUp({
+      destinationAmount: 1_000_000_000_000_000_000n,
+      destinationToken: usdfc,
+      includeFil: true,
+      integratorId: "test",
+      owner,
+      source: {
+        chainId: 314,
+        decimals: 18,
+        symbol: "FIL",
+        token: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      },
+      sourceAmount: 2_000_000_000_000_000_000n,
+    });
+
+    expect(planSquidFunding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxSourceAmount: "1.75",
+        requirements: [expect.objectContaining({ id: FILECOIN_USDFC_REQUIREMENT_ID })],
+      }),
+      expect.anything(),
+    );
   });
 });

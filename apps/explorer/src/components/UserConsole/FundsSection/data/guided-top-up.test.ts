@@ -143,6 +143,12 @@ describe("guided top-up", () => {
     expect(getRequiredNativeBalance(nativePlan, 36n)).toBe(144n);
   });
 
+  it("includes a caller-selected native balance floor", () => {
+    const nativePlan = plan(NATIVE_TOKEN_ADDRESS);
+
+    expect(getRequiredNativeBalance(nativePlan, 36n, 7n)).toBe(151n);
+  });
+
   it("uses the dependency's rounded-up 50% bridge execution headroom", () => {
     expect(getMaximumBridgeNativeFee(0n)).toBe(0n);
     expect(getMaximumBridgeNativeFee(1n)).toBe(2n);

@@ -5,6 +5,7 @@ import {
   loadSquidAcquisition,
   markSquidAcquiredFromBalance,
   markSquidBroadcast,
+  markSquidIntermediateRouteCompleted,
   markSquidSwapRequested,
   type SquidAcquisition,
 } from "./squid-acquisition";
@@ -26,7 +27,11 @@ export async function runSquidAcquisition({
   sourceChainId,
   storage,
 }: {
-  execute: (callbacks: { onSwapAttempt: () => void; onSwapBroadcast: (hash: Hash) => void }) => Promise<unknown>;
+  execute: (callbacks: {
+    onIntermediateRouteComplete: () => void;
+    onSwapAttempt: () => void;
+    onSwapBroadcast: (hash: Hash) => void;
+  }) => Promise<unknown>;
   minimumDestinationAmount: bigint;
   onStarted?: (acquisition: SquidAcquisition) => void;
   owner: Address;
@@ -57,6 +62,9 @@ export async function runSquidAcquisition({
   try {
     onStarted?.(acquisition);
     await execute({
+      onIntermediateRouteComplete: () => {
+        acquisition = markSquidIntermediateRouteCompleted(storage, acquisition);
+      },
       onSwapAttempt: () => {
         acquisition = markSquidSwapRequested(storage, acquisition);
       },

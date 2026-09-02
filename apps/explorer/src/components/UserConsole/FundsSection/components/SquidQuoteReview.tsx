@@ -14,7 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useDebounce } from "use-debounce";
-import { erc20Abi, formatUnits } from "viem";
+import { type Address, erc20Abi, formatUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
@@ -33,7 +33,13 @@ import type { SquidAcquisition } from "../data/squid-acquisition";
 import { runSquidAcquisition } from "../data/squid-acquisition-flow";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
-import { planSquidTopUp, squidFetch } from "../data/squid-quote";
+import {
+  FILECOIN_FIL_AMOUNT,
+  FILECOIN_FIL_REQUIREMENT_ID,
+  FILECOIN_USDFC_REQUIREMENT_ID,
+  planSquidTopUp,
+  squidFetch,
+} from "../data/squid-quote";
 import { readUsdfcBalance } from "../data/usdfc-balance";
 
 const QUOTE_DEBOUNCE_MS = 500;
@@ -88,6 +94,14 @@ export function excludeDestinationUsdfc<T extends { token: string }>(tokens: rea
     : [...tokens];
 }
 
+export function shouldIncludeFilForFees(balance: bigint | undefined, hasError: boolean) {
+  return hasError || balance === undefined || balance === 0n;
+}
+
+export function totalQuotedSourceAmount(quotes: readonly { sourceAmount: bigint }[]) {
+  return quotes.reduce((total, quote) => total + quote.sourceAmount, 0n);
+}
+
 export function resolveSearchableOption(options: readonly SearchableOption[], query: string) {
   const normalizedQuery = query.trim().toLowerCase();
   const labelMatch = options.find((option) => option.label.toLowerCase() === normalizedQuery);
@@ -118,6 +132,7 @@ export function SquidQuoteReview({
   const [sourceTokenQueryTouched, setSourceTokenQueryTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [includeFilOverride, setIncludeFilOverride] = useState<{ owner: Address; value: boolean } | null>(null);
   const sourceChainListId = useId();
   const sourceTokenListId = useId();
   const latestAddress = useRef(address);
@@ -161,7 +176,30 @@ export function SquidQuoteReview({
   const source = selectableTokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
   const isBusy = acquisitionState !== "idle";
   const isNativeSource = source?.token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
+  const isFilecoinFilSource = isNativeSource && source?.chainId === mainnet.id;
   const isQuoteDebouncing = destinationAmount !== debouncedDestinationAmount;
+  const {
+    data: filecoinFilBalance,
+    isError: isFilecoinFilBalanceError,
+    isFetching: isLoadingFilecoinFilBalance,
+    refetch: refetchFilecoinFilBalance,
+  } = useQuery({
+    enabled: !!address && !!destinationClient,
+    queryFn: async () => {
+      if (!destinationClient || !address) throw new Error("Filecoin balance client is unavailable");
+      return destinationClient.getBalance({ address });
+    },
+    queryKey: ["squid", "filecoin-fil-balance", mainnet.id, address],
+  });
+  const currentIncludeFilOverride =
+    includeFilOverride && includeFilOverride.owner.toLowerCase() === address?.toLowerCase()
+      ? includeFilOverride.value
+      : null;
+  const includeFil =
+    currentIncludeFilOverride ?? shouldIncludeFilForFees(filecoinFilBalance, isFilecoinFilBalanceError);
+  const isFilecoinFilBalanceResolved =
+    currentIncludeFilOverride !== null || filecoinFilBalance !== undefined || isFilecoinFilBalanceError;
+  const nativeBalanceFloor = isFilecoinFilSource ? FILECOIN_FIL_AMOUNT : 0n;
   const {
     data: sourceBalance,
     isError: isSourceBalanceError,
@@ -230,6 +268,7 @@ export function SquidQuoteReview({
       !quotesUnavailable &&
       !isBusy &&
       !isQuoteDebouncing &&
+      isFilecoinFilBalanceResolved &&
       !!address &&
       !!source &&
       debouncedDestinationAmount !== null &&
@@ -243,6 +282,7 @@ export function SquidQuoteReview({
       return planSquidTopUp({
         destinationAmount: debouncedDestinationAmount,
         destinationToken: mainnet.contracts.usdfc.address,
+        includeFil,
         integratorId,
         owner: address,
         source,
@@ -255,6 +295,7 @@ export function SquidQuoteReview({
       address,
       mainnet.contracts.usdfc.address,
       debouncedDestinationAmount?.toString() ?? "",
+      includeFil,
       sourceChain,
       sourceTokenAddress,
       sourceAmount?.toString() ?? "",
@@ -264,7 +305,9 @@ export function SquidQuoteReview({
     staleTime: 30_000,
   });
   const plan = isQuoteDebouncing ? undefined : quotedPlan;
-  const quote = plan?.quotes[0];
+  const quote = plan?.quotes.find((item) => item.requirement.id === FILECOIN_USDFC_REQUIREMENT_ID);
+  const filQuote = plan?.quotes.find((item) => item.requirement.id === FILECOIN_FIL_REQUIREMENT_ID);
+  const totalSourceAmount = plan ? totalQuotedSourceAmount(plan.quotes) : 0n;
   const quoteCosts = plan?.quotes.flatMap((item) => item.costs) ?? [];
   const bridgeNativeFees = plan ? getPlanBridgeNativeFees(plan) : { estimated: 0n, maximum: 0n };
   const bridgeFeeLabel = sourceChainMeta
@@ -284,7 +327,7 @@ export function SquidQuoteReview({
       ? formatNativeFee(networkGas.maximum, sourceChainMeta.nativeCurrency)
       : null;
   const requiredNativeBalance =
-    plan && networkGas.maximum !== null ? getRequiredNativeBalance(plan, networkGas.maximum) : 0n;
+    plan && networkGas.maximum !== null ? getRequiredNativeBalance(plan, networkGas.maximum, nativeBalanceFloor) : 0n;
   const approvalTransactionCount =
     plan && networkGas.transactionCount !== null ? networkGas.transactionCount - plan.quotes.length : null;
   const requiredNativeBalanceLabel = sourceChainMeta
@@ -391,7 +434,7 @@ export function SquidQuoteReview({
     if (latestBalanceResult.isError || latestBalanceResult.data === undefined) {
       return setError("Could not refresh your source-token balance. Try again before confirming.");
     }
-    if (quote.sourceAmount > latestBalanceResult.data) {
+    if (totalSourceAmount > latestBalanceResult.data) {
       return setError(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
     }
     const latestNativeBalanceResult = isNativeSource ? latestBalanceResult : await refetchNativeBalance();
@@ -435,12 +478,18 @@ export function SquidQuoteReview({
     try {
       const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
         runSquidAcquisition({
-          execute: ({ onSwapAttempt, onSwapBroadcast }) =>
+          execute: ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) =>
             executeSquidTopUp({
               destinationClient: destinationClient as unknown as SquidPublicClient,
               integratorId,
               maxNativeFee: reviewedNetworkGasMaximum,
               maxTotalNativeRouteFee: bridgeNativeFees.maximum,
+              nativeBalanceFloor,
+              onIntermediateRouteComplete: async () => {
+                onIntermediateRouteComplete();
+                setIncludeFilOverride({ owner: address, value: false });
+                await Promise.all([refetchFilecoinFilBalance(), refetchSourceBalance()]);
+              },
               onSwapAttempt,
               onSwapBroadcast,
               plan,
@@ -718,6 +767,33 @@ export function SquidQuoteReview({
         )}
       </div>
 
+      <div className='grid gap-1 rounded-md bg-muted/50 p-2'>
+        <label className='flex items-start gap-2 font-medium'>
+          <input
+            checked={includeFil}
+            className='mt-0.5 h-4 w-4'
+            disabled={isBusy}
+            onChange={(event) => {
+              setError(null);
+              if (address) setIncludeFilOverride({ owner: address, value: event.currentTarget.checked });
+            }}
+            type='checkbox'
+          />
+          <span>Include 0.25 FIL for transaction fees</span>
+        </label>
+        <p className='pl-6 text-xs text-muted-foreground'>
+          {isFilecoinFilBalanceError
+            ? includeFil
+              ? "Your FIL balance could not be read, so this is included by default."
+              : "Your FIL balance could not be read. FIL is not included."
+            : filecoinFilBalance !== undefined && filecoinFilBalance > 0n
+              ? "You already have FIL for fees."
+              : isLoadingFilecoinFilBalance
+                ? "Checking your Filecoin wallet balance…"
+                : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL. This covers about a month of typical activity. The FIL goes to your wallet to pay network fees — not to your Filecoin Pay balance."}
+        </p>
+      </div>
+
       <Button
         disabled={
           !source ||
@@ -753,12 +829,12 @@ export function SquidQuoteReview({
         </div>
       )}
 
-      {quote && (
+      {quote && plan && (
         <div className='grid gap-2 border-t pt-3'>
           <div className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
             <span className='text-muted-foreground'>Spend (estimated)</span>
             <span className='text-right font-medium'>
-              {displayAmount(quote.sourceAmount, plan.source.decimals, plan.source.symbol)}
+              {displayAmount(totalSourceAmount, plan.source.decimals, plan.source.symbol)}
             </span>
             <span className='text-muted-foreground'>Estimated received</span>
             <span className='text-right font-medium'>
@@ -768,6 +844,16 @@ export function SquidQuoteReview({
             <span className='text-right font-medium'>
               {displayAmount(quote.requirement.amount, USDFC_DECIMALS, "USDFC")}
             </span>
+            {(includeFil || isFilecoinFilSource) && (
+              <>
+                <span className='text-muted-foreground'>
+                  {isFilecoinFilSource ? "Wallet FIL reserve" : "+ network fees (FIL)"}
+                </span>
+                <span className='text-right font-medium'>
+                  {filQuote ? displayAmount(filQuote.requirement.amount, 18, "FIL") : "0.25 FIL kept in your wallet"}
+                </span>
+              </>
+            )}
             <span className='text-muted-foreground'>Slippage</span>
             <span className='text-right font-medium'>1%</span>
             {bridgeFeeLabel && maximumBridgeFeeLabel && (
@@ -857,10 +943,12 @@ export function SquidQuoteReview({
             ) : acquisitionState === "processing" ? (
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
-                Acquiring USDFC…
+                Acquiring USDFC{includeFil ? " + FIL" : ""}…
               </span>
+            ) : filQuote ? (
+              "Swap for USDFC + FIL"
             ) : (
-              "Acquire USDFC"
+              "Swap for USDFC"
             )}
           </Button>
         </div>

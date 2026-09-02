@@ -157,14 +157,15 @@ describe("runSquidAcquisition", () => {
     expect(loadSquidAcquisition(storage, owner)).toBeNull();
   });
 
-  it("preserves an earlier route hash when a later wallet request is rejected", async () => {
+  it("clears a confirmed first route before a later wallet request is rejected", async () => {
     const storage = createStorage();
     const error = { code: 4001 };
 
     const outcome = await runSquidAcquisition({
-      execute: async ({ onSwapAttempt, onSwapBroadcast }) => {
+      execute: async ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) => {
         onSwapAttempt();
         onSwapBroadcast(sourceHash);
+        onIntermediateRouteComplete();
         onSwapAttempt();
         throw error;
       },
@@ -175,17 +176,30 @@ describe("runSquidAcquisition", () => {
       storage,
     });
 
-    expect(outcome).toEqual({
-      acquisition: expect.objectContaining({
-        executionStage: "swap-requested",
-        transactionHashes: [sourceHash],
+    expect(outcome).toEqual({ error, status: "failed" });
+    expect(loadSquidAcquisition(storage, owner)).toBeNull();
+  });
+
+  it("clears a confirmed first route before a later preflight failure", async () => {
+    const storage = createStorage();
+    const error = new Error("second quote refresh failed");
+
+    await expect(
+      runSquidAcquisition({
+        execute: async ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) => {
+          onSwapAttempt();
+          onSwapBroadcast(sourceHash);
+          onIntermediateRouteComplete();
+          throw error;
+        },
+        minimumDestinationAmount: 10n,
+        owner,
+        readDestinationBalance: vi.fn().mockResolvedValue(100n),
+        sourceChainId: 42161,
+        storage,
       }),
-      error,
-      status: "blocked",
-    });
-    expect(loadSquidAcquisition(storage, owner)).toEqual(
-      expect.objectContaining({ executionStage: "swap-requested", transactionHashes: [sourceHash] }),
-    );
+    ).resolves.toEqual({ error, status: "failed" });
+    expect(loadSquidAcquisition(storage, owner)).toBeNull();
   });
 
   it("returns the in-memory marker when storage becomes unreadable after it is saved", async () => {

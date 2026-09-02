@@ -10,6 +10,8 @@ import {
 
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
+  maximumNativeRouteFee: (value: bigint) => value * 2n,
+  NATIVE_TOKEN_ADDRESS: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   SQUID_ROUTER_ADDRESS: "0x1111111111111111111111111111111111111111",
 }));
 
@@ -35,6 +37,7 @@ describe("executeSquidTopUp", () => {
       integratorId: "test-integrator",
       maxNativeFee: 30n,
       maxTotalNativeRouteFee: 20n,
+      nativeBalanceFloor: 250n,
       plan,
       sourcePublicClient: {} as never,
       sourceWalletClient: {} as never,
@@ -45,6 +48,7 @@ describe("executeSquidTopUp", () => {
         feeMode: "op-stack",
         maxNativeFee: 30n,
         maxTotalNativeRouteFee: 20n,
+        nativeBalanceFloor: 250n,
         trustedSpender: SQUID_ROUTER_ADDRESS,
         trustedTarget: SQUID_ROUTER_ADDRESS,
         plan,
@@ -86,6 +90,125 @@ describe("executeSquidTopUp", () => {
     expect(onSwapAttempt).toHaveBeenCalledOnce();
     expect(onSwapBroadcast).toHaveBeenCalledOnce();
     expect(onSwapBroadcast).toHaveBeenCalledWith(transactionHash);
+  });
+
+  it("checkpoints a completed first requirement and preserves aggregate caps", async () => {
+    const onIntermediateRouteComplete = vi.fn();
+    const requirements = ["fil", "usdfc"];
+    const plan = {
+      maxSourceAmount: 20n,
+      owner,
+      quotes: requirements.map((id, index) => ({
+        costs: [
+          {
+            amount: BigInt(index + 1),
+            kind: "fee" as const,
+            token: { address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", chainId: 10 },
+          },
+        ],
+        requirement: { amount: 1n, chainId: 314, id },
+        sourceAmount: BigInt((index + 1) * 5),
+      })),
+      slippage: 1,
+      source,
+    } as never;
+    vi.mocked(executeSquidFunding)
+      .mockResolvedValueOnce({
+        nativeFee: 3n,
+        routes: [{ requirementId: "fil", transactionHash: `0x${"4".repeat(64)}` }],
+        sourceAmount: 5n,
+      })
+      .mockResolvedValueOnce({
+        nativeFee: 4n,
+        routes: [{ requirementId: "usdfc", transactionHash: `0x${"5".repeat(64)}` }],
+        sourceAmount: 10n,
+      });
+
+    await expect(
+      executeSquidTopUp({
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        maxNativeFee: 10n,
+        maxTotalNativeRouteFee: 6n,
+        onIntermediateRouteComplete,
+        plan,
+        sourcePublicClient: {} as never,
+        sourceWalletClient: {} as never,
+      }),
+    ).resolves.toMatchObject({ nativeFee: 7n, sourceAmount: 15n });
+
+    expect(executeSquidFunding).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ maxNativeFee: 10n, maxTotalNativeRouteFee: 2n, sourceBalanceFloor: 10n }),
+      expect.anything(),
+    );
+    expect(executeSquidFunding).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ maxNativeFee: 7n, maxTotalNativeRouteFee: 4n, sourceBalanceFloor: 0n }),
+      expect.anything(),
+    );
+    expect(onIntermediateRouteComplete).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a multi-route plan above the reviewed aggregate route-fee cap", async () => {
+    const plan = {
+      maxSourceAmount: 20n,
+      owner,
+      quotes: [1n, 2n].map((amount, index) => ({
+        costs: [
+          {
+            amount,
+            kind: "fee" as const,
+            token: { address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", chainId: 10 },
+          },
+        ],
+        requirement: { amount: 1n, chainId: 314, id: String(index) },
+        sourceAmount: 5n,
+      })),
+      slippage: 1,
+      source,
+    } as never;
+    vi.mocked(executeSquidFunding).mockResolvedValue({ nativeFee: 1n, routes: [], sourceAmount: 5n });
+
+    await expect(
+      executeSquidTopUp({
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        maxNativeFee: 10n,
+        maxTotalNativeRouteFee: 5n,
+        plan,
+        sourcePublicClient: {} as never,
+        sourceWalletClient: {} as never,
+      }),
+    ).rejects.toThrow("Execution would exceed the total-native-route-fee cap");
+    expect(executeSquidFunding).not.toHaveBeenCalled();
+  });
+
+  it("rejects a multi-route plan above its aggregate source cap before execution", async () => {
+    const plan = {
+      maxSourceAmount: 10n,
+      owner,
+      quotes: ["fil", "usdfc"].map((id) => ({
+        costs: [],
+        requirement: { amount: 1n, chainId: 314, id },
+        sourceAmount: 8n,
+      })),
+      slippage: 1,
+      source,
+    } as never;
+
+    await expect(
+      executeSquidTopUp({
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        maxNativeFee: 10n,
+        maxTotalNativeRouteFee: 0n,
+        plan,
+        sourcePublicClient: {} as never,
+        sourceWalletClient: {} as never,
+      }),
+    ).rejects.toThrow("Invalid multi-route funding plan");
+    expect(executeSquidFunding).not.toHaveBeenCalled();
   });
 
   it("reports an attempted swap even when the wallet loses the response", async () => {

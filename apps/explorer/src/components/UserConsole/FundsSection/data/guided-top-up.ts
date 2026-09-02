@@ -104,11 +104,15 @@ function getQuoteNetworkGas(costs: readonly SquidQuoteCost[], sourceChainId: num
   );
 }
 
-export function getRequiredNativeBalance(plan: SquidFundingPlan, maximumNetworkFee: bigint): bigint {
+export function getRequiredNativeBalance(
+  plan: SquidFundingPlan,
+  maximumNetworkFee: bigint,
+  nativeBalanceFloor = 0n,
+): bigint {
   const sourceAmount = isNativeToken(plan.source.token)
     ? plan.quotes.reduce((total, quote) => total + quote.sourceAmount, 0n)
     : 0n;
-  return sourceAmount + getPlanBridgeNativeFees(plan).maximum + maximumNetworkFee;
+  return sourceAmount + getPlanBridgeNativeFees(plan).maximum + maximumNetworkFee + nativeBalanceFloor;
 }
 
 export function shouldBlockOnSeparateNativeBalance(

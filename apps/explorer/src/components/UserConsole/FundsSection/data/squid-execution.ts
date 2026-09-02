@@ -1,5 +1,7 @@
 import {
   executeSquidFunding,
+  maximumNativeRouteFee,
+  NATIVE_TOKEN_ADDRESS,
   SQUID_ROUTER_ADDRESS,
   type SquidExecutionResult,
   type SquidFundingPlan,
@@ -22,8 +24,10 @@ export async function executeSquidTopUp({
   integratorId,
   maxNativeFee,
   maxTotalNativeRouteFee,
+  nativeBalanceFloor = 0n,
   onSwapAttempt,
   onSwapBroadcast,
+  onIntermediateRouteComplete,
   plan,
   sourcePublicClient,
   sourceWalletClient,
@@ -32,8 +36,10 @@ export async function executeSquidTopUp({
   integratorId: string;
   maxNativeFee: bigint;
   maxTotalNativeRouteFee: bigint;
+  nativeBalanceFloor?: bigint;
   onSwapAttempt?: () => void;
   onSwapBroadcast?: (transactionHash: Hash) => void;
+  onIntermediateRouteComplete?: () => Promise<void> | void;
   plan: SquidFundingPlan;
   sourcePublicClient: SquidPublicClient;
   sourceWalletClient: SquidWalletClient;
@@ -50,27 +56,95 @@ export async function executeSquidTopUp({
     },
   } as SquidWalletClient;
 
-  return executeSquidFunding(
-    {
-      feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
-      maxNativeFee,
-      maxTotalNativeRouteFee,
-      maxPollAttempts: 30,
-      opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
-        ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)
-        : undefined,
-      plan,
-      pollIntervalMs: 10_000,
-      trustedSpender: SQUID_ROUTER_ADDRESS,
-      trustedTarget: SQUID_ROUTER_ADDRESS,
-    },
-    {
-      destinationClient,
-      publicClient: sourcePublicClient,
-      squid: { integratorId },
-      walletClient: trackedWalletClient,
-    },
+  const execute = (
+    executionPlan: SquidFundingPlan,
+    nativeFeeCap: bigint,
+    nativeRouteFeeCap: bigint,
+    sourceBalanceFloor = 0n,
+  ) =>
+    executeSquidFunding(
+      {
+        feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
+        maxNativeFee: nativeFeeCap,
+        maxTotalNativeRouteFee: nativeRouteFeeCap,
+        nativeBalanceFloor,
+        sourceBalanceFloor,
+        maxPollAttempts: 30,
+        opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
+          ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)
+          : undefined,
+        plan: executionPlan,
+        pollIntervalMs: 10_000,
+        trustedSpender: SQUID_ROUTER_ADDRESS,
+        trustedTarget: SQUID_ROUTER_ADDRESS,
+      },
+      {
+        destinationClient,
+        publicClient: sourcePublicClient,
+        squid: { integratorId },
+        walletClient: trackedWalletClient,
+      },
+    );
+
+  if (plan.quotes.length <= 1) return execute(plan, maxNativeFee, maxTotalNativeRouteFee);
+
+  const plannedSourceAmount = plan.quotes.reduce((total, quote) => total + quote.sourceAmount, 0n);
+  const requirementIds = new Set(plan.quotes.map((quote) => quote.requirement.id));
+  const destinationChainIds = new Set(plan.quotes.map((quote) => quote.requirement.chainId));
+  if (
+    plan.maxSourceAmount <= 0n ||
+    plannedSourceAmount > plan.maxSourceAmount ||
+    plan.quotes.some((quote) => quote.sourceAmount <= 0n || quote.requirement.amount <= 0n) ||
+    requirementIds.size !== plan.quotes.length ||
+    destinationChainIds.size !== 1
+  ) {
+    throw new Error("Invalid multi-route funding plan");
+  }
+  const nativeRouteFeeCaps = plan.quotes.map((quote) =>
+    maximumNativeRouteFee(
+      quote.costs.reduce(
+        (total, cost) =>
+          total +
+          (cost.kind === "fee" &&
+          cost.token.chainId === plan.source.chainId &&
+          cost.token.address?.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
+            ? cost.amount
+            : 0n),
+        0n,
+      ),
+    ),
   );
+  if (nativeRouteFeeCaps.reduce((total, cap) => total + cap, 0n) > maxTotalNativeRouteFee) {
+    throw new Error("Execution would exceed the total-native-route-fee cap");
+  }
+
+  let remainingNativeFee = maxNativeFee;
+  let remainingNativeRouteFee = maxTotalNativeRouteFee;
+  let nativeFee = 0n;
+  let sourceAmount = 0n;
+  const routes: SquidExecutionResult["routes"][number][] = [];
+  for (const [index, quote] of plan.quotes.entries()) {
+    const sourceBalanceFloor = plan.quotes
+      .slice(index + 1)
+      .reduce((total, remainingQuote) => total + remainingQuote.sourceAmount, 0n);
+    const nativeRouteFeeCap = nativeRouteFeeCaps[index];
+    if (nativeRouteFeeCap > remainingNativeRouteFee) {
+      throw new Error("Execution would exceed the total-native-route-fee cap");
+    }
+    const result = await execute(
+      { ...plan, quotes: [quote] },
+      remainingNativeFee,
+      nativeRouteFeeCap,
+      sourceBalanceFloor,
+    );
+    remainingNativeFee -= result.nativeFee;
+    remainingNativeRouteFee -= nativeRouteFeeCap;
+    nativeFee += result.nativeFee;
+    sourceAmount += result.sourceAmount;
+    routes.push(...result.routes);
+    if (index + 1 < plan.quotes.length) await onIntermediateRouteComplete?.();
+  }
+  return { nativeFee, routes, sourceAmount };
 }
 
 export function canClearSquidAcquisitionAfterError(
