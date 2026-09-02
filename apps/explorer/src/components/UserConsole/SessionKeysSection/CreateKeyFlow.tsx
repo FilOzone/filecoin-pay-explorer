@@ -250,6 +250,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <DialogTitle>New session key</DialogTitle>
               <DialogDescription>One wallet transaction. All selected scopes share the same expiry.</DialogDescription>
             </DialogHeader>
+            {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
+            {txState === "failed" && txBanner}
 
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
