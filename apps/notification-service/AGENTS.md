@@ -12,24 +12,21 @@ One pnpm/Turbo workspace package (`@filecoin-pay/notification-service`) that shi
 | `alert-scheduler/` | `notification-alert-scheduler` | Cron (`0 */12 * * *`) | `scheduled` |
 | `alert-processor/` | `notification-alert-processor` | Queue consumer | `queue` |
 
-`shared/` holds in-package code imported by the workers (`chain.ts`, and later D1 schema, RPC, auth, email). `migrations/` holds D1 migrations. There is **no root `wrangler.jsonc`** — every wrangler command must pass `-c <worker>/wrangler.jsonc`.
+`shared/` holds in-package code imported by the workers — `chain.ts`, `db/` (schema + client), `emails/`, `messages.ts`, `alert-levels.ts`. `migrations/` holds D1 migrations. There is **no root `wrangler.jsonc`** — every wrangler command must pass `-c <worker>/wrangler.jsonc`.
 
 Hono is only in `api/`. The scheduler and processor are plain `ExportedHandler`s — do not add Hono to them.
 
-## The alert pipeline (runtime model)
+## The alert pipeline
 
-The three workers form one pipeline; know where a change lands before editing:
+`alert-scheduler` (cron) fans out one queue message per subscribed wallet to `ALERT_QUEUE`; `alert-processor` (queue consumer) evaluates each. Two things here aren't visible from a single file:
 
-1. **`alert-scheduler`** fires on cron, reads every subscribed wallet from D1 (paged, never all in memory), and publishes one queue message per wallet to `ALERT_QUEUE`. It sets a `deduplicationId` per message so a double cron fire can't enqueue the same wallet twice within the dedup window. It fails fast if D1 is unreachable rather than pushing a partial list.
-2. **`alert-processor`** consumes the queue. Per message: read on-chain account state via RPC → derive a health tier → dedup-check → send the alert email → record the send.
+**Dedup is KV + D1, never the queue.** Cloudflare Queues is at-least-once with no infra-level dedup. The processor is what absorbs re-enqueued wallets, via KV plus `notification_log` (D1 is ground truth; KV is a cache backfilled from it). Send-first is deliberate: `recordSent` runs *after* the email, so a crash in that gap yields a rare duplicate email rather than a missed solvency alert.
 
-**Deduplication lives in KV + D1, never in the queue.** The processor does not write back to the queue. Order in `process-message.ts`: `getAlertState(KV)` fast pre-check → `shouldSend(...)` suppresses within the tier window → send → `recordSent(KV, D1)` writes the durable record. `notification_log` (D1) is ground truth; KV is a fast cache backfilled from it. Send-first is deliberate: a rare duplicate email is preferred over a missed solvency alert.
-
-**The queue handler must never throw out of the batch.** `processMessage` catches everything and maps it to `"ack"` or `"retry"` (`ack` = done/skip, `retry` = transient, redeliver). A per-message failure logs and moves on so one bad wallet can't fail the other 99. The only code that runs *outside* the per-message try/catch is the batch-level setup at the top of `queue()` — `createReadClient(env.RPC_URL, env.NETWORK)` and `createDb(env.DB)`. If those throw, the whole batch fails; keep them dependency-light.
+**The queue handler must never throw out of the batch.** `processMessage` maps every outcome to `ack`/`retry`, so one wallet's failure can't fail the batch. The exception is the batch-level setup at the top of `queue()` (the read client and the D1 client) — it runs *outside* the per-message try/catch, so a throw there fails all messages. Keep it dependency-light.
 
 ## The `--env` rule (most important thing here)
 
-**Bindings are not inherited by named environments.** Every binding (`DB`, `KV`, `ALERT_QUEUE`), every `var` (`NETWORK`), and every cron lives *inside* `env.staging` and `env.production`. The top-level config has none. So any wrangler command run without `--env` operates on an empty, binding-less environment.
+**Bindings are not inherited by named environments.** Every binding, every `var`, and every cron lives *inside* `env.staging` and `env.production` — those blocks are the authoritative list. The top-level config has none. So any wrangler command run without `--env` operates on an empty, binding-less environment.
 
 Because of this, **every script pins an env** — this was a deliberate fix, don't undo it:
 
@@ -51,7 +48,7 @@ Each worker's `tsconfig.json` extends the package base, sets `compilerOptions.ty
 
 ```bash
 pnpm run types          # generate each worker's Env (must run before type-check)
-pnpm run type-check     # types + tsc for all three workers
+pnpm run type-check     # types + tsc across all projects (3 workers, shared/emails, tests)
 pnpm run build          # dry-run bundle all three workers, both envs
 pnpm run dev:api        # local dev for the api worker (staging bindings, local storage)
 pnpm run deploy:staging | deploy:production
@@ -98,10 +95,7 @@ Reading logs:
 - **Events view (dashboard):** each row is an invocation. Cloudflare's own error markers (`type: cf-worker`, `origin: queue`, contentless `"error": "error"`) always appear regardless of observability — they are *not* your logs. Your evlog lines (`message`, `why`, `internal`, `log.set` fields) appear only when observability is live on that deploy.
 - **`wrangler tail -c <worker>/wrangler.jsonc --env <env>`:** streams the real console output live, bypassing dashboard sampling and the deploy-time gate. Fastest way to read an error's actual `message`/`why`. Drop `--status error` while debugging — a per-message failure can ride on an invocation whose overall `outcome` is `ok`.
 
-**Logging serialization traps** (evlog stringifies with `JSON.stringify`):
-
-- `JSON.stringify(Infinity)` is `null`. `runwayDays: null` in a `healthy` log is the serialized form of `Number.POSITIVE_INFINITY` — an account with no active spend, not a missing value.
-- `JSON.stringify(bigint)` **throws**. The account summary is bigint-heavy (`runwayInEpochs`, `lockupRatePerEpoch`, `debt`, `epoch`). Never pass a raw bigint into `log.set(...)` or a `createError` `internal` — convert to `Number`/`String` first, or a logging call becomes an uncaught throw with no readable message.
+**Logging serialization trap** (evlog stringifies with `JSON.stringify`): `JSON.stringify(Infinity)` is `null`, so `runwayDays: null` in a `healthy` log is `Number.POSITIVE_INFINITY` — an account with no active spend, not a missing value. (The account summary is bigint-heavy, so convert bigints to `Number`/`String` before logging.)
 
 ## D1 transactions
 

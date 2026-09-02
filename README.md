@@ -160,7 +160,13 @@ NEXT_PUBLIC_NOTIFICATIONS_API_URL=<URL printed by Wrangler>
 NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS=calibration
 ```
 
-Provide the local Worker with a `FRONTEND_ORIGIN` override of `http://localhost:3000`; do not change the checked-in staging or production origin for local development. Connect the Explorer wallet to calibration when testing the notification flow.
+Override the local Worker's `FRONTEND_ORIGIN` in `apps/notification-service/api/.dev.vars` (beside the api worker's `wrangler.jsonc`; `dev:api` loads it automatically and it is gitignored):
+
+```bash
+FRONTEND_ORIGIN=http://localhost:3000
+```
+
+Do not change the checked-in staging or production origin for local development. Connect the Explorer wallet to calibration when testing the notification flow.
 
 The scheduler and processor have separate local commands:
 
