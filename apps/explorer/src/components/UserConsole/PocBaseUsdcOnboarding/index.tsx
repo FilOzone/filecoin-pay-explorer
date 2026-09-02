@@ -15,7 +15,7 @@ import { useAddFunds, usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, Loader2, Repeat } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPublicClient, erc20Abi, formatUnits, http } from "viem";
 import { useConnection } from "wagmi";
 import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
@@ -63,20 +63,14 @@ async function readBaseUsdc(address: string): Promise<bigint> {
   });
 }
 
-export function PocBaseUsdcOnboarding() {
+/**
+ * Shared detection: real Base-USDC balance for the connected address, with
+ * the ?pocBaseUsdc= demo override. Used by the page-level rail and by the
+ * inline hint inside the add-service dialog.
+ */
+function useBaseUsdcDetection() {
   const { address } = useConnection();
-  const { authenticated } = usePrivy();
-  const { addFunds } = useAddFunds();
-  const { constants } = useSynapse();
   const searchParams = useSearchParams();
-  const [isFunding, setIsFunding] = useState(false);
-  const [swapOpen, setSwapOpen] = useState(false);
-  const [addServiceOpen, setAddServiceOpen] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [phase, setPhase] = useState<"form" | "swapping" | "done">("form");
-
-  // Demo override: a fresh embedded wallet holds no real Base USDC, and no rule
-  // lets the agent fund one, so ?pocBaseUsdc=25 simulates the detection.
   const overrideParam = searchParams.get("pocBaseUsdc");
   const override = overrideParam && Number.parseFloat(overrideParam) > 0 ? Number.parseFloat(overrideParam) : null;
 
@@ -89,18 +83,93 @@ export function PocBaseUsdcOnboarding() {
   });
 
   const balance = override ?? (realBalance !== undefined ? Number(formatUnits(realBalance, BASE_USDC_DECIMALS)) : 0);
-  const isSimulatedBalance = override !== null;
+  return { address, balance, isSimulatedBalance: override !== null };
+}
+
+const OPEN_SWAP_EVENT = "poc-open-swap";
+
+/**
+ * Inline entry point for the swap flow, rendered inside the add-service
+ * dialog when the wallet lacks USDFC but holds USDC on Base. Dispatches to
+ * the page-level rail (which owns the swap dialog) so there is exactly one
+ * swap surface.
+ */
+export function PocSwapHint({ onNavigate, visible }: { onNavigate?: () => void; visible: boolean }) {
+  const { balance } = useBaseUsdcDetection();
+  if (!visible || balance <= 0) return null;
+  const balanceLabel = balance.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return (
+    <div className='flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50/60 p-2 text-xs'>
+      <span className='flex items-center gap-2'>
+        <Repeat className='h-3.5 w-3.5 shrink-0 text-amber-700' />
+        <span>
+          No USDFC yet? You have <b>{balanceLabel} USDC on Base</b> - swap it first.
+        </span>
+        <PocBadge />
+      </span>
+      <Button
+        onClick={() => {
+          onNavigate?.();
+          window.dispatchEvent(new Event(OPEN_SWAP_EVENT));
+        }}
+        size='compact'
+        type='button'
+        variant='tertiary'
+      >
+        Swap to USDFC
+      </Button>
+    </div>
+  );
+}
+
+export function PocBaseUsdcOnboarding() {
+  const { authenticated } = usePrivy();
+  const { addFunds } = useAddFunds();
+  const { constants } = useSynapse();
+  const searchParams = useSearchParams();
+  const [isFunding, setIsFunding] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [phase, setPhase] = useState<"form" | "swapping" | "done">("form");
+
+  const { address, balance, isSimulatedBalance } = useBaseUsdcDetection();
+
+  // The add-service dialog's inline hint opens the swap flow through this
+  // event, so the page owns a single swap dialog.
+  const balanceRef = useRef(balance);
+  balanceRef.current = balance;
+  useEffect(() => {
+    const handler = () => {
+      if (balanceRef.current <= 0) return;
+      setAmount(String(balanceRef.current));
+      setPhase("form");
+      setSwapOpen(true);
+    };
+    window.addEventListener(OPEN_SWAP_EVENT, handler);
+    return () => window.removeEventListener(OPEN_SWAP_EVENT, handler);
+  }, []);
 
   // Privy's unified funding modal (card onramp, exchange transfer, crypto
   // deposit - whichever methods the dashboard enables), targeting USDC on
   // Base for the connected wallet. Real money, paid by the user in their own
   // browser; nothing here signs or moves funds itself.
+  // Experiment knob: ?pocFundAsset=usdfc|fil retargets the destination at
+  // Filecoin mainnet (eip155:314) to probe whether Privy/Relay can deliver
+  // USDFC or native FIL directly - answering "can we skip the swap leg?".
+  const fundAssetParam = searchParams.get("pocFundAsset");
+  const fundDestination =
+    fundAssetParam === "usdfc"
+      ? { chain: "eip155:314" as const, asset: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045" }
+      : fundAssetParam === "fil"
+        ? { chain: "eip155:314" as const, asset: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" }
+        : { chain: "eip155:8453" as const, asset: BASE_USDC_ADDRESS };
   const getUsdcWithPrivy = async () => {
     if (!address || isFunding) return;
     setIsFunding(true);
     try {
       await addFunds({
-        destination: { address, chain: "eip155:8453", asset: BASE_USDC_ADDRESS },
+        destination: { address, ...fundDestination },
         fiat: { defaultAmount: "5" },
         crypto: {},
       });

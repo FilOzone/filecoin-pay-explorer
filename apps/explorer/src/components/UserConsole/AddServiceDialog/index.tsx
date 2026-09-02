@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
+import { PocSwapHint } from "@/components/UserConsole/PocBaseUsdcOnboarding";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -385,6 +386,13 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                     Insufficient balance for this deposit.
                   </p>
                 )}
+                {/* POC: the wallet can't deposit what it doesn't hold - when USDFC
+                    is missing but USDC sits on Base, surface the swap entry right
+                    here instead of dead-ending at a zero balance. */}
+                <PocSwapHint
+                  onNavigate={() => onOpenChange(false)}
+                  visible={balance !== undefined && (balance === 0n || !hasSufficientBalance)}
+                />
                 <p className='text-xs text-muted-foreground'>
                   Funds stay in your account and the service bills them as you use it. Leave empty to add the service
                   without depositing.

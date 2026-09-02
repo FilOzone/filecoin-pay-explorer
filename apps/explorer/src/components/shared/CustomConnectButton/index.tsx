@@ -1,6 +1,8 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { useConnectWallet, usePrivy } from "@privy-io/react-auth";
+import { useConnectWallet, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useSetActiveWallet } from "@privy-io/wagmi";
+import { useEffect } from "react";
 import { useAccount } from "wagmi";
 
 /**
@@ -16,16 +18,28 @@ import { useAccount } from "wagmi";
 const CustomConnectButton = () => {
   const { ready, authenticated, login, logout } = usePrivy();
   const { connectWallet } = useConnectWallet();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
   const { isConnected } = useAccount();
+
+  // Privy sessions survive reloads but the embedded wallet does not always
+  // rehydrate into wagmi, stranding the user authenticated-but-disconnected
+  // on the login gate after every refresh. When that state appears, reconnect
+  // the restored wallet automatically instead of demanding a fresh login.
+  const restoredWallet =
+    ready && authenticated && !isConnected ? wallets.find((wallet) => wallet.walletClientType === "privy") : undefined;
+  useEffect(() => {
+    if (restoredWallet) void setActiveWallet(restoredWallet);
+  }, [restoredWallet, setActiveWallet]);
 
   if (isConnected) return null;
 
   const handleLogin = async () => {
     // Privy sessions and wagmi connections are separate state systems. A
-    // restored session whose embedded wallet failed to rehydrate into wagmi
-    // leaves the user authenticated-but-disconnected, and login() refuses to
-    // run for an authenticated user — a dead-end where this button silently
-    // no-ops. Discard the orphaned session so "Log in" always logs in.
+    // restored session with no rehydratable wallet leaves the user
+    // authenticated-but-disconnected, and login() refuses to run for an
+    // authenticated user — a dead-end where this button silently no-ops.
+    // Discard the orphaned session so "Log in" always logs in.
     if (authenticated) await logout();
     login();
   };
