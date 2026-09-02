@@ -132,7 +132,7 @@ export function useSessionKeys(network: Network, account: Hex) {
     const { records: synced, skippedUnrecognized } = foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
     const { merged, addedCount } = mergeSyncedRecords(records, synced);
     if (addedCount > 0) {
-      persist(merged);
+      persist(() => merged);
       refetchStatuses();
     }
     return { addedCount, skippedUnrecognized };

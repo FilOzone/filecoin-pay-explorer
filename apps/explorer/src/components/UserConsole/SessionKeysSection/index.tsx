@@ -273,7 +273,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                 ))}
                 {visibleKeys.length === 0 && (
                   <tr>
-                    <td colSpan={6} className='px-4 py-6 text-center text-sm text-zinc-500'>
+                    <td colSpan={5} className='px-4 py-6 text-center text-sm text-zinc-500'>
                       No active session keys.
                     </td>
                   </tr>
