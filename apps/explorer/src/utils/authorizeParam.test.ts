@@ -25,7 +25,7 @@ describe("parseAuthorizeParam", () => {
 
   it("reports junk text, script tags, ENS names, and short hex as not an address", () => {
     for (const input of ["not-an-address", "<script>alert(1)</script>", "vitalik.eth", "0x1234"]) {
-      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" });
+      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" }, input);
     }
   });
 
@@ -38,8 +38,8 @@ describe("parseAuthorizeParam", () => {
 
   it("never throws, even on hostile input", () => {
     for (const input of ["0x", "0xgg".padEnd(42, "g"), "javascript:alert(1)", "%3Cscript%3E", "0x0000"]) {
-      assert.doesNotThrow(() => parseAuthorizeParam(input));
-      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" });
+      assert.doesNotThrow(() => parseAuthorizeParam(input), input);
+      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" }, input);
     }
   });
 });

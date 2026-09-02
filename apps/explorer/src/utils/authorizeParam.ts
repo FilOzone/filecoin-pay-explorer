@@ -2,9 +2,9 @@
  * Validate the `?authorize=` / `?scopes=` search params used by the
  * filecoin-pin CLI pairing flow (`session create --console`). Both params are
  * untrusted URL input and never throw:
- * - `authorize` is either a real 20-byte EVM address — checksummed here so
- *   the UI only ever renders the canonical form — or a typed error the page
- *   shows instead of silently dropping the request.
+ * - `authorize` is either a real 20-byte EVM address, checksummed here so
+ *   the UI only ever renders the canonical form, or a typed error the page
+ *   shows instead of dropping the request.
  * - `scopes` is a comma-separated scope-id list; unknown entries are dropped,
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
