@@ -6,7 +6,7 @@ import Logo from "@/public/foc-logo-dark.svg";
 type ConsoleHeaderProps = {
   /**
    * Wallet controls for the right-hand side. Only the gated console shell passes
-   * these — the header itself must render without wagmi/RainbowKit providers so
+   * these — the header itself must render without wallet providers so
    * ungated pages (e.g. the email verification landing page) can reuse it.
    */
   walletControls?: ReactNode;
