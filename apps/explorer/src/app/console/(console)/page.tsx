@@ -9,6 +9,7 @@ import {
   RailsSection,
   TopUpDialogController,
 } from "@/components/UserConsole";
+import PocBaseUsdcOnboarding from "@/components/UserConsole/PocBaseUsdcOnboarding";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
@@ -117,6 +118,10 @@ const UserConsole = () => {
 
   return (
     <div className='flex flex-col gap-15'>
+      {/* POC: Base-USDC onboarding rail for wallet-less (email) users. Renders
+          only when the connected address holds USDC on Base (or the demo
+          override is set); simulation boundaries are labeled inside. */}
+      <PocBaseUsdcOnboarding />
       {/* The (console) layout gates on a connected wallet, so address is set here. */}
       {address && canMountTopUpController ? (
         <TopUpDialogController
