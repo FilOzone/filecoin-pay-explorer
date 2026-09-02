@@ -14,11 +14,12 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { useAddFunds, usePrivy } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, Loader2, Repeat } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPublicClient, erc20Abi, formatUnits, http } from "viem";
-import { useConnection } from "wagmi";
+import { useConnection, usePublicClient } from "wagmi";
 import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
+import { mainnet } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
 
 /**
@@ -45,6 +46,10 @@ const baseReadClient = createPublicClient({ transport: http(BASE_RPC_URL) });
 
 // Indicative only, mirroring a typical Squid USDC->USDFC quote shape.
 const SIMULATED_RATE = 0.997;
+
+// Issue #377 default: covers a heavy month of client gas and the worst
+// observed base-fee spike (0.19 FIL).
+const POC_FIL_BUNDLE = "0.25";
 
 function PocBadge() {
   return (
@@ -134,6 +139,21 @@ export function PocBaseUsdcOnboarding() {
   const [phase, setPhase] = useState<"form" | "swapping" | "done">("form");
 
   const { address, balance, isSimulatedBalance } = useBaseUsdcDetection();
+  const { chainId } = useConnection();
+  const router = useRouter();
+  const pathname = usePathname();
+  const filecoinClient = usePublicClient();
+  const [includeFil, setIncludeFil] = useState(true);
+
+  // Issue #377: FIL for gas rides along with the swap. The wallet's native
+  // FIL balance on the active Filecoin chain decides the checkbox default.
+  const { data: filBalance } = useQuery({
+    queryKey: ["poc-fil-balance", address, chainId],
+    queryFn: () => filecoinClient?.getBalance({ address: address as `0x${string}` }),
+    enabled: Boolean(address) && Boolean(filecoinClient),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
   // The add-service dialog's inline hint opens the swap flow through this
   // event, so the page owns a single swap dialog.
@@ -218,9 +238,23 @@ export function PocBaseUsdcOnboarding() {
   const validAmount = Number.isFinite(parsedAmount) && parsedAmount > 0 && parsedAmount <= balance;
   const receiveEstimate = validAmount ? (parsedAmount * SIMULATED_RATE).toFixed(2) : null;
 
+  // On Filecoin mainnet the real in-console Squid flow exists (guided top-up,
+  // ?topUp=1): route there so the swap executes for real. The simulated
+  // dialog is the testnet stand-in only - Squid has no calibration support.
+  // FIL bundling (issue #377) applies to both: simulated here, and in
+  // squid-evm-funding as a second same-chain requirement for the real leg.
   const openSwap = () => {
+    if (chainId === mainnet.id) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("topUp", "1");
+      router.replace(`${pathname}?${params.toString()}`);
+      return;
+    }
     setAmount(String(balance));
     setPhase("form");
+    // Issue #377 defaults: no FIL in the wallet (or unreadable balance) ->
+    // bundle 0.25 FIL; wallet already has FIL -> opt out.
+    setIncludeFil(!(filBalance !== undefined && filBalance > 0n));
     setSwapOpen(true);
   };
 
@@ -294,11 +328,35 @@ export function PocBaseUsdcOnboarding() {
                     <span className='text-muted-foreground'>You receive (est.)</span>
                     <span className='font-medium'>{receiveEstimate} USDFC</span>
                   </p>
+                  {includeFil && (
+                    <p className='flex items-center justify-between'>
+                      <span className='text-muted-foreground'>+ network fees (FIL)</span>
+                      <span className='font-medium'>{POC_FIL_BUNDLE} FIL</span>
+                    </p>
+                  )}
                   <p className='mt-1 text-xs text-muted-foreground'>
                     Indicative rate ({SIMULATED_RATE} USDFC per USDC) standing in for a live Squid quote.
                   </p>
                 </div>
               )}
+              {/* Issue #377: bundle FIL for gas so a zero-FIL wallet can actually
+                  submit the deposit after the swap. */}
+              <label className='flex items-start gap-2 text-sm'>
+                <input
+                  checked={includeFil}
+                  className='mt-1'
+                  onChange={(event) => setIncludeFil(event.target.checked)}
+                  type='checkbox'
+                />
+                <span>
+                  Include {POC_FIL_BUNDLE} FIL for transaction fees
+                  <span className='mt-0.5 block text-xs text-muted-foreground'>
+                    {filBalance !== undefined && filBalance > 0n
+                      ? "You already have FIL for fees."
+                      : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL. This covers about a month of typical activity. The FIL goes to your wallet to pay network fees - not to your Filecoin Pay balance."}
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 
@@ -316,7 +374,8 @@ export function PocBaseUsdcOnboarding() {
               <div className='flex items-center gap-2 rounded-md border border-green-300 bg-green-50 p-3 text-sm'>
                 <Check className='h-4 w-4 text-green-700' />
                 <span>
-                  {receiveEstimate} USDFC arrived in your wallet <em>(simulated)</em>.
+                  {receiveEstimate} USDFC{includeFil ? ` and ${POC_FIL_BUNDLE} FIL (for network fees)` : ""} arrived in
+                  your wallet <em>(simulated)</em>.
                 </span>
               </div>
               {constants.faucets && constants.faucets.length > 0 && (
@@ -344,7 +403,7 @@ export function PocBaseUsdcOnboarding() {
             </Button>
             {phase === "form" && (
               <Button disabled={!validAmount} onClick={runSimulatedSwap} variant='primary'>
-                Swap (simulated)
+                {includeFil ? "Swap for USDFC + FIL (simulated)" : "Swap for USDFC (simulated)"}
               </Button>
             )}
             {phase === "done" && (
