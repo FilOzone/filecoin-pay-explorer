@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { erc20Abi, type Hex, isAddress, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { useTransactionReview } from "@/components/UserConsole/TransactionReview";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
@@ -208,6 +209,7 @@ export interface SubmitArgs {
 }
 
 export function useAddServiceSubmit(onSubmitOnChain: () => void) {
+  const { requestReview, reviewDialog } = useTransactionReview();
   const { constants } = useSynapse();
   const { address: userAddress } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -229,6 +231,39 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
     rateInWei,
   }: SubmitArgs) => {
     const tokenAddress = token.address as `0x${string}`;
+
+    // Embedded wallets sign without any wallet prompt, so the console shows
+    // its own review step first (once per action; user can opt out).
+    const isDepositing = parsedDeposit !== null && parsedDeposit > 0n;
+    const approved = await requestReview({
+      title: isDepositing
+        ? `Deposit ${depositAmountLabel} ${token.symbol} and approve service`
+        : `Approve service ${operatorAddress.slice(0, 6)}…${operatorAddress.slice(-4)}`,
+      rows: [
+        ...(isDepositing ? [{ label: "Deposit", value: `${depositAmountLabel} ${token.symbol}` }] : []),
+        { label: "Service (operator)", value: operatorAddress },
+        { label: "Token", value: `${token.symbol} ${tokenAddress}` },
+        { label: "Rate allowance", value: rateInWei.toString() },
+        { label: "Lockup allowance", value: lockupInWei.toString() },
+        { label: "Network", value: constants.chain.name },
+      ],
+      details: JSON.stringify(
+        {
+          function: isDepositing ? "depositWithPermitAndApproveOperator" : "setOperatorApproval",
+          token: tokenAddress,
+          operator: operatorAddress,
+          depositWei: isDepositing ? String(parsedDeposit) : "0",
+          rateAllowanceWei: rateInWei.toString(),
+          lockupAllowanceWei: lockupInWei.toString(),
+          maxLockupPeriod: DEFAULT_MAX_LOCKUP_PERIOD.toString(),
+          chainId: constants.chain.id,
+        },
+        null,
+        2,
+      ),
+    });
+    if (!approved) return;
+
     setIsSubmitting(true);
     try {
       if (parsedDeposit !== null && parsedDeposit > 0n) {
@@ -240,51 +275,68 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
         // execute() toasts its own failures; the permit signature is the one
         // step before it that can throw (signature declined, or a custom token
         // without EIP-2612 support), so surface that here.
-        let permitSignature: PermitSignature;
-        try {
-          permitSignature = await getPermitSignature(
-            {
+        const signPermit = async (): Promise<PermitSignature | null> => {
+          try {
+            return await getPermitSignature(
+              {
+                tokenAddress,
+                ownerAddress: userAddress,
+                spenderAddress: constants.contracts.payments.address,
+                amount: parsedDeposit,
+                deadline,
+                chainId: constants.chain.id,
+              },
+              walletClient,
+              publicClient,
+            );
+          } catch (err) {
+            console.error("Permit signature failed:", err);
+            toast.error("Deposit authorization failed", {
+              description: "The signature was declined, or this token does not support gasless approval (EIP-2612).",
+            });
+            return null;
+          }
+        };
+        const submitDeposit = (permitSignature: PermitSignature) =>
+          execute({
+            functionName: "depositWithPermitAndApproveOperator",
+            args: [
               tokenAddress,
-              ownerAddress: userAddress,
-              spenderAddress: constants.contracts.payments.address,
-              amount: parsedDeposit,
-              deadline,
-              chainId: constants.chain.id,
+              userAddress,
+              parsedDeposit,
+              permitSignature.deadline,
+              permitSignature.v,
+              permitSignature.r,
+              permitSignature.s,
+              operatorAddress,
+              rateInWei,
+              lockupInWei,
+              DEFAULT_MAX_LOCKUP_PERIOD,
+            ],
+            metadata: {
+              type: "depositAndApprove",
+              amount: depositAmountLabel,
+              token: token.symbol,
+              operator: operatorAddress,
             },
-            walletClient,
-            publicClient,
-          );
-        } catch (err) {
-          console.error("Permit signature failed:", err);
-          toast.error("Deposit authorization failed", {
-            description: "The signature was declined, or this token does not support gasless approval (EIP-2612).",
+            onSubmitOnChain,
           });
-          return;
-        }
 
-        await execute({
-          functionName: "depositWithPermitAndApproveOperator",
-          args: [
-            tokenAddress,
-            userAddress,
-            parsedDeposit,
-            permitSignature.deadline,
-            permitSignature.v,
-            permitSignature.r,
-            permitSignature.s,
-            operatorAddress,
-            rateInWei,
-            lockupInWei,
-            DEFAULT_MAX_LOCKUP_PERIOD,
-          ],
-          metadata: {
-            type: "depositAndApprove",
-            amount: depositAmountLabel,
-            token: token.symbol,
-            operator: operatorAddress,
-          },
-          onSubmitOnChain,
-        });
+        const permitSignature = await signPermit();
+        if (!permitSignature) return;
+        try {
+          await submitDeposit(permitSignature);
+        } catch (err) {
+          // Load-balanced RPCs can serve the permit nonce or gas estimation
+          // from a lagging replica, rejecting a correct signature; one re-sign
+          // with a freshly read nonce resolves it. See DepositDialog.
+          if (!(err instanceof Error && err.message.includes("EIP2612: invalid signature"))) throw err;
+          console.warn("[AddService] Stale-replica permit revert; retrying once with a fresh nonce...");
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+          const retrySignature = await signPermit();
+          if (!retrySignature) return;
+          await submitDeposit(retrySignature);
+        }
       } else {
         await execute({
           functionName: "setOperatorApproval",
@@ -305,5 +357,5 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
     }
   };
 
-  return { submit, isSubmitting, isExecuting };
+  return { submit, isSubmitting, isExecuting, reviewDialog };
 }

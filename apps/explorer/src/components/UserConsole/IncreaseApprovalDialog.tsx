@@ -14,6 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { maxUint256, parseUnits } from "viem";
+import { useTransactionReview } from "@/components/UserConsole/TransactionReview";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
@@ -33,6 +34,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
 
   const { synapse, constants } = useSynapse();
 
+  const { requestReview, reviewDialog } = useTransactionReview();
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
@@ -83,6 +85,35 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
       ? maxUint256
       : BigInt(approval.maxLockupPeriod) + BigInt(maxLockupPeriodIncrease);
 
+    // Embedded wallets sign without any wallet prompt, so the console shows
+    // its own review step first (once per action; user can opt out).
+    const approvedByUser = await requestReview({
+      title: `Increase allowances for ${approval.operator.address.slice(0, 6)}…${approval.operator.address.slice(-4)}`,
+      rows: [
+        { label: "Service (operator)", value: approval.operator.address },
+        { label: "Token", value: `${approval.token.symbol} ${approval.token.id}` },
+        { label: "New rate allowance", value: newRateAllowance.toString() },
+        { label: "New lockup allowance", value: newLockupAllowance.toString() },
+        { label: "New max lockup period", value: newMaxLockupPeriod.toString() },
+      ],
+      details: JSON.stringify(
+        {
+          function: "setOperatorApproval",
+          token: approval.token.id,
+          operator: approval.operator.address,
+          rateAllowanceWei: newRateAllowance.toString(),
+          lockupAllowanceWei: newLockupAllowance.toString(),
+          maxLockupPeriod: newMaxLockupPeriod.toString(),
+        },
+        null,
+        2,
+      ),
+    });
+    if (!approvedByUser) {
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       await execute({
         functionName: "setOperatorApproval",
@@ -111,140 +142,143 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   const canSubmit = !isSubmitting && !isExecuting;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
-        <DialogHeader>
-          <DialogTitle>Increase Approval</DialogTitle>
-          <DialogDescription>Increase the allowances for this operator approval.</DialogDescription>
-        </DialogHeader>
+    <>
+      {reviewDialog}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className='sm:max-w-[500px]'>
+          <DialogHeader>
+            <DialogTitle>Increase Approval</DialogTitle>
+            <DialogDescription>Increase the allowances for this operator approval.</DialogDescription>
+          </DialogHeader>
 
-        <div className='grid gap-4 py-4'>
-          {/* Approval Info */}
-          <div className='grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50'>
-            <div>
-              <span className='text-xs text-muted-foreground'>Operator</span>
-              <div className='font-mono text-sm font-medium'>{formatAddress(approval.operator.address)}</div>
-            </div>
-            <div>
-              <span className='text-xs text-muted-foreground'>Token</span>
-              <div className='font-medium'>{approval.token.symbol}</div>
-            </div>
-          </div>
-
-          {/* Current Allowances */}
-          <div className='grid gap-2 p-3 rounded-lg border'>
-            <h4 className='text-sm font-medium'>Current Allowances</h4>
-            <div className='grid grid-cols-2 gap-3 text-sm'>
+          <div className='grid gap-4 py-4'>
+            {/* Approval Info */}
+            <div className='grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50'>
               <div>
-                <span className='text-muted-foreground'>Lockup:</span>
-                <div className='font-medium'>
-                  {isCurrentLockupUnlimited ? (
-                    <div className='flex justify-start'>
-                      <Badge variant='secondary' icon={InfinityIcon}>
-                        Unlimited
-                      </Badge>
-                    </div>
-                  ) : (
-                    formatToken(approval.lockupAllowance, approval.token.decimals, approval.token.symbol, 2)
-                  )}
+                <span className='text-xs text-muted-foreground'>Operator</span>
+                <div className='font-mono text-sm font-medium'>{formatAddress(approval.operator.address)}</div>
+              </div>
+              <div>
+                <span className='text-xs text-muted-foreground'>Token</span>
+                <div className='font-medium'>{approval.token.symbol}</div>
+              </div>
+            </div>
+
+            {/* Current Allowances */}
+            <div className='grid gap-2 p-3 rounded-lg border'>
+              <h4 className='text-sm font-medium'>Current Allowances</h4>
+              <div className='grid grid-cols-2 gap-3 text-sm'>
+                <div>
+                  <span className='text-muted-foreground'>Lockup:</span>
+                  <div className='font-medium'>
+                    {isCurrentLockupUnlimited ? (
+                      <div className='flex justify-start'>
+                        <Badge variant='secondary' icon={InfinityIcon}>
+                          Unlimited
+                        </Badge>
+                      </div>
+                    ) : (
+                      formatToken(approval.lockupAllowance, approval.token.decimals, approval.token.symbol, 2)
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className='text-muted-foreground'>Rate:</span>
+                  <div className='font-medium'>
+                    {isCurrentRateUnlimited ? (
+                      <div className='flex justify-start'>
+                        <Badge variant='secondary' icon={InfinityIcon}>
+                          Unlimited
+                        </Badge>
+                      </div>
+                    ) : (
+                      formatToken(approval.rateAllowance, approval.token.decimals, approval.token.symbol, 2)
+                    )}
+                  </div>
                 </div>
               </div>
-              <div>
-                <span className='text-muted-foreground'>Rate:</span>
-                <div className='font-medium'>
-                  {isCurrentRateUnlimited ? (
-                    <div className='flex justify-start'>
-                      <Badge variant='secondary' icon={InfinityIcon}>
-                        Unlimited
-                      </Badge>
-                    </div>
-                  ) : (
-                    formatToken(approval.rateAllowance, approval.token.decimals, approval.token.symbol, 2)
-                  )}
+            </div>
+
+            {/* Increase Values */}
+            <div className='grid gap-3'>
+              <div className='flex items-center justify-between'>
+                <Label>Increase By</Label>
+                <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                  <input
+                    type='checkbox'
+                    checked={isUnlimited}
+                    onChange={(e) => setIsUnlimited(e.target.checked)}
+                    className='rounded'
+                  />
+                  Set to Unlimited
+                </label>
+              </div>
+              <div className='grid grid-cols-2 gap-3'>
+                <div>
+                  <Label htmlFor='lockupIncrease' className='text-xs text-muted-foreground'>
+                    Lockup Increase
+                  </Label>
+                  <Input
+                    id='lockupIncrease'
+                    type='number'
+                    placeholder='0.0'
+                    value={lockupIncrease}
+                    onChange={setLockupIncrease}
+                    disabled={isUnlimited || isSubmitting}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor='rateIncrease' className='text-xs text-muted-foreground'>
+                    Rate Increase
+                  </Label>
+                  <Input
+                    id='rateIncrease'
+                    type='number'
+                    placeholder='0.0'
+                    value={rateIncrease}
+                    onChange={setRateIncrease}
+                    disabled={isUnlimited || isSubmitting}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor='maxLockupPeriodIncrease' className='text-xs text-muted-foreground'>
+                    Maximum Lockup Period Increase
+                  </Label>
+                  <Input
+                    id='maxLockupPeriodIncrease'
+                    type='number'
+                    placeholder='0.0'
+                    value={maxLockupPeriodIncrease}
+                    onChange={setMaxLockupPeriodIncrease}
+                    disabled={isUnlimited || isSubmitting}
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Increase Values */}
-          <div className='grid gap-3'>
-            <div className='flex items-center justify-between'>
-              <Label>Increase By</Label>
-              <label className='flex items-center gap-2 text-sm cursor-pointer'>
-                <input
-                  type='checkbox'
-                  checked={isUnlimited}
-                  onChange={(e) => setIsUnlimited(e.target.checked)}
-                  className='rounded'
-                />
-                Set to Unlimited
-              </label>
-            </div>
-            <div className='grid grid-cols-2 gap-3'>
-              <div>
-                <Label htmlFor='lockupIncrease' className='text-xs text-muted-foreground'>
-                  Lockup Increase
-                </Label>
-                <Input
-                  id='lockupIncrease'
-                  type='number'
-                  placeholder='0.0'
-                  value={lockupIncrease}
-                  onChange={setLockupIncrease}
-                  disabled={isUnlimited || isSubmitting}
-                />
-              </div>
-              <div>
-                <Label htmlFor='rateIncrease' className='text-xs text-muted-foreground'>
-                  Rate Increase
-                </Label>
-                <Input
-                  id='rateIncrease'
-                  type='number'
-                  placeholder='0.0'
-                  value={rateIncrease}
-                  onChange={setRateIncrease}
-                  disabled={isUnlimited || isSubmitting}
-                />
-              </div>
-              <div>
-                <Label htmlFor='maxLockupPeriodIncrease' className='text-xs text-muted-foreground'>
-                  Maximum Lockup Period Increase
-                </Label>
-                <Input
-                  id='maxLockupPeriodIncrease'
-                  type='number'
-                  placeholder='0.0'
-                  value={maxLockupPeriodIncrease}
-                  onChange={setMaxLockupPeriodIncrease}
-                  disabled={isUnlimited || isSubmitting}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isExecuting}
-            className='py-2'
-          >
-            Cancel
-          </Button>
-          <Button variant='primary' onClick={handleIncrease} disabled={!canSubmit} className='py-2'>
-            {isSubmitting || isExecuting ? (
-              <span className='flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
-                Processing...
-              </span>
-            ) : (
-              "Increase"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button
+              variant='ghost'
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting || isExecuting}
+              className='py-2'
+            >
+              Cancel
+            </Button>
+            <Button variant='primary' onClick={handleIncrease} disabled={!canSubmit} className='py-2'>
+              {isSubmitting || isExecuting ? (
+                <span className='flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                  Processing...
+                </span>
+              ) : (
+                "Increase"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

@@ -77,7 +77,7 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
 const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange }) => {
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
-  const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
+  const { submit, isSubmitting, isExecuting, reviewDialog } = useAddServiceSubmit(() => onOpenChange(false));
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -171,312 +171,316 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'>
-        <DialogHeader>
-          <DialogTitle>Add a Service</DialogTitle>
-          <DialogDescription>
-            Choose a service to pay through your Filecoin Pay account. You can set spending limits and remove it at any
-            time.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {reviewDialog}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle>Add a Service</DialogTitle>
+            <DialogDescription>
+              Choose a service to pay through your Filecoin Pay account. You can set spending limits and remove it at
+              any time.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className='grid gap-6 py-4'>
-          {/* Service */}
-          <div className='grid gap-3'>
-            <Label htmlFor='service'>Select Service</Label>
-            <Select value={serviceChoice} onValueChange={serviceSelection.setServiceChoice} disabled={isSubmitting}>
-              <SelectTrigger id='service' className='w-full'>
-                <SelectValue placeholder={isLoadingServices ? "Loading services…" : "Choose a service…"} />
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.address} value={service.address}>
-                    <span className='flex items-center gap-2'>
-                      <span>{service.name}</span>
-                      <span className='font-mono text-xs text-muted-foreground'>
-                        ({formatAddress(service.address)})
+          <div className='grid gap-6 py-4'>
+            {/* Service */}
+            <div className='grid gap-3'>
+              <Label htmlFor='service'>Select Service</Label>
+              <Select value={serviceChoice} onValueChange={serviceSelection.setServiceChoice} disabled={isSubmitting}>
+                <SelectTrigger id='service' className='w-full'>
+                  <SelectValue placeholder={isLoadingServices ? "Loading services…" : "Choose a service…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((service) => (
+                    <SelectItem key={service.address} value={service.address}>
+                      <span className='flex items-center gap-2'>
+                        <span>{service.name}</span>
+                        <span className='font-mono text-xs text-muted-foreground'>
+                          ({formatAddress(service.address)})
+                        </span>
                       </span>
-                    </span>
-                  </SelectItem>
-                ))}
-                {services.length > 0 && <SelectSeparator />}
-                <SelectItem value={CUSTOM_OPTION}>Custom service address…</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {selectedService && <ServiceDetailsCard service={selectedService} explorerUrl={explorerUrl} />}
-
-            {serviceChoice === CUSTOM_OPTION && (
-              <div className='grid gap-2'>
-                <Input
-                  id='customService'
-                  placeholder='Service contract address 0x…'
-                  value={serviceSelection.customServiceInput}
-                  onChange={serviceSelection.setCustomServiceInput}
-                  disabled={isSubmitting}
-                />
-                {serviceSelection.customServiceInput &&
-                  (isOperatorValid ? (
-                    <div className='flex items-center gap-2 text-sm text-green-600 dark:text-green-400'>
-                      <CheckCircle2 className='h-4 w-4' />
-                      <span>Valid service address</span>
-                    </div>
-                  ) : (
-                    <div className='flex items-center gap-2 text-sm text-destructive'>
-                      <AlertCircle className='h-4 w-4' />
-                      <span>Invalid address format</span>
-                    </div>
+                    </SelectItem>
                   ))}
-              </div>
-            )}
-          </div>
+                  {services.length > 0 && <SelectSeparator />}
+                  <SelectItem value={CUSTOM_OPTION}>Custom service address…</SelectItem>
+                </SelectContent>
+              </Select>
 
-          {/* Payment token */}
-          <div className='grid gap-3'>
-            <Label htmlFor='paymentToken'>Payment in</Label>
-            <Select
-              value={tokenSelection.tokenChoice}
-              onValueChange={(value) => {
-                tokenSelection.setTokenChoice(value);
-                clearAmounts();
-              }}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger id='paymentToken' className='w-full'>
-                <SelectValue placeholder='Choose a token…' />
-              </SelectTrigger>
-              <SelectContent>
-                {tokenSelection.knownTokens.map((knownToken) => (
-                  <SelectItem key={knownToken.address} value={knownToken.address}>
-                    <span className='flex items-center gap-2'>
-                      <TokenIcon token={knownToken} className='size-5' />
-                      <span>{knownToken.symbol}</span>
-                      <span className='font-mono text-xs text-muted-foreground'>
-                        ({formatAddress(knownToken.address)})
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-                {tokenSelection.knownTokens.length > 0 && <SelectSeparator />}
-                <SelectItem value={CUSTOM_OPTION}>Custom token address…</SelectItem>
-              </SelectContent>
-            </Select>
+              {selectedService && <ServiceDetailsCard service={selectedService} explorerUrl={explorerUrl} />}
 
-            {tokenSelection.tokenChoice === CUSTOM_OPTION && (
-              <Input
-                id='customToken'
-                placeholder='Token contract address 0x…'
-                value={tokenSelection.customTokenInput}
-                onChange={(value) => {
-                  tokenSelection.setCustomTokenInput(value);
+              {serviceChoice === CUSTOM_OPTION && (
+                <div className='grid gap-2'>
+                  <Input
+                    id='customService'
+                    placeholder='Service contract address 0x…'
+                    value={serviceSelection.customServiceInput}
+                    onChange={serviceSelection.setCustomServiceInput}
+                    disabled={isSubmitting}
+                  />
+                  {serviceSelection.customServiceInput &&
+                    (isOperatorValid ? (
+                      <div className='flex items-center gap-2 text-sm text-green-600 dark:text-green-400'>
+                        <CheckCircle2 className='h-4 w-4' />
+                        <span>Valid service address</span>
+                      </div>
+                    ) : (
+                      <div className='flex items-center gap-2 text-sm text-destructive'>
+                        <AlertCircle className='h-4 w-4' />
+                        <span>Invalid address format</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Payment token */}
+            <div className='grid gap-3'>
+              <Label htmlFor='paymentToken'>Payment in</Label>
+              <Select
+                value={tokenSelection.tokenChoice}
+                onValueChange={(value) => {
+                  tokenSelection.setTokenChoice(value);
                   clearAmounts();
                 }}
                 disabled={isSubmitting}
-              />
-            )}
-            {tokenSelection.customTokenState === "invalid" && (
-              <div className='flex items-center gap-2 text-sm text-destructive'>
-                <AlertCircle className='h-4 w-4' />
-                <span>Invalid token address</span>
-              </div>
-            )}
-            {tokenSelection.customTokenState === "loading" && (
-              <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-                <Loader2 className='h-4 w-4 animate-spin' />
-                <span>Loading token details…</span>
-              </div>
-            )}
-            {tokenSelection.customTokenState === "error" && (
-              <div className='flex items-center gap-2 text-sm text-destructive'>
-                <AlertCircle className='h-4 w-4' />
-                <span>Couldn't read this token. Check it is an ERC-20 contract on the connected network.</span>
-              </div>
-            )}
-            {tokenSelection.customTokenState === "loaded" && token && (
-              <div className='flex items-center gap-2 text-sm text-green-600 dark:text-green-400'>
-                <CheckCircle2 className='h-4 w-4' />
-                <span>
-                  {token.symbol} · {token.decimals} decimals
-                </span>
-              </div>
-            )}
-
-            {token && (
-              <div className='flex items-center gap-1 text-xs text-muted-foreground'>
-                <span>Token contract:</span>
-                {explorerUrl ? (
-                  <a
-                    href={`${explorerUrl}/address/${token.address}`}
-                    target='_blank'
-                    rel='noreferrer'
-                    className='font-mono text-primary hover:underline'
-                  >
-                    {formatAddress(token.address)}
-                  </a>
-                ) : (
-                  <span className='font-mono'>{formatAddress(token.address)}</span>
-                )}
-                <CopyButton value={token.address} tooltipText='Copy token contract address' />
-              </div>
-            )}
-          </div>
-
-          {/* Deposit amount */}
-          {token && !supportsPermit && (
-            <p className='flex items-center gap-2 text-xs text-muted-foreground'>
-              <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
-              This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
-              separately.
-            </p>
-          )}
-          {token && supportsPermit && (
-            <div className='grid gap-2'>
-              <div className='flex items-center justify-between'>
-                <Label htmlFor='amount'>Deposit amount</Label>
-                {(balance !== undefined || isLoadingBalance) && (
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3' />
-                    <span>
-                      Balance:{" "}
-                      {isLoadingBalance || balance === undefined ? (
-                        <Loader2 className='h-3 w-3 animate-spin inline' />
-                      ) : (
-                        <span className='font-medium text-foreground'>
-                          {Number(formatUnits(balance, token.decimals)).toLocaleString(undefined, {
-                            maximumFractionDigits: 6,
-                          })}{" "}
-                          {token.symbol}
+              >
+                <SelectTrigger id='paymentToken' className='w-full'>
+                  <SelectValue placeholder='Choose a token…' />
+                </SelectTrigger>
+                <SelectContent>
+                  {tokenSelection.knownTokens.map((knownToken) => (
+                    <SelectItem key={knownToken.address} value={knownToken.address}>
+                      <span className='flex items-center gap-2'>
+                        <TokenIcon token={knownToken} className='size-5' />
+                        <span>{knownToken.symbol}</span>
+                        <span className='font-mono text-xs text-muted-foreground'>
+                          ({formatAddress(knownToken.address)})
                         </span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className='relative'>
-                <Input
-                  id='amount'
-                  type='number'
-                  placeholder='0.0'
-                  value={depositAmount}
-                  onChange={setDepositAmount}
-                  min='0'
-                  step='any'
-                  disabled={isSubmitting}
-                  className='text-lg pr-16'
-                />
-                <Button
-                  type='button'
-                  variant='ghost'
-                  className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
-                  onClick={() => {
-                    if (balance !== undefined) setDepositAmount(formatUnits(balance, token.decimals));
-                  }}
-                  disabled={isSubmitting || balance === undefined || isLoadingBalance}
-                >
-                  MAX
-                </Button>
-              </div>
-              {isDepositing && balance !== undefined && !hasSufficientBalance && (
-                <p className='flex items-center gap-2 text-xs text-destructive'>
-                  <AlertCircle className='h-3.5 w-3.5 shrink-0' />
-                  Insufficient balance for this deposit.
-                </p>
-              )}
-              <p className='text-xs text-muted-foreground'>
-                Funds stay in your account and the service bills them as you use it. Leave empty to add the service
-                without depositing.
-              </p>
-            </div>
-          )}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {tokenSelection.knownTokens.length > 0 && <SelectSeparator />}
+                  <SelectItem value={CUSTOM_OPTION}>Custom token address…</SelectItem>
+                </SelectContent>
+              </Select>
 
-          {/* Spending limits (advanced) */}
-          <div className='grid gap-3'>
-            <button
-              type='button'
-              onClick={() => setShowLimits(!showLimits)}
-              disabled={isSubmitting}
-              className='text-sm text-primary text-left w-fit hover:underline'
-            >
-              {showLimits ? "Hide spending limits" : "Set spending limits (optional)"}
-            </button>
-            {showLimits && (
-              <div className='grid gap-3 rounded-lg border p-3'>
-                <label className='flex items-center gap-2 text-sm cursor-pointer'>
-                  <input
-                    type='checkbox'
-                    checked={isUnlimited}
-                    onChange={(e) => setIsUnlimited(e.target.checked)}
-                    className='rounded'
-                    disabled={isSubmitting}
-                  />
-                  No spending limit (default)
-                </label>
-                <div className='grid grid-cols-2 gap-3'>
-                  <div className='grid gap-2'>
-                    <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
-                      Reserve limit{token ? ` (${token.symbol})` : ""}
-                    </Label>
-                    <Input
-                      id='lockupAllowance'
-                      type='number'
-                      placeholder='0.0'
-                      value={lockupAllowance}
-                      onChange={setLockupAllowance}
-                      disabled={isUnlimited || isSubmitting}
-                    />
-                  </div>
-                  <div className='grid gap-2'>
-                    <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
-                      Rate limit{token ? ` (${token.symbol} per epoch)` : ""}
-                    </Label>
-                    <Input
-                      id='rateAllowance'
-                      type='number'
-                      placeholder='0.0'
-                      value={rateAllowance}
-                      onChange={setRateAllowance}
-                      disabled={isUnlimited || isSubmitting}
-                    />
-                  </div>
+              {tokenSelection.tokenChoice === CUSTOM_OPTION && (
+                <Input
+                  id='customToken'
+                  placeholder='Token contract address 0x…'
+                  value={tokenSelection.customTokenInput}
+                  onChange={(value) => {
+                    tokenSelection.setCustomTokenInput(value);
+                    clearAmounts();
+                  }}
+                  disabled={isSubmitting}
+                />
+              )}
+              {tokenSelection.customTokenState === "invalid" && (
+                <div className='flex items-center gap-2 text-sm text-destructive'>
+                  <AlertCircle className='h-4 w-4' />
+                  <span>Invalid token address</span>
                 </div>
+              )}
+              {tokenSelection.customTokenState === "loading" && (
+                <div className='flex items-center gap-2 text-sm text-muted-foreground'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                  <span>Loading token details…</span>
+                </div>
+              )}
+              {tokenSelection.customTokenState === "error" && (
+                <div className='flex items-center gap-2 text-sm text-destructive'>
+                  <AlertCircle className='h-4 w-4' />
+                  <span>Couldn't read this token. Check it is an ERC-20 contract on the connected network.</span>
+                </div>
+              )}
+              {tokenSelection.customTokenState === "loaded" && token && (
+                <div className='flex items-center gap-2 text-sm text-green-600 dark:text-green-400'>
+                  <CheckCircle2 className='h-4 w-4' />
+                  <span>
+                    {token.symbol} · {token.decimals} decimals
+                  </span>
+                </div>
+              )}
+
+              {token && (
+                <div className='flex items-center gap-1 text-xs text-muted-foreground'>
+                  <span>Token contract:</span>
+                  {explorerUrl ? (
+                    <a
+                      href={`${explorerUrl}/address/${token.address}`}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='font-mono text-primary hover:underline'
+                    >
+                      {formatAddress(token.address)}
+                    </a>
+                  ) : (
+                    <span className='font-mono'>{formatAddress(token.address)}</span>
+                  )}
+                  <CopyButton value={token.address} tooltipText='Copy token contract address' />
+                </div>
+              )}
+            </div>
+
+            {/* Deposit amount */}
+            {token && !supportsPermit && (
+              <p className='flex items-center gap-2 text-xs text-muted-foreground'>
+                <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
+                This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
+                separately.
+              </p>
+            )}
+            {token && supportsPermit && (
+              <div className='grid gap-2'>
+                <div className='flex items-center justify-between'>
+                  <Label htmlFor='amount'>Deposit amount</Label>
+                  {(balance !== undefined || isLoadingBalance) && (
+                    <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                      <Wallet className='h-3 w-3' />
+                      <span>
+                        Balance:{" "}
+                        {isLoadingBalance || balance === undefined ? (
+                          <Loader2 className='h-3 w-3 animate-spin inline' />
+                        ) : (
+                          <span className='font-medium text-foreground'>
+                            {Number(formatUnits(balance, token.decimals)).toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}{" "}
+                            {token.symbol}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className='relative'>
+                  <Input
+                    id='amount'
+                    type='number'
+                    placeholder='0.0'
+                    value={depositAmount}
+                    onChange={setDepositAmount}
+                    min='0'
+                    step='any'
+                    disabled={isSubmitting}
+                    className='text-lg pr-16'
+                  />
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
+                    onClick={() => {
+                      if (balance !== undefined) setDepositAmount(formatUnits(balance, token.decimals));
+                    }}
+                    disabled={isSubmitting || balance === undefined || isLoadingBalance}
+                  >
+                    MAX
+                  </Button>
+                </div>
+                {isDepositing && balance !== undefined && !hasSufficientBalance && (
+                  <p className='flex items-center gap-2 text-xs text-destructive'>
+                    <AlertCircle className='h-3.5 w-3.5 shrink-0' />
+                    Insufficient balance for this deposit.
+                  </p>
+                )}
                 <p className='text-xs text-muted-foreground'>
-                  Advanced. Limits cap how much the service can reserve and charge; most users keep this unlimited and
-                  rely on removing the service instead.
+                  Funds stay in your account and the service bills them as you use it. Leave empty to add the service
+                  without depositing.
                 </p>
               </div>
             )}
+
+            {/* Spending limits (advanced) */}
+            <div className='grid gap-3'>
+              <button
+                type='button'
+                onClick={() => setShowLimits(!showLimits)}
+                disabled={isSubmitting}
+                className='text-sm text-primary text-left w-fit hover:underline'
+              >
+                {showLimits ? "Hide spending limits" : "Set spending limits (optional)"}
+              </button>
+              {showLimits && (
+                <div className='grid gap-3 rounded-lg border p-3'>
+                  <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                    <input
+                      type='checkbox'
+                      checked={isUnlimited}
+                      onChange={(e) => setIsUnlimited(e.target.checked)}
+                      className='rounded'
+                      disabled={isSubmitting}
+                    />
+                    No spending limit (default)
+                  </label>
+                  <div className='grid grid-cols-2 gap-3'>
+                    <div className='grid gap-2'>
+                      <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
+                        Reserve limit{token ? ` (${token.symbol})` : ""}
+                      </Label>
+                      <Input
+                        id='lockupAllowance'
+                        type='number'
+                        placeholder='0.0'
+                        value={lockupAllowance}
+                        onChange={setLockupAllowance}
+                        disabled={isUnlimited || isSubmitting}
+                      />
+                    </div>
+                    <div className='grid gap-2'>
+                      <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
+                        Rate limit{token ? ` (${token.symbol} per epoch)` : ""}
+                      </Label>
+                      <Input
+                        id='rateAllowance'
+                        type='number'
+                        placeholder='0.0'
+                        value={rateAllowance}
+                        onChange={setRateAllowance}
+                        disabled={isUnlimited || isSubmitting}
+                      />
+                    </div>
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Advanced. Limits cap how much the service can reserve and charge; most users keep this unlimited and
+                    rely on removing the service instead.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <p className='text-xs text-muted-foreground'>
+              The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any
+              time.
+            </p>
           </div>
 
-          <p className='text-xs text-muted-foreground'>
-            The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any time.
-          </p>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isExecuting}
-            size='compact'
-          >
-            Cancel
-          </Button>
-          <Button variant='primary' onClick={handleSubmit} disabled={!canSubmit} size='compact'>
-            {isSubmitting || isExecuting ? (
-              <span className='flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
-                Processing…
-              </span>
-            ) : isDepositing ? (
-              "Deposit and Add Service"
-            ) : (
-              "Add Service"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button
+              variant='ghost'
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting || isExecuting}
+              size='compact'
+            >
+              Cancel
+            </Button>
+            <Button variant='primary' onClick={handleSubmit} disabled={!canSubmit} size='compact'>
+              {isSubmitting || isExecuting ? (
+                <span className='flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                  Processing…
+                </span>
+              ) : isDepositing ? (
+                "Deposit and Add Service"
+              ) : (
+                "Add Service"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
