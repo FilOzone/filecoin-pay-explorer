@@ -4,10 +4,12 @@ import { describe, it } from "vitest";
 import {
   buildEnvSnippet,
   deriveKeyStatus,
+  deriveSessionKeys,
   EXPIRY_PRESETS,
   isScopeActive,
   normalizeKeyName,
   resolveExpiry,
+  type ScopeId,
   SESSION_KEY_SCOPES,
   sanitizeRecords,
 } from "./sessionKeys";
@@ -167,5 +169,47 @@ describe("resolveExpiry", () => {
     assert.equal(resolveExpiry("custom", "2000-01-01", nowMs), null);
     assert.equal(resolveExpiry("custom", "", nowMs), null);
     assert.equal(resolveExpiry("99", "", nowMs), null);
+  });
+});
+
+describe("deriveSessionKeys", () => {
+  const now = 1_000_000n;
+  const nowMs = Number(now) * 1000;
+  const ok = (result: bigint) => ({ status: "success" as const, result });
+  const keyA = {
+    name: "a",
+    sessionKeyPublic: SIGNER,
+    scopes: ["createDataSet", "addPieces"] as ScopeId[],
+    createdAt: 1,
+  };
+  const keyB = { name: "b", sessionKeyPublic: ACCOUNT, scopes: ["terminateService"] as ScopeId[], createdAt: 1 };
+
+  it("walks the flat read list in record and scope order", () => {
+    const [a, b] = deriveSessionKeys([keyA, keyB], [ok(now + 10n), ok(0n), ok(now - 10n)], now, nowMs);
+    assert.deepEqual(a.scopeExpiries, { createDataSet: now + 10n, addPieces: 0n });
+    assert.deepEqual(a.scopeActive, { createDataSet: true, addPieces: false });
+    assert.equal(a.status, "active");
+    assert.equal(a.maxExpiry, now + 10n);
+    assert.deepEqual(b.scopeExpiries, { terminateService: now - 10n });
+    assert.equal(b.status, "expired");
+  });
+
+  it("is unknown until every scope has a successful read", () => {
+    const [a] = deriveSessionKeys([keyA], [ok(now + 10n), { status: "failure" }], now, nowMs);
+    assert.equal(a.status, "unknown");
+    assert.equal(deriveSessionKeys([keyA], undefined, now, nowMs)[0].status, "unknown");
+  });
+
+  it("flips from active to expired when only the clock moves", () => {
+    const reads = [ok(now + 10n), ok(now + 10n)];
+    assert.equal(deriveSessionKeys([keyA], reads, now, nowMs)[0].status, "active");
+    assert.equal(deriveSessionKeys([keyA], reads, now + 11n, nowMs)[0].status, "expired");
+  });
+
+  it("treats an all-zero read on a key created moments ago as unknown, not revoked", () => {
+    const fresh = { ...keyA, createdAt: nowMs - 60_000 };
+    const zeros = [ok(0n), ok(0n)];
+    assert.equal(deriveSessionKeys([fresh], zeros, now, nowMs)[0].status, "unknown");
+    assert.equal(deriveSessionKeys([keyA], zeros, now, nowMs)[0].status, "revoked");
   });
 });
