@@ -118,6 +118,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   );
   const isExistingKey = prefillAddress != null && existingKey != null;
   const nameLocked = isExistingKey;
+  // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
+  const addressLocked = prefillAddress != null;
 
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
@@ -473,7 +475,13 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                       Generate the keypair yourself and paste <b>only</b> the session key's <b>public address</b> — the
                       private key should never touch this console.
                     </span>
-                    {signerMode === "own" && (
+                    {signerMode === "own" && addressLocked && (
+                      <span className='mt-2 flex items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2'>
+                        <code className='flex-1 text-sm font-mono break-all'>{ownAddress}</code>
+                        <CopyButton value={ownAddress} tooltipText='Copy address' successMessage='Address copied' />
+                      </span>
+                    )}
+                    {signerMode === "own" && !addressLocked && (
                       <input
                         type='text'
                         placeholder='0x… session key public address'
@@ -485,9 +493,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     {signerMode === "own" && ownAddress.length > 0 && !isAddress(ownAddress) && (
                       <span className='block text-xs text-red-600 mt-1'>Not a valid address.</span>
                     )}
-                    {signerMode === "own" && prefillAddress != null && ownAddress === prefillAddress && (
+                    {signerMode === "own" && addressLocked && (
                       <span className='block text-xs text-amber-700 dark:text-amber-400 mt-1'>
-                        Only approve if this matches the address you are adding.
+                        This address came from the link. If it is not the one you expect, do not approve it.
                       </span>
                     )}
                   </span>
