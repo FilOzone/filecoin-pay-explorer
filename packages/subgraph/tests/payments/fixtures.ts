@@ -4,6 +4,7 @@ import { assert } from "matchstick-as";
 import { handleDepositRecorded, handleOperatorApprovalUpdated, handleRailCreated } from "../../src/payments";
 import { ONE_BIG_INT } from "../../src/utils/constants";
 import {
+  getAccountOperatorEntityId,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
   getRailEntityId,
@@ -125,6 +126,23 @@ export function setupCompleteRail(
 }
 
 // Assertion Helper Functions
+export function assertAccountOperatorState(
+  account: Address,
+  operator: Address,
+  totalRails: string,
+  totalActiveRails: string,
+  totalApprovals: string,
+  totalActiveApprovals: string,
+): void {
+  const id = getAccountOperatorEntityId(account, operator).toHexString();
+  assert.fieldEquals("AccountOperator", id, "account", account.toHexString());
+  assert.fieldEquals("AccountOperator", id, "operator", operator.toHexString());
+  assert.fieldEquals("AccountOperator", id, "totalRails", totalRails);
+  assert.fieldEquals("AccountOperator", id, "totalActiveRails", totalActiveRails);
+  assert.fieldEquals("AccountOperator", id, "totalApprovals", totalApprovals);
+  assert.fieldEquals("AccountOperator", id, "totalActiveApprovals", totalActiveApprovals);
+}
+
 export function assertOperatorLockupCleared(operator: Address, token: Address): void {
   const operatorApprovalId = getOperatorApprovalEntityId(TEST_ADDRESSES.ACCOUNT, operator, token).toHex();
   const operatorTokenId = getOperatorTokenEntityId(operator, token).toHex();

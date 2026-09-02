@@ -45,6 +45,16 @@ type Account @entity(immutable: false) {
   userTokens: [UserToken!]! @derivedFrom(field: "account")
 }
 
+type AccountOperator @entity(immutable: false) {
+  id: Bytes! # payer address + operator address
+  account: Account! # payer account
+  operator: Operator! # service granted access by the payer
+  totalRails: BigInt! # all rails ever created for this pair; never decreases
+  totalActiveRails: BigInt! # rails in ACTIVE state; paymentRate may be zero
+  totalApprovals: BigInt! # distinct token approvals ever created for this pair; never decreases
+  totalActiveApprovals: BigInt! # token approvals whose current isApproved value is true
+}
+
 type OperatorApproval @entity(immutable: false) {
   id: Bytes! # client address,operator address,token address
   isApproved: Boolean!

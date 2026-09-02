@@ -4,6 +4,7 @@ import { erc20 } from "../../generated/Payments/erc20";
 import { RailOneTimePaymentProcessed } from "../../generated/Payments/Payments";
 import {
   Account,
+  AccountOperator,
   OneTimePayment,
   Operator,
   OperatorApproval,
@@ -21,6 +22,7 @@ import {
   NATIVE_TOKEN_SYMBOL,
 } from "./constants";
 import {
+  getAccountOperatorEntityId,
   getIdFromTxHashAndLogIndex,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -59,6 +61,13 @@ class UserTokenWithIsNew {
 class OperatorWithIsNew {
   constructor(
     public operator: Operator,
+    public isNew: boolean,
+  ) {}
+}
+
+class AccountOperatorWithIsNew {
+  constructor(
+    public accountOperator: AccountOperator,
     public isNew: boolean,
   ) {}
 }
@@ -189,6 +198,25 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
   }
 
   return new OperatorWithIsNew(operator, false);
+};
+
+export const createOrLoadAccountOperator = (account: Bytes, operator: Bytes): AccountOperatorWithIsNew => {
+  const id = getAccountOperatorEntityId(account, operator);
+  let accountOperator = AccountOperator.load(id);
+
+  if (!accountOperator) {
+    accountOperator = new AccountOperator(id);
+    accountOperator.account = account;
+    accountOperator.operator = operator;
+    accountOperator.totalRails = ZERO_BIG_INT;
+    accountOperator.totalActiveRails = ZERO_BIG_INT;
+    accountOperator.totalApprovals = ZERO_BIG_INT;
+    accountOperator.totalActiveApprovals = ZERO_BIG_INT;
+    accountOperator.save();
+    return new AccountOperatorWithIsNew(accountOperator, true);
+  }
+
+  return new AccountOperatorWithIsNew(accountOperator, false);
 };
 
 // OperatorApproval entity functions
