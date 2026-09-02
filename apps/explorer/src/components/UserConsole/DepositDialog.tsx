@@ -28,6 +28,7 @@ import {
   ONE_YEAR_EPOCHS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
+import { useTransactionReview } from "@/components/UserConsole/TransactionReview";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -96,6 +97,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const { synapse, constants } = useSynapse();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const { requestReview, reviewDialog } = useTransactionReview();
 
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: constants.contracts.payments.address,
@@ -307,6 +309,33 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       return;
     }
 
+    // Embedded wallets sign without any wallet prompt, so the console shows
+    // its own review step first (once per action; user can opt out).
+    const approved = await requestReview({
+      title: `Deposit ${amount} ${currentToken.symbol}`,
+      rows: [
+        { label: "Amount", value: `${amount} ${currentToken.symbol}` },
+        { label: "To", value: `Filecoin Pay ${constants.contracts.payments.address}` },
+        { label: "Token", value: currentToken.address },
+        { label: "Network", value: constants.chain.name },
+        { label: "Wallet", value: userAddress },
+      ],
+      details: JSON.stringify(
+        {
+          function: "depositWithPermit",
+          token: currentToken.address,
+          owner: userAddress,
+          spender: constants.contracts.payments.address,
+          amountWei: parseUnits(amount, currentToken.decimals).toString(),
+          permitValidFor: `${PERMIT_DEADLINE_SECONDS}s`,
+          chainId: constants.chain.id,
+        },
+        null,
+        2,
+      ),
+    });
+    if (!approved) return;
+
     setIsSubmitting(true);
 
     try {
@@ -394,130 +423,133 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   }, [defaultSuggestion, open]);
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
-        // The guard in `handleDialogOpenChange` already refuses these closes, but
-        // stopping them at the source means no dismissal is even attempted while
-        // a signature is pending, and the missing X says so before it is tried.
-        showCloseButton={!isBusy}
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Deposit tokens</DialogTitle>
-          <DialogDescription>Choose a token and deposit it into your Filecoin Pay account.</DialogDescription>
-        </DialogHeader>
+    <>
+      {reviewDialog}
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+        <DialogContent
+          className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
+          // The guard in `handleDialogOpenChange` already refuses these closes, but
+          // stopping them at the source means no dismissal is even attempted while
+          // a signature is pending, and the missing X says so before it is tried.
+          showCloseButton={!isBusy}
+          onEscapeKeyDown={(event) => {
+            if (isBusy) event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
+            if (isBusy) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Deposit tokens</DialogTitle>
+            <DialogDescription>Choose a token and deposit it into your Filecoin Pay account.</DialogDescription>
+          </DialogHeader>
 
-        {/* `min-h-0` lets this shrink below its content so `overflow-y-auto` engages. */}
-        <div className='grid min-h-0 gap-4 overflow-y-auto py-4'>
-          <DepositTokenPicker
-            tokens={tokens}
-            token={currentToken}
-            mode={pickerMode}
-            onModeChange={handleModeChange}
-            onSelectToken={handleSelectToken}
-            customAddress={customAddress}
-            onCustomAddressChange={handleCustomAddressChange}
-            customTokenStatus={customTokenStatus}
-            chainName={constants.chain.name}
-            disabled={isBusy}
-          />
+          {/* `min-h-0` lets this shrink below its content so `overflow-y-auto` engages. */}
+          <div className='grid min-h-0 gap-4 overflow-y-auto py-4'>
+            <DepositTokenPicker
+              tokens={tokens}
+              token={currentToken}
+              mode={pickerMode}
+              onModeChange={handleModeChange}
+              onSelectToken={handleSelectToken}
+              customAddress={customAddress}
+              onCustomAddressChange={handleCustomAddressChange}
+              customTokenStatus={customTokenStatus}
+              chainName={constants.chain.name}
+              disabled={isBusy}
+            />
 
-          {currentToken ? (
-            <div className='grid gap-2'>
-              <div className='flex items-center justify-between'>
-                <Label htmlFor='amount'>Amount</Label>
-                {balance !== undefined || isLoadingBalance ? (
-                  // `min-w-0` down the chain so the symbol — arbitrary text from a
-                  // hand-entered contract — clips instead of widening the row.
-                  <div className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3 shrink-0' />
-                    <span className='min-w-0 truncate'>
-                      Balance:{" "}
-                      {isLoadingBalance || balance === undefined ? (
-                        <Loader2 className='h-3 w-3 animate-spin inline' />
-                      ) : (
-                        <span className='font-medium text-foreground'>
-                          {Number(formatUnits(balance, currentToken.decimals)).toLocaleString(undefined, {
-                            maximumFractionDigits: 6,
-                          })}{" "}
-                          {currentToken.symbol}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-              <div className='relative'>
-                <Input
-                  id='amount'
-                  type='number'
-                  placeholder='0.0'
-                  value={amount}
-                  onChange={setAmount}
-                  min='0'
-                  step='any'
-                  disabled={isBusy}
-                  className='text-lg pr-16'
-                />
-                <Button
-                  type='button'
-                  variant='ghost'
-                  className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
-                  onClick={handleMaxClick}
-                  disabled={isBusy || balance === undefined || isLoadingBalance}
-                >
-                  MAX
-                </Button>
-              </div>
-              {/* Wraps rather than truncates: this line has the width to spare,
+            {currentToken ? (
+              <div className='grid gap-2'>
+                <div className='flex items-center justify-between'>
+                  <Label htmlFor='amount'>Amount</Label>
+                  {balance !== undefined || isLoadingBalance ? (
+                    // `min-w-0` down the chain so the symbol — arbitrary text from a
+                    // hand-entered contract — clips instead of widening the row.
+                    <div className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
+                      <Wallet className='h-3 w-3 shrink-0' />
+                      <span className='min-w-0 truncate'>
+                        Balance:{" "}
+                        {isLoadingBalance || balance === undefined ? (
+                          <Loader2 className='h-3 w-3 animate-spin inline' />
+                        ) : (
+                          <span className='font-medium text-foreground'>
+                            {Number(formatUnits(balance, currentToken.decimals)).toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}{" "}
+                            {currentToken.symbol}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className='relative'>
+                  <Input
+                    id='amount'
+                    type='number'
+                    placeholder='0.0'
+                    value={amount}
+                    onChange={setAmount}
+                    min='0'
+                    step='any'
+                    disabled={isBusy}
+                    className='text-lg pr-16'
+                  />
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
+                    onClick={handleMaxClick}
+                    disabled={isBusy || balance === undefined || isLoadingBalance}
+                  >
+                    MAX
+                  </Button>
+                </div>
+                {/* Wraps rather than truncates: this line has the width to spare,
                   and `break-words` keeps an unbroken symbol from widening it. */}
-              <p className='break-words text-xs text-muted-foreground'>
-                Enter the amount of {currentToken.symbol} you want to deposit
-              </p>
-            </div>
-          ) : null}
+                <p className='break-words text-xs text-muted-foreground'>
+                  Enter the amount of {currentToken.symbol} you want to deposit
+                </p>
+              </div>
+            ) : null}
 
-          {isUsdfcDeposit && accountSummary && runwayCurrent ? (
-            <>
-              <FundingRunwaySlider
-                accountSummary={accountSummary}
-                amount={amount}
-                disabled={isBusy}
-                genesisTimestamp={constants.chain.genesisTimestamp}
-                maxAmount={balance}
-                onSelect={setAmount}
-              />
-              <RunwayCard current={runwayCurrent} projected={runwayProjected}>
-                <p className='text-muted-foreground'>Target deposit: {amount || "—"} USDFC.</p>
-              </RunwayCard>
-            </>
-          ) : isUsdfcDeposit && isAccountSummaryLoading ? (
-            <p className='text-sm text-muted-foreground'>Loading funding runway…</p>
-          ) : null}
-        </div>
+            {isUsdfcDeposit && accountSummary && runwayCurrent ? (
+              <>
+                <FundingRunwaySlider
+                  accountSummary={accountSummary}
+                  amount={amount}
+                  disabled={isBusy}
+                  genesisTimestamp={constants.chain.genesisTimestamp}
+                  maxAmount={balance}
+                  onSelect={setAmount}
+                />
+                <RunwayCard current={runwayCurrent} projected={runwayProjected}>
+                  <p className='text-muted-foreground'>Target deposit: {amount || "—"} USDFC.</p>
+                </RunwayCard>
+              </>
+            ) : isUsdfcDeposit && isAccountSummaryLoading ? (
+              <p className='text-sm text-muted-foreground'>Loading funding runway…</p>
+            ) : null}
+          </div>
 
-        <DialogFooter>
-          <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
-            Cancel
-          </Button>
-          <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
-            {isBusy ? (
-              <span className='inline-flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin' />
-                Processing...
-              </span>
-            ) : (
-              "Deposit"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
+              Cancel
+            </Button>
+            <Button variant='primary' onClick={handleDeposit} disabled={!canDeposit} size='compact'>
+              {isBusy ? (
+                <span className='inline-flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                  Processing...
+                </span>
+              ) : (
+                "Deposit"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
