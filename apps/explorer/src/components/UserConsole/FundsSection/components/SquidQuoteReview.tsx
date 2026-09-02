@@ -767,31 +767,35 @@ export function SquidQuoteReview({
         )}
       </div>
 
-      <div className='grid gap-1 rounded-md bg-muted/50 p-2'>
-        <label className='flex items-start gap-2 font-medium'>
-          <input
-            checked={includeFil}
-            className='mt-0.5 h-4 w-4'
-            disabled={isBusy}
-            onChange={(event) => {
-              setError(null);
-              if (address) setIncludeFilOverride({ owner: address, value: event.currentTarget.checked });
-            }}
-            type='checkbox'
-          />
-          <span>Include 0.25 FIL for transaction fees</span>
-        </label>
-        <p className='pl-6 text-xs text-muted-foreground'>
-          {isFilecoinFilBalanceError
-            ? includeFil
-              ? "Your FIL balance could not be read, so this is included by default."
-              : "Your FIL balance could not be read. FIL is not included."
-            : filecoinFilBalance !== undefined && filecoinFilBalance > 0n
-              ? "You already have FIL for fees."
-              : isLoadingFilecoinFilBalance
-                ? "Checking your Filecoin wallet balance…"
-                : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL. This covers about a month of typical activity. The FIL goes to your wallet to pay network fees — not to your Filecoin Pay balance."}
-        </p>
+      <div className='flex items-start gap-2 rounded-md bg-muted/50 p-3'>
+        <input
+          aria-describedby='squid-include-fil-hint'
+          checked={includeFil}
+          className='mt-0.5 h-4 w-4 shrink-0 accent-primary'
+          disabled={isBusy}
+          id='squid-include-fil'
+          onChange={(event) => {
+            setError(null);
+            if (address) setIncludeFilOverride({ owner: address, value: event.currentTarget.checked });
+          }}
+          type='checkbox'
+        />
+        <div className='grid gap-1'>
+          <Label className='cursor-pointer' htmlFor='squid-include-fil'>
+            Include 0.25 FIL for transaction fees
+          </Label>
+          <p className='text-xs leading-relaxed text-muted-foreground' id='squid-include-fil-hint'>
+            {isFilecoinFilBalanceError
+              ? includeFil
+                ? "Your FIL balance could not be read, so this is included by default."
+                : "Your FIL balance could not be read. FIL is not included."
+              : filecoinFilBalance !== undefined && filecoinFilBalance > 0n
+                ? "You already have FIL for fees."
+                : isLoadingFilecoinFilBalance
+                  ? "Checking your Filecoin wallet balance…"
+                  : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL. This covers about a month of typical activity. The FIL goes to your wallet to pay network fees — not to your Filecoin Pay balance."}
+          </p>
+        </div>
       </div>
 
       <Button
