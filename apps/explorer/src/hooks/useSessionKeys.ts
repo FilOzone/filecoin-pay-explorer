@@ -50,10 +50,15 @@ export function useSessionKeys(network: Network, account: Hex) {
     setRecords(loadRecords(network, account));
   }, [network, account]);
 
+  // Updater form so a callback captured by an in-flight transaction never
+  // writes a record list older than the one on screen.
   const persist = useCallback(
-    (next: SessionKeyRecord[]) => {
-      setRecords(next);
-      window.localStorage.setItem(storageKey(network, account), JSON.stringify(next));
+    (update: (prev: SessionKeyRecord[]) => SessionKeyRecord[]) => {
+      setRecords((prev) => {
+        const next = update(prev);
+        window.localStorage.setItem(storageKey(network, account), JSON.stringify(next));
+        return next;
+      });
     },
     [network, account],
   );
@@ -113,22 +118,35 @@ export function useSessionKeys(network: Network, account: Hex) {
     });
   }, [records, reads, nowSec]);
 
+  // A signer the list already knows keeps its earlier scopes: whole-key revoke
+  // sends every scope in the record, so the record must hold all of them.
   const addKey = useCallback(
     (record: SessionKeyRecord) => {
-      persist([
-        record,
-        ...records.filter((r) => r.sessionKeyPublic.toLowerCase() !== record.sessionKeyPublic.toLowerCase()),
-      ]);
+      persist((prev) => {
+        const same = (r: SessionKeyRecord) =>
+          r.sessionKeyPublic.toLowerCase() === record.sessionKeyPublic.toLowerCase();
+        const existing = prev.find(same);
+        const merged = existing
+          ? {
+              ...existing,
+              ...record,
+              scopes: [...new Set([...existing.scopes, ...record.scopes])],
+              createdAt: existing.createdAt || record.createdAt,
+              name: existing.name || record.name,
+            }
+          : record;
+        return [merged, ...prev.filter((r) => !same(r))];
+      });
     },
-    [records, persist],
+    [persist],
   );
 
   /** Removes a key from the local inventory (used when a login tx fails after optimistic add). */
   const removeKey = useCallback(
     (sessionKeyPublic: Hex) => {
-      persist(records.filter((r) => r.sessionKeyPublic.toLowerCase() !== sessionKeyPublic.toLowerCase()));
+      persist((prev) => prev.filter((r) => r.sessionKeyPublic.toLowerCase() !== sessionKeyPublic.toLowerCase()));
     },
-    [records, persist],
+    [persist],
   );
 
   return {

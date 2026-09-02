@@ -161,7 +161,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                     className='border-b border-zinc-100 dark:border-zinc-800 last:border-0'
                   >
                     <td className='px-4 py-3'>
-                      <span className='font-medium'>{key.name}</span>
+                      <span className='font-medium'>{key.name || "(unnamed)"}</span>
                       {key.createdAt > 0 && (
                         <span className='block text-xs text-zinc-500'>
                           created{" "}

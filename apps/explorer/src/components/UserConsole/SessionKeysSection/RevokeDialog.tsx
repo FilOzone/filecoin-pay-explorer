@@ -52,7 +52,7 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenCh
     <Dialog open={sessionKey !== null} onOpenChange={onOpenChange}>
       <DialogContent className='sm:max-w-lg'>
         <DialogHeader>
-          <DialogTitle>Revoke “{sessionKey?.name}”?</DialogTitle>
+          <DialogTitle>Revoke “{sessionKey?.name || "(unnamed)"}”?</DialogTitle>
           <DialogDescription>
             Immediately disables every scope of this key. Apps still holding it will stop working.
           </DialogDescription>
