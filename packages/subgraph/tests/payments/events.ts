@@ -16,13 +16,22 @@ import {
   WithdrawRecorded,
 } from "../../generated/Payments/Payments";
 
+let nextLogIndex = 1;
+
+function newEvent(): ethereum.Event {
+  const event = newMockEvent();
+  event.logIndex = GraphBN.fromI32(nextLogIndex);
+  nextLogIndex += 1;
+  return event;
+}
+
 export function createDepositRecordedEvent(
   token: Address,
   from: Address,
   to: Address,
   amount: GraphBN,
 ): DepositRecorded {
-  const event = changetype<DepositRecorded>(newMockEvent());
+  const event = changetype<DepositRecorded>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("token", ethereum.Value.fromAddress(token)));
   event.parameters.push(new ethereum.EventParam("from", ethereum.Value.fromAddress(from)));
@@ -38,7 +47,7 @@ export function createWithdrawRecordedEvent(
   to: Address,
   amount: GraphBN,
 ): WithdrawRecorded {
-  const event = changetype<WithdrawRecorded>(newMockEvent());
+  const event = changetype<WithdrawRecorded>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("token", ethereum.Value.fromAddress(token)));
   event.parameters.push(new ethereum.EventParam("from", ethereum.Value.fromAddress(from)));
@@ -58,7 +67,7 @@ export function createRailCreatedEvent(
   serviceFeeRecipient: Address,
   commissionRateBps: GraphBN,
 ): RailCreated {
-  const event = changetype<RailCreated>(newMockEvent());
+  const event = changetype<RailCreated>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(new ethereum.EventParam("payer", ethereum.Value.fromAddress(payer)));
@@ -85,7 +94,7 @@ export function createOperatorApprovalUpdatedEvent(
   lockupAllowance: GraphBN,
   maxLockupPeriod: GraphBN,
 ): OperatorApprovalUpdated {
-  const event = changetype<OperatorApprovalUpdated>(newMockEvent());
+  const event = changetype<OperatorApprovalUpdated>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("token", ethereum.Value.fromAddress(token)));
   event.parameters.push(new ethereum.EventParam("client", ethereum.Value.fromAddress(client)));
@@ -105,7 +114,7 @@ export function createAccountLockupSettledEvent(
   lockupRate: GraphBN,
   lockupLastSettledAt: GraphBN,
 ): AccountLockupSettled {
-  const event = changetype<AccountLockupSettled>(newMockEvent());
+  const event = changetype<AccountLockupSettled>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("token", ethereum.Value.fromAddress(token)));
   event.parameters.push(new ethereum.EventParam("owner", ethereum.Value.fromAddress(owner)));
@@ -124,7 +133,7 @@ export function createRailOneTimePaymentProcessedEvent(
   operatorCommission: GraphBN,
   networkFee: GraphBN,
 ): RailOneTimePaymentProcessed {
-  const event = changetype<RailOneTimePaymentProcessed>(newMockEvent());
+  const event = changetype<RailOneTimePaymentProcessed>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(new ethereum.EventParam("netPayeeAmount", ethereum.Value.fromUnsignedBigInt(netPayeeAmount)));
@@ -143,7 +152,7 @@ export function createRailLockupModifiedEvent(
   oldLockupFixed: GraphBN,
   newLockupFixed: GraphBN,
 ): RailLockupModified {
-  const event = changetype<RailLockupModified>(newMockEvent());
+  const event = changetype<RailLockupModified>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(new ethereum.EventParam("oldLockupPeriod", ethereum.Value.fromUnsignedBigInt(oldLockupPeriod)));
@@ -155,7 +164,7 @@ export function createRailLockupModifiedEvent(
 }
 
 export function createRailRateModifiedEvent(railId: GraphBN, oldRate: GraphBN, newRate: GraphBN): RailRateModified {
-  const event = changetype<RailRateModified>(newMockEvent());
+  const event = changetype<RailRateModified>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(new ethereum.EventParam("oldRate", ethereum.Value.fromUnsignedBigInt(oldRate)));
@@ -172,7 +181,7 @@ export function createRailSettledEvent(
   networkFee: GraphBN,
   settledUpto: GraphBN,
 ): RailSettled {
-  const event = changetype<RailSettled>(newMockEvent());
+  const event = changetype<RailSettled>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(
@@ -191,7 +200,7 @@ export function createRailSettledEvent(
 }
 
 export function createRailTerminatedEvent(railId: GraphBN, by: Address, endEpoch: GraphBN): RailTerminated {
-  const event = changetype<RailTerminated>(newMockEvent());
+  const event = changetype<RailTerminated>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
   event.parameters.push(new ethereum.EventParam("by", ethereum.Value.fromAddress(by)));
@@ -201,7 +210,7 @@ export function createRailTerminatedEvent(railId: GraphBN, by: Address, endEpoch
 }
 
 export function createRailFinalizedEvent(railId: GraphBN): RailFinalized {
-  const event = changetype<RailFinalized>(newMockEvent());
+  const event = changetype<RailFinalized>(newEvent());
 
   event.parameters.push(new ethereum.EventParam("railId", ethereum.Value.fromUnsignedBigInt(railId)));
 
