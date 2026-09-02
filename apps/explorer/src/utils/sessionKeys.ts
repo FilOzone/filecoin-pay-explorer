@@ -4,6 +4,12 @@
  * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol`;
  * the unit tests recompute them from the preimages to guard against drift.
  *
+ * Canonical source: `DefaultFwssPermissions` in `@filoz/synapse-core/session-key`.
+ * The explorer pins `@filoz/synapse-sdk` 0.41, which neither re-exports that
+ * module nor ships a synapse-core with the current `TerminateService` hash
+ * (0.5.2 still has `DeleteDataSet`). Switch to the import once the SDK is
+ * bumped to a version whose synapse-core is 0.7 or newer.
+ *
  * NOTE: this module stays free of `@/` imports and side effects so its logic
  \* stays unit-testable in isolation.
  */
@@ -77,6 +83,23 @@ export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
   { label: "90 days", seconds: 90 * 86400 },
 ];
 
+/**
+ * Absolute expiry (unix seconds) for the create form. A preset index is a
+ * duration added to `nowMs`; "custom" is an absolute `YYYY-MM-DD` taken as
+ * end of day in local time. Returns null when the choice is missing or in
+ * the past.
+ */
+export function resolveExpiry(presetIndex: string, customDate: string, nowMs: number): bigint | null {
+  const nowSec = Math.floor(nowMs / 1000);
+  if (presetIndex === "custom") {
+    if (!customDate) return null;
+    const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
+    return ts > nowSec ? BigInt(ts) : null;
+  }
+  const preset = EXPIRY_PRESETS[Number(presetIndex)];
+  return preset ? BigInt(nowSec + preset.seconds) : null;
+}
+
 export interface SessionKeyRecord {
   name: string;
   sessionKeyPublic: `0x${string}`;
@@ -104,7 +127,9 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
     // Rebuilds records field-by-field: fields not listed here are DROPPED on
     // every load, so a new SessionKeyRecord field must be added here too.
     out.push({
-      name: typeof r.name === "string" ? r.name : "",
+      // Re-normalized on read: a record written before a stricter rule, or
+      // edited by hand, still comes out clean.
+      name: normalizeKeyName(typeof r.name === "string" ? r.name : ""),
       sessionKeyPublic: r.sessionKeyPublic as `0x${string}`,
       scopes,
       createdAt: typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : 0,
