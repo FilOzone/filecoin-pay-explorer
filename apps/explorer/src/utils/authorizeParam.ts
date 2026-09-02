@@ -3,21 +3,32 @@
  * filecoin-pin CLI pairing flow (`session create --console`). Both params are
  * untrusted URL input and never throw:
  * - `authorize` is either a real 20-byte EVM address — checksummed here so
- *   the UI only ever renders the canonical form — or it is dropped entirely.
+ *   the UI only ever renders the canonical form — or a typed error the page
+ *   shows instead of silently dropping the request.
  * - `scopes` is a comma-separated scope-id list; unknown entries are dropped,
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
 import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
-export function parseAuthorizeParam(value: string | null | undefined): `0x${string}` | null {
+/**
+ * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
+ * shape whose mixed-case letters do not match EIP-55; all-lowercase input
+ * never hits it.
+ */
+export type AuthorizeParamError = "bad-checksum" | "not-an-address";
+
+/** null means the param was absent or blank, so there is no request to show at all. */
+export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
+
+export function parseAuthorizeParam(value: string | null | undefined): AuthorizeParamResult {
   if (typeof value !== "string") return null;
   const candidate = value.trim();
-  // isAddress (strict by default) accepts all-lowercase hex or a correctly
-  // checksummed address, and rejects everything else — including mixed-case
-  // strings whose checksum doesn't verify.
-  if (!isAddress(candidate)) return null;
-  return getAddress(candidate);
+  if (candidate.length === 0) return null;
+  if (!isAddress(candidate, { strict: false })) return { error: "not-an-address" };
+  // Strict mode accepts all-lowercase hex or a correctly checksummed address.
+  if (!isAddress(candidate)) return { error: "bad-checksum" };
+  return { address: getAddress(candidate) };
 }
 
 /** Canonical-order, deduped scope ids from a `?scopes=` value, or null when none are valid. */
