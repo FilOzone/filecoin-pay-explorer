@@ -13,12 +13,25 @@ const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 // a reload; see createConsoleWalletSelector. Storage is read lazily, on the client.
 const selectConsoleWallet = createConsoleWalletSelector({ storage: () => window.localStorage });
 
+/**
+ * Stands in for the console on a deploy without a Privy app ID: a readable
+ * message instead of Privy's own "invalid app ID" screen, and no throw, so a
+ * build without the variable (CI, a preview) still completes.
+ */
+function PrivyNotConfigured() {
+  return (
+    <main className='mx-auto max-w-xl p-8 text-sm'>
+      <h1 className='text-lg font-semibold'>The console is not configured</h1>
+      <p className='mt-2 text-muted-foreground'>
+        Set <code>NEXT_PUBLIC_PRIVY_APP_ID</code> (and <code>NEXT_PUBLIC_PRIVY_CLIENT_ID</code>) so the console can log
+        users in through Privy. The README lists the Privy dashboard settings.
+      </p>
+    </main>
+  );
+}
+
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  if (!PRIVY_APP_ID) {
-    // Fail with a clear message instead of booting into an opaque Privy
-    // "invalid app ID" error screen on a misconfigured deploy.
-    throw new Error("NEXT_PUBLIC_PRIVY_APP_ID is not set; the console cannot initialize Privy without it.");
-  }
+  if (!PRIVY_APP_ID) return <PrivyNotConfigured />;
   return (
     <PrivyProvider
       appId={PRIVY_APP_ID}
