@@ -6,10 +6,10 @@ import clsx from "clsx";
 import { useState } from "react";
 import type { Hex } from "viem";
 import { getChain } from "@/constants/chains";
-import { type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
+import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { formatAddress } from "@/utils/formatter";
-import { SCOPE_BY_ID } from "@/utils/sessionKeys";
+import { pickRevokeTarget, SCOPE_BY_ID } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -65,7 +65,13 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
   const { keys, addKey, removeKey, refetchStatuses, registry } = useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
   const [createOpen, setCreateOpen] = useState(false);
-  const [revokeTarget, setRevokeTarget] = useState<SessionKeyWithStatus | null>(null);
+  // The target remembers the identity it was chosen under: a revoke is sent
+  // by the connected wallet, so after a wallet or network switch the dialog
+  // must not offer a signer the new wallet never authorized.
+  const [revoke, setRevoke] = useState<{ target: SessionKeyWithStatus; identity: SessionKeysIdentity } | null>(null);
+  const revokeTarget = pickRevokeTarget(revoke, { network, account });
+  const setRevokeTarget = (target: SessionKeyWithStatus | null) =>
+    setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
 
   const visibleKeys = activeOnly ? keys.filter((k) => k.status === "active") : keys;

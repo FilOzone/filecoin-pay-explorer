@@ -172,6 +172,28 @@ export function deriveSessionKeys(
   });
 }
 
+/** The wallet and network a session key inventory belongs to. */
+export interface KeyInventoryIdentity {
+  network: string;
+  account: `0x${string}`;
+}
+
+export function isSameIdentity(a: KeyInventoryIdentity, b: KeyInventoryIdentity): boolean {
+  return a.network === b.network && a.account.toLowerCase() === b.account.toLowerCase();
+}
+
+/**
+ * A revoke is sent by the connected wallet, so a target chosen under another
+ * wallet or network is not offered: the dialog counts as open only while the
+ * identity it was chosen under is still the connected one.
+ */
+export function pickRevokeTarget<T>(
+  chosen: { target: T; identity: KeyInventoryIdentity } | null,
+  current: KeyInventoryIdentity,
+): T | null {
+  return chosen && isSameIdentity(chosen.identity, current) ? chosen.target : null;
+}
+
 export interface SessionKeyRecord {
   name: string;
   sessionKeyPublic: `0x${string}`;

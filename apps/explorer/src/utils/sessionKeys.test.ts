@@ -10,6 +10,7 @@ import {
   EXPIRY_PRESETS,
   isScopeActive,
   normalizeKeyName,
+  pickRevokeTarget,
   resolveExpiry,
   type ScopeId,
   SESSION_KEY_SCOPES,
@@ -122,6 +123,24 @@ describe("call encoding", () => {
 
   it("revoke is (signer, typehashes, name) with no expiry", () => {
     assert.deepEqual(buildRevokeArgs(SIGNER, ["terminateService"], "ci"), [SIGNER, [TERMINATE], "ci"]);
+  });
+});
+
+describe("pickRevokeTarget", () => {
+  const chosen = { target: "key-a", identity: { network: "calibration", account: ACCOUNT } };
+
+  it("offers the target while the same wallet and network are connected, case-insensitively", () => {
+    assert.equal(pickRevokeTarget(chosen, { network: "calibration", account: ACCOUNT }), "key-a");
+    assert.equal(
+      pickRevokeTarget(chosen, { network: "calibration", account: ACCOUNT.toLowerCase() as `0x${string}` }),
+      "key-a",
+    );
+  });
+
+  it("drops the target after a wallet or network switch, and with nothing chosen", () => {
+    assert.equal(pickRevokeTarget(chosen, { network: "calibration", account: SIGNER }), null);
+    assert.equal(pickRevokeTarget(chosen, { network: "mainnet", account: ACCOUNT }), null);
+    assert.equal(pickRevokeTarget(null, { network: "calibration", account: ACCOUNT }), null);
   });
 });
 
