@@ -10,6 +10,7 @@ import { BaseError, UserRejectedRequestError } from "viem";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
 import {
+  AlertPreferencesCard,
   AlertsActiveCard,
   AlertsOffCard,
   AlertsUnsubscribingCard,
@@ -395,6 +396,7 @@ const NotificationsContent = ({
       return (
         <>
           <AlertsActiveCard onTurnOff={handleTurnOffClick} error={unsubscribeError} />
+          <AlertPreferencesCard wallet={address} />
           <UnsubscribeDialog
             open={unsubscribeDialogOpen}
             onCancel={() => setUnsubscribeDialogOpen(false)}

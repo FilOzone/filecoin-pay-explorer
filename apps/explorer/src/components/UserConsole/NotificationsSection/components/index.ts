@@ -1,3 +1,4 @@
+export { AlertPreferencesCard } from "./AlertPreferencesCard";
 export { AlertsActiveCard } from "./AlertsActiveCard";
 export { AlertsOffCard } from "./AlertsOffCard";
 export { AlertsUnsubscribingCard } from "./AlertsUnsubscribingCard";
