@@ -8,20 +8,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
+import { useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useDisconnect, useReadContract, useWalletClient } from "wagmi";
+import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
+import { exitWalletSession, getWalletExitAction } from "@/components/shared/CustomConnectButton/state";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
   const { constants } = useSynapse();
   const { address } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { authenticated } = usePrivy();
+  const { logout } = useLogout();
+  const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
+  const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
+  const exitAction = getWalletExitAction(authenticated, activeWallet?.connectorType);
   const [copied, setCopied] = useState(false);
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
@@ -64,6 +71,25 @@ const Balance = () => {
     }
   };
 
+  const exitWallet = async () => {
+    try {
+      if (exitAction === "manual-disconnect") {
+        toast.info("Disconnect this site from your wallet extension");
+        return;
+      }
+
+      await exitWalletSession({
+        authenticated,
+        logout,
+        disconnect: activeWallet ? () => activeWallet.disconnect() : undefined,
+      });
+    } catch (error) {
+      toast.error(exitAction === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -97,9 +123,15 @@ const Balance = () => {
           <span className='text-base text-zinc-950 font-mono'>{address && formatAddress(address)}</span>
           {copied && <Check className='text-green-500 ml-auto' />}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer py-2'>
+        <DropdownMenuItem onClick={() => void exitWallet()} className='cursor-pointer py-2'>
           <LogOut />
-          <span className='text-base text-zinc-950'>Disconnect</span>
+          <span className='text-base text-zinc-950'>
+            {exitAction === "logout"
+              ? "Log out"
+              : exitAction === "manual-disconnect"
+                ? "Disconnect in wallet"
+                : "Disconnect"}
+          </span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Tools</DropdownMenuLabel>
