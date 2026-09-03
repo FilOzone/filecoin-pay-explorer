@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { GET_APPROVED_OPERATOR_CLIENTS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
-import { useGraphQLQuery } from "./useGraphQLQuery";
+import { useGraphQLClient } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
 import { useServiceMetadata } from "./useServiceMetadata";
 
@@ -16,9 +17,44 @@ const HOMEPAGE_PATTERN = /^https?:\/\/\S+$/i;
 
 interface ApprovedOperatorClientsResponse {
   operatorApprovals: Array<{
+    id: string;
     client: { id: string };
     operator: { address: string };
   }>;
+}
+
+type ApprovedOperatorClient = ApprovedOperatorClientsResponse["operatorApprovals"][number];
+
+const APPROVAL_PAGE_SIZE = 1000;
+
+export async function getApprovedOperatorClients(
+  fetchPage: (cursor: string) => Promise<ApprovedOperatorClientsResponse>,
+) {
+  const approvals: ApprovedOperatorClientsResponse["operatorApprovals"] = [];
+  let cursor = "0x";
+
+  while (true) {
+    const page = (await fetchPage(cursor)).operatorApprovals;
+    approvals.push(...page);
+    if (page.length < APPROVAL_PAGE_SIZE) return approvals;
+
+    const nextCursor = page.at(-1)?.id;
+    if (!nextCursor || nextCursor === cursor) throw new Error("Operator approval pagination did not advance");
+    cursor = nextCursor;
+  }
+}
+
+export function getApprovableServiceCandidates(approvals: ApprovedOperatorClient[], network: Network) {
+  const payersByOperator = new Map<string, Set<string>>();
+  for (const approval of approvals) {
+    const operator = approval.operator.address.toLowerCase();
+    const payers = payersByOperator.get(operator) ?? new Set<string>();
+    payers.add(approval.client.id.toLowerCase());
+    payersByOperator.set(operator, payers);
+  }
+  return Array.from(payersByOperator.entries())
+    .filter(([, payers]) => payers.size >= MIN_UNIQUE_PAYERS[network])
+    .map(([address, payers]) => ({ address, payerCount: payers.size }));
 }
 
 export interface ApprovableService {
@@ -39,31 +75,19 @@ export interface ApprovableService {
 export function useApprovableServices(options?: { networkOverride?: Network }) {
   const { network: contextNetwork } = useNetwork();
   const network = options?.networkOverride ?? contextNetwork;
-  const { data: approvals, isLoading } = useGraphQLQuery<
-    ApprovedOperatorClientsResponse,
-    ApprovedOperatorClientsResponse["operatorApprovals"]
-  >({
-    networkOverride: options?.networkOverride,
-    queryKey: ["approvedOperatorClients"],
-    // 1000 covers today's network many times over (~150 payers on the largest
-    // operator); popular operators would still clear the threshold if it ever
-    // truncates.
-    query: GET_APPROVED_OPERATOR_CLIENTS,
-    select: (data) => data.operatorApprovals,
+  const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
+  const { data: approvals, isLoading } = useQuery({
+    queryKey: ["approvedOperatorClients", network],
+    queryFn: () =>
+      getApprovedOperatorClients((cursor) =>
+        executeQuery<ApprovedOperatorClientsResponse>(GET_APPROVED_OPERATOR_CLIENTS, {
+          cursor,
+          first: APPROVAL_PAGE_SIZE,
+        }),
+      ),
   });
 
-  const candidates = useMemo(() => {
-    const payersByOperator = new Map<string, Set<string>>();
-    for (const approval of approvals ?? []) {
-      const operator = approval.operator.address.toLowerCase();
-      const payers = payersByOperator.get(operator) ?? new Set<string>();
-      payers.add(approval.client.id.toLowerCase());
-      payersByOperator.set(operator, payers);
-    }
-    return Array.from(payersByOperator.entries())
-      .filter(([, payers]) => payers.size >= MIN_UNIQUE_PAYERS[network])
-      .map(([address, payers]) => ({ address, payerCount: payers.size }));
-  }, [approvals, network]);
+  const candidates = useMemo(() => getApprovableServiceCandidates(approvals ?? [], network), [approvals, network]);
 
   // The name gate means candidates are invisible until their onchain reads
   // land — without this, the dropdown briefly claims there are no services.
@@ -80,7 +104,7 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
           const homepage = meta.homepage && HOMEPAGE_PATTERN.test(meta.homepage) ? meta.homepage : undefined;
           return [{ ...candidate, name: meta.name, description: meta.description, homepage }];
         })
-        .sort((a, b) => b.payerCount - a.payerCount),
+        .sort((a, b) => b.payerCount - a.payerCount || a.address.localeCompare(b.address)),
     [candidates, metadata],
   );
 

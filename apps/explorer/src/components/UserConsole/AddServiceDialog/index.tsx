@@ -78,6 +78,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
+  const isBusy = isSubmitting || isExecuting;
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -141,7 +142,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   // A 0-rate/0-lockup grant is an on-chain no-op that still costs gas —
   // switching off the unlimited default requires a real limit.
   const areLimitsValid =
-    lockupInWei !== null && rateInWei !== null && (isUnlimited || lockupInWei > 0n || rateInWei > 0n);
+    lockupInWei !== null &&
+    rateInWei !== null &&
+    lockupInWei >= 0n &&
+    rateInWei >= 0n &&
+    (isUnlimited || lockupInWei > 0n || rateInWei > 0n);
 
   const isOperatorValid = !!operatorAddress;
   const isDepositValid = !depositAmount.trim() || (isDepositing && supportsPermit);
@@ -149,14 +154,12 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
     !isDepositing || (balance !== undefined && parsedDeposit !== null && parsedDeposit <= balance);
-  const canSubmit =
-    isOperatorValid &&
-    !!token &&
-    isDepositValid &&
-    hasSufficientBalance &&
-    areLimitsValid &&
-    !isSubmitting &&
-    !isExecuting;
+  const canSubmit = isOperatorValid && !!token && isDepositValid && hasSufficientBalance && areLimitsValid && !isBusy;
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isBusy) return;
+    onOpenChange(nextOpen);
+  };
 
   const handleSubmit = () => {
     if (!operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
@@ -171,8 +174,17 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'
+        showCloseButton={!isBusy}
+        onEscapeKeyDown={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Add a Service</DialogTitle>
           <DialogDescription>
@@ -185,7 +197,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
           {/* Service */}
           <div className='grid gap-3'>
             <Label htmlFor='service'>Select Service</Label>
-            <Select value={serviceChoice} onValueChange={serviceSelection.setServiceChoice} disabled={isSubmitting}>
+            <Select value={serviceChoice} onValueChange={serviceSelection.setServiceChoice} disabled={isBusy}>
               <SelectTrigger id='service' className='w-full'>
                 <SelectValue placeholder={isLoadingServices ? "Loading services…" : "Choose a service…"} />
               </SelectTrigger>
@@ -214,7 +226,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                   placeholder='Service contract address 0x…'
                   value={serviceSelection.customServiceInput}
                   onChange={serviceSelection.setCustomServiceInput}
-                  disabled={isSubmitting}
+                  disabled={isBusy}
                 />
                 {serviceSelection.customServiceInput &&
                   (isOperatorValid ? (
@@ -241,7 +253,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                 tokenSelection.setTokenChoice(value);
                 clearAmounts();
               }}
-              disabled={isSubmitting}
+              disabled={isBusy}
             >
               <SelectTrigger id='paymentToken' className='w-full'>
                 <SelectValue placeholder='Choose a token…' />
@@ -272,7 +284,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                   tokenSelection.setCustomTokenInput(value);
                   clearAmounts();
                 }}
-                disabled={isSubmitting}
+                disabled={isBusy}
               />
             )}
             {tokenSelection.customTokenState === "invalid" && (
@@ -362,7 +374,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                   onChange={setDepositAmount}
                   min='0'
                   step='any'
-                  disabled={isSubmitting}
+                  disabled={isBusy}
                   className='text-lg pr-16'
                 />
                 <Button
@@ -372,7 +384,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                   onClick={() => {
                     if (balance !== undefined) setDepositAmount(formatUnits(balance, token.decimals));
                   }}
-                  disabled={isSubmitting || balance === undefined || isLoadingBalance}
+                  disabled={isBusy || balance === undefined || isLoadingBalance}
                 >
                   MAX
                 </Button>
@@ -381,6 +393,12 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                 <p className='flex items-center gap-2 text-xs text-destructive'>
                   <AlertCircle className='h-3.5 w-3.5 shrink-0' />
                   Insufficient balance for this deposit.
+                </p>
+              )}
+              {!!depositAmount.trim() && !isDepositing && (
+                <p className='flex items-center gap-2 text-xs text-destructive'>
+                  <AlertCircle className='h-3.5 w-3.5 shrink-0' />
+                  Enter a valid amount.
                 </p>
               )}
               <p className='text-xs text-muted-foreground'>
@@ -395,7 +413,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
             <button
               type='button'
               onClick={() => setShowLimits(!showLimits)}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className='text-sm text-primary text-left w-fit hover:underline'
             >
               {showLimits ? "Hide spending limits" : "Set spending limits (optional)"}
@@ -408,7 +426,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                     checked={isUnlimited}
                     onChange={(e) => setIsUnlimited(e.target.checked)}
                     className='rounded'
-                    disabled={isSubmitting}
+                    disabled={isBusy}
                   />
                   No spending limit (default)
                 </label>
@@ -423,7 +441,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                       placeholder='0.0'
                       value={lockupAllowance}
                       onChange={setLockupAllowance}
-                      disabled={isUnlimited || isSubmitting}
+                      min='0'
+                      disabled={isUnlimited || isBusy}
                     />
                   </div>
                   <div className='grid gap-2'>
@@ -436,7 +455,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                       placeholder='0.0'
                       value={rateAllowance}
                       onChange={setRateAllowance}
-                      disabled={isUnlimited || isSubmitting}
+                      min='0'
+                      disabled={isUnlimited || isBusy}
                     />
                   </div>
                 </div>
@@ -454,16 +474,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
         </div>
 
         <DialogFooter>
-          <Button
-            variant='ghost'
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isExecuting}
-            size='compact'
-          >
+          <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
           <Button variant='primary' onClick={handleSubmit} disabled={!canSubmit} size='compact'>
-            {isSubmitting || isExecuting ? (
+            {isBusy ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Processing…

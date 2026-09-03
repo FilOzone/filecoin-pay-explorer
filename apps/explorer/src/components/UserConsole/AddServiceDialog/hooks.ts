@@ -6,7 +6,7 @@ import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
-import { getPermitSignature, type PermitSignature } from "@/utils/permit";
+import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -92,6 +92,16 @@ const permitNoncesAbi = [
   },
 ] as const;
 
+const permitDomainSeparatorAbi = [
+  {
+    type: "function",
+    name: "DOMAIN_SEPARATOR",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bytes32" }],
+  },
+] as const;
+
 export interface TokenSelection {
   knownTokens: PaymentTokenDetails[];
   tokenChoice: string;
@@ -99,7 +109,7 @@ export interface TokenSelection {
   customTokenInput: string;
   setCustomTokenInput: (value: string) => void;
   token: PaymentTokenDetails | null;
-  /** Curated tokens are permit-verified; custom tokens must pass the nonces() probe. */
+  /** Curated tokens are permit-verified; custom tokens must pass the permit-domain probes. */
   supportsPermit: boolean;
   customTokenState: CustomTokenState;
   balance: bigint | undefined;
@@ -132,11 +142,12 @@ export function useTokenSelection(open: boolean): TokenSelection {
           { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
           { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
           { address: customTokenAddress, abi: permitNoncesAbi, functionName: "nonces", args: [zeroAddress] },
+          { address: customTokenAddress, abi: permitDomainSeparatorAbi, functionName: "DOMAIN_SEPARATOR" },
         ]
       : [],
     query: { enabled: !!customTokenAddress && open },
   });
-  const [symbolRead, decimalsRead, nameRead, noncesRead] = tokenReads ?? [];
+  const [symbolRead, decimalsRead, nameRead, noncesRead, domainSeparatorRead] = tokenReads ?? [];
 
   // All of symbol/decimals/name must succeed (allowFailure: true reports
   // per-result status, and the aggregate isError stays false on a single
@@ -156,7 +167,15 @@ export function useTokenSelection(open: boolean): TokenSelection {
       : null;
 
   const token = selectedKnown ?? chainToken;
-  const supportsPermit = selectedKnown ? true : noncesRead?.status === "success";
+  const supportsPermit = selectedKnown
+    ? true
+    : !!(
+        chainToken?.name &&
+        noncesRead?.status === "success" &&
+        domainSeparatorRead?.status === "success" &&
+        String(domainSeparatorRead.result).toLowerCase() ===
+          getPermitDomainSeparator(customTokenAddress as Hex, chainToken.name, constants.chain.id)
+      );
 
   // Checks ordered by precedence: an empty field never reports invalid, an
   // in-flight read never reports an error.
@@ -245,6 +264,7 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
           permitSignature = await getPermitSignature(
             {
               tokenAddress,
+              tokenName: token.name,
               ownerAddress: userAddress,
               spenderAddress: constants.contracts.payments.address,
               amount: parsedDeposit,
