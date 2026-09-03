@@ -1,13 +1,22 @@
 import { AlertCircle } from "lucide-react";
+import { formatUnits } from "viem";
 import { formatUsdfcAmount } from "../../data/funding-runway";
-import { isUnfavorableRate, type SquidDepositQuote } from "../../data/squid-deposit-route";
+import {
+  FIL_GAS_TOP_UP_AMOUNT,
+  type FilGasTopUp,
+  getDepositAfterFilGasTopUp,
+  isUnfavorableRate,
+  type SquidDepositQuote,
+} from "../../data/squid-deposit-route";
 
 /** What the account receives for the typed amount, with the rate, fees and time. */
 export function QuoteSummary({
+  filGasTopUp,
   quote,
   rate,
   tokenSymbol,
 }: {
+  filGasTopUp?: FilGasTopUp;
   quote: SquidDepositQuote;
   rate: number;
   tokenSymbol: string;
@@ -16,8 +25,16 @@ export function QuoteSummary({
     <div className='grid gap-1 rounded-md border p-3'>
       <div className='flex items-center justify-between gap-2'>
         <span className='text-muted-foreground'>You receive at least</span>
-        <span className='font-medium'>{formatUsdfcAmount(quote.minimumDestinationAmount)} USDFC</span>
+        <span className='font-medium'>
+          {formatUsdfcAmount(getDepositAfterFilGasTopUp(quote.minimumDestinationAmount, filGasTopUp))} USDFC
+        </span>
       </div>
+      {filGasTopUp && (
+        <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+          <span>Plus about {formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL in your wallet for gas</span>
+          <span>{formatUsdfcAmount(filGasTopUp.spendUsdfc)} USDFC</span>
+        </div>
+      )}
       <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
         <span>
           1 {tokenSymbol} ≈ {rate.toFixed(3)} USDFC

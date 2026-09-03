@@ -6,6 +6,7 @@ import { parseFundingAmount } from "../../data/funding-runway";
 import {
   getDepositRequiredNativeBalance,
   getUsdfcPerUsdc,
+  planFilGasTopUp,
   requestSquidDepositRoute,
   type SquidClient,
   type SquidDepositTarget,
@@ -116,6 +117,7 @@ export function useSquidDepositQuote({
   });
   const quote = quoteQuery.data;
   const rate = quote && sourceToken ? getUsdfcPerUsdc(quote, sourceToken.decimals) : null;
+  const filGasTopUp = quote ? planFilGasTopUp(quote, squid.now ?? Date.now) : undefined;
   const requiredNative =
     quote && balances
       ? getDepositRequiredNativeBalance(quote, sourceChainId, APPROVAL_GAS_UNITS * balances.gasPrice)
@@ -131,6 +133,7 @@ export function useSquidDepositQuote({
   return {
     balances,
     balancesQuery,
+    filGasTopUp,
     gasTopUpAmount,
     hasInsufficientGas,
     hasInsufficientUsdc,

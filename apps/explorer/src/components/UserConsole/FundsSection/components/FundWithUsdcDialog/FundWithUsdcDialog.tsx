@@ -41,6 +41,7 @@ import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 import { createDialogCloseGuard } from "../../data/dialog-close-guard";
 import { formatUsdfcAmount } from "../../data/funding-runway";
+import { getDepositAfterFilGasTopUp } from "../../data/squid-deposit-route";
 import { readSquidIntegratorId } from "../../data/squid-integrator";
 import { squidFetch } from "../../data/squid-quote";
 import {
@@ -144,6 +145,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
   const {
     balances,
     balancesQuery,
+    filGasTopUp,
     gasTopUpAmount,
     hasInsufficientGas,
     hasInsufficientUsdc,
@@ -214,7 +216,16 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
     if (!canConfirm || !payingWallet || !sourceToken || !sourceChain || !recipient || parsedAmount === null || !quote) {
       return;
     }
-    return execution.confirm({ amount, parsedAmount, payingWallet, quote, recipient, sourceChain, sourceToken });
+    return execution.confirm({
+      amount,
+      filGasTopUp,
+      parsedAmount,
+      payingWallet,
+      quote,
+      recipient,
+      sourceChain,
+      sourceToken,
+    });
   };
 
   const runFundingFlow = async (
@@ -367,7 +378,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
                   <dd className='text-right font-medium'>Your Filecoin Pay account</dd>
                 </div>
               </dl>
-              <QuoteSummary quote={quote} rate={rate} tokenSymbol={sourceToken.symbol} />
+              <QuoteSummary filGasTopUp={filGasTopUp} quote={quote} rate={rate} tokenSymbol={sourceToken.symbol} />
               <p className='text-muted-foreground'>
                 {isEmbedded
                   ? "Your Privy wallet signs the approval and the swap for you."
@@ -490,7 +501,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
                 <p className='flex items-center justify-between gap-2 text-muted-foreground'>
                   <span>You receive at least</span>
                   <span className='font-medium text-foreground'>
-                    {formatUsdfcAmount(quote.minimumDestinationAmount)} USDFC
+                    {formatUsdfcAmount(getDepositAfterFilGasTopUp(quote.minimumDestinationAmount, filGasTopUp))} USDFC
                   </span>
                 </p>
               )}

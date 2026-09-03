@@ -3,15 +3,22 @@ import { decodeFunctionData } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDepositPostHook,
+  FIL_GAS_TOP_UP_AMOUNT,
+  getDepositAfterFilGasTopUp,
   getDepositRequiredNativeBalance,
   getSourceNativeCosts,
   getUsdfcPerUsdc,
   isExecutableQuote,
   isUnfavorableRate,
   parseSquidDepositRoute,
+  planFilGasTopUp,
   requestSquidDepositRoute,
+  SUSHI_V3_SWAP_ROUTER_ADDRESS,
   selectUsdcTokens,
   squidDepositAbi,
+  sushiSwapRouterAbi,
+  WFIL_ADDRESS,
+  WFIL_USDFC_POOL_FEE,
 } from "./squid-deposit-route";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -128,6 +135,87 @@ describe("buildDepositPostHook", () => {
       args: [USDFC, RECIPIENT, 0n],
     });
   });
+
+  it("sells a slice of the USDFC for FIL to the recipient before the deposit takes the rest", () => {
+    const topUp = {
+      spendUsdfc: 100_000_000_000_000_000n,
+      minimumFil: 70_000_000_000_000_000n,
+      deadline: 1_700_604_800n,
+    };
+    const hook = buildDepositPostHook({ payments: PAYMENTS, usdfc: USDFC, recipient: RECIPIENT }, topUp);
+
+    expect(hook.description).toBe("Set aside FIL for gas, deposit USDFC into Filecoin Pay");
+    expect(hook.calls.map((call) => [call.callType, call.target, call.payload.tokenAddress])).toEqual([
+      [0, USDFC, USDFC],
+      [0, SUSHI_V3_SWAP_ROUTER_ADDRESS, USDFC],
+      [1, USDFC, USDFC],
+      [1, PAYMENTS, USDFC],
+    ]);
+    expect(decodeFunctionData({ abi: squidDepositAbi, data: hook.calls[0].callData })).toEqual({
+      functionName: "approve",
+      args: [SUSHI_V3_SWAP_ROUTER_ADDRESS, topUp.spendUsdfc],
+    });
+    const multicall = decodeFunctionData({ abi: sushiSwapRouterAbi, data: hook.calls[1].callData });
+    expect(multicall.functionName).toBe("multicall");
+    const [swap, unwrap] = (multicall.args as [readonly `0x${string}`[]])[0];
+    expect(decodeFunctionData({ abi: sushiSwapRouterAbi, data: swap })).toEqual({
+      functionName: "exactInputSingle",
+      args: [
+        {
+          tokenIn: USDFC,
+          tokenOut: WFIL_ADDRESS,
+          fee: WFIL_USDFC_POOL_FEE,
+          recipient: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+          deadline: topUp.deadline,
+          amountIn: topUp.spendUsdfc,
+          amountOutMinimum: topUp.minimumFil,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    });
+    expect(decodeFunctionData({ abi: sushiSwapRouterAbi, data: unwrap })).toEqual({
+      functionName: "unwrapWETH9",
+      args: [topUp.minimumFil, RECIPIENT],
+    });
+    expect(decodeFunctionData({ abi: squidDepositAbi, data: hook.calls[3].callData })).toEqual({
+      functionName: "deposit",
+      args: [USDFC, RECIPIENT, 0n],
+    });
+  });
+});
+
+describe("planFilGasTopUp", () => {
+  // Squid's own leg: 6.377 WFIL became 4.587 USDFC, so 0.1 FIL costs about 0.0719 USDFC.
+  const filecoinSwap = { wfil: 6_377_049_200_414_049_325n, usdfc: 4_587_274_747_827_089_410n };
+
+  it("spends a quarter more than the quoted rate and accepts 30% less FIL, a week out", () => {
+    const topUp = planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 92n * 10n ** 18n }, now);
+
+    expect(topUp).toEqual({
+      spendUsdfc: 89_917_660_262_234_738n,
+      minimumFil: 70_000_000_000_000_000n,
+      deadline: 1_700_000_000n + 7n * 24n * 60n * 60n,
+    });
+    expect(FIL_GAS_TOP_UP_AMOUNT).toBe(100_000_000_000_000_000n);
+  });
+
+  it("skips the top-up when it would take more than a tenth of the deposit", () => {
+    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 800_000_000_000_000_000n }, now)).toBeUndefined();
+  });
+
+  it("skips the top-up when the quote has no WFIL to USDFC leg to price it from", () => {
+    expect(planFilGasTopUp({ minimumDestinationAmount: 92n * 10n ** 18n }, now)).toBeUndefined();
+    expect(
+      planFilGasTopUp({ filecoinSwap: { wfil: 0n, usdfc: 1n }, minimumDestinationAmount: 92n * 10n ** 18n }, now),
+    ).toBeUndefined();
+  });
+
+  it("reports the USDFC left for the deposit", () => {
+    const topUp = { spendUsdfc: 5n, minimumFil: 1n, deadline: 1n };
+    expect(getDepositAfterFilGasTopUp(12n, topUp)).toBe(7n);
+    expect(getDepositAfterFilGasTopUp(3n, topUp)).toBe(0n);
+    expect(getDepositAfterFilGasTopUp(12n, undefined)).toBe(12n);
+  });
 });
 
 describe("selectUsdcTokens", () => {
@@ -194,6 +282,31 @@ describe("parseSquidDepositRoute", () => {
       ],
     });
     expect(isExecutableQuote(quote)).toBe(false);
+  });
+
+  it("keeps the WFIL to USDFC leg so the FIL top-up can be priced", () => {
+    const route = fakeRoute({
+      estimate: {
+        actions: [
+          { type: "bridge", fromChain: "8453", toChain: "314" },
+          {
+            type: "swap",
+            fromChain: "314",
+            toChain: "314",
+            fromToken: { address: WFIL_ADDRESS.toLowerCase() },
+            toToken: { address: USDFC },
+            fromAmount: "6377049200414049325",
+            toAmount: "4587274747827089410",
+          },
+          { type: "custom", fromChain: "314", toChain: "314" },
+        ],
+      },
+    });
+
+    expect(parseSquidDepositRoute(route, request, true, now).filecoinSwap).toEqual({
+      wfil: 6_377_049_200_414_049_325n,
+      usdfc: 4_587_274_747_827_089_410n,
+    });
   });
 
   it("parses an executable route against the trusted router", () => {
@@ -269,6 +382,24 @@ describe("requestSquidDepositRoute", () => {
       quoteOnly: true,
       postHook: buildDepositPostHook(request),
     });
+  });
+
+  it("includes the FIL top-up calls in the hook when the request plans one", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ route: fakeRoute() }), { status: 200 }));
+    const filGasTopUp = { spendUsdfc: 90n * 10n ** 15n, minimumFil: 70n * 10n ** 15n, deadline: 1_700_604_800n };
+
+    await requestSquidDepositRoute(
+      { ...request, filGasTopUp },
+      { integratorId: "integrator", fetch, now },
+      {
+        quoteOnly: false,
+      },
+    ).catch(() => undefined);
+
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.postHook).toEqual(JSON.parse(JSON.stringify(buildDepositPostHook(request, filGasTopUp))));
+    expect(body.postHook.calls).toHaveLength(4);
   });
 
   it("surfaces Squid's error message with the status", async () => {

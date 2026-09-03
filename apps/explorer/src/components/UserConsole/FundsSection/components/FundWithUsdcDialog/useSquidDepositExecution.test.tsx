@@ -174,6 +174,29 @@ describe("useSquidDepositExecution", () => {
     expect(switchChain.mock.calls.map(([chainId]) => chainId)).toEqual([8453, 314]);
   });
 
+  it("passes the FIL top-up to the route and shows it in the review", async () => {
+    fns.requestRoute.mockResolvedValue(executable);
+    fns.execute.mockResolvedValue(result);
+    const filGasTopUp = { spendUsdfc: 2n * 10n ** 18n, minimumFil: 7n * 10n ** 16n, deadline: 1_700_604_800n };
+    await render({ ...baseProps(), isEmbedded: true });
+
+    await act(async () => latest.confirm({ ...confirmInput, filGasTopUp }));
+
+    expect(fns.requestReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: expect.arrayContaining([
+          { label: "Receive at least", value: `${formatUsdfcAmount(DEPOSITED - 2n * 10n ** 18n)} USDFC` },
+          { label: "Gas top-up", value: `About 0.1 FIL sent to ${RECIPIENT}` },
+        ]),
+      }),
+    );
+    expect(fns.requestRoute).toHaveBeenCalledWith(
+      expect.objectContaining({ filGasTopUp }),
+      { integratorId: "id" },
+      { quoteOnly: false },
+    );
+  });
+
   it("stops when the embedded wallet declines the review", async () => {
     fns.requestReview.mockResolvedValueOnce(false);
     await render({ ...baseProps(), isEmbedded: true });

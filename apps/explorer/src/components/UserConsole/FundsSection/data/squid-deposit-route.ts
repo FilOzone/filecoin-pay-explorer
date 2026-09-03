@@ -16,11 +16,37 @@ const FULL_TOKEN_BALANCE_CALL_TYPE = 1;
 // gas separately and these estimates did not change the quoted fee.
 const APPROVE_ESTIMATED_GAS = "15000000";
 const DEPOSIT_ESTIMATED_GAS = "60000000";
+const FIL_SWAP_ESTIMATED_GAS = "250000000";
+
+// SushiSwap V3 on Filecoin, the venue Squid's own route already swaps through.
+// The router is the Uniswap-style SwapRouter (WETH9 = WFIL), so one multicall
+// can swap USDFC to WFIL and unwrap it straight to the wallet.
+export const SUSHI_V3_SWAP_ROUTER_ADDRESS: Address = "0x0389879e0156033202C44BF784ac18fC02edeE4f";
+export const WFIL_ADDRESS: Address = "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A";
+export const WFIL_USDFC_POOL_FEE = 500;
+/** Native FIL a deposit sets aside for the recipient's future gas. */
+export const FIL_GAS_TOP_UP_AMOUNT = 10n ** 17n;
+// The top-up only needs to land in the right ballpark: spend a quarter more USDFC
+// than the quoted rate implies, and accept getting 30% less FIL than aimed for,
+// so a price move between quote and settlement does not fail the whole deposit.
+const FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT = 25n;
+const FIL_GAS_TOP_UP_MINIMUM_PERCENT = 70n;
+// Never let the gas top-up eat more than this share of the arriving USDFC.
+const FIL_GAS_TOP_UP_MAX_SHARE_PERCENT = 10n;
+// Axelar can hold a route for a long time; the swap deadline must outlive it.
+const FIL_GAS_TOP_UP_DEADLINE_SECONDS = 7n * 24n * 60n * 60n;
 
 export const squidDepositAbi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function deposit(address token, address to, uint256 amount)",
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
+]);
+
+export const sushiSwapRouterAbi = parseAbi([
+  "struct ExactInputSingleParams { address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
+  "function exactInputSingle(ExactInputSingleParams params) payable returns (uint256 amountOut)",
+  "function unwrapWETH9(uint256 amountMinimum, address recipient) payable",
+  "function multicall(bytes[] data) payable returns (bytes[] results)",
 ]);
 
 export interface SquidDepositTarget {
@@ -30,6 +56,16 @@ export interface SquidDepositTarget {
   recipient: Address;
 }
 
+/** A slice of the arriving USDFC swapped to native FIL for the recipient's gas. */
+export interface FilGasTopUp {
+  /** USDFC taken out of the deposit and sold for FIL. */
+  spendUsdfc: bigint;
+  /** Least FIL the swap may return before it reverts. */
+  minimumFil: bigint;
+  /** Unix seconds after which the swap reverts. */
+  deadline: bigint;
+}
+
 export interface SquidDepositRouteRequest extends SquidDepositTarget {
   /** Wallet that pays the USDC and signs on the source network. */
   owner: Address;
@@ -37,6 +73,8 @@ export interface SquidDepositRouteRequest extends SquidDepositTarget {
   sourceToken: Address;
   sourceAmount: bigint;
   slippage?: number;
+  /** When set, the post-hook sends this much FIL to the recipient before depositing the rest. */
+  filGasTopUp?: FilGasTopUp;
 }
 
 export interface SquidDepositCost {
@@ -67,6 +105,8 @@ export interface SquidDepositQuote {
   estimatedSeconds?: number;
   fees: SquidDepositCost[];
   gasCosts: SquidDepositCost[];
+  /** The route's WFIL to USDFC leg on Filecoin, which prices the FIL gas top-up. */
+  filecoinSwap?: { wfil: bigint; usdfc: bigint };
   transaction?: SquidDepositTransaction;
 }
 
@@ -81,13 +121,96 @@ export interface SquidDepositRef {
   quoteId: string;
 }
 
-export function buildDepositPostHook({ payments, usdfc, recipient }: SquidDepositTarget) {
+/**
+ * Sells `spendUsdfc` for WFIL on SushiSwap and unwraps it to the recipient in
+ * one router multicall, so the multicall never holds native FIL itself.
+ */
+function buildFilGasTopUpCalls({ usdfc, recipient }: SquidDepositTarget, topUp: FilGasTopUp) {
+  const swap = encodeFunctionData({
+    abi: sushiSwapRouterAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: usdfc,
+        tokenOut: WFIL_ADDRESS,
+        fee: WFIL_USDFC_POOL_FEE,
+        recipient: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+        deadline: topUp.deadline,
+        amountIn: topUp.spendUsdfc,
+        amountOutMinimum: topUp.minimumFil,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  const unwrap = encodeFunctionData({
+    abi: sushiSwapRouterAbi,
+    functionName: "unwrapWETH9",
+    args: [topUp.minimumFil, recipient],
+  });
+  return [
+    {
+      chainType: "evm",
+      callType: 0,
+      target: usdfc,
+      value: "0",
+      callData: encodeFunctionData({
+        abi: squidDepositAbi,
+        functionName: "approve",
+        args: [SUSHI_V3_SWAP_ROUTER_ADDRESS, topUp.spendUsdfc],
+      }),
+      payload: { tokenAddress: usdfc, inputPos: 0 },
+      estimatedGas: APPROVE_ESTIMATED_GAS,
+    },
+    {
+      chainType: "evm",
+      callType: 0,
+      target: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+      value: "0",
+      callData: encodeFunctionData({ abi: sushiSwapRouterAbi, functionName: "multicall", args: [[swap, unwrap]] }),
+      payload: { tokenAddress: usdfc, inputPos: 0 },
+      estimatedGas: FIL_SWAP_ESTIMATED_GAS,
+    },
+  ];
+}
+
+/**
+ * Sizes the FIL top-up from the quote's own WFIL to USDFC leg. Skipped when the
+ * quote has no such leg to price it from, or when it would take more than a
+ * small share of the deposit.
+ */
+export function planFilGasTopUp(
+  quote: Pick<SquidDepositQuote, "filecoinSwap" | "minimumDestinationAmount">,
+  now: () => number,
+): FilGasTopUp | undefined {
+  const swap = quote.filecoinSwap;
+  if (!swap || swap.wfil === 0n) return undefined;
+  const usdfcAtQuote = (FIL_GAS_TOP_UP_AMOUNT * swap.usdfc + swap.wfil - 1n) / swap.wfil;
+  const spendUsdfc = (usdfcAtQuote * (100n + FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT)) / 100n;
+  if (spendUsdfc * 100n > quote.minimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) return undefined;
+  return {
+    spendUsdfc,
+    minimumFil: (FIL_GAS_TOP_UP_AMOUNT * FIL_GAS_TOP_UP_MINIMUM_PERCENT) / 100n,
+    deadline: BigInt(Math.floor(now() / 1000)) + FIL_GAS_TOP_UP_DEADLINE_SECONDS,
+  };
+}
+
+/** USDFC left for the deposit once the FIL top-up has taken its share. */
+export function getDepositAfterFilGasTopUp(amount: bigint, topUp: FilGasTopUp | undefined): bigint {
+  if (!topUp) return amount;
+  return amount > topUp.spendUsdfc ? amount - topUp.spendUsdfc : 0n;
+}
+
+export function buildDepositPostHook(target: SquidDepositTarget, filGasTopUp?: FilGasTopUp) {
+  const { payments, usdfc, recipient } = target;
   return {
     chainType: "evm",
     provider: "Filecoin Pay",
-    description: "Deposit USDFC into Filecoin Pay",
+    description: filGasTopUp
+      ? "Set aside FIL for gas, deposit USDFC into Filecoin Pay"
+      : "Deposit USDFC into Filecoin Pay",
     logoURI: "https://pay.filecoin.cloud/usdfc-logo.svg",
     calls: [
+      ...(filGasTopUp ? buildFilGasTopUpCalls(target, filGasTopUp) : []),
       {
         chainType: "evm",
         callType: FULL_TOKEN_BALANCE_CALL_TYPE,
@@ -185,7 +308,7 @@ export async function requestSquidDepositRoute(
       toToken: request.usdfc,
       slippage,
       quoteOnly: options.quoteOnly,
-      postHook: buildDepositPostHook(request),
+      postHook: buildDepositPostHook(request, request.filGasTopUp),
     }),
   });
   if (!response.ok) {
@@ -237,6 +360,29 @@ function parseCosts(value: unknown, label: string): SquidDepositCost[] {
   });
 }
 
+/** The swap leg that turns WFIL into USDFC on Filecoin, if the route has one. */
+function findFilecoinSwap(actions: unknown[], usdfc: Address): { wfil: bigint; usdfc: bigint } | undefined {
+  for (const action of actions) {
+    if (
+      !isRecord(action) ||
+      action.type !== "swap" ||
+      action.toChain !== String(FILECOIN_CHAIN_ID) ||
+      !isRecord(action.fromToken) ||
+      !isRecord(action.toToken) ||
+      !sameAddress(action.fromToken.address, WFIL_ADDRESS) ||
+      !sameAddress(action.toToken.address, usdfc) ||
+      typeof action.fromAmount !== "string" ||
+      typeof action.toAmount !== "string" ||
+      !/^\d+$/.test(action.fromAmount) ||
+      !/^\d+$/.test(action.toAmount)
+    ) {
+      continue;
+    }
+    return { wfil: BigInt(action.fromAmount), usdfc: BigInt(action.toAmount) };
+  }
+  return undefined;
+}
+
 /**
  * Validates Squid's response against the request and the trusted router, and
  * requires the deposit hook to survive as the route's final step.
@@ -272,6 +418,7 @@ export function parseSquidDepositRoute(
   if (!isRecord(lastAction) || lastAction.type !== "custom" || lastAction.toChain !== String(FILECOIN_CHAIN_ID)) {
     throw new Error("Squid route is missing the Filecoin Pay deposit step");
   }
+  const filecoinSwap = findFilecoinSwap(actions, request.usdfc);
 
   const quote: SquidDepositQuote = {
     quoteId: route.quoteId,
@@ -287,6 +434,7 @@ export function parseSquidDepositRoute(
       : {}),
     fees: parseCosts(estimate.feeCosts, "fee costs"),
     gasCosts: parseCosts(estimate.gasCosts, "gas costs"),
+    ...(filecoinSwap === undefined ? {} : { filecoinSwap }),
   };
   if (quoteOnly) return quote;
 

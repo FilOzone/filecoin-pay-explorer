@@ -3,7 +3,7 @@ import type { ConnectedWallet } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
-import { type Address, createWalletClient, custom, getAddress, type Hash } from "viem";
+import { type Address, createWalletClient, custom, formatUnits, getAddress, type Hash } from "viem";
 import type { useTransactionReview } from "@/components/UserConsole/TransactionReview";
 import { mainnet, type SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { formatUsdfcAmount } from "../../data/funding-runway";
@@ -18,6 +18,9 @@ import {
   type SquidDepositStage,
 } from "../../data/squid-deposit-execution";
 import {
+  FIL_GAS_TOP_UP_AMOUNT,
+  type FilGasTopUp,
+  getDepositAfterFilGasTopUp,
   isExecutableQuote,
   requestSquidDepositRoute,
   type SquidClient,
@@ -42,6 +45,8 @@ export interface ConfirmDepositInput {
   parsedAmount: bigint;
   payingWallet: ConnectedWallet;
   quote: SquidDepositQuote;
+  /** FIL set aside for gas out of the arriving USDFC, when the quote allows it. */
+  filGasTopUp?: FilGasTopUp;
   recipient: Address;
   sourceChain: SourceChain;
   sourceToken: SourceToken;
@@ -202,6 +207,7 @@ export function useSquidDepositExecution({
 
   const confirm = async ({
     amount,
+    filGasTopUp,
     parsedAmount,
     payingWallet,
     quote,
@@ -219,6 +225,7 @@ export function useSquidDepositExecution({
       sourceChainId: sourceChain.id,
       sourceToken: sourceToken.token,
       sourceAmount: parsedAmount,
+      ...(filGasTopUp ? { filGasTopUp } : {}),
     };
     if (isEmbedded) {
       const confirmed = await requestReview({
@@ -226,7 +233,13 @@ export function useSquidDepositExecution({
         rows: [
           { label: "Pay from", value: owner },
           { label: "Network", value: sourceChain.name },
-          { label: "Receive at least", value: `${formatUsdfcAmount(quote.minimumDestinationAmount)} USDFC` },
+          {
+            label: "Receive at least",
+            value: `${formatUsdfcAmount(getDepositAfterFilGasTopUp(quote.minimumDestinationAmount, filGasTopUp))} USDFC`,
+          },
+          ...(filGasTopUp
+            ? [{ label: "Gas top-up", value: `About ${formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL sent to ${to}` }]
+            : []),
           { label: "Deposit to", value: `Filecoin Pay account ${to}` },
         ],
         details: JSON.stringify(
