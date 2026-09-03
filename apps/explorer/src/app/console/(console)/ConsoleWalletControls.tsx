@@ -12,6 +12,7 @@ type ConsoleWalletControlsProps = {
 
 export function ConsoleWalletControls({ accessState, chainId, isTopUpActive }: ConsoleWalletControlsProps) {
   switch (accessState) {
+    case "reconnecting":
     case "not-connected":
       return null;
     case "unsupported-chain":

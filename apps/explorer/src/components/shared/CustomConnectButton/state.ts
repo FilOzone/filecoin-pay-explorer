@@ -27,12 +27,24 @@ export const exitWalletSession = async ({
   authenticated,
   logout,
   disconnect,
+  pauseSelection,
+  resumeSelection,
 }: {
   authenticated: boolean;
   logout: () => Promise<void>;
   disconnect?: () => void;
+  pauseSelection?: () => void;
+  resumeSelection?: () => void;
 }) => {
-  if (authenticated) return logout();
+  if (authenticated) {
+    pauseSelection?.();
+    try {
+      return await logout();
+    } catch (error) {
+      resumeSelection?.();
+      throw error;
+    }
+  }
   if (!disconnect) throw new Error("Connected wallet was not found");
   disconnect();
 };

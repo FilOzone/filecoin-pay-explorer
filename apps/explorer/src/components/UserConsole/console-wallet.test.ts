@@ -27,6 +27,24 @@ describe("createConsoleWalletSelector", () => {
     expect(createConsoleWalletSelector({ storage })({ wallets: [coinbase, metamask], user: null })).toBe(metamask);
   });
 
+  it("does not restore a logged-out wallet until the user explicitly reconnects", () => {
+    const items = new Map<string, string>();
+    const storage = () => ({
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => void items.set(key, value),
+    });
+    const select = createConsoleWalletSelector({ storage });
+    expect(select({ wallets: [metamask], user: null })).toBe(metamask);
+
+    select.pause();
+    expect(select({ wallets: [metamask], user: null })).toBeUndefined();
+    const afterReload = createConsoleWalletSelector({ storage });
+    expect(afterReload({ wallets: [metamask], user: null })).toBeUndefined();
+
+    afterReload.resume();
+    expect(afterReload({ wallets: [metamask], user: null })).toBe(metamask);
+  });
+
   it("recognises embedded wallets by client type", () => {
     expect(isPrivyEmbeddedWallet(embedded)).toBe(true);
     expect(isPrivyEmbeddedWallet(metamask)).toBe(false);

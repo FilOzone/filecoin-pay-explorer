@@ -5,7 +5,7 @@ import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config, walletChains } from "@/services/wagmi/config";
-import { createConsoleWalletSelector } from "./console-wallet";
+import { consoleWalletSelector } from "./console-wallet";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
 export const PRIVY_CONFIG = {
@@ -18,8 +18,6 @@ export const PRIVY_CONFIG = {
   supportedChains: [...walletChains],
   appearance: { walletChainType: "ethereum-only" },
 } satisfies PrivyClientConfig;
-
-const selectConsoleWallet = createConsoleWalletSelector({ storage: () => window.localStorage });
 
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -35,7 +33,7 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
-      <WagmiProvider config={config} setActiveWalletForWagmi={selectConsoleWallet}>
+      <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
         <SynapseProvider>
           <TopUpActivityProvider>{children}</TopUpActivityProvider>
         </SynapseProvider>
