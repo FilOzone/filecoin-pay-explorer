@@ -1,5 +1,6 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
 import { columns } from "../data/columnDefinitions";
 import type { RailTableRow } from "../types";
 
@@ -14,7 +15,11 @@ function RailsTable({ data }: RailsTableProps) {
     enableSorting: false,
   });
 
-  return <TanstackTable table={table} />;
+  return (
+    <ResponsiveTable>
+      <TanstackTable table={table} />
+    </ResponsiveTable>
+  );
 }
 
 export default RailsTable;
