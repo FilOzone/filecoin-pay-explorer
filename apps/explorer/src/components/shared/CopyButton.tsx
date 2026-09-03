@@ -47,7 +47,9 @@ const CopyButton = ({
       type='button'
       onClick={handleCopy}
       className={cn(
-        "inline-flex items-center gap-1 p-1 rounded-md transition-colors cursor-pointer",
+        "inline-flex items-center justify-center gap-1 p-1 rounded-md transition-colors cursor-pointer",
+        // Touch screens get a full-size target; pointers keep the compact icon.
+        "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
         "text-gray-500 hover:bg-gray-100",
         className,
       )}
