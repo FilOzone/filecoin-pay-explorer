@@ -287,6 +287,38 @@ describe("RailRatePeriod projection", () => {
     assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "0", "1", "1");
   });
 
+  test("carries a termination cap into a later same-block decrease", () => {
+    const railId = GraphBN.fromI32(17);
+    createRailAt(railId, 10, 1);
+    const firstRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const lowerRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, firstRate);
+    setEventPosition(activation, 20, 2);
+    handleRailRateModified(activation);
+
+    const termination = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, GraphBN.fromI32(40));
+    setEventPosition(termination, 25, 3);
+    handleRailTerminated(termination);
+
+    const decrease = createRailRateModifiedEvent(railId, firstRate, lowerRate);
+    setEventPosition(decrease, 25, 4);
+    handleRailRateModified(decrease);
+
+    const activePeriodId = getEventId(activation);
+    const replacementPeriodId = getEventId(decrease);
+    assert.entityCount("RailRatePeriod", 3);
+    assertRailRatePeriodState(activePeriodId, railId, firstRate, GraphBN.fromI32(20), "25");
+    assertRailRatePeriodState(replacementPeriodId, railId, lowerRate, GraphBN.fromI32(25), "40");
+    assert.fieldEquals(
+      "Rail",
+      getRailEntityId(railId).toHexString(),
+      "currentRatePeriod",
+      replacementPeriodId.toHexString(),
+    );
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "state", "TERMINATED");
+    assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "0", "1", "1");
+  });
+
   test("finalization after settlement leaves the capped timeline unchanged", () => {
     const railId = GraphBN.fromI32(7);
     createRailAt(railId, 10, 1);

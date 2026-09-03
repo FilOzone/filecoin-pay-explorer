@@ -281,6 +281,8 @@ export const createRail = (
   timestamp: GraphBN,
   currentRatePeriod: Bytes,
 ): Rail => {
+  // The caller saves after creating the initial rate period so the required
+  // currentRatePeriod pointer is present when the rail is first persisted.
   const rail = new Rail(getRailEntityId(railId));
   rail.railId = railId;
   rail.payer = payer;
@@ -322,7 +324,7 @@ export const createRailRatePeriod = (
   ratePeriod.token = rail.token;
   ratePeriod.rate = rate;
   ratePeriod.startEpoch = startEpoch;
-  if (untilEpoch) ratePeriod.untilEpoch = untilEpoch;
+  if (untilEpoch !== null) ratePeriod.untilEpoch = untilEpoch;
   ratePeriod.save();
 
   return ratePeriod;

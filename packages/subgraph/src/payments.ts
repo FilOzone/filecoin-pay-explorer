@@ -56,36 +56,17 @@ function failRatePeriodInvariant(
   oldRate: BigInt | null = null,
   newRate: BigInt | null = null,
 ): void {
-  let context =
-    "railId=" +
-    rail.railId.toString() +
-    " state=" +
-    rail.state +
-    " block=" +
-    event.block.number.toString() +
-    " txHash=" +
-    event.transaction.hash.toHexString() +
-    " logIndex=" +
-    event.logIndex.toString() +
-    " railEndEpoch=" +
-    rail.endEpoch.toString();
+  let context = `railId=${rail.railId.toString()} state=${rail.state} block=${event.block.number.toString()} txHash=${event.transaction.hash.toHexString()} logIndex=${event.logIndex.toString()} railEndEpoch=${rail.endEpoch.toString()}`;
 
-  if (ratePeriod) {
-    context +=
-      " periodId=" +
-      ratePeriod.id.toHexString() +
-      " periodRate=" +
-      ratePeriod.rate.toString() +
-      " periodStartEpoch=" +
-      ratePeriod.startEpoch.toString() +
-      " periodUntilEpoch=" +
-      (ratePeriod.untilEpoch ? ratePeriod.untilEpoch!.toString() : "null");
+  if (ratePeriod !== null) {
+    const untilEpoch = ratePeriod.untilEpoch;
+    context += ` periodId=${ratePeriod.id.toHexString()} periodRate=${ratePeriod.rate.toString()} periodStartEpoch=${ratePeriod.startEpoch.toString()} periodUntilEpoch=${untilEpoch !== null ? untilEpoch.toString() : "null"}`;
   } else {
     context += ` periodId=${rail.currentRatePeriod.toHexString()} period=<missing>`;
   }
 
-  if (oldRate) context += ` oldRate=${oldRate.toString()}`;
-  if (newRate) context += ` newRate=${newRate.toString()}`;
+  if (oldRate !== null) context += ` oldRate=${oldRate.toString()}`;
+  if (newRate !== null) context += ` newRate=${newRate.toString()}`;
 
   assert(false, `${reason} ${context}`);
 }
@@ -289,7 +270,7 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
     return;
   }
   const existingUntilEpoch = currentRatePeriod.untilEpoch;
-  if (existingUntilEpoch) {
+  if (existingUntilEpoch !== null) {
     if (existingUntilEpoch.notEqual(event.params.endEpoch)) {
       failRatePeriodInvariant(
         "[handleRailTerminated] Rate period cap does not match endEpoch",
@@ -444,7 +425,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
 
     const existingUntilEpoch = currentRatePeriod.untilEpoch;
     if (rail.state == "TERMINATED") {
-      if (!existingUntilEpoch) {
+      if (existingUntilEpoch === null) {
         failRatePeriodInvariant(
           "[handleRailRateModified] Terminated rail has an uncapped rate period",
           rail,
@@ -487,7 +468,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
         newRate,
       );
       return;
-    } else if (existingUntilEpoch) {
+    } else if (existingUntilEpoch !== null) {
       failRatePeriodInvariant(
         "[handleRailRateModified] Active rail has a capped current rate period",
         rail,
