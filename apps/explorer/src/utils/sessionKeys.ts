@@ -174,7 +174,7 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
     const r = item as Record<string, unknown>;
     if (typeof r.sessionKeyPublic !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(r.sessionKeyPublic)) continue;
     if (!Array.isArray(r.scopes)) continue;
-    const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && s in SCOPE_BY_ID);
+    const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && Object.hasOwn(SCOPE_BY_ID, s));
     if (scopes.length === 0) continue;
     // Rebuilds records field-by-field: fields not listed here are DROPPED on
     // every load, so a new SessionKeyRecord field must be added here too.
