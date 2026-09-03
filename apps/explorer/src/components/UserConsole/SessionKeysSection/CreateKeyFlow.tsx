@@ -17,6 +17,8 @@ import type { Abi, Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
+import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
+import type { Network } from "@/types";
 import { download } from "@/utils/download";
 import {
   buildEnvSnippet,
@@ -32,13 +34,15 @@ import {
 interface CreateKeyFlowProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  network: Network;
   account: Hex;
   registry: { address: Hex; abi: Abi };
-  onCreated: (record: SessionKeyRecord) => void;
+  /** `identity` is the wallet and network at submit time, so a late callback still lands in the right inventory. */
+  onCreated: (record: SessionKeyRecord, identity: SessionKeysIdentity) => void;
   /** Fires when the login tx is confirmed onchain (used to refresh chain-read statuses). */
   onConfirmed?: () => void;
   /** Fires when a submitted login tx fails onchain — removes the optimistically added row. */
-  onFailed?: (sessionKeyPublic: Hex) => void;
+  onFailed?: (sessionKeyPublic: Hex, identity: SessionKeysIdentity) => void;
 }
 
 interface GeneratedKey {
@@ -62,6 +66,7 @@ const EMPTY_SELECTION = Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, 
 export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   open,
   onOpenChange,
+  network,
   account,
   registry,
   onCreated,
@@ -79,7 +84,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // Tracks the submitted login until its receipt settles. `uiActive` goes false
   // when the dialog is closed mid-flight so late receipts don't mutate a fresh
   // form; the row-removal on failure runs regardless (the row exists either way).
-  const inFlightRef = useRef<{ address: Hex; uiActive: boolean } | null>(null);
+  const inFlightRef = useRef<{ address: Hex; identity: SessionKeysIdentity; uiActive: boolean } | null>(null);
 
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
@@ -94,7 +99,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       // receipt-level failure: authorization never happened — drop the optimistic row
       const flight = inFlightRef.current;
       inFlightRef.current = null;
-      if (flight) onFailed?.(flight.address);
+      if (flight) onFailed?.(flight.address, flight.identity);
       if (flight?.uiActive) setTxState("failed");
     },
   });
@@ -119,8 +124,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     const key: GeneratedKey = { privateKey, address: keyAccount.address };
     setGenerated(key);
     const signerAddress = keyAccount.address;
+    // Captured now: the wallet may switch before the submission resolves.
+    const identity: SessionKeysIdentity = { network, account };
     setExpirySec(expiry);
-    inFlightRef.current = { address: signerAddress, uiActive: true };
+    inFlightRef.current = { address: signerAddress, identity, uiActive: true };
     setTxState("pending");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway.
@@ -131,13 +138,16 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         args: [signerAddress, expiry, selectedScopes.map((id) => SCOPE_BY_ID[id].typehash), cleanName],
         metadata: { type: "createSessionKey", keyName: cleanName },
       });
-      onCreated({
-        name: cleanName,
-        sessionKeyPublic: signerAddress,
-        scopes: selectedScopes,
-        createdAt: Date.now(),
-        txHash,
-      });
+      onCreated(
+        {
+          name: cleanName,
+          sessionKeyPublic: signerAddress,
+          scopes: selectedScopes,
+          createdAt: Date.now(),
+          txHash,
+        },
+        identity,
+      );
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.

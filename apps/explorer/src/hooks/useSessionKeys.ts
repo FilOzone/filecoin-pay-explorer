@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Hex } from "viem";
 import { useReadContracts } from "wagmi";
 import { getChain } from "@/constants/chains";
@@ -9,6 +9,15 @@ import { deriveSessionKeys, SCOPE_BY_ID, type SessionKeyRecord, sanitizeRecords 
 export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
 const storageKey = (network: Network, account: Hex) => `fp-session-keys:${network}:${account.toLowerCase()}`;
+
+/** The wallet and network a session key inventory belongs to. */
+export interface SessionKeysIdentity {
+  network: Network;
+  account: Hex;
+}
+
+const sameIdentity = (a: SessionKeysIdentity, b: SessionKeysIdentity) =>
+  a.network === b.network && a.account.toLowerCase() === b.account.toLowerCase();
 
 function loadRecords(network: Network, account: Hex): SessionKeyRecord[] {
   if (typeof window === "undefined") return [];
@@ -29,23 +38,30 @@ function loadRecords(network: Network, account: Hex): SessionKeyRecord[] {
  */
 export function useSessionKeys(network: Network, account: Hex) {
   const [records, setRecords] = useState<SessionKeyRecord[]>(() => loadRecords(network, account));
+  const identityRef = useRef<SessionKeysIdentity>({ network, account });
 
   // Reload when wallet or network changes.
   useEffect(() => {
+    identityRef.current = { network, account };
     setRecords(loadRecords(network, account));
   }, [network, account]);
 
-  // Updater form so a callback captured by an in-flight transaction never
-  // writes a record list older than the one on screen.
+  // Every write names the identity that submitted the transaction. A wallet
+  // or network switch while a login is pending must neither park the record
+  // under the wrong key nor lose it, so an off-screen identity is updated in
+  // storage only and the list on screen is left alone. Updater form so a
+  // callback captured by an in-flight transaction never writes a record list
+  // older than the one on screen.
   const persist = useCallback(
-    (update: (prev: SessionKeyRecord[]) => SessionKeyRecord[]) => {
-      setRecords((prev) => {
-        const next = update(prev);
-        window.localStorage.setItem(storageKey(network, account), JSON.stringify(next));
-        return next;
+    (identity: SessionKeysIdentity, update: (prev: SessionKeyRecord[]) => SessionKeyRecord[]) => {
+      setRecords((current) => {
+        const onScreen = sameIdentity(identityRef.current, identity);
+        const next = update(onScreen ? current : loadRecords(identity.network, identity.account));
+        window.localStorage.setItem(storageKey(identity.network, identity.account), JSON.stringify(next));
+        return onScreen ? next : current;
       });
     },
-    [network, account],
+    [],
   );
 
   const registry = useMemo(() => getChain(network).contracts.sessionKeyRegistry, [network]);
@@ -81,8 +97,8 @@ export function useSessionKeys(network: Network, account: Hex) {
   // A signer the list already knows keeps its earlier scopes: whole-key revoke
   // sends every scope in the record, so the record must hold all of them.
   const addKey = useCallback(
-    (record: SessionKeyRecord) => {
-      persist((prev) => {
+    (record: SessionKeyRecord, identity: SessionKeysIdentity) => {
+      persist(identity, (prev) => {
         const same = (r: SessionKeyRecord) =>
           r.sessionKeyPublic.toLowerCase() === record.sessionKeyPublic.toLowerCase();
         const existing = prev.find(same);
@@ -103,8 +119,10 @@ export function useSessionKeys(network: Network, account: Hex) {
 
   /** Removes a key from the local inventory (used when a login tx fails after optimistic add). */
   const removeKey = useCallback(
-    (sessionKeyPublic: Hex) => {
-      persist((prev) => prev.filter((r) => r.sessionKeyPublic.toLowerCase() !== sessionKeyPublic.toLowerCase()));
+    (sessionKeyPublic: Hex, identity: SessionKeysIdentity) => {
+      persist(identity, (prev) =>
+        prev.filter((r) => r.sessionKeyPublic.toLowerCase() !== sessionKeyPublic.toLowerCase()),
+      );
     },
     [persist],
   );

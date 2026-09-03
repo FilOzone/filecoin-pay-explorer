@@ -232,6 +232,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
       <CreateKeyFlow
         open={createOpen}
         onOpenChange={setCreateOpen}
+        network={network}
         account={account}
         registry={registry}
         onCreated={addKey}
