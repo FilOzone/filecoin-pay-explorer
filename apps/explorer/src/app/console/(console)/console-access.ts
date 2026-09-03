@@ -1,7 +1,7 @@
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { isSupportedChainId } from "@/utils/network";
 
-export type ConsoleAccessState = "not-connected" | "unsupported-chain" | "squid-source" | "ready";
+export type ConsoleAccessState = "reconnecting" | "not-connected" | "unsupported-chain" | "squid-source" | "ready";
 
 export const getConsoleDisplayAccessState = (
   walletAccessState: ConsoleAccessState,
@@ -10,13 +10,16 @@ export const getConsoleDisplayAccessState = (
 
 export const getConsoleAccessState = ({
   isConnected,
+  isReconnecting,
   hasAddress,
   chainId,
 }: {
   isConnected: boolean;
+  isReconnecting?: boolean;
   hasAddress: boolean;
   chainId: number | undefined;
 }): ConsoleAccessState => {
+  if (isReconnecting) return "reconnecting";
   if (!isConnected || !hasAddress) {
     return "not-connected";
   }

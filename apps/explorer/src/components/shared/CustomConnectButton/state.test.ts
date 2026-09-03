@@ -40,8 +40,10 @@ describe("getWalletExitAction", () => {
   it("calls only the exit operation for the active session type", async () => {
     const logout = vi.fn(async () => undefined);
     const disconnect = vi.fn();
+    const pauseSelection = vi.fn();
 
-    await exitWalletSession({ authenticated: true, logout, disconnect });
+    await exitWalletSession({ authenticated: true, logout, disconnect, pauseSelection });
+    expect(pauseSelection).toHaveBeenCalledOnce();
     expect(logout).toHaveBeenCalledOnce();
     expect(disconnect).not.toHaveBeenCalled();
 
@@ -49,5 +51,22 @@ describe("getWalletExitAction", () => {
     await exitWalletSession({ authenticated: false, logout, disconnect });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("restores wallet selection when logout fails", async () => {
+    const error = new Error("logout failed");
+    const resumeSelection = vi.fn();
+
+    await expect(
+      exitWalletSession({
+        authenticated: true,
+        logout: async () => {
+          throw error;
+        },
+        pauseSelection: vi.fn(),
+        resumeSelection,
+      }),
+    ).rejects.toThrow(error);
+    expect(resumeSelection).toHaveBeenCalledOnce();
   });
 });
