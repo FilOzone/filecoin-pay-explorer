@@ -61,10 +61,12 @@ export function useSquidExecution({
   const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
   const [error, setError] = useState<string | null>(null);
+  const [isPreparingAcquisition, setIsPreparingAcquisition] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
-  const latestAddress = useRef(address);
-  latestAddress.current = address;
+  const acquisitionInFlight = useRef(false);
   const quote = plan?.quotes[0];
+  const latestExecutionContext = useRef({ address, chainId, plan, source });
+  latestExecutionContext.current = { address, chainId, plan, source };
 
   useEffect(() => {
     if (chainId === source?.chainId) setSwitchError(null);
@@ -90,6 +92,7 @@ export function useSquidExecution({
 
   const acquire = async () => {
     setError(null);
+    if (acquisitionInFlight.current) return;
     if (acquisitionState === "blocked")
       return setError("Check your source wallet activity before starting another acquisition.");
     if (acquisitionState !== "idle") return setError("This acquisition is already complete or in progress.");
@@ -101,30 +104,59 @@ export function useSquidExecution({
     if (!sourceWalletClient.account || sourceWalletClient.account.address.toLowerCase() !== address.toLowerCase())
       return setError("Wallet account changed before confirming.");
 
+    const isCurrentExecution = () => {
+      const current = latestExecutionContext.current;
+      return (
+        current.address?.toLowerCase() === address.toLowerCase() &&
+        current.chainId === chainId &&
+        current.plan === plan &&
+        current.source?.chainId === source.chainId &&
+        current.source.token.toLowerCase() === source.token.toLowerCase()
+      );
+    };
+    acquisitionInFlight.current = true;
+    setIsPreparingAcquisition(true);
+    const finishAcquisition = () => {
+      acquisitionInFlight.current = false;
+      setIsPreparingAcquisition(false);
+    };
+    const failAcquisition = (message: string) => {
+      finishAcquisition();
+      setError(message);
+    };
+
     let executionInputs: SquidExecutionInputs;
     try {
       executionInputs = await refreshExecutionInputs();
     } catch (cause) {
-      return setError(
-        cause instanceof Error ? cause.message : "Could not refresh wallet balances. Try again before confirming.",
-      );
+      finishAcquisition();
+      if (isCurrentExecution())
+        setError(
+          cause instanceof Error ? cause.message : "Could not refresh wallet balances. Try again before confirming.",
+        );
+      return;
+    }
+    if (!isCurrentExecution()) {
+      finishAcquisition();
+      return;
     }
     if (quote.sourceAmount > executionInputs.sourceBalance)
-      return setError(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
+      return failAcquisition(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
 
     if (networkGasMaximum === 0n)
-      return setError("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
-    if (networkGasMaximum === null) return setError("Your source-token allowance is still loading. Try again shortly.");
+      return failAcquisition("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
+    if (networkGasMaximum === null)
+      return failAcquisition("Your source-token allowance is still loading. Try again shortly.");
     if (!isNativeSource) {
       if (executionInputs.allowance === undefined)
-        return setError("Could not refresh your source-token allowance. Try again before confirming.");
+        return failAcquisition("Could not refresh your source-token allowance. Try again before confirming.");
       if (getPlanNetworkGas(plan, executionInputs.allowance).maximum !== networkGasMaximum)
-        return setError(
+        return failAcquisition(
           "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.",
         );
     }
     if (executionInputs.nativeBalance < requiredNativeBalance)
-      return setError(
+      return failAcquisition(
         `Your ${sourceNativeCurrencySymbol ?? "source-network native-token"} balance does not cover the reviewed maximum native requirement.`,
       );
 
@@ -136,10 +168,10 @@ export function useSquidExecution({
               estimateTotalFee(sourcePublicClient, request),
           }
         : sourcePublicClient;
-    const isCurrentOwner = () => latestAddress.current?.toLowerCase() === address.toLowerCase();
     try {
-      const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
-        runSquidAcquisition({
+      const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () => {
+        if (!isCurrentExecution()) return null;
+        return runSquidAcquisition({
           execute: ({ onSwapAttempt, onSwapBroadcast }) =>
             executeSquidTopUp({
               destinationClient: destinationClient as unknown as SquidPublicClient,
@@ -154,15 +186,15 @@ export function useSquidExecution({
             }),
           minimumDestinationAmount: quote.requirement.amount,
           onStarted: (acquisition) => {
-            if (isCurrentOwner()) onStarted(acquisition);
+            if (isCurrentExecution()) onStarted(acquisition);
           },
           owner: address,
           readDestinationBalance: () => readUsdfcBalance(destinationClient, mainnet.contracts.usdfc.address, address),
           sourceChainId: source.chainId,
           storage: window.localStorage,
-        }),
-      );
-      if (!isCurrentOwner()) return;
+        });
+      });
+      if (!outcome || !isCurrentExecution()) return;
       if (outcome.status === "acquired") {
         onAcquired(outcome.acquisition);
         return;
@@ -174,7 +206,9 @@ export function useSquidExecution({
       }
       setError(walletErrorMessage(outcome.error, "Squid could not complete the acquisition."));
     } catch (cause) {
-      if (isCurrentOwner()) setError(walletErrorMessage(cause, "Squid could not start safely."));
+      if (isCurrentExecution()) setError(walletErrorMessage(cause, "Squid could not start safely."));
+    } finally {
+      finishAcquisition();
     }
   };
 
@@ -185,6 +219,7 @@ export function useSquidExecution({
       setSwitchError(null);
     },
     error,
+    isPreparingAcquisition,
     isPreparingWallet,
     isSwitchingChain,
     switchError,

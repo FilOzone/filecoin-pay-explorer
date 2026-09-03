@@ -1,4 +1,5 @@
 import { NATIVE_TOKEN_ADDRESS, type SourceToken, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
+import { useRef } from "react";
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getPlanNetworkGas } from "../data/guided-top-up";
@@ -6,13 +7,14 @@ import type { SquidAcquisition } from "../data/squid-acquisition";
 import { useSquidExecution } from "./useSquidExecution";
 
 const wallet = vi.hoisted(() => ({
-  address: "0x1111111111111111111111111111111111111111" as const,
+  address: "0x1111111111111111111111111111111111111111" as `0x${string}`,
   chainId: 314,
 }));
 const switchChainAsync = vi.hoisted(() => vi.fn());
 const runSquidAcquisition = vi.hoisted(() => vi.fn());
 const sourcePublicClient = vi.hoisted(() => ({}));
 const destinationClient = vi.hoisted(() => ({ readContract: vi.fn() }));
+const refreshExecutionInputs = vi.hoisted(() => vi.fn());
 const sourceWalletClient = vi.hoisted(() => ({
   account: { address: "0x1111111111111111111111111111111111111111" as const },
 }));
@@ -86,15 +88,14 @@ let callbacks: {
 };
 
 function Harness({
-  latestAllowance = 0n,
-  latestBalance = 100n,
+  fundingPlan,
   selectedSource = source(8453),
 }: {
-  latestAllowance?: bigint;
-  latestBalance?: bigint;
+  fundingPlan?: SquidFundingPlan;
   selectedSource?: SourceToken;
 }) {
-  const fundingPlan = plan();
+  const defaultPlan = useRef(plan()).current;
+  const selectedPlan = fundingPlan ?? defaultPlan;
   execution = useSquidExecution({
     integratorId: "test",
     lifecycle: {
@@ -107,17 +108,13 @@ function Harness({
     onNetworkSwitchingChange: vi.fn(),
     route: {
       bridgeFeeMaximum: 1n,
-      networkGasMaximum: getPlanNetworkGas(fundingPlan, 0n).maximum,
-      plan: fundingPlan,
+      networkGasMaximum: getPlanNetworkGas(selectedPlan, 0n).maximum,
+      plan: selectedPlan,
       requiredNativeBalance: 1n,
     },
     source: {
       isNative: false,
-      refreshExecutionInputs: vi.fn().mockResolvedValue({
-        allowance: latestAllowance,
-        nativeBalance: 1_000n,
-        sourceBalance: latestBalance,
-      }),
+      refreshExecutionInputs,
       token: selectedSource,
     },
   });
@@ -127,7 +124,13 @@ function Harness({
 describe("useSquidExecution", () => {
   beforeEach(() => {
     wallet.chainId = 314;
+    wallet.address = "0x1111111111111111111111111111111111111111";
     vi.stubGlobal("window", { localStorage: {} });
+    refreshExecutionInputs.mockReset().mockImplementation(async () => ({
+      allowance: 0n,
+      nativeBalance: 1_000n,
+      sourceBalance: 100n,
+    }));
     switchChainAsync.mockReset().mockRejectedValue({ code: 4001 });
     runSquidAcquisition.mockReset();
     callbacks = {
@@ -188,8 +191,9 @@ describe("useSquidExecution", () => {
 
   it("stops before execution when the allowance changed", async () => {
     wallet.chainId = 8453;
+    refreshExecutionInputs.mockResolvedValue({ allowance: 100n, nativeBalance: 1_000n, sourceBalance: 100n });
     await act(async () => {
-      create(<Harness latestAllowance={100n} />);
+      create(<Harness />);
     });
     await act(async () => execution.acquire());
 
@@ -199,12 +203,50 @@ describe("useSquidExecution", () => {
 
   it("stops before execution when the refreshed source balance is insufficient", async () => {
     wallet.chainId = 8453;
+    refreshExecutionInputs.mockResolvedValue({ allowance: 0n, nativeBalance: 1_000n, sourceBalance: 99n });
     await act(async () => {
-      create(<Harness latestBalance={99n} />);
+      create(<Harness />);
     });
     await act(async () => execution.acquire());
 
     expect(runSquidAcquisition).not.toHaveBeenCalled();
     expect(execution.error).toContain("balance no longer covers the quote");
+  });
+
+  it("blocks duplicate acquisition and abandons changed execution context during preflight", async () => {
+    wallet.chainId = 8453;
+    let resolveRefresh!: (value: { allowance: bigint; nativeBalance: bigint; sourceBalance: bigint }) => void;
+    refreshExecutionInputs.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = execution.acquire();
+      await Promise.resolve();
+    });
+    expect(execution.isPreparingAcquisition).toBe(true);
+    await act(async () => execution.acquire());
+    expect(refreshExecutionInputs).toHaveBeenCalledOnce();
+
+    wallet.address = "0x3333333333333333333333333333333333333333";
+    const changedPlan = plan();
+    await act(async () => {
+      renderer.update(<Harness fundingPlan={changedPlan} selectedSource={source(10)} />);
+    });
+    await act(async () => {
+      resolveRefresh({ allowance: 0n, nativeBalance: 1_000n, sourceBalance: 100n });
+      await pending;
+    });
+
+    expect(runSquidAcquisition).not.toHaveBeenCalled();
+    expect(execution.isPreparingAcquisition).toBe(false);
   });
 });

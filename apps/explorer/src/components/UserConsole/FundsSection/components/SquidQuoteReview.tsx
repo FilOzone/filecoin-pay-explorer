@@ -150,7 +150,6 @@ export function SquidQuoteReview({
       value: token.token,
     };
   });
-  const isBusy = acquisitionState !== "idle";
   const sourceAmount = sourceBalance ?? null;
   const quotePlan = useSquidQuotePlan({
     acquisitionState,
@@ -254,6 +253,7 @@ export function SquidQuoteReview({
       token: source,
     },
   });
+  const isBusy = acquisitionState !== "idle" || execution.isPreparingAcquisition;
   const clearErrors = () => {
     setError(null);
     execution.clearError();
@@ -694,6 +694,11 @@ export function SquidQuoteReview({
               <span className='inline-flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin' />
                 Acquiring USDFC…
+              </span>
+            ) : execution.isPreparingAcquisition ? (
+              <span className='inline-flex items-center gap-2'>
+                <Loader2 className='h-4 w-4 animate-spin' />
+                Checking balances…
               </span>
             ) : (
               "Acquire USDFC"
