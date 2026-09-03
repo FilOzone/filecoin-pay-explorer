@@ -12,7 +12,7 @@ import type { Abi, Hex } from "viem";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeyWithStatus } from "@/hooks/useSessionKeys";
 import { formatAddress } from "@/utils/formatter";
-import { SCOPE_BY_ID } from "@/utils/sessionKeys";
+import { buildRevokeArgs, SCOPE_BY_ID } from "@/utils/sessionKeys";
 
 interface RevokeDialogProps {
   sessionKey: SessionKeyWithStatus | null;
@@ -48,7 +48,7 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({
     try {
       await execute({
         functionName: "revoke",
-        args: [sessionKey.sessionKeyPublic, sessionKey.scopes.map((id) => SCOPE_BY_ID[id].typehash), sessionKey.name],
+        args: buildRevokeArgs(sessionKey.sessionKeyPublic, sessionKey.scopes, sessionKey.name),
         metadata: { type: "revokeSessionKey", keyName: sessionKey.name },
       });
     } catch {

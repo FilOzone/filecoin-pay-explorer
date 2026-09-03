@@ -58,6 +58,26 @@ export const SCOPE_BY_ID: Record<ScopeId, SessionKeyScope> = Object.fromEntries(
   SESSION_KEY_SCOPES.map((s) => [s.id, s]),
 ) as Record<ScopeId, SessionKeyScope>;
 
+type Address = `0x${string}`;
+
+/**
+ * Arguments for SessionKeyRegistry `login(signer, expiry, permissions[], origin)`.
+ * A permission is the scope's FWSS typehash; `origin` is the public key name.
+ */
+export function buildLoginArgs(
+  signer: Address,
+  expiry: bigint,
+  scopes: ScopeId[],
+  name: string,
+): [Address, bigint, Address[], string] {
+  return [signer, expiry, scopes.map((id) => SCOPE_BY_ID[id].typehash), name];
+}
+
+/** Arguments for SessionKeyRegistry `revoke(signer, permissions[], origin)`: login with expiry 0. */
+export function buildRevokeArgs(signer: Address, scopes: ScopeId[], name: string): [Address, Address[], string] {
+  return [signer, scopes.map((id) => SCOPE_BY_ID[id].typehash), name];
+}
+
 export type SessionKeyStatus = "active" | "expired" | "revoked";
 
 /** Contract check is `authorizationExpiry(...) >= block.timestamp`, so expiry == now is still active. */
@@ -205,14 +225,14 @@ export function normalizeKeyName(name: string): string {
 }
 
 /**
- * .env download offered on the reveal screen. Byte-compatible with
- * filecoin-pin's `~/.filecoin-session-key.env` (SESSION_KEY + WALLET_ADDRESS,
- * session address as a comment), so the downloaded file can be saved there
- * as-is and picked up by the CLI.
+ * .env download offered on the reveal screen. A dotenv file filecoin-pin
+ * reads as-is through `--credentials-file`, or whose variables can be
+ * exported: SESSION_KEY and WALLET_ADDRESS, session address as a comment.
  */
 export function buildEnvSnippet(privateKey: string, sessionKeyAddress: string, accountWalletAddress: string): string {
   return [
-    "# Session key for Filecoin Warm Storage — save as ~/.filecoin-session-key.env (chmod 600).",
+    "# Session key for Filecoin Warm Storage.",
+    "# Use with filecoin-pin --credentials-file <this file>, or export the variables below.",
     "# Treat SESSION_KEY like a password: anyone holding it can use its scopes until expiry.",
     `# session address: ${sessionKeyAddress}`,
     `SESSION_KEY=${privateKey}`,
