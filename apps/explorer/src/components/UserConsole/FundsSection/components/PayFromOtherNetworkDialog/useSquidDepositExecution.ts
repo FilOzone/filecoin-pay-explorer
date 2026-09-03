@@ -53,7 +53,7 @@ export interface ConfirmDepositInput {
 }
 
 /**
- * Runs and tracks a USDC deposit: the review, the source-network signatures,
+ * Runs and tracks a cross-network deposit: the review, the source-network signatures,
  * the pending record that survives a reload, resume, failure and dismissal.
  * The dialog owns what the user is choosing; this owns what is happening.
  */
@@ -83,7 +83,7 @@ export function useSquidDepositExecution({
 }) {
   const queryClient = useQueryClient();
   const [stage, setStage] = useState<UiStage | null>(null);
-  // Whether this run signed a USDC approval, so the swap signature reads as step 2 of 2.
+  // Whether this run signed a token approval, so the swap signature reads as step 2 of 2.
   const [hasApproved, setHasApproved] = useState(false);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export function useSquidDepositExecution({
       }
       return;
     }
-    setError(walletErrorMessage(failure, "The USDC funding could not be completed."));
+    setError(walletErrorMessage(failure, "The payment could not be completed."));
   };
 
   const resumePendingDeposit = async (deposit: PendingSquidDeposit) => {

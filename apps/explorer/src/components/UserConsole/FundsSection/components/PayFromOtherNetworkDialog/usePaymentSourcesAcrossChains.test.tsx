@@ -1,7 +1,11 @@
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
-import { buildUsdcSourceQuery, USDC_SCAN_CHAINS, useUsdcBalancesAcrossChains } from "./useUsdcBalancesAcrossChains";
+import {
+  buildPaymentSourceQuery,
+  PAYMENT_SCAN_CHAINS,
+  usePaymentSourcesAcrossChains,
+} from "./usePaymentSourcesAcrossChains";
 
 const OWNER = "0x1111111111111111111111111111111111111111" as const;
 const BASE_USDC = {
@@ -31,44 +35,45 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("wagmi", () => ({ useConfig: () => ({}) }));
 vi.mock("wagmi/actions", () => ({ getPublicClient: () => undefined }));
 
-describe("buildUsdcSourceQuery", () => {
+describe("buildPaymentSourceQuery", () => {
   it("loads Squid's list, then reads every balance through the network's client", async () => {
     const multicall = vi.fn(async () => [{ status: "success" as const, result: 5_000_000n }]);
-    const query = buildUsdcSourceQuery({
+    const getBalance = vi.fn(async () => 0n);
+    const query = buildPaymentSourceQuery({
       chainId: 8453,
-      getClient: () => ({ multicall }),
+      getClient: () => ({ getBalance, multicall }),
       loadTokens: async () => [BASE_USDC],
       owner: OWNER,
     });
-    expect(query.queryKey).toEqual(["squid-usdc-sources", 8453, OWNER]);
+    expect(query.queryKey).toEqual(["squid-payment-sources", 8453, OWNER]);
     expect(await query.queryFn()).toEqual([{ balance: 5_000_000n, chainId: 8453, token: BASE_USDC }]);
   });
 
   it("fails loudly without a wallet or a client", async () => {
     const loadTokens = async () => [BASE_USDC];
     await expect(
-      buildUsdcSourceQuery({ chainId: 8453, getClient: () => undefined, loadTokens, owner: undefined }).queryFn(),
+      buildPaymentSourceQuery({ chainId: 8453, getClient: () => undefined, loadTokens, owner: undefined }).queryFn(),
     ).rejects.toThrow("No wallet to scan");
     await expect(
-      buildUsdcSourceQuery({ chainId: 8453, getClient: () => undefined, loadTokens, owner: OWNER }).queryFn(),
+      buildPaymentSourceQuery({ chainId: 8453, getClient: () => undefined, loadTokens, owner: OWNER }).queryFn(),
     ).rejects.toThrow("No RPC client for chain 8453");
   });
 });
 
-describe("useUsdcBalancesAcrossChains", () => {
-  let latest!: ReturnType<typeof useUsdcBalancesAcrossChains>;
-  function Harness(props: Parameters<typeof useUsdcBalancesAcrossChains>[0]) {
-    latest = useUsdcBalancesAcrossChains(props);
+describe("usePaymentSourcesAcrossChains", () => {
+  let latest!: ReturnType<typeof usePaymentSourcesAcrossChains>;
+  function Harness(props: Parameters<typeof usePaymentSourcesAcrossChains>[0]) {
+    latest = usePaymentSourcesAcrossChains(props);
     return null;
   }
   const squid = { integratorId: "test" };
 
   it("scans every Squid source network but Filecoin for the checksummed wallet and ranks what comes back", async () => {
-    expect(USDC_SCAN_CHAINS.map((chain) => chain.id)).toEqual(
+    expect(PAYMENT_SCAN_CHAINS.map((chain) => chain.id)).toEqual(
       SQUID_SOURCE_CHAINS.map((chain) => chain.id).filter((id) => id !== 314),
     );
-    expect(USDC_SCAN_CHAINS.length).toBeGreaterThan(0);
-    queries.results = USDC_SCAN_CHAINS.map((chain) => ({
+    expect(PAYMENT_SCAN_CHAINS.length).toBeGreaterThan(0);
+    queries.results = PAYMENT_SCAN_CHAINS.map((chain) => ({
       data:
         chain.id === 8453
           ? [{ balance: 5_000_000n, chainId: 8453, token: BASE_USDC }]
@@ -82,7 +87,7 @@ describe("useUsdcBalancesAcrossChains", () => {
       create(<Harness enabled owner={OWNER.toLowerCase()} squid={squid} />);
     });
     expect(queries.received.map((q) => q.queryKey)).toEqual(
-      USDC_SCAN_CHAINS.map((chain) => ["squid-usdc-sources", chain.id, OWNER]),
+      PAYMENT_SCAN_CHAINS.map((chain) => ["squid-payment-sources", chain.id, OWNER]),
     );
     expect(queries.received.every((q) => q.enabled)).toBe(true);
     expect(latest.sources.map((s) => [s.chainId, s.balance])).toEqual([

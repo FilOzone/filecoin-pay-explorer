@@ -3,21 +3,26 @@ import { type Address, getAddress } from "viem";
 import { useConfig } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import {
+  type BalanceReader,
+  type PaymentSource,
+  rankPaymentSources,
+  readPaymentSources,
+} from "../../data/payment-sources";
 import type { SquidClient } from "../../data/squid-deposit-route";
-import { usdcTokensQueryOptions } from "../../data/squid-usdc-tokens";
-import { type BalanceReader, rankUsdcSources, readUsdcSources, type UsdcSource } from "../../data/usdc-sources";
+import { type PaymentToken, paymentTokensQueryOptions } from "../../data/squid-payment-tokens";
 
 type ScanChainId = (typeof SQUID_SOURCE_CHAINS)[number]["id"];
 
 /**
- * The networks a USDC payment can come from: every Squid source except
- * Filecoin itself. Squid lists bridged USDC there too, but paying from
- * Filecoin would need FIL for gas, which this dialog promises not to.
+ * The networks a payment can come from: every Squid source except Filecoin
+ * itself. Squid lists bridged USDC there too, but paying from Filecoin would
+ * need FIL for gas, which this dialog promises not to.
  */
-export const USDC_SCAN_CHAINS = SQUID_SOURCE_CHAINS.filter((chain) => chain.id !== mainnet.id);
+export const PAYMENT_SCAN_CHAINS = SQUID_SOURCE_CHAINS.filter((chain) => chain.id !== mainnet.id);
 
-/** One network's part of the scan: Squid's USDC list, then one multicall for the balances. */
-export function buildUsdcSourceQuery({
+/** One network's part of the scan: Squid's token list, then the balances through the network's client. */
+export function buildPaymentSourceQuery({
   chainId,
   getClient,
   loadTokens,
@@ -25,18 +30,18 @@ export function buildUsdcSourceQuery({
 }: {
   chainId: number;
   getClient: (chainId: number) => BalanceReader | undefined;
-  loadTokens: (chainId: number) => Promise<UsdcSource["token"][]>;
+  loadTokens: (chainId: number) => Promise<PaymentToken[]>;
   owner: Address | undefined;
 }) {
   return {
-    queryFn: async (): Promise<UsdcSource[]> => {
+    queryFn: async (): Promise<PaymentSource[]> => {
       if (!owner) throw new Error("No wallet to scan");
       const tokens = await loadTokens(chainId);
       const client = getClient(chainId);
       if (!client) throw new Error(`No RPC client for chain ${chainId}`);
-      return readUsdcSources({ chainId, client, owner, tokens });
+      return readPaymentSources({ chainId, client, owner, tokens });
     },
-    queryKey: ["squid-usdc-sources", chainId, owner],
+    queryKey: ["squid-payment-sources", chainId, owner],
     refetchInterval: 30_000,
     retry: 1,
     staleTime: 15_000,
@@ -44,10 +49,10 @@ export function buildUsdcSourceQuery({
 }
 
 /**
- * Where the paying wallet's USDC actually is: every scan network is asked at
- * once, and the result comes back largest balance first.
+ * What the paying wallet holds that Squid can pay with: every scan network is
+ * asked at once, and the result comes back best source first.
  */
-export function useUsdcBalancesAcrossChains({
+export function usePaymentSourcesAcrossChains({
   enabled,
   owner,
   squid,
@@ -61,11 +66,11 @@ export function useUsdcBalancesAcrossChains({
   const checksummedOwner = owner ? getAddress(owner) : undefined;
   const isEnabled = enabled && !!checksummedOwner;
   const results = useQueries({
-    queries: USDC_SCAN_CHAINS.map((chain) => ({
-      ...buildUsdcSourceQuery({
+    queries: PAYMENT_SCAN_CHAINS.map((chain) => ({
+      ...buildPaymentSourceQuery({
         chainId: chain.id,
         getClient: (chainId) => getPublicClient(config, { chainId: chainId as ScanChainId }),
-        loadTokens: (chainId) => queryClient.fetchQuery(usdcTokensQueryOptions(chainId, squid)),
+        loadTokens: (chainId) => queryClient.fetchQuery(paymentTokensQueryOptions(chainId, squid)),
         owner: checksummedOwner,
       }),
       enabled: isEnabled,
@@ -75,6 +80,6 @@ export function useUsdcBalancesAcrossChains({
     /** True while any network has not answered yet. */
     isPending: isEnabled && results.some((result) => result.isPending),
     refetch: () => Promise.all(results.map((result) => result.refetch())),
-    sources: rankUsdcSources(results.flatMap((result) => result.data ?? [])),
+    sources: rankPaymentSources(results.flatMap((result) => result.data ?? [])),
   };
 }

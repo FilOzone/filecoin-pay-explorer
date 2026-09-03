@@ -42,11 +42,11 @@ export function TopUpWalletPanel({
       </span>
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <span className='flex items-center gap-2'>
-          <Label className='text-muted-foreground' htmlFor='fund-with-usdc-card-chain'>
+          <Label className='text-muted-foreground' htmlFor='pay-from-network-card-chain'>
             Add USDC on
           </Label>
           <Select disabled={isBusy} onValueChange={(value) => onChainChange(Number(value))} value={String(chainId)}>
-            <SelectTrigger aria-label='Network to add USDC on' id='fund-with-usdc-card-chain' size='sm'>
+            <SelectTrigger aria-label='Network to add USDC on' id='pay-from-network-card-chain' size='sm'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

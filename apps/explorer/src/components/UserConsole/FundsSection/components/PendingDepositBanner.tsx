@@ -19,19 +19,13 @@ export function PendingDepositBanner({ onView, pending }: { onView: () => void; 
       <div className='flex items-start gap-3'>
         <Loader2 aria-hidden className='mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground' />
         <div>
-          <p className='font-medium'>USDC deposit in progress</p>
+          <p className='font-medium'>Deposit in progress</p>
           <p className='text-sm text-muted-foreground'>
             {`${describePendingDeposit(pending)} is on its way to your Filecoin Pay account.`}
           </p>
         </div>
       </div>
-      <Button
-        aria-label='View USDC deposit in progress'
-        onClick={onView}
-        size='compact'
-        type='button'
-        variant='tertiary'
-      >
+      <Button aria-label='View deposit in progress' onClick={onView} size='compact' type='button' variant='tertiary'>
         View
       </Button>
     </div>

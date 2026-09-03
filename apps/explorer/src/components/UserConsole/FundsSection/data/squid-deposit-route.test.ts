@@ -7,7 +7,7 @@ import {
   getDepositAfterFilGasTopUp,
   getDepositRequiredNativeBalance,
   getSourceNativeCosts,
-  getUsdfcPerUsdc,
+  getUsdfcPerSourceUnit,
   isExecutableQuote,
   isUnfavorableRate,
   parseSquidDepositRoute,
@@ -233,11 +233,14 @@ describe("selectUsdcTokens", () => {
 
 describe("rate helpers", () => {
   it("computes USDFC per USDC and flags a haircut below the threshold", () => {
-    const rate = getUsdfcPerUsdc({ sourceAmount: 100_000_000n, destinationAmount: 93_000_000_000_000_000_000n }, 6);
+    const rate = getUsdfcPerSourceUnit(
+      { sourceAmount: 100_000_000n, destinationAmount: 93_000_000_000_000_000_000n },
+      6,
+    );
     expect(rate).toBeCloseTo(0.93, 5);
     expect(isUnfavorableRate(rate)).toBe(true);
     expect(isUnfavorableRate(0.98)).toBe(false);
-    expect(getUsdfcPerUsdc({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBe(0);
+    expect(getUsdfcPerSourceUnit({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBe(0);
   });
 
   it("sums source-network native costs and adds headroom for the approval and swap gas", () => {

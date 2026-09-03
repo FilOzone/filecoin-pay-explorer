@@ -5,18 +5,18 @@ import type { SourceToken } from "@filecoin-project/squid-evm-funding";
 import type { ConnectedWallet } from "@privy-io/react-auth";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import {
-  formatUsdcBalance,
-  fundedUsdcSourceOptions,
-  isSameUsdcSource,
-  parseUsdcSourceValue,
-  toUsdcSourceValue,
-  type UsdcSource,
-  type UsdcSourceChoice,
-} from "../../data/usdc-sources";
+  formatSourceBalance,
+  fundedPaymentSourceOptions,
+  isSamePaymentSource,
+  type PaymentSource,
+  type PaymentSourceChoice,
+  parsePaymentSourceValue,
+  toPaymentSourceValue,
+} from "../../data/payment-sources";
 import type { SourceChain } from "./useSquidDepositExecution";
 import { describeWallet } from "./wallets";
 
-/** Which wallet pays, and with which of the USDC it holds. */
+/** Which wallet pays, and with which of the tokens it holds. */
 export function PaymentSourceFields({
   areWalletsReady,
   isBusy,
@@ -43,20 +43,20 @@ export function PaymentSourceFields({
   onConnectAnother: () => void;
   onExpand: () => void;
   onPayingAddressChange: (address: string) => void;
-  onSourceChange: (choice: UsdcSourceChoice) => void;
+  onSourceChange: (choice: PaymentSourceChoice) => void;
   payingWallet: ConnectedWallet | undefined;
   sourceChain: SourceChain | undefined;
-  sourceChoice: UsdcSourceChoice;
-  /** The paying wallet's USDC on every network, largest first. */
-  sources: readonly UsdcSource[];
+  sourceChoice: PaymentSourceChoice;
+  /** What the paying wallet holds on every network, best first. */
+  sources: readonly PaymentSource[];
   sourceToken: SourceToken | undefined;
   tokensQuery: { isError: boolean };
   wallets: ConnectedWallet[];
 }) {
-  const funded = fundedUsdcSourceOptions({ chains: SQUID_SOURCE_CHAINS, sources });
-  const selectedSource = sources.find((source) => isSameUsdcSource(source, sourceChoice));
+  const funded = fundedPaymentSourceOptions({ chains: SQUID_SOURCE_CHAINS, sources });
+  const selectedSource = sources.find((source) => isSamePaymentSource(source, sourceChoice));
   const isSelectedFunded = !!selectedSource && selectedSource.balance > 0n;
-  const emptyNote = isScanning ? "Checking balances…" : "No USDC found on any supported network.";
+  const emptyNote = isScanning ? "Checking balances…" : "Nothing to pay with on any supported network.";
 
   if (isCollapsed && payingWallet) {
     return (
@@ -70,11 +70,11 @@ export function PaymentSourceFields({
               {sourceChain?.name ?? "this network"}
               <span className='text-muted-foreground'>
                 {" "}
-                · {formatUsdcBalance(selectedSource)} {sourceToken.symbol}
+                · {formatSourceBalance(selectedSource)} {sourceToken.symbol}
               </span>
             </>
           ) : (
-            <span className='text-muted-foreground'> · {funded.length > 0 ? "choose a network" : emptyNote}</span>
+            <span className='text-muted-foreground'> · {funded.length > 0 ? "choose a token" : emptyNote}</span>
           )}
         </span>
         <Button
@@ -96,7 +96,7 @@ export function PaymentSourceFields({
         <div className='grid gap-2'>
           {/* Both label rows take the height of the button in this one, so the labels line up. */}
           <div className='flex min-h-10 items-center justify-between gap-2'>
-            <Label htmlFor='fund-with-usdc-wallet'>Pay from</Label>
+            <Label htmlFor='pay-from-network-wallet'>Pay from</Label>
             <Button
               aria-label='Connect another wallet'
               disabled={isBusy}
@@ -113,7 +113,7 @@ export function PaymentSourceFields({
             onValueChange={onPayingAddressChange}
             value={payingWallet?.address ?? ""}
           >
-            <SelectTrigger aria-label='Paying wallet' className='w-full' id='fund-with-usdc-wallet'>
+            <SelectTrigger aria-label='Paying wallet' className='w-full' id='pay-from-network-wallet'>
               <SelectValue placeholder={areWalletsReady ? "Choose a wallet" : "Loading wallets…"} />
             </SelectTrigger>
             <SelectContent>
@@ -128,7 +128,7 @@ export function PaymentSourceFields({
 
         <div className='grid gap-2'>
           <div className='flex min-h-10 items-center justify-between gap-2'>
-            <Label htmlFor='fund-with-usdc-source'>Pay with</Label>
+            <Label htmlFor='pay-from-network-source'>Pay with</Label>
             {isScanning && funded.length > 0 ? (
               <span className='text-xs text-muted-foreground'>Checking balances…</span>
             ) : null}
@@ -136,11 +136,11 @@ export function PaymentSourceFields({
           {funded.length > 0 ? (
             <Select
               disabled={isBusy}
-              onValueChange={(value) => onSourceChange(parseUsdcSourceValue(value))}
-              value={isSelectedFunded ? toUsdcSourceValue(sourceChoice) : ""}
+              onValueChange={(value) => onSourceChange(parsePaymentSourceValue(value))}
+              value={isSelectedFunded ? toPaymentSourceValue(sourceChoice) : ""}
             >
-              <SelectTrigger aria-label='Payment source' className='w-full' id='fund-with-usdc-source'>
-                <SelectValue placeholder='Choose a network' />
+              <SelectTrigger aria-label='Payment source' className='w-full' id='pay-from-network-source'>
+                <SelectValue placeholder='Choose a token' />
               </SelectTrigger>
               <SelectContent>
                 {funded.map((option) => (
@@ -151,7 +151,7 @@ export function PaymentSourceFields({
               </SelectContent>
             </Select>
           ) : (
-            <p className='flex h-9 items-center text-muted-foreground' id='fund-with-usdc-source'>
+            <p className='flex h-9 items-center text-muted-foreground' id='pay-from-network-source'>
               {emptyNote}
             </p>
           )}

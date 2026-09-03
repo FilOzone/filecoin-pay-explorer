@@ -4,7 +4,6 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useConnection } from "wagmi";
 import { getChain } from "@/constants/chains";
 import useAccountSummary from "@/hooks/useAccountSummary";
-import { useFundingLaunch } from "../FundingLaunchContext";
 import { useTopUpActivity } from "../TopUpActivityContext";
 import { GuidedTopUpDialog } from "./components";
 import { withoutTopUpSearchParam } from "./data/guided-top-up";
@@ -36,12 +35,6 @@ export function TopUpDialogController({ accountId, children }: TopUpDialogContro
     setOpen(true);
     setTopUpActive(true);
   }, [setTopUpActive]);
-  // The console-wide add-funds picker offers the guided swap only while this controller is mounted.
-  const { setGuidedTopUp } = useFundingLaunch();
-  useEffect(() => {
-    setGuidedTopUp(openTopUp);
-    return () => setGuidedTopUp(null);
-  }, [openTopUp, setGuidedTopUp]);
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen);

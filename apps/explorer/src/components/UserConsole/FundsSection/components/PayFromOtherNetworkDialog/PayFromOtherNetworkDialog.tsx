@@ -25,7 +25,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDebounce } from "use-debounce";
 import { formatUnits } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useAccount, useBalance, usePublicClient } from "wagmi";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import {
   BASE_CHAIN_ID,
@@ -41,50 +41,53 @@ import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 import { createDialogCloseGuard } from "../../data/dialog-close-guard";
 import { formatUsdfcAmount } from "../../data/funding-runway";
-import { getDepositAfterFilGasTopUp } from "../../data/squid-deposit-route";
-import { readSquidIntegratorId } from "../../data/squid-integrator";
-import { squidFetch } from "../../data/squid-quote";
 import {
   findCardUsdcToken,
-  findUsdcSourceCovering,
-  formatUsdcBalance,
-  isSameUsdcSource,
-  pickDefaultUsdcSource,
-  type UsdcSourceChoice,
-} from "../../data/usdc-sources";
+  findPaymentSourceCovering,
+  formatSourceBalance,
+  isSamePaymentSource,
+  type PaymentSourceChoice,
+  pickDefaultPaymentSource,
+} from "../../data/payment-sources";
+import { FIL_GAS_TOP_UP_AMOUNT, getDepositAfterFilGasTopUp } from "../../data/squid-deposit-route";
+import { readSquidIntegratorId } from "../../data/squid-integrator";
+import { isStablecoinSymbol } from "../../data/squid-payment-tokens";
+import { squidFetch } from "../../data/squid-quote";
 import { DepositProgress } from "./DepositProgress";
+import { FilGasTopUpOption } from "./FilGasTopUpOption";
 import { pickFundingHelper } from "./funding-helper";
 import { PaymentSourceFields } from "./PaymentSourceFields";
 import { PendingDepositPanel } from "./PendingDepositPanel";
 import { GasShortfallPanel, TopUpWalletPanel } from "./PrivyFundingPanels";
 import { QuoteSummary } from "./QuoteSummary";
+import { usePaymentSourcesAcrossChains } from "./usePaymentSourcesAcrossChains";
 import { useSquidDepositExecution } from "./useSquidDepositExecution";
 import { useSquidDepositQuote } from "./useSquidDepositQuote";
-import { useUsdcBalancesAcrossChains } from "./useUsdcBalancesAcrossChains";
 import { describeWallet, formatTokenAmount, pickDefaultWallet } from "./wallets";
 
 const QUOTE_DEBOUNCE_MS = 500;
-// Until the scan finds USDC somewhere: Base has the cheapest gas among the
-// Squid source networks and is where Privy's funding flows deliver USDC.
-const FALLBACK_SOURCE: UsdcSourceChoice = { chainId: BASE_CHAIN_ID, token: "" };
+// Until the scan finds something: Base has the cheapest gas among the Squid
+// source networks and is where Privy's funding flows deliver USDC.
+const FALLBACK_SOURCE: PaymentSourceChoice = { chainId: BASE_CHAIN_ID, token: "" };
 // Where a card purchase or transfer can land and still be paid from here, Base first as the cheapest.
 const CARD_CHAINS = CARD_ONRAMP_CHAIN_IDS.flatMap((id) => SQUID_SOURCE_CHAINS.filter((chain) => chain.id === id));
 const DEPOSIT_CONTRACTS = { payments: mainnet.contracts.payments.address, usdfc: mainnet.contracts.usdfc.address };
 
-type FundWithUsdcDialogProps = {
+type PayFromOtherNetworkDialogProps = {
   accountId: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 };
 
 /**
- * Pays USDC from any connected wallet and lands it as USDFC in the Filecoin
- * Pay account. This component owns what the user is choosing (wallet, USDC
- * source, amount) and the Privy top-up flows; the scan hook owns where the
- * wallet's USDC is, the quote hook what the choice costs, and the execution
- * hook what happens after confirm.
+ * Pays USDC, or another token, from any connected wallet on another network
+ * and lands it as USDFC in the Filecoin Pay account. This component owns what
+ * the user is choosing (wallet, source, amount, whether to keep some FIL for
+ * gas) and the Privy top-up flows; the scan hook owns where the wallet's
+ * tokens are, the quote hook what the choice costs, and the execution hook
+ * what happens after confirm.
  */
-export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUsdcDialogProps) {
+export function PayFromOtherNetworkDialog({ accountId, onOpenChange, open }: PayFromOtherNetworkDialogProps) {
   const { address: recipient } = useAccount();
   const { ready: areWalletsReady, wallets } = useWallets();
   const { connectWallet } = useConnectWallet();
@@ -97,10 +100,16 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
   const { setTopUpActive } = useTopUpActivity();
   const { requestReview, reviewDialog } = useTransactionReview();
   const amountInputId = useId();
+  // The account wallet's FIL decides whether the gas top-up starts on.
+  const { data: recipientFilBalance } = useBalance({
+    address: recipient,
+    chainId: mainnet.id,
+    query: { enabled: open && !!recipient },
+  });
 
   const [payingAddress, setPayingAddress] = useState("");
-  // The user's own pick, if any; otherwise the source holding the most USDC.
-  const [chosenSource, setChosenSource] = useState<UsdcSourceChoice | null>(null);
+  // The user's own pick, if any; otherwise the best-funded source, USDC first.
+  const [chosenSource, setChosenSource] = useState<PaymentSourceChoice | null>(null);
   // Where bought or transferred USDC should land; follows the paying network until the user picks.
   const [chosenCardChainId, setChosenCardChainId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
@@ -109,6 +118,8 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
   // The source (wallet, network, token) shows as one line until the user wants to change it.
   const [isSourceExpanded, setSourceExpanded] = useState(false);
   const [isReviewing, setReviewing] = useState(false);
+  // The user's own choice about the FIL top-up; null follows the default.
+  const [wantsFilGasTopUp, setWantsFilGasTopUp] = useState<boolean | null>(null);
   const wasOpen = useRef(false);
 
   const squid = { integratorId: readSquidIntegratorId(), fetch: squidFetch };
@@ -116,9 +127,9 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
     wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
     pickDefaultWallet(wallets);
   const isEmbedded = payingWallet ? isPrivyEmbeddedWallet(payingWallet) : false;
-  const scan = useUsdcBalancesAcrossChains({ enabled: open, owner: payingWallet?.address, squid });
-  const defaultSource = pickDefaultUsdcSource(scan.sources);
-  const sourceChoice: UsdcSourceChoice =
+  const scan = usePaymentSourcesAcrossChains({ enabled: open, owner: payingWallet?.address, squid });
+  const defaultSource = pickDefaultPaymentSource(scan.sources);
+  const sourceChoice: PaymentSourceChoice =
     chosenSource ??
     (defaultSource ? { chainId: defaultSource.chainId, token: defaultSource.token.token } : FALLBACK_SOURCE);
   const sourceChainId = sourceChoice.chainId;
@@ -148,13 +159,15 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
     filGasTopUp,
     gasTopUpAmount,
     hasInsufficientGas,
-    hasInsufficientUsdc,
+    hasInsufficientToken,
+    isNativeSource,
     parsedAmount,
     quote,
     quoteQuery,
     rate,
     requiredNative,
     sourceToken,
+    spendable,
     tokensQuery,
   } = useSquidDepositQuote({
     amount: debouncedAmount,
@@ -181,8 +194,12 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
     parsedAmount !== null &&
     !!sourceClient &&
     !!destinationClient &&
-    !hasInsufficientUsdc &&
+    !hasInsufficientToken &&
     !hasInsufficientGas;
+  // On by default for a wallet holding less FIL than the top-up brings; off once it has some.
+  const recipientFil = recipientFilBalance?.value;
+  const keepsFilForGas = wantsFilGasTopUp ?? (recipientFil !== undefined && recipientFil < FIL_GAS_TOP_UP_AMOUNT);
+  const appliedFilGasTopUp = keepsFilForGas ? filGasTopUp : undefined;
 
   // Only an open dialog claims top-up activity; a closed instance elsewhere on
   // the page must not clear it for the guided flow.
@@ -196,6 +213,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
       setChosenSource(null);
       setReviewing(false);
       setSourceExpanded(false);
+      setWantsFilGasTopUp(null);
     }
   }, [open, setTopUpActive]);
 
@@ -218,7 +236,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
     }
     return execution.confirm({
       amount,
-      filGasTopUp,
+      filGasTopUp: appliedFilGasTopUp,
       parsedAmount,
       payingWallet,
       quote,
@@ -244,6 +262,9 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
 
   // The USDC a purchase lands as: native USDC on the chosen network, by Squid's listing or by address.
   const cardToken = findCardUsdcToken(scan.sources, cardChainId);
+  // A typed dollar amount pre-fills the purchase; an amount in ETH would not.
+  const cardDefaultAmount =
+    parsedAmount !== null && sourceToken && isStablecoinSymbol(sourceToken.symbol) ? amount : undefined;
 
   /** Privy's card onramp (Stripe, MoonPay, or Meld by region) into the paying wallet. */
   const buyUsdcWithCard = () => {
@@ -255,7 +276,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
             address: payingWallet.address,
             asset: cardToken.token,
             chainId: cardChainId,
-            defaultAmount: parsedAmount === null ? undefined : amount,
+            defaultAmount: cardDefaultAmount,
             environment: readOnrampEnvironment(),
           }),
         ),
@@ -294,38 +315,48 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
   const payerLabel = isEmbedded ? "your Privy wallet" : "this wallet";
   const isSourceResolved = !!payingWallet && !!sourceToken;
   const resolvedChoice = sourceToken ? { chainId: sourceChainId, token: sourceToken.token } : undefined;
-  // Another network that would do: the one covering the amount, or holding the most USDC before an amount is typed.
-  const betterSource = parsedAmount !== null ? findUsdcSourceCovering(scan.sources, debouncedAmount) : defaultSource;
-  const alternative = betterSource && !isSameUsdcSource(betterSource, resolvedChoice) ? betterSource : undefined;
+  // Another network that would do: one holding enough of the same token, or the best-funded source before an amount is typed.
+  const betterSource =
+    parsedAmount !== null && sourceToken
+      ? findPaymentSourceCovering(scan.sources, debouncedAmount, sourceToken.symbol)
+      : defaultSource;
+  const alternative = betterSource && !isSamePaymentSource(betterSource, resolvedChoice) ? betterSource : undefined;
   const alternativeChain = alternative && SQUID_SOURCE_CHAINS.find((chain) => chain.id === alternative.chainId);
+  const hasOtherFundedSource = scan.sources.some(
+    (source) => source.balance > 0n && !isSamePaymentSource(source, resolvedChoice),
+  );
   const helper = pickFundingHelper({
     hasAlternative: !!alternative,
     hasBalances: balances !== undefined,
     hasInsufficientGas,
-    holdsUsdcSomewhere: scan.sources.some((source) => source.balance > 0n),
+    holdsTokensSomewhere: scan.sources.some((source) => source.balance > 0n),
     isScanning: scan.isPending,
     isSourceResolved,
-    isUsdcShort: balances?.token === 0n || hasInsufficientUsdc,
+    isTokenShort: balances?.token === 0n || hasInsufficientToken,
   });
   const topUpMessage =
     helper === "empty"
-      ? `${payerLabel[0].toUpperCase()}${payerLabel.slice(1)} holds no USDC on any supported network yet.`
-      : `Not enough USDC in ${payerLabel} on any supported network.`;
+      ? `${payerLabel[0].toUpperCase()}${payerLabel.slice(1)} holds nothing to pay with on any supported network yet.`
+      : `Not enough ${sourceToken?.symbol ?? "of this token"} on ${sourceChain?.name ?? "this network"}. ${
+          hasOtherFundedSource
+            ? "Choose another token or network above, or buy USDC with card."
+            : "Buy USDC with card, or transfer some to this wallet."
+        }`;
   const view = stage ? "progress" : pendingDeposit ? "pending" : isReviewing ? "review" : "amount";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[520px]'>
         <DialogHeader>
-          <DialogTitle>{view === "review" ? "Review payment" : "Pay with USDC"}</DialogTitle>
+          <DialogTitle>{view === "review" ? "Review payment" : "Pay from another network"}</DialogTitle>
           <DialogDescription>
             {view === "review" ? (
               "Check the details, then confirm in your wallet."
             ) : (
               <>
-                Fund your account from another network where you hold USDC. It is swapped to USDFC via{" "}
-                <ExternalTextLink href='https://app.squidrouter.com/'>Squid</ExternalTextLink> and deposited for you.
-                Nothing to sign on Filecoin, no FIL needed.
+                Pay with USDC, or another token you hold on Ethereum, Base, Arbitrum and more. It is swapped to USDFC
+                via <ExternalTextLink href='https://app.squidrouter.com/'>Squid</ExternalTextLink> and deposited for
+                you. Nothing to sign on Filecoin.
               </>
             )}
             {recipient ? (
@@ -378,11 +409,18 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
                   <dd className='text-right font-medium'>Your Filecoin Pay account</dd>
                 </div>
               </dl>
-              <QuoteSummary filGasTopUp={filGasTopUp} quote={quote} rate={rate} tokenSymbol={sourceToken.symbol} />
+              <QuoteSummary
+                filGasTopUp={appliedFilGasTopUp}
+                quote={quote}
+                rate={rate}
+                tokenSymbol={sourceToken.symbol}
+              />
               <p className='text-muted-foreground'>
                 {isEmbedded
                   ? "Your Privy wallet signs the approval and the swap for you."
-                  : "Your wallet will ask you to approve USDC on a first purchase, then to confirm the swap."}
+                  : isNativeSource
+                    ? "Your wallet will ask you to confirm the swap."
+                    : `Your wallet will ask you to approve ${sourceToken.symbol} on a first purchase, then to confirm the swap.`}
               </p>
             </>
           )}
@@ -413,15 +451,16 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
               <div className='grid gap-2'>
                 <div className='flex items-center justify-between gap-2'>
                   <Label htmlFor={amountInputId}>Amount ({sourceToken?.symbol ?? "USDC"})</Label>
-                  {balances && balances.token > 0n && sourceToken && (
+                  {spendable !== undefined && spendable > 0n && sourceToken && (
                     <Button
                       disabled={isBusy}
-                      onClick={() => setAmount(formatUnits(balances.token, sourceToken.decimals))}
+                      onClick={() => setAmount(formatUnits(spendable, sourceToken.decimals))}
                       size='compact'
                       type='button'
                       variant='ghost'
                     >
-                      Max ({formatTokenAmount(balances.token, sourceToken.decimals)} {sourceToken.symbol})
+                      Max ({formatTokenAmount(spendable, sourceToken.decimals, isNativeSource ? 4 : 2)}{" "}
+                      {sourceToken.symbol})
                     </Button>
                   )}
                 </div>
@@ -445,7 +484,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
               {helper === "elsewhere" && alternative && alternativeChain && (
                 <div className='flex flex-wrap items-center justify-between gap-2 rounded-md border p-3'>
                   <span className='text-muted-foreground'>
-                    {alternativeChain.name} holds {formatUsdcBalance(alternative)} {alternative.token.symbol}
+                    {alternativeChain.name} holds {formatSourceBalance(alternative)} {alternative.token.symbol}
                     {parsedAmount !== null ? ", enough for this amount." : "."}
                   </span>
                   <Button
@@ -497,11 +536,21 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
                   {quoteQuery.error instanceof Error ? quoteQuery.error.message : "Squid could not quote this amount."}
                 </p>
               )}
+              {quote && filGasTopUp && (
+                <FilGasTopUpOption
+                  checked={keepsFilForGas}
+                  disabled={isBusy}
+                  onCheckedChange={setWantsFilGasTopUp}
+                  recipientFil={recipientFil}
+                  topUp={filGasTopUp}
+                />
+              )}
               {quote && sourceToken && rate !== null && (
                 <p className='flex items-center justify-between gap-2 text-muted-foreground'>
                   <span>You receive at least</span>
                   <span className='font-medium text-foreground'>
-                    {formatUsdfcAmount(getDepositAfterFilGasTopUp(quote.minimumDestinationAmount, filGasTopUp))} USDFC
+                    {formatUsdfcAmount(getDepositAfterFilGasTopUp(quote.minimumDestinationAmount, appliedFilGasTopUp))}{" "}
+                    USDFC
                   </span>
                 </p>
               )}
@@ -539,7 +588,7 @@ export function FundWithUsdcDialog({ accountId, onOpenChange, open }: FundWithUs
           )}
           {view === "review" && sourceToken && (
             <Button
-              aria-label='Pay with USDC'
+              aria-label='Confirm payment'
               className='disabled:cursor-not-allowed disabled:opacity-50'
               disabled={!canConfirm}
               onClick={() => void handleConfirm()}

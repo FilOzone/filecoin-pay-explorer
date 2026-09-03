@@ -15,13 +15,10 @@ type FundingLaunch = {
   closeAddFunds: () => void;
   /** The token the latest add-funds request asked a deposit to open on. */
   depositToken: UserToken | null;
-  /** Whether the console-wide "Pay with USDC" dialog is open. */
-  isUsdcFundingOpen: boolean;
-  openUsdcFunding: () => void;
-  closeUsdcFunding: () => void;
-  /** Opens the guided any-token swap, while the dashboard that owns it is mounted. */
-  guidedTopUp: (() => void) | null;
-  setGuidedTopUp: (open: (() => void) | null) => void;
+  /** Whether the console-wide "Pay from another network" dialog is open. */
+  isCrossChainPaymentOpen: boolean;
+  openCrossChainPayment: () => void;
+  closeCrossChainPayment: () => void;
 };
 
 const FundingLaunchContext = createContext<FundingLaunch | null>(null);
@@ -29,45 +26,38 @@ const FundingLaunchContext = createContext<FundingLaunch | null>(null);
 /**
  * Holds the open state of the funding dialogs for the whole console. The
  * wallet menu, the dashboard and the first-time trigger all open the same
- * picker and the same USDC dialog, which FundingHost renders exactly once, so
- * a request to fund is never dropped for want of a listener.
+ * picker and the same cross-network payment, which FundingHost renders exactly
+ * once, so a request to fund is never dropped for want of a listener.
  */
 export function FundingLaunchProvider({ children }: { children: ReactNode }) {
   const [isAddFundsOpen, setAddFundsOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
-  const [isUsdcFundingOpen, setUsdcFundingOpen] = useState(false);
-  const [guidedTopUp, setGuidedTopUpState] = useState<(() => void) | null>(null);
+  const [isCrossChainPaymentOpen, setCrossChainPaymentOpen] = useState(false);
   const openAddFunds = useCallback((options?: AddFundsOptions) => {
     setDepositToken(options?.depositToken ?? null);
     setAddFundsOpen(true);
   }, []);
   const closeAddFunds = useCallback(() => setAddFundsOpen(false), []);
-  const openUsdcFunding = useCallback(() => setUsdcFundingOpen(true), []);
-  const closeUsdcFunding = useCallback(() => setUsdcFundingOpen(false), []);
-  // Wrapped so a function is stored rather than run as a state updater.
-  const setGuidedTopUp = useCallback((open: (() => void) | null) => setGuidedTopUpState(() => open), []);
+  const openCrossChainPayment = useCallback(() => setCrossChainPaymentOpen(true), []);
+  const closeCrossChainPayment = useCallback(() => setCrossChainPaymentOpen(false), []);
   const value = useMemo(
     () => ({
       isAddFundsOpen,
       openAddFunds,
       closeAddFunds,
       depositToken,
-      isUsdcFundingOpen,
-      openUsdcFunding,
-      closeUsdcFunding,
-      guidedTopUp,
-      setGuidedTopUp,
+      isCrossChainPaymentOpen,
+      openCrossChainPayment,
+      closeCrossChainPayment,
     }),
     [
       isAddFundsOpen,
       openAddFunds,
       closeAddFunds,
       depositToken,
-      isUsdcFundingOpen,
-      openUsdcFunding,
-      closeUsdcFunding,
-      guidedTopUp,
-      setGuidedTopUp,
+      isCrossChainPaymentOpen,
+      openCrossChainPayment,
+      closeCrossChainPayment,
     ],
   );
   return <FundingLaunchContext.Provider value={value}>{children}</FundingLaunchContext.Provider>;

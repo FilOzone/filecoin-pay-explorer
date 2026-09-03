@@ -20,6 +20,6 @@ export function pickDefaultWallet(wallets: readonly ConnectedWallet[]): Connecte
 
 export function formatTokenAmount(amount: bigint, decimals: number, maxFractionDigits = 2): string {
   const [whole, fraction = ""] = formatUnits(amount, decimals).split(".");
-  const trimmed = fraction.replace(/0+$/, "").slice(0, maxFractionDigits);
+  const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, "");
   return trimmed ? `${whole}.${trimmed}` : whole;
 }

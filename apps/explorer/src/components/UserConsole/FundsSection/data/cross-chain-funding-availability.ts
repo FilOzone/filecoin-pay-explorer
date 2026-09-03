@@ -6,7 +6,7 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
  * when the console shows mainnet and while the paying wallet sits on a Squid
  * source network mid-payment. Calibration and unknown networks get nothing.
  */
-export function isUsdcFundingAvailable(chainId: number | undefined): boolean {
+export function isCrossChainFundingAvailable(chainId: number | undefined): boolean {
   if (chainId === undefined || isSupportedChainId(chainId)) return getNetworkFromChainId(chainId) === "mainnet";
   return SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
 }

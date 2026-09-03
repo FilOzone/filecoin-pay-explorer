@@ -8,6 +8,10 @@ import {
   isUnfavorableRate,
   type SquidDepositQuote,
 } from "../../data/squid-deposit-route";
+import { isStablecoinSymbol } from "../../data/squid-payment-tokens";
+
+const formatRate = (rate: number) =>
+  rate.toLocaleString(undefined, { maximumFractionDigits: rate >= 100 ? 0 : rate >= 10 ? 2 : 3 });
 
 /** What the account receives for the typed amount, with the rate, fees and time. */
 export function QuoteSummary({
@@ -16,6 +20,7 @@ export function QuoteSummary({
   rate,
   tokenSymbol,
 }: {
+  /** The FIL top-up the user kept on, if any. */
   filGasTopUp?: FilGasTopUp;
   quote: SquidDepositQuote;
   rate: number;
@@ -37,7 +42,7 @@ export function QuoteSummary({
       )}
       <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
         <span>
-          1 {tokenSymbol} ≈ {rate.toFixed(3)} USDFC
+          1 {tokenSymbol} ≈ {formatRate(rate)} USDFC
           {quote.priceImpactPercent ? ` · impact ${quote.priceImpactPercent}%` : ""}
         </span>
         <span>
@@ -49,7 +54,8 @@ export function QuoteSummary({
             : ""}
         </span>
       </div>
-      {isUnfavorableRate(rate) && (
+      {/* Only a dollar-pegged token has a rate to fall short of. */}
+      {isStablecoinSymbol(tokenSymbol) && isUnfavorableRate(rate) && (
         <p className='mt-1 inline-flex items-start gap-2 text-muted-foreground'>
           <AlertCircle aria-hidden className='mt-0.5 h-4 w-4 shrink-0' />
           <span>

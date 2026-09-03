@@ -1,6 +1,6 @@
 import type { UserToken } from "@filecoin-pay/types";
 import { act, create } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "./FundingLaunchContext";
 
 const SEED = { id: "account-usdfc" } as unknown as UserToken;
@@ -10,17 +10,15 @@ function Controls() {
   return (
     <>
       <span
-        data-open={launch.isUsdcFundingOpen}
+        data-open={launch.isCrossChainPaymentOpen}
         data-picker-open={launch.isAddFundsOpen}
         data-seed={launch.depositToken}
-        data-swap={launch.guidedTopUp}
       />
-      <button data-launch onClick={launch.openUsdcFunding} type='button' />
-      <button data-close onClick={launch.closeUsdcFunding} type='button' />
+      <button data-launch onClick={launch.openCrossChainPayment} type='button' />
+      <button data-close onClick={launch.closeCrossChainPayment} type='button' />
       <button data-open-picker onClick={() => launch.openAddFunds()} type='button' />
       <button data-open-seeded onClick={() => launch.openAddFunds({ depositToken: SEED })} type='button' />
       <button data-close-picker onClick={launch.closeAddFunds} type='button' />
-      <button data-register={launch.setGuidedTopUp} type='button' />
     </>
   );
 }
@@ -41,7 +39,7 @@ const press = (renderer: ReturnType<typeof create>, name: string) =>
   act(() => renderer.root.findByProps({ [name]: true }).props.onClick());
 
 describe("FundingLaunchContext", () => {
-  it("opens and closes the shared USDC funding dialog", () => {
+  it("opens and closes the shared cross-network payment dialog", () => {
     const renderer = render();
     expect(flag(renderer, "data-open")).toBe(false);
     press(renderer, "data-launch");
@@ -62,19 +60,6 @@ describe("FundingLaunchContext", () => {
     // A request without a token clears the previous one.
     press(renderer, "data-open-picker");
     expect(flag(renderer, "data-seed")).toBeNull();
-  });
-
-  it("keeps the guided swap opener while a dashboard registers one", () => {
-    const renderer = render();
-    const register = renderer.root.findAll((node) => node.type === "button" && "data-register" in node.props)[0].props[
-      "data-register"
-    ];
-    const openSwap = vi.fn();
-    expect(flag(renderer, "data-swap")).toBeNull();
-    act(() => register(openSwap));
-    expect(flag(renderer, "data-swap")).toBe(openSwap);
-    act(() => register(null));
-    expect(flag(renderer, "data-swap")).toBeNull();
   });
 
   it("refuses to run outside the provider", () => {

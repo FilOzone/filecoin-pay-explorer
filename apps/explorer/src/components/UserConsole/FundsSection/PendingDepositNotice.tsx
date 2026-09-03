@@ -8,7 +8,7 @@ import { usePendingSquidDeposit } from "./hooks/usePendingSquidDeposit";
 /** Shows an in-flight USDC deposit on every console page until the dialog is open or the deposit settles. */
 export function PendingDepositNotice({ address }: { address: Address | undefined }) {
   const pending = usePendingSquidDeposit(address);
-  const { isUsdcFundingOpen, openUsdcFunding } = useFundingLaunch();
-  if (!pending || isUsdcFundingOpen) return null;
-  return <PendingDepositBanner onView={openUsdcFunding} pending={pending} />;
+  const { isCrossChainPaymentOpen, openCrossChainPayment } = useFundingLaunch();
+  if (!pending || isCrossChainPaymentOpen) return null;
+  return <PendingDepositBanner onView={openCrossChainPayment} pending={pending} />;
 }

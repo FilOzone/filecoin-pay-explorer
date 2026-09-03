@@ -5,7 +5,7 @@ import { getPendingSquidDepositKey, PENDING_SQUID_DEPOSIT_EVENT } from "./data/s
 import { PendingDepositNotice } from "./PendingDepositNotice";
 
 const RECIPIENT = "0x2222222222222222222222222222222222222222";
-const launch = vi.hoisted(() => ({ isUsdcFundingOpen: false, openUsdcFunding: vi.fn() }));
+const launch = vi.hoisted(() => ({ isCrossChainPaymentOpen: false, openCrossChainPayment: vi.fn() }));
 
 vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({ useFundingLaunch: () => launch }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -56,7 +56,7 @@ function render(address: string | undefined) {
 
 beforeEach(() => {
   items.clear();
-  launch.isUsdcFundingOpen = false;
+  launch.isCrossChainPaymentOpen = false;
   vi.stubGlobal("window", {
     addEventListener: vi.fn((type: string, listener: (event?: unknown) => void) => {
       listeners[type] = listener;
@@ -83,17 +83,17 @@ describe("PendingDepositNotice", () => {
       "25 USDC from Base is on its way to your Filecoin Pay account.",
     );
 
-    act(() => renderer.root.findByProps({ "aria-label": "View USDC deposit in progress" }).props.onClick());
-    expect(launch.openUsdcFunding).toHaveBeenCalledOnce();
+    act(() => renderer.root.findByProps({ "aria-label": "View deposit in progress" }).props.onClick());
+    expect(launch.openCrossChainPayment).toHaveBeenCalledOnce();
   });
 
   it("hides while the dialog is open and disappears once the deposit clears", () => {
     seedPendingDeposit();
-    launch.isUsdcFundingOpen = true;
+    launch.isCrossChainPaymentOpen = true;
     const renderer = render(RECIPIENT);
     expect(renderer.toJSON()).toBeNull();
 
-    launch.isUsdcFundingOpen = false;
+    launch.isCrossChainPaymentOpen = false;
     act(() => renderer.update(<PendingDepositNotice address={RECIPIENT} />));
     expect(renderer.toJSON()).not.toBeNull();
 

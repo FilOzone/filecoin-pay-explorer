@@ -31,7 +31,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
 }));
-vi.mock("../FundingLaunchContext", () => ({ useFundingLaunch: () => ({ setGuidedTopUp: () => undefined }) }));
 vi.mock("@/hooks/useSynapse", () => ({
   default: () => ({ synapse: undefined }),
 }));

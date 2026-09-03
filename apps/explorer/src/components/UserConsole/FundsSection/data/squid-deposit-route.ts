@@ -234,17 +234,17 @@ export function buildDepositPostHook(target: SquidDepositTarget, filGasTopUp?: F
 }
 
 export function isUsdcLikeSymbol(symbol: string): boolean {
-  return /usdc/i.test(symbol);
+  return /usdb?c/i.test(symbol);
 }
 
 /** USDC variants Squid lists for a network, plain USDC first. */
-export function selectUsdcTokens(tokens: readonly SourceToken[]): SourceToken[] {
+export function selectUsdcTokens<T extends SourceToken>(tokens: readonly T[]): T[] {
   return tokens
     .filter((token) => isUsdcLikeSymbol(token.symbol) && !isNativeToken(token.token))
     .sort((a, b) => Number(b.symbol.toUpperCase() === "USDC") - Number(a.symbol.toUpperCase() === "USDC"));
 }
 
-export function getUsdfcPerUsdc(
+export function getUsdfcPerSourceUnit(
   quote: Pick<SquidDepositQuote, "sourceAmount" | "destinationAmount">,
   sourceDecimals: number,
 ): number {
@@ -291,7 +291,7 @@ export async function requestSquidDepositRoute(
   client: SquidClient,
   options: { quoteOnly: boolean },
 ): Promise<SquidDepositQuote> {
-  if (request.sourceAmount <= 0n) throw new Error("Enter a USDC amount greater than zero");
+  if (request.sourceAmount <= 0n) throw new Error("Enter an amount greater than zero");
   if (client.integratorId.trim() === "") throw new Error("Squid integrator ID is required");
   const slippage = request.slippage ?? DEFAULT_SQUID_SLIPPAGE;
   const fetcher = client.fetch ?? globalThis.fetch.bind(globalThis);

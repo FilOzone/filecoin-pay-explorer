@@ -11,7 +11,7 @@ const card = vi.hoisted(() => ({ buyWithCard: vi.fn(), label: "Buy USDC with car
 const dialogs = vi.hoisted(() => ({
   onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
   onSelect: undefined as ((method: string) => void) | undefined,
-  onUsdcOpenChange: undefined as ((open: boolean) => void) | undefined,
+  onPaymentOpenChange: undefined as ((open: boolean) => void) | undefined,
 }));
 
 vi.mock("wagmi", () => ({ useConnection: () => wallet }));
@@ -32,23 +32,21 @@ vi.mock("@/components/UserConsole/DepositDialog", () => ({
 }));
 vi.mock("./components", () => ({
   AddFundsDialog: ({
+    crossChainAvailable,
     onOpenChange,
     onSelect,
     open,
-    squidAvailable,
-    swapAvailable,
   }: {
+    crossChainAvailable: boolean;
     onOpenChange: (open: boolean) => void;
     onSelect: (method: string) => void;
     open: boolean;
-    squidAvailable: boolean;
-    swapAvailable: boolean;
   }) => {
     dialogs.onPickerOpenChange = onOpenChange;
     dialogs.onSelect = onSelect;
-    return <div data-picker-open={open} data-squid={squidAvailable} data-swap={swapAvailable} />;
+    return <div data-crosschain={crossChainAvailable} data-picker-open={open} />;
   },
-  FundWithUsdcDialog: ({
+  PayFromOtherNetworkDialog: ({
     accountId,
     onOpenChange,
     open,
@@ -57,23 +55,22 @@ vi.mock("./components", () => ({
     onOpenChange: (open: boolean) => void;
     open: boolean;
   }) => {
-    dialogs.onUsdcOpenChange = onOpenChange;
-    return <div data-account={accountId} data-usdc-dialog-open={open} />;
+    dialogs.onPaymentOpenChange = onOpenChange;
+    return <div data-account={accountId} data-payment-dialog-open={open} />;
   },
 }));
 
 function Launcher() {
-  const { openAddFunds, openUsdcFunding, setGuidedTopUp } = useFundingLaunch();
+  const { openAddFunds, openCrossChainPayment } = useFundingLaunch();
   return (
     <>
-      <button data-launch onClick={openUsdcFunding} type='button' />
+      <button data-launch onClick={openCrossChainPayment} type='button' />
       <button data-open-picker onClick={() => openAddFunds()} type='button' />
       <button
         data-open-seeded
         onClick={() => openAddFunds({ depositToken: { id: "token-1" } as never })}
         type='button'
       />
-      <button data-register={setGuidedTopUp} type='button' />
     </>
   );
 }
@@ -102,33 +99,28 @@ beforeEach(() => {
 });
 
 describe("FundingHost", () => {
-  it("renders the USDC dialog once for the lowercase account and opens it on request", () => {
+  it("renders the payment dialog once for the lowercase account and opens it on request", () => {
     const renderer = renderHost();
-    expect(renderer.root.findAllByProps({ "data-usdc-dialog-open": false }, { deep: false })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "data-payment-dialog-open": false }, { deep: false })).toHaveLength(1);
     expect(find(renderer, "data-account").props["data-account"]).toBe("0xabcdef0000000000000000000000000000000001");
 
     press(renderer, "data-launch");
-    expect(find(renderer, "data-account").props["data-usdc-dialog-open"]).toBe(true);
+    expect(find(renderer, "data-account").props["data-payment-dialog-open"]).toBe(true);
 
-    act(() => dialogs.onUsdcOpenChange?.(false));
-    expect(find(renderer, "data-account").props["data-usdc-dialog-open"]).toBe(false);
+    act(() => dialogs.onPaymentOpenChange?.(false));
+    expect(find(renderer, "data-account").props["data-payment-dialog-open"]).toBe(false);
   });
 
-  it("routes every picker method: USDC dialog, card, deposit, and the guided swap once one is registered", () => {
+  it("routes every picker method: the payment dialog, card, and deposit", () => {
     const renderer = renderHost();
-    expect(find(renderer, "data-picker-open").props["data-swap"]).toBe(false);
-    const openSwap = vi.fn();
-    act(() =>
-      renderer.root.find((n) => n.type === "button" && "data-register" in n.props).props["data-register"](openSwap),
-    );
-    expect(find(renderer, "data-picker-open").props["data-swap"]).toBe(true);
+    expect(find(renderer, "data-picker-open").props["data-crosschain"]).toBe(true);
 
     press(renderer, "data-open-picker");
     expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
 
-    act(() => dialogs.onSelect?.("usdc"));
+    act(() => dialogs.onSelect?.("crosschain"));
     expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(false);
-    expect(find(renderer, "data-account").props["data-usdc-dialog-open"]).toBe(true);
+    expect(find(renderer, "data-account").props["data-payment-dialog-open"]).toBe(true);
 
     act(() => dialogs.onSelect?.("card"));
     expect(card.buyWithCard).toHaveBeenCalledOnce();
@@ -143,16 +135,13 @@ describe("FundingHost", () => {
     press(renderer, "data-open-seeded");
     act(() => dialogs.onSelect?.("deposit"));
     expect(find(renderer, "data-deposit-open").props["data-seed"]).toBe("token-1");
-
-    act(() => dialogs.onSelect?.("squid"));
-    expect(openSwap).toHaveBeenCalledOnce();
   });
 
-  it("opens the plain deposit itself on calibration, with no picker or USDC dialog, and nothing without an address", () => {
+  it("opens the plain deposit itself on calibration, with no picker or payment dialog, and nothing without an address", () => {
     wallet.chainId = 314159;
     const renderer = renderHost();
     expect(renderer.root.findAllByProps({ "data-picker-open": false }, { deep: false })).toHaveLength(0);
-    expect(renderer.root.findAllByProps({ "data-usdc-dialog-open": false }, { deep: false })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ "data-payment-dialog-open": false }, { deep: false })).toHaveLength(0);
 
     press(renderer, "data-open-picker");
     expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(true);
