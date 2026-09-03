@@ -17,6 +17,7 @@ import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi"
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { exitWalletSession, getWalletExitAction } from "@/components/shared/CustomConnectButton/state";
+import { consoleWalletSelector } from "@/components/UserConsole/console-wallet";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
@@ -82,6 +83,8 @@ const Balance = () => {
         authenticated,
         logout,
         disconnect: activeWallet ? () => activeWallet.disconnect() : undefined,
+        pauseSelection: consoleWalletSelector.pause,
+        resumeSelection: consoleWalletSelector.resume,
       });
     } catch (error) {
       toast.error(exitAction === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
