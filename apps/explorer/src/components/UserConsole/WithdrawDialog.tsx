@@ -15,11 +15,13 @@ import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi";
+import { useTransactionReview } from "@/components/UserConsole/TransactionReview";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import type { AccountInfo } from "@/types";
 import { WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
+import { createDialogCloseGuard } from "./FundsSection/data/dialog-close-guard";
 
 interface WithdrawDialogProps {
   userToken: UserToken;
@@ -28,6 +30,7 @@ interface WithdrawDialogProps {
 }
 
 export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open, onOpenChange }) => {
+  const { requestReview, reviewDialog } = useTransactionReview();
   const { address: userAddress } = useAccount();
 
   // Form state
@@ -51,11 +54,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
   }, [open]);
 
   // Fetch balance using useReadContract
-  const {
-    data: accountInfo,
-    isLoading: isLoadingAccountInfo,
-    isRefetching: isRefetchingAccountInfo,
-  } = useReadContract({
+  const { data: accountInfo, isLoading: isLoadingAccountInfo } = useReadContract({
     address: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
     functionName: "getAccountInfoIfSettled",
@@ -98,6 +97,30 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
       console.log("User address not available");
       return;
     }
+
+    // Embedded wallets sign without any wallet prompt, so the console shows
+    // its own review step first (once per action; user can opt out).
+    const approved = await requestReview({
+      title: `Withdraw ${amount} ${token.symbol}`,
+      rows: [
+        { label: "Amount", value: `${amount} ${token.symbol}` },
+        { label: "From", value: `Filecoin Pay ${constants.contracts.payments.address}` },
+        { label: "To wallet", value: userAddress },
+        { label: "Network", value: constants.chain.name },
+      ],
+      details: JSON.stringify(
+        {
+          function: "withdrawTo",
+          token: token.address,
+          to: userAddress,
+          amountWei: parseUnits(amount, token.decimals).toString(),
+          chainId: constants.chain.id,
+        },
+        null,
+        2,
+      ),
+    });
+    if (!approved) return;
 
     try {
       const amountInWei = parseUnits(amount, token.decimals);
@@ -146,130 +169,138 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
   const lockupRate = accountInfo ? (accountInfo as AccountInfo)[3] : 0n;
 
   const canWithdraw = accountInfo && parseUnits(amount, currentToken.decimals) <= (accountInfo as AccountInfo)[2];
-  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
+  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo;
+
+  const handleOpenChange = createDialogCloseGuard({
+    blockReason: () => (isExecuting ? "Wait for the withdrawal to finish before closing this dialog." : null),
+    onClose: () => onOpenChange(false),
+    onOpen: () => onOpenChange(true),
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
-        <DialogHeader>
-          <DialogTitle>Withdraw {currentToken?.symbol || "Tokens"}</DialogTitle>
-          <DialogDescription>Withdraw {currentToken?.symbol || "Tokens"} from your account.</DialogDescription>
-        </DialogHeader>
+    <>
+      {reviewDialog}
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className='sm:max-w-[500px]'>
+          <DialogHeader>
+            <DialogTitle>Withdraw {currentToken?.symbol || "Tokens"}</DialogTitle>
+            <DialogDescription>Withdraw {currentToken?.symbol || "Tokens"} from your account.</DialogDescription>
+          </DialogHeader>
 
-        <div className='grid gap-4 py-4'>
-          {/* Token Info Display */}
-          {currentToken && (
-            <div className='space-y-3'>
-              <div className='flex items-center justify-between p-3 rounded-lg bg-muted/50'>
-                <span className='text-sm text-muted-foreground'>Token</span>
-                <div className='flex items-center gap-2'>
-                  <span className='font-medium'>{currentToken.symbol}</span>
-                  <Badge variant='secondary'>{`${currentToken.decimals} decimals`}</Badge>
-                </div>
-              </div>
-
-              <div className='p-3 rounded-lg bg-muted/30 space-y-2'>
-                <div className='flex justify-between text-xs'>
-                  <span className='text-muted-foreground'>Contract Address</span>
-                  <span className='font-mono'>{`${formatAddress(currentToken.address)}`}</span>
-                </div>
-                <div className='flex justify-between text-xs'>
-                  <span className='text-muted-foreground'>Token Name</span>
-                  <span className='font-medium'>{currentToken.name}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Amount Input - Only show if token is selected */}
-          {currentToken && (
-            <div className='grid gap-2'>
-              <div className='flex items-center justify-between'>
-                <Label htmlFor='amount'>Amount</Label>
-                {
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3' />
-                    <span>
-                      Balance:{" "}
-                      {isLoadingAccountInfo || !accountInfo || isRefetchingAccountInfo ? (
-                        <Loader2 className='h-3 w-3 animate-spin inline' />
-                      ) : (
-                        <span className='font-medium text-foreground'>
-                          {Number(formatUnits((accountInfo as AccountInfo)[2], currentToken.decimals)).toLocaleString(
-                            undefined,
-                            {
-                              maximumFractionDigits: 6,
-                            },
-                          )}{" "}
-                          {currentToken.symbol}
-                        </span>
-                      )}
-                    </span>
+          <div className='grid gap-4 py-4'>
+            {/* Token Info Display */}
+            {currentToken && (
+              <div className='space-y-3'>
+                <div className='flex items-center justify-between p-3 rounded-lg bg-muted/50'>
+                  <span className='text-sm text-muted-foreground'>Token</span>
+                  <div className='flex items-center gap-2'>
+                    <span className='font-medium'>{currentToken.symbol}</span>
+                    <Badge variant='secondary'>{`${currentToken.decimals} decimals`}</Badge>
                   </div>
-                }
-              </div>
-              <div className='relative'>
-                <Input
-                  id='amount'
-                  type='number'
-                  placeholder='0.0'
-                  value={amount}
-                  onChange={setAmount}
-                  min='0'
-                  step='any'
-                  disabled={isExecuting}
-                  className='text-lg pr-16'
-                />
-                <Button
-                  type='button'
-                  variant='ghost'
-                  className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
-                  onClick={handleMaxClick}
-                  disabled={isExecuting || !accountInfo || isLoadingAccountInfo || isRefetchingAccountInfo}
-                >
-                  MAX
-                </Button>
-              </div>
-              <p className='text-xs text-muted-foreground'>
-                Enter the amount of {currentToken.symbol} you want to withdraw
-              </p>
-              {lockupRate > 0n && (
-                <p className='text-xs text-muted-foreground'>
-                  Max includes a small buffer to prevent transaction failures from ongoing payment streams.
-                </p>
-              )}
-              <p className='text-xs text-red-500'>
-                {canWithdraw ? "" : "Insufficient Available funds in contract account"}
-              </p>
-            </div>
-          )}
+                </div>
 
-          {/* Info Message for new users */}
-          {!currentToken && (
-            <div className='p-4 rounded-lg bg-muted/30 border border-dashed'>
-              <p className='text-sm text-muted-foreground text-center'>
-                Enter a token contract address above to begin your withdraw
-              </p>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
-            Cancel
-          </Button>
-          <Button variant='primary' onClick={handleWithdraw} disabled={!canExecute} className='py-2'>
-            {isExecuting ? (
-              <span className='flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
-                Processing...
-              </span>
-            ) : (
-              "Withdraw"
+                <div className='p-3 rounded-lg bg-muted/30 space-y-2'>
+                  <div className='flex justify-between text-xs'>
+                    <span className='text-muted-foreground'>Contract Address</span>
+                    <span className='font-mono'>{`${formatAddress(currentToken.address)}`}</span>
+                  </div>
+                  <div className='flex justify-between text-xs'>
+                    <span className='text-muted-foreground'>Token Name</span>
+                    <span className='font-medium'>{currentToken.name}</span>
+                  </div>
+                </div>
+              </div>
             )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+            {/* Amount Input - Only show if token is selected */}
+            {currentToken && (
+              <div className='grid gap-2'>
+                <div className='flex items-center justify-between'>
+                  <Label htmlFor='amount'>Amount</Label>
+                  {
+                    <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                      <Wallet className='h-3 w-3' />
+                      <span>
+                        Balance:{" "}
+                        {isLoadingAccountInfo || !accountInfo ? (
+                          <Loader2 className='h-3 w-3 animate-spin inline' />
+                        ) : (
+                          <span className='font-medium text-foreground'>
+                            {Number(formatUnits((accountInfo as AccountInfo)[2], currentToken.decimals)).toLocaleString(
+                              undefined,
+                              {
+                                maximumFractionDigits: 6,
+                              },
+                            )}{" "}
+                            {currentToken.symbol}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  }
+                </div>
+                <div className='relative'>
+                  <Input
+                    id='amount'
+                    type='text'
+                    inputMode='decimal'
+                    placeholder='0.0'
+                    value={amount}
+                    onChange={setAmount}
+                    disabled={isExecuting}
+                    className='text-lg pr-16'
+                  />
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
+                    onClick={handleMaxClick}
+                    disabled={isExecuting || !accountInfo || isLoadingAccountInfo}
+                  >
+                    MAX
+                  </Button>
+                </div>
+                <p className='text-xs text-muted-foreground'>
+                  Enter the amount of {currentToken.symbol} you want to withdraw
+                </p>
+                {lockupRate > 0n && (
+                  <p className='text-xs text-muted-foreground'>
+                    Max includes a small buffer to prevent transaction failures from ongoing payment streams.
+                  </p>
+                )}
+                <p className='text-xs text-destructive'>
+                  {canWithdraw ? "" : "Insufficient Available funds in contract account"}
+                </p>
+              </div>
+            )}
+
+            {/* Info Message for new users */}
+            {!currentToken && (
+              <div className='p-4 rounded-lg bg-muted/30 border border-dashed'>
+                <p className='text-sm text-muted-foreground text-center'>
+                  Enter a token contract address above to begin your withdraw
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+              Cancel
+            </Button>
+            <Button variant='primary' onClick={handleWithdraw} disabled={!canExecute} className='py-2'>
+              {isExecuting ? (
+                <span className='flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                  Processing...
+                </span>
+              ) : (
+                "Withdraw"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
