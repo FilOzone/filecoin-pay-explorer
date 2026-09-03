@@ -5,7 +5,7 @@ import { useConnectWallet, useLogin, useLogout, usePrivy, useWallets } from "@pr
 import { toast } from "sonner";
 import { useConnection } from "wagmi";
 import { consoleWalletSelector } from "@/components/UserConsole/console-wallet";
-import { getWalletEntryState } from "./state";
+import { exitWalletSession, getWalletEntryState } from "./state";
 
 const CustomConnectButton = () => {
   const { ready, authenticated, error } = usePrivy();
@@ -35,7 +35,12 @@ const CustomConnectButton = () => {
         <button
           type='button'
           onClick={() =>
-            void logout().catch((error) => toast.error("Unable to log out", { description: error.message }))
+            void exitWalletSession({
+              authenticated,
+              logout,
+              pauseSelection: consoleWalletSelector.pause,
+              resumeSelection: consoleWalletSelector.resume,
+            }).catch((error) => toast.error("Unable to log out", { description: error.message }))
           }
           className='text-sm underline underline-offset-2 opacity-70 hover:opacity-100'
         >
