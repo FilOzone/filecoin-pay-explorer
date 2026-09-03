@@ -7,6 +7,7 @@ import { useAccountTokens } from "@/hooks/useAccountDetails";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
+import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
 
 const TOKEN_PAGE_SIZE = 100;
@@ -20,6 +21,7 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
+  const [isSquidOpen, setSquidOpen] = useState(false);
   const isMainnet = chainId === undefined || chainId === mainnet.id;
   const isCalibration = chainId === calibration.id;
   const network = isCalibration ? "calibration" : "mainnet";
@@ -43,10 +45,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   return (
     <TopUpDialogController accountId={address.toLowerCase()}>
-      {(openTopUp) => {
+      {() => {
         const chooseMethod = (method: AddFundsMethod) => {
           launch.closeAddFunds();
-          if (method === "squid") openTopUp();
+          if (method === "squid") setSquidOpen(true);
           else setDepositOpen(true);
         };
 
@@ -69,6 +71,11 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
                 tokens={data?.userTokens ?? []}
               />
             ) : null}
+            <DirectSquidDepositDialog
+              accountId={address.toLowerCase()}
+              onOpenChange={setSquidOpen}
+              open={isSquidOpen}
+            />
           </>
         );
       }}
