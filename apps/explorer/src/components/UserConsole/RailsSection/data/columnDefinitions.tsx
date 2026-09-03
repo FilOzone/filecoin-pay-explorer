@@ -57,7 +57,7 @@ export const columns = [
             truncate={true}
             truncateLength={8}
           />
-          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(operator.address)}</div>
+          <div className='text-xs text-muted-foreground'>Service: {formatAddress(operator.address)}</div>
         </div>
       );
     },

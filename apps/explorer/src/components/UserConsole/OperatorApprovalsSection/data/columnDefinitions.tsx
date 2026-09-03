@@ -2,11 +2,11 @@ import { Badge } from "@filecoin-foundation/ui-filecoin/Badge";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Infinity as InfinityIcon } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { CopyableText } from "@/components/shared";
 import AllowanceDisplay from "@/components/shared/AllowanceDisplay";
 import { formatToken } from "@/utils/formatter";
+import { formatLockupPeriod } from "@/utils/lockup-period";
 
 // Create column helper
 const columnHelper = createColumnHelper<OperatorApproval & { onIncrease: (approval: OperatorApproval) => void }>();
@@ -38,8 +38,8 @@ export const columns = [
           {symbol === "USDFC" ? (
             <USDFCLogo className='w-6 h-6' />
           ) : (
-            <div className='h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center'>
-              <span className='text-sm font-semibold text-amber-700 dark:text-amber-400'>{symbol.charAt(0)}</span>
+            <div className='flex h-8 w-8 items-center justify-center rounded-full bg-muted'>
+              <span className='text-sm font-semibold text-muted-foreground'>{symbol.charAt(0)}</span>
             </div>
           )}
           <span className='font-medium'>{symbol}</span>
@@ -89,14 +89,7 @@ export const columns = [
             {approval.isApproved ? "Active" : "Revoked"}
           </Badge>
           <div className='text-xs text-muted-foreground'>
-            Max:{" "}
-            {approval.maxLockupPeriod === BigInt(2) ** BigInt(64) - BigInt(1) ? (
-              <span className='inline-flex items-center gap-1'>
-                <InfinityIcon className='h-3 w-3' /> epochs
-              </span>
-            ) : (
-              `${approval.maxLockupPeriod.toString()} epochs`
-            )}
+            Max lockup: {formatLockupPeriod(approval.maxLockupPeriod)}
           </div>
         </div>
       );

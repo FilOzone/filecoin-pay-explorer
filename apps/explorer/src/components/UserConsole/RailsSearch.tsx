@@ -41,7 +41,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
       case "railId":
         return "Search by Rail ID (e.g., 123)";
       case "operator":
-        return "Search by Operator Address (0x...)";
+        return "Search by service address (0x...)";
       case "payer":
         return "Search by Payer Address (0x...)";
       case "payee":

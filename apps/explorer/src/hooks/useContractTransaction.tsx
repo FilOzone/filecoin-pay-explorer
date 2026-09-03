@@ -95,7 +95,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
       toast.error(content.title, {
         id: txData.toastId,
-        description: "Request failed. See console logs for more details.",
+        description: "The request failed. Try again in a moment.",
         action: explorerUrl
           ? {
               label: (
@@ -155,8 +155,8 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         fullError: err,
       });
 
-      toast.error("Transaction Rejected", {
-        description: "Request failed. See console logs for more details.",
+      toast.error("Transaction rejected", {
+        description: "The request was not sent. Check your wallet and try again.",
         duration: 4000,
       });
 

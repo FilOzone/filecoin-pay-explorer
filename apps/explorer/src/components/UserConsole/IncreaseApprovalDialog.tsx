@@ -17,6 +17,8 @@ import { maxUint256, parseUnits } from "viem";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
+import { daysToEpochs } from "@/utils/lockup-period";
+import { createDialogCloseGuard } from "./FundsSection/data/dialog-close-guard";
 
 interface IncreaseApprovalDialogProps {
   approval: OperatorApproval;
@@ -48,20 +50,16 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
     if (!open) {
       setLockupIncrease("");
       setRateIncrease("");
+      setMaxLockupPeriodIncrease("");
       setIsUnlimited(false);
     }
   }, [open]);
 
-  const handleIncrease = async () => {
-    if (!isUnlimited && !lockupIncrease && !rateIncrease) {
-      console.log("No increase values provided");
-      return;
-    }
+  // Something must change, or the transaction would only spend gas.
+  const hasIncrease = isUnlimited || Boolean(lockupIncrease || rateIncrease || maxLockupPeriodIncrease);
 
-    if (!synapse) {
-      console.log("Synapse not initialized");
-      return;
-    }
+  const handleIncrease = async () => {
+    if (!hasIncrease || !synapse) return;
 
     setIsSubmitting(true);
 
@@ -81,7 +79,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
     const newRateAllowance = isUnlimited ? maxUint256 : BigInt(approval.rateAllowance) + BigInt(rateIncreaseWei);
     const newMaxLockupPeriod = isUnlimited
       ? maxUint256
-      : BigInt(approval.maxLockupPeriod) + BigInt(maxLockupPeriodIncrease);
+      : BigInt(approval.maxLockupPeriod) + (daysToEpochs(maxLockupPeriodIncrease) ?? 0n);
 
     try {
       await execute({
@@ -108,21 +106,28 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
     }
   };
 
-  const canSubmit = !isSubmitting && !isExecuting;
+  const canSubmit = hasIncrease && !isSubmitting && !isExecuting;
+
+  const handleOpenChange = createDialogCloseGuard({
+    blockReason: () =>
+      isSubmitting || isExecuting ? "Wait for the transaction to finish before closing this dialog." : null,
+    onClose: () => onOpenChange(false),
+    onOpen: () => onOpenChange(true),
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-[500px]'>
         <DialogHeader>
-          <DialogTitle>Increase Approval</DialogTitle>
-          <DialogDescription>Increase the allowances for this operator approval.</DialogDescription>
+          <DialogTitle>Increase limits</DialogTitle>
+          <DialogDescription>Raise what this service may charge or keep locked.</DialogDescription>
         </DialogHeader>
 
         <div className='grid gap-4 py-4'>
           {/* Approval Info */}
           <div className='grid grid-cols-2 gap-3 p-3 rounded-lg bg-muted/50'>
             <div>
-              <span className='text-xs text-muted-foreground'>Operator</span>
+              <span className='text-xs text-muted-foreground'>Service</span>
               <div className='font-mono text-sm font-medium'>{formatAddress(approval.operator.address)}</div>
             </div>
             <div>
@@ -187,7 +192,8 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 </Label>
                 <Input
                   id='lockupIncrease'
-                  type='number'
+                  type='text'
+                  inputMode='decimal'
                   placeholder='0.0'
                   value={lockupIncrease}
                   onChange={setLockupIncrease}
@@ -200,7 +206,8 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
                 </Label>
                 <Input
                   id='rateIncrease'
-                  type='number'
+                  type='text'
+                  inputMode='decimal'
                   placeholder='0.0'
                   value={rateIncrease}
                   onChange={setRateIncrease}
@@ -209,11 +216,12 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
               </div>
               <div>
                 <Label htmlFor='maxLockupPeriodIncrease' className='text-xs text-muted-foreground'>
-                  Maximum Lockup Period Increase
+                  Max lockup period increase (days)
                 </Label>
                 <Input
                   id='maxLockupPeriodIncrease'
-                  type='number'
+                  type='text'
+                  inputMode='decimal'
                   placeholder='0.0'
                   value={maxLockupPeriodIncrease}
                   onChange={setMaxLockupPeriodIncrease}
@@ -224,6 +232,9 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
           </div>
         </div>
 
+        {!hasIncrease && !isSubmitting ? (
+          <p className='text-sm text-muted-foreground'>Enter at least one increase, or set the limits to unlimited.</p>
+        ) : null}
         <DialogFooter>
           <Button
             variant='ghost'

@@ -81,7 +81,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ account, address }) =>
           <StatCard
             label='Total Approvals'
             value={formatCompactNumber(account.totalApprovals)}
-            tooltip='How many payment managers this account has given permission to use their tokens'
+            tooltip='How many services this account has allowed to charge it'
           />
         </div>
       </Card>
