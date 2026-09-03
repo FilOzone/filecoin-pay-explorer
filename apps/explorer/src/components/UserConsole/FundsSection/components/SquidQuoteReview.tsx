@@ -67,7 +67,7 @@ type SquidQuoteReviewProps = {
   destinationAmount: bigint | null;
   onAcquired: (acquisition: SquidAcquisition) => void;
   onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
-  onBlocked: (acquisition: SquidAcquisition) => void;
+  onAcquisitionSaved: (acquisition: SquidAcquisition) => void;
   onNetworkSwitchingChange: (isSwitching: boolean) => void;
 };
 
@@ -119,8 +119,8 @@ export function SquidQuoteReview({
   completedRequirementIds = [],
   destinationAmount,
   onAcquired,
+  onAcquisitionSaved,
   onAcquisitionStateChange,
-  onBlocked,
   onNetworkSwitchingChange,
 }: SquidQuoteReviewProps) {
   // The flow is deliberately split into read-only route review and wallet execution.
@@ -505,6 +505,7 @@ export function SquidQuoteReview({
               sourceWalletClient: sourceWalletClient as SquidWalletClient,
             }),
           minimumDestinationAmount: quote.requirement.amount,
+          onCheckpoint: onAcquisitionSaved,
           onStarted: () => {
             if (isCurrentExecutionOwner()) onAcquisitionStateChange("processing");
           },
@@ -521,7 +522,7 @@ export function SquidQuoteReview({
         return;
       }
       if (outcome.status === "blocked") {
-        onBlocked(outcome.acquisition);
+        onAcquisitionSaved(outcome.acquisition);
         onAcquisitionStateChange("blocked");
       } else {
         onAcquisitionStateChange("idle");

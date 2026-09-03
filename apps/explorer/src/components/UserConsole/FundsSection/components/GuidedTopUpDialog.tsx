@@ -730,8 +730,8 @@ export function GuidedTopUpDialog({
                 setAcquiredAmount(getSquidDepositAmount(acquired));
                 setAcquisitionOwner(acquired.owner);
               }}
+              onAcquisitionSaved={setSavedAcquisition}
               onAcquisitionStateChange={setAcquisitionState}
-              onBlocked={setSavedAcquisition}
               onNetworkSwitchingChange={setIsSwitchingNetwork}
             />
           )}

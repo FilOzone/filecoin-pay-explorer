@@ -23,6 +23,7 @@ export type SquidAcquisitionOutcome =
 export async function runSquidAcquisition({
   execute,
   minimumDestinationAmount,
+  onCheckpoint,
   onStarted,
   owner,
   readDestinationBalance,
@@ -36,6 +37,7 @@ export async function runSquidAcquisition({
     onSwapBroadcast: (hash: Hash) => void;
   }) => Promise<unknown>;
   minimumDestinationAmount: bigint;
+  onCheckpoint?: (acquisition: SquidAcquisition) => void;
   onStarted?: (acquisition: SquidAcquisition) => void;
   owner: Address;
   readDestinationBalance: () => Promise<bigint>;
@@ -75,6 +77,7 @@ export async function runSquidAcquisition({
       completedRequirementIds: acquisition.completedRequirementIds ?? [],
       onIntermediateRouteComplete: (requirementId) => {
         acquisition = markSquidIntermediateRouteCompleted(storage, acquisition, requirementId);
+        onCheckpoint?.(acquisition);
       },
       onSwapAttempt: () => {
         acquisition = markSquidSwapRequested(storage, acquisition);

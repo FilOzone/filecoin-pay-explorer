@@ -161,6 +161,7 @@ describe("runSquidAcquisition", () => {
   it("keeps a completed FIL checkpoint after a later wallet request is rejected", async () => {
     const storage = createStorage();
     const error = { code: 4001 };
+    const onCheckpoint = vi.fn();
 
     const outcome = await runSquidAcquisition({
       execute: async ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) => {
@@ -171,6 +172,7 @@ describe("runSquidAcquisition", () => {
         throw error;
       },
       minimumDestinationAmount: 10n,
+      onCheckpoint,
       owner,
       readDestinationBalance: vi.fn().mockResolvedValue(100n),
       sourceChainId: 42161,
@@ -178,6 +180,9 @@ describe("runSquidAcquisition", () => {
     });
 
     expect(outcome).toEqual({ error, status: "failed" });
+    expect(onCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID] }),
+    );
     expect(loadSquidAcquisition(storage, owner)).toEqual(
       expect.objectContaining({
         completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID],
