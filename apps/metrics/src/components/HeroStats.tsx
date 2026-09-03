@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Activity, Coins, DollarSign, TrendingUp, Users, Zap } from "lucide-react";
+import { Activity, Coins, TrendingUp, Users, Zap } from "lucide-react";
 import type React from "react";
 import { usePaymentsMetrics } from "../hooks/useMetrics";
 import { formatCompactNumber, formatFIL } from "../utils/formatters";
@@ -133,27 +133,6 @@ export const HeroStats: React.FC = () => {
             icon={Coins}
             gradient='from-orange-500 to-red-600'
             delay={0.5}
-          />
-        </div>
-
-        {/* Additional Stats Row */}
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-6 mt-6'>
-          <MetricCard
-            title='Unique Payers'
-            value={formatCompactNumber(paymentsMetric.uniquePayers)}
-            subtitle='Active payment senders'
-            icon={DollarSign}
-            gradient='from-indigo-500 to-purple-600'
-            delay={0.6}
-          />
-
-          <MetricCard
-            title='Unique Payees'
-            value={formatCompactNumber(paymentsMetric.uniquePayees)}
-            subtitle='Payment recipients'
-            icon={Users}
-            gradient='from-cyan-500 to-blue-600'
-            delay={0.7}
           />
 
           <MetricCard
