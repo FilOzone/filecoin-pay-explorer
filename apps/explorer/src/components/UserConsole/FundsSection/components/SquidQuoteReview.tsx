@@ -782,7 +782,7 @@ export function SquidQuoteReview({
         />
         <div className='grid gap-1'>
           <Label className='cursor-pointer' htmlFor='squid-include-fil'>
-            Include 0.25 FIL for transaction fees
+            Add 0.25 FIL for transaction fees
           </Label>
           <p className='text-xs leading-relaxed text-muted-foreground' id='squid-include-fil-hint'>
             {isFilecoinFilBalanceError
@@ -793,7 +793,7 @@ export function SquidQuoteReview({
                 ? "You already have FIL for fees."
                 : isLoadingFilecoinFilBalance
                   ? "Checking your Filecoin wallet balance…"
-                  : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL. This covers about a month of typical activity. The FIL goes to your wallet to pay network fees — not to your Filecoin Pay balance."}
+                  : "Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions."}
           </p>
         </div>
       </div>
