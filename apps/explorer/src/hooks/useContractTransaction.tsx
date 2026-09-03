@@ -3,10 +3,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { getAccount } from "wagmi/actions";
+import { config } from "@/services/wagmi/config";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
 interface UseContractTransactionOptions {
+  account?: Hex;
   contractAddress: Hex;
   abi: Abi;
   chainId?: number;
@@ -25,7 +28,7 @@ interface ExecuteTransactionParams {
 }
 
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
-  const { contractAddress, abi, explorerUrl, onSuccess, onError } = options;
+  const { account, contractAddress, abi, chainId, explorerUrl, onSuccess, onError } = options;
 
   const [transactions, setTransactions] = useState<
     Map<Hex, { toastId: string | number; metadata: TransactionMetadata }>
@@ -130,9 +133,19 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
     onError,
   }: ExecuteTransactionParams) => {
     try {
+      const connected = getAccount(config);
+      if (account && connected.address?.toLowerCase() !== account.toLowerCase()) {
+        throw new Error("The connected wallet changed. Review the transaction and try again.");
+      }
+      if (chainId !== undefined && connected.chainId !== chainId) {
+        throw new Error("The connected network changed. Switch back, review the transaction, and try again.");
+      }
+
       const txHash = await writeContractAsync({
+        account,
         address: contractAddress,
         abi,
+        chainId,
         functionName,
         args,
         value,
