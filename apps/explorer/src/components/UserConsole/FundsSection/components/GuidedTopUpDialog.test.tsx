@@ -25,8 +25,11 @@ const sdk = vi.hoisted(() => ({
   synapse: undefined as { payments: { fundSync: ReturnType<typeof vi.fn> } } | undefined,
 }));
 const quoteReview = vi.hoisted(() => ({
+  completedRequirementIds: undefined as readonly string[] | undefined,
   destinationAmount: null as bigint | null,
   onAcquired: undefined as ((acquisition: SquidAcquisition) => void) | undefined,
+  onAcquisitionSaved: undefined as ((acquisition: SquidAcquisition) => void) | undefined,
+  onAcquisitionStateChange: undefined as ((state: "acquired" | "blocked" | "idle" | "processing") => void) | undefined,
   onNetworkSwitchingChange: undefined as ((isSwitching: boolean) => void) | undefined,
 }));
 const automaticRecovery = vi.hoisted(() => ({
@@ -101,16 +104,25 @@ vi.mock("./RunwayCard", () => ({
 }));
 vi.mock("./SquidQuoteReview", () => ({
   SquidQuoteReview: ({
+    completedRequirementIds,
     destinationAmount,
     onAcquired,
+    onAcquisitionSaved,
+    onAcquisitionStateChange,
     onNetworkSwitchingChange,
   }: {
+    completedRequirementIds?: readonly string[];
     destinationAmount: bigint | null;
     onAcquired: NonNullable<typeof quoteReview.onAcquired>;
+    onAcquisitionSaved: NonNullable<typeof quoteReview.onAcquisitionSaved>;
+    onAcquisitionStateChange: NonNullable<typeof quoteReview.onAcquisitionStateChange>;
     onNetworkSwitchingChange: (isSwitching: boolean) => void;
   }) => {
+    quoteReview.completedRequirementIds = completedRequirementIds;
     quoteReview.destinationAmount = destinationAmount;
     quoteReview.onAcquired = onAcquired;
+    quoteReview.onAcquisitionSaved = onAcquisitionSaved;
+    quoteReview.onAcquisitionStateChange = onAcquisitionStateChange;
     quoteReview.onNetworkSwitchingChange = onNetworkSwitchingChange;
     return null;
   },
@@ -128,7 +140,12 @@ beforeEach(() => {
 afterEach(() => {
   wallet.address = undefined;
   wallet.chainId = 314;
+  quoteReview.completedRequirementIds = undefined;
   quoteReview.destinationAmount = null;
+  quoteReview.onAcquired = undefined;
+  quoteReview.onAcquisitionSaved = undefined;
+  quoteReview.onAcquisitionStateChange = undefined;
+  quoteReview.onNetworkSwitchingChange = undefined;
   sdk.synapse = undefined;
   automaticRecovery.data = undefined;
   automaticRecovery.dataUpdatedAt = 0;
@@ -456,6 +473,56 @@ describe("GuidedTopUpDialog", () => {
       create(<GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />);
     });
 
+    expect(quoteReview.destinationAmount).toBe(destinationAmount);
+  });
+
+  it("shows a resumable FIL checkpoint without reopening the dialog", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    const destinationAmount = 12_500_000_000_000_000_000n;
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("FIL was added");
+
+    const checkpoint = markSquidIntermediateRouteCompleted(
+      storage,
+      markSquidBroadcast(
+        storage,
+        markSquidSwapRequested(
+          storage,
+          beginSquidAcquisition(
+            storage,
+            owner,
+            destinationAmount,
+            100n * 10n ** 18n,
+            42161,
+            "11111111-1111-4111-8111-111111111111",
+          ),
+        ),
+        `0x${"3".repeat(64)}`,
+      ),
+      FILECOIN_FIL_REQUIREMENT_ID,
+    );
+    await act(async () => {
+      quoteReview.onAcquisitionStateChange?.("processing");
+      quoteReview.onAcquisitionSaved?.(checkpoint);
+      quoteReview.onAcquisitionStateChange?.("idle");
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("FIL was added. Continue with the saved USDFC acquisition.");
+    expect(quoteReview.completedRequirementIds).toEqual([FILECOIN_FIL_REQUIREMENT_ID]);
     expect(quoteReview.destinationAmount).toBe(destinationAmount);
   });
 
