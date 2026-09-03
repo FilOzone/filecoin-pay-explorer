@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   isSubmitting: false,
   isExecuting: false,
   submit: vi.fn(),
+  hasGas: true as boolean | undefined,
+  openAddFunds: vi.fn(),
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -50,9 +52,16 @@ vi.mock("@filecoin-pay/ui/components/select", () => ({
   SelectValue: () => null,
 }));
 vi.mock("@/components/shared/CopyButton", () => ({ default: () => null }));
+vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({
+  useFundingLaunch: () => ({ openAddFunds: mocks.openAddFunds }),
+}));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
 vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { chain: { blockExplorers: { default: { url: "https://example.com" } } } } }),
+  default: () => ({
+    constants: {
+      chain: { blockExplorers: { default: { url: "https://example.com" } }, nativeCurrency: { symbol: "FIL" } },
+    },
+  }),
 }));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
@@ -80,6 +89,7 @@ vi.mock("./hooks", () => ({
     isLoadingBalance: false,
     reset: vi.fn(),
   }),
+  useHasGasForTransaction: () => ({ balance: undefined, hasGas: mocks.hasGas }),
   useAddServiceSubmit: (onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
     return { submit: mocks.submit, isSubmitting: mocks.isSubmitting, isExecuting: mocks.isExecuting };
@@ -94,11 +104,24 @@ function renderDialog(onOpenChange = vi.fn()) {
   return { renderer, onOpenChange };
 }
 
+type Rendered = ReturnType<ReturnType<typeof create>["toJSON"]>;
+const flatten = (node: Rendered | string): string =>
+  typeof node === "string"
+    ? node
+    : Array.isArray(node)
+      ? node.map(flatten).join("")
+      : node?.children
+        ? node.children.map(flatten).join("")
+        : "";
+const textOf = (renderer: ReturnType<typeof create>) => flatten(renderer.toJSON());
+
 function primaryButton(renderer: ReturnType<typeof create>) {
   return renderer.root.findByProps({ "data-variant": "primary" });
 }
 
 beforeEach(() => {
+  mocks.hasGas = true;
+  mocks.openAddFunds.mockReset();
   mocks.isSubmitting = false;
   mocks.isExecuting = false;
   mocks.submit.mockReset();
@@ -108,6 +131,34 @@ beforeEach(() => {
 });
 
 describe("AddServiceDialog", () => {
+  it("sends a wallet without FIL to Add funds instead of letting it submit", () => {
+    mocks.hasGas = false;
+    const { renderer, onOpenChange } = renderDialog();
+    const text = textOf(renderer);
+    expect(text).toContain("Your wallet holds no FIL to pay for this transaction.");
+    expect(text).toContain("paying from another network can also set a little FIL aside for gas");
+    const submit = renderer.root.find(
+      (node) =>
+        node.type === "button" && node.props["data-variant"] === "primary" && node.children.includes("Add Service"),
+    );
+    expect(submit.props.disabled).toBe(true);
+
+    const addFunds = renderer.root.find(
+      (node) =>
+        node.type === "button" && node.props["data-variant"] === "primary" && node.children.includes("Add funds"),
+    );
+    act(() => addFunds.props.onClick());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mocks.openAddFunds).toHaveBeenCalledOnce();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about gas while the balance is unknown", () => {
+    mocks.hasGas = undefined;
+    const { renderer } = renderDialog();
+    expect(textOf(renderer)).not.toContain("holds no FIL");
+  });
+
   it("blocks every user close while busy but still closes after onchain submission", () => {
     mocks.isSubmitting = true;
     const { renderer, onOpenChange } = renderDialog();

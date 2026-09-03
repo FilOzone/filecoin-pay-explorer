@@ -22,10 +22,17 @@ import { useEffect, useState } from "react";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
-import { CUSTOM_OPTION, useAddServiceSubmit, useServiceSelection, useTokenSelection } from "./hooks";
+import {
+  CUSTOM_OPTION,
+  useAddServiceSubmit,
+  useHasGasForTransaction,
+  useServiceSelection,
+  useTokenSelection,
+} from "./hooks";
 
 interface AddServiceDialogProps {
   open: boolean;
@@ -79,6 +86,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const tokenSelection = useTokenSelection(open);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
   const isBusy = isSubmitting || isExecuting;
+  // Adding a service is a Filecoin transaction, so a wallet without FIL is sent
+  // to Add funds first (paying from another network can set FIL aside for gas).
+  const { hasGas } = useHasGasForTransaction();
+  const needsGas = hasGas === false;
+  const { openAddFunds } = useFundingLaunch();
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -90,6 +102,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
+  const gasSymbol = constants.chain.nativeCurrency?.symbol ?? "FIL";
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; open is the only real dependency
   useEffect(() => {
@@ -154,7 +167,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
     !isDepositing || (balance !== undefined && parsedDeposit !== null && parsedDeposit <= balance);
-  const canSubmit = isOperatorValid && !!token && isDepositValid && hasSufficientBalance && areLimitsValid && !isBusy;
+  const canSubmit =
+    isOperatorValid && !!token && isDepositValid && hasSufficientBalance && areLimitsValid && !isBusy && !needsGas;
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && isBusy) return;
@@ -467,6 +481,30 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
               </div>
             )}
           </div>
+
+          {needsGas && (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                <span>
+                  Your wallet holds no {gasSymbol} to pay for this transaction. Add funds first: paying from another
+                  network can also set a little {gasSymbol} aside for gas.
+                </span>
+              </span>
+              <Button
+                className='shrink-0'
+                onClick={() => {
+                  onOpenChange(false);
+                  openAddFunds();
+                }}
+                size='compact'
+                type='button'
+                variant='primary'
+              >
+                Add funds
+              </Button>
+            </div>
+          )}
 
           <p className='text-xs text-muted-foreground'>
             The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any time.

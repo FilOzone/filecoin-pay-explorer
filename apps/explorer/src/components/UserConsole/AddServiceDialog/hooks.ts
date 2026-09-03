@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { erc20Abi, type Hex, isAddress, zeroAddress } from "viem";
-import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { erc20Abi, type Hex, isAddress, parseEther, zeroAddress } from "viem";
+import { useAccount, useBalance, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
@@ -15,6 +15,9 @@ import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } fr
 // epochs.
 const DEFAULT_MAX_LOCKUP_PERIOD = 86_400n;
 const PERMIT_DEADLINE_SECONDS = 3600;
+// Filecoin gas is cheap: this much covers many approvals, so less than it means
+// the wallet has no FIL to speak of and cannot send anything.
+export const MINIMUM_GAS_BALANCE = parseEther("0.001");
 
 /** Sentinel for the "Custom … address" entries in both selects. */
 export const CUSTOM_OPTION = "custom";
@@ -213,6 +216,18 @@ export function useTokenSelection(open: boolean): TokenSelection {
     isLoadingBalance,
     reset,
   };
+}
+
+/**
+ * Whether the connected wallet holds enough of the network's coin to pay for
+ * the approval; undefined until the balance is read.
+ */
+export function useHasGasForTransaction(): { balance: bigint | undefined; hasGas: boolean | undefined } {
+  const { constants } = useSynapse();
+  const { address } = useAccount();
+  const { data } = useBalance({ address, chainId: constants.chain.id, query: { enabled: !!address } });
+  const balance = data?.value;
+  return { balance, hasGas: balance === undefined ? undefined : balance >= MINIMUM_GAS_BALANCE };
 }
 
 export interface SubmitArgs {
