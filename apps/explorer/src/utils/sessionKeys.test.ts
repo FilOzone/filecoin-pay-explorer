@@ -3,6 +3,8 @@ import { keccak256, toBytes } from "viem";
 import { describe, it } from "vitest";
 import {
   buildEnvSnippet,
+  buildLoginArgs,
+  buildRevokeArgs,
   deriveKeyStatus,
   deriveSessionKeys,
   EXPIRY_PRESETS,
@@ -85,7 +87,7 @@ describe("expiry presets", () => {
 });
 
 describe("env snippet", () => {
-  it("is byte-compatible with ~/.filecoin-session-key.env: SESSION_KEY, WALLET_ADDRESS, session-address comment", () => {
+  it("emits the SESSION_KEY and WALLET_ADDRESS dotenv lines filecoin-pin reads, plus a session-address comment", () => {
     const pk = `0x${"ab".repeat(32)}`;
     const snippet = buildEnvSnippet(pk, SIGNER, ACCOUNT);
     assert.match(snippet, new RegExp(`^SESSION_KEY=${pk}$`, "m"));
@@ -100,6 +102,26 @@ describe("env snippet", () => {
       if (trimmed === "" || trimmed.startsWith("#")) continue;
       assert.match(trimmed, /^[A-Z_]+=\S+$/);
     }
+  });
+});
+
+describe("call encoding", () => {
+  const CREATE = "0x25ebf20299107c91b4624d5bac3a16d32cabf0db23b450ee09ab7732983b1dc9";
+  const ADD = "0x954bdc254591a7eab1b73f03842464d9283a08352772737094d710a4428fd183";
+  const TERMINATE = "0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc";
+
+  it("login is (signer, expiry, typehashes in scope order, name)", () => {
+    assert.deepEqual(buildLoginArgs(SIGNER, 1_700_000_000n, ["createDataSet", "addPieces"], "ci"), [
+      SIGNER,
+      1_700_000_000n,
+      [CREATE, ADD],
+      "ci",
+    ]);
+    assert.deepEqual(buildLoginArgs(SIGNER, 1n, ["addPieces", "createDataSet"], "")[2], [ADD, CREATE]);
+  });
+
+  it("revoke is (signer, typehashes, name) with no expiry", () => {
+    assert.deepEqual(buildRevokeArgs(SIGNER, ["terminateService"], "ci"), [SIGNER, [TERMINATE], "ci"]);
   });
 });
 

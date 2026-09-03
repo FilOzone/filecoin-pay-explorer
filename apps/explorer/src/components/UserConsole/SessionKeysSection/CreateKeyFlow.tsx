@@ -22,6 +22,7 @@ import type { Network } from "@/types";
 import { download } from "@/utils/download";
 import {
   buildEnvSnippet,
+  buildLoginArgs,
   EXPIRY_PRESETS,
   normalizeKeyName,
   resolveExpiry,
@@ -139,7 +140,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     try {
       const txHash = await execute({
         functionName: "login",
-        args: [signerAddress, expiry, selectedScopes.map((id) => SCOPE_BY_ID[id].typehash), cleanName],
+        args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
         metadata: { type: "createSessionKey", keyName: cleanName },
       });
       onCreated(
@@ -373,7 +374,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <p className='text-xs text-amber-900/80 dark:text-amber-200/80'>
                 <b>SESSION_KEY is the secret.</b> It was made in your browser and is never stored here; only its address
                 went on chain. Anyone who has it can use the scopes above until the key expires, so treat it like a
-                password. The snippet above is a ready-to-paste env file. It is shown only once.
+                password. Save the snippet as a file and point filecoin-pin at it with --credentials-file, or export the
+                variables in your app's environment. It is shown only once.
               </p>
             </div>
 
