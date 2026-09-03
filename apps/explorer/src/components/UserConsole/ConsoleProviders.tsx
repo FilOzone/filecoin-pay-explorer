@@ -21,16 +21,8 @@ export const PRIVY_CONFIG = {
 } satisfies PrivyClientConfig;
 
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
-
-  if (!appId || !clientId) {
-    return (
-      <div role='alert' className='m-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-900'>
-        Console wallet login is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID.
-      </div>
-    );
-  }
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmtkfb83p04du0bk0kofldq4e";
+  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID || "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf";
 
   return (
     <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
