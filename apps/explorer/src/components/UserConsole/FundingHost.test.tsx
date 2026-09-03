@@ -90,6 +90,17 @@ async function renderHost() {
   return renderer;
 }
 
+async function rerenderHost(renderer: ReturnType<typeof create>) {
+  await act(async () => {
+    renderer.update(
+      <FundingLaunchProvider>
+        <Launcher />
+        <FundingHost />
+      </FundingLaunchProvider>,
+    );
+  });
+}
+
 const find = (renderer: ReturnType<typeof create>, prop: string) =>
   renderer.root.find((node) => typeof node.type === "string" && prop in node.props);
 
@@ -126,6 +137,32 @@ describe("FundingHost", () => {
     expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(true);
+  });
+
+  it("closes the mainnet picker instead of turning it into a deposit on a Squid source chain", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
+    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
+
+    wallet.chainId = 8453;
+    await rerenderHost(renderer);
+
+    expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === "button" && "data-deposit-open" in node.props)).toHaveLength(
+      0,
+    );
+  });
+
+  it("closes and resets a direct deposit when the Filecoin network changes", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-seeded": true }).props.onClick());
+    act(() => dialogs.onSelect?.("deposit"));
+    expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(true);
+
+    wallet.chainId = 314159;
+    await rerenderHost(renderer);
+
+    expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(false);
   });
 
   it("renders no dialog tree without a connected address", async () => {
