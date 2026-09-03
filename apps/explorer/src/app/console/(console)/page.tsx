@@ -2,13 +2,7 @@
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { Account } from "@filecoin-pay/types";
 import { useConnection } from "wagmi";
-import {
-  AlertsBanner,
-  FundsSection,
-  OperatorApprovalsSection,
-  RailsSection,
-  TopUpDialogController,
-} from "@/components/UserConsole";
+import { AlertsBanner, FundsSection, OperatorApprovalsSection, RailsSection } from "@/components/UserConsole";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
@@ -24,7 +18,6 @@ type AccountSectionsProps = {
   error: Error | null;
   isLoading: boolean;
   network: Network;
-  onGuidedTopUp?: () => void;
   userAddress: string;
   /**
    * Rendered below the funds overview rather than above the page: the prompt to
@@ -35,15 +28,7 @@ type AccountSectionsProps = {
   alertsBanner: React.ReactNode;
 };
 
-const AccountSections = ({
-  account,
-  error,
-  isLoading,
-  network,
-  onGuidedTopUp,
-  userAddress,
-  alertsBanner,
-}: AccountSectionsProps) => {
+const AccountSections = ({ account, error, isLoading, network, userAddress, alertsBanner }: AccountSectionsProps) => {
   if (isLoading) {
     return (
       <>
@@ -65,7 +50,7 @@ const AccountSections = ({
   return (
     <>
       <div className='flex flex-col gap-6'>
-        <FundsSection account={account} network={network} onGuidedTopUp={onGuidedTopUp} />
+        <FundsSection account={account} network={network} />
         {alertsBanner}
       </div>
       <RailsSection account={account} network={network} userAddress={userAddress} />
@@ -83,11 +68,9 @@ const UserConsole = () => {
   const walletNetwork = getNetworkFromChainId(chainId);
   const isFilecoinChain = isSupportedChainId(chainId);
   const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
-  const isFilecoinMainnet = (chainId === undefined || isFilecoinChain) && walletNetwork === "mainnet";
   const displayMainnetDuringTopUp = isTopUpActive && isSquidSourceChain;
   const displayNetwork = displayMainnetDuringTopUp ? "mainnet" : walletNetwork;
   const canLoadFilecoinConsole = chainId === undefined || isFilecoinChain || displayMainnetDuringTopUp;
-  const canMountTopUpController = isFilecoinMainnet || isSquidSourceChain;
 
   const { data: notificationStatus, isError: isNotificationStatusError } = useNotificationStatus(
     canLoadFilecoinConsole ? address : undefined,
@@ -100,35 +83,21 @@ const UserConsole = () => {
     networkOverride: displayNetwork,
   });
 
-  const accountSections = (onGuidedTopUp?: () => void) =>
+  const accountSections = () =>
     address ? (
       <AccountSections
         account={accountQuery.data}
         error={accountQuery.error}
         isLoading={accountQuery.isLoading}
         network={displayNetwork}
-        onGuidedTopUp={onGuidedTopUp}
         userAddress={address}
         alertsBanner={showAlertsBanner ? <AlertsBanner /> : null}
       />
     ) : null;
 
-  const showTopUpTrigger = !accountQuery.isLoading && !accountQuery.error && !accountQuery.data;
-
   return (
     <div className='flex flex-col gap-15'>
-      {/* The (console) layout gates on a connected wallet, so address is set here. */}
-      {address && canMountTopUpController ? (
-        <TopUpDialogController
-          accountId={accountQuery.data?.id ?? address}
-          key={address}
-          showTrigger={isFilecoinMainnet && showTopUpTrigger}
-        >
-          {(openTopUp, isOpen) => (isSquidSourceChain && !isOpen ? <UnsupportedChain /> : accountSections(openTopUp))}
-        </TopUpDialogController>
-      ) : canLoadFilecoinConsole ? (
-        accountSections()
-      ) : null}
+      {isSquidSourceChain && !isTopUpActive ? <UnsupportedChain /> : canLoadFilecoinConsole ? accountSections() : null}
     </div>
   );
 };
