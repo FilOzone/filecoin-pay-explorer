@@ -51,7 +51,7 @@ export function PendingDepositPanel({
       {isConfirmingDismiss ? (
         <div className='grid gap-2 rounded-md border border-dashed p-3'>
           <p>
-            Dismiss this deposit? Only do this after checking the transaction on{" "}
+            Dismiss this deposit? Only do this after checking the route on Squid or the transaction on{" "}
             {explorerName ?? "the source network explorer"}; the console will stop following it.
           </p>
           <div className='flex flex-wrap gap-2'>

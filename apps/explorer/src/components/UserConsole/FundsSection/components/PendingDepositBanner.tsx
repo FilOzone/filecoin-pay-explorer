@@ -1,7 +1,9 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
 import { Loader2 } from "lucide-react";
 import { formatUnits } from "viem";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { getSquidScanTransactionUrl } from "../data/squid-deposit-route";
 import type { PendingSquidDeposit } from "../data/squid-deposit-tracker";
 
 /** "25 USDC from Base", or just the network when the token details were not recorded. */
@@ -21,7 +23,10 @@ export function PendingDepositBanner({ onView, pending }: { onView: () => void; 
         <div>
           <p className='font-medium'>Deposit in progress</p>
           <p className='text-sm text-muted-foreground'>
-            {`${describePendingDeposit(pending)} is on its way to your Filecoin Pay account.`}
+            {`${describePendingDeposit(pending)} is on its way to your Filecoin Pay account.`}{" "}
+            <ExternalTextLink className='text-sm' href={getSquidScanTransactionUrl(pending.transactionHash)}>
+              Track on Squid
+            </ExternalTextLink>
           </p>
         </div>
       </div>

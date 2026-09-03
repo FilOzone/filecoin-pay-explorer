@@ -8,6 +8,9 @@ const RECIPIENT = "0x2222222222222222222222222222222222222222";
 const launch = vi.hoisted(() => ({ isCrossChainPaymentOpen: false, openCrossChainPayment: vi.fn() }));
 
 vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({ useFundingLaunch: () => launch }));
+vi.mock("@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink", () => ({
+  ExternalTextLink: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   Button: ({
     "aria-label": ariaLabel,
@@ -82,6 +85,8 @@ describe("PendingDepositNotice", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain(
       "25 USDC from Base is on its way to your Filecoin Pay account.",
     );
+    expect(renderer.root.findByType("a").props.href).toBe(`https://scan.squidrouter.com/tx/0x${"a".repeat(64)}`);
+    expect(renderer.root.findByType("a").children).toEqual(["Track on Squid"]);
 
     act(() => renderer.root.findByProps({ "aria-label": "View deposit in progress" }).props.onClick());
     expect(launch.openCrossChainPayment).toHaveBeenCalledOnce();

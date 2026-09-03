@@ -4,6 +4,13 @@ import { isNativeToken } from "./guided-top-up";
 
 export const FILECOIN_CHAIN_ID = 314;
 export const SQUID_API_BASE_URL = "https://v2.api.squidrouter.com/v2";
+// Squid's own explorer follows a route from the source transaction through Axelar to Filecoin.
+export const SQUID_SCAN_URL = "https://scan.squidrouter.com";
+
+/** Where to watch a broadcast route settle, by its source transaction hash. */
+export function getSquidScanTransactionUrl(transactionHash: Hash): string {
+  return `${SQUID_SCAN_URL}/tx/${transactionHash}`;
+}
 export const DEFAULT_SQUID_SLIPPAGE = 1;
 // Below this many USDFC per USDC the quote is flagged so the haircut is visible.
 export const UNFAVORABLE_RATE_THRESHOLD = 0.97;

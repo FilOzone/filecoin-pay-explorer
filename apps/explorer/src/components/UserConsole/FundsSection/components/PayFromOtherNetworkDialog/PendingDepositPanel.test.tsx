@@ -59,8 +59,11 @@ describe("PendingDepositPanel", () => {
     });
     const markup = JSON.stringify(renderer.toJSON());
     expect(markup).toContain("25 USDC from Base, arriving as at least ");
-    expect(renderer.root.findByType("a").props.href).toBe(`https://basescan.org/tx/${pendingDeposit.transactionHash}`);
-    expect(renderer.root.findByType("a").children).toEqual(["View on ", "Basescan"]);
+    const [explorer, squid] = renderer.root.findAllByType("a");
+    expect(explorer.props.href).toBe(`https://basescan.org/tx/${pendingDeposit.transactionHash}`);
+    expect(explorer.children).toEqual(["View on ", "Basescan"]);
+    expect(squid.props.href).toBe(`https://scan.squidrouter.com/tx/${pendingDeposit.transactionHash}`);
+    expect(squid.children).toEqual(["Track on Squid"]);
 
     act(() => renderer.root.findByProps({ "aria-label": "Dismiss pending deposit" }).props.onClick());
     expect(onDismiss).not.toHaveBeenCalled();
