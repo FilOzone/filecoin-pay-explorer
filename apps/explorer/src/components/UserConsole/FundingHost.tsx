@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
-import { mainnet } from "@/constants/chains";
+import { calibration, mainnet } from "@/constants/chains";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
-import { getNetworkFromChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
@@ -21,14 +20,21 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
-  const network = getNetworkFromChainId(chainId);
   const isMainnet = chainId === undefined || chainId === mainnet.id;
-  const { data } = useAccountTokens(address.toLowerCase(), 1, {
+  const isCalibration = chainId === calibration.id;
+  const network = isCalibration ? "calibration" : "mainnet";
+  const previousChainId = useRef(chainId);
+  const chainChanged = previousChainId.current !== chainId;
+  const { data } = useAccountTokens(isMainnet || isCalibration ? address.toLowerCase() : "", 1, {
     networkOverride: network,
     pageSize: TOKEN_PAGE_SIZE,
   });
 
-  useEffect(() => launch.closeAddFunds(), [launch.closeAddFunds]);
+  useEffect(() => {
+    previousChainId.current = chainId;
+    setDepositOpen(false);
+    launch.closeAddFunds();
+  }, [chainId, launch.closeAddFunds]);
 
   const handleDepositOpenChange = (open: boolean) => {
     setDepositOpen(open);
@@ -50,16 +56,19 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
               <AddFundsDialog
                 onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
                 onSelect={chooseMethod}
-                open={launch.isAddFundsOpen}
+                open={!chainChanged && launch.isAddFundsOpen}
                 squidAvailable
               />
             ) : null}
-            <DepositDialog
-              depositToken={launch.depositToken}
-              onOpenChange={handleDepositOpenChange}
-              open={isDepositOpen || (!isMainnet && launch.isAddFundsOpen)}
-              tokens={data?.userTokens ?? []}
-            />
+            {isMainnet || isCalibration ? (
+              <DepositDialog
+                depositToken={launch.depositToken}
+                key={network}
+                onOpenChange={handleDepositOpenChange}
+                open={!chainChanged && (isDepositOpen || (isCalibration && launch.isAddFundsOpen))}
+                tokens={data?.userTokens ?? []}
+              />
+            ) : null}
           </>
         );
       }}
