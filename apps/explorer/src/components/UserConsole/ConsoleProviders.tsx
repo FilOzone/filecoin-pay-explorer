@@ -1,32 +1,46 @@
-import { midnightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
-import { WagmiProvider } from "wagmi";
+"use client";
+
+import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
+import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
-import { config } from "@/services/wagmi/config";
+import { config, walletChains } from "@/services/wagmi/config";
+import { createConsoleWalletSelector } from "./console-wallet";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
+export const PRIVY_CONFIG = {
+  loginMethods: ["email", "google", "wallet"],
+  embeddedWallets: {
+    showWalletUIs: true,
+    ethereum: { createOnLogin: "users-without-wallets" },
+  },
+  defaultChain: mainnet,
+  supportedChains: [...walletChains],
+  appearance: { walletChainType: "ethereum-only" },
+} satisfies PrivyClientConfig;
+
+const selectConsoleWallet = createConsoleWalletSelector({ storage: () => window.localStorage });
+
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
+
+  if (!appId || !clientId) {
+    return (
+      <div role='alert' className='m-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-900'>
+        Console wallet login is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID.
+      </div>
+    );
+  }
+
   return (
-    <WagmiProvider config={config}>
-      <RainbowKitProvider
-        // Squid source chains (Ethereum, Base, …) live in the wagmi config so the
-        // guided top-up flow can switch to and transact on them, but the console
-        // itself only supports Filecoin. Without an explicit initialChain,
-        // RainbowKit would keep a wallet that is already on one of those chains
-        // there at connect time, dead-ending the console in "Unsupported
-        // Network". Pinning initialChain restores the pre-Squid behavior of
-        // landing every new connection on Filecoin mainnet.
-        initialChain={mainnet.id}
-        theme={midnightTheme({
-          borderRadius: "small",
-          fontStack: "system",
-        })}
-      >
+    <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
+      <WagmiProvider config={config} setActiveWalletForWagmi={selectConsoleWallet}>
         <SynapseProvider>
           <TopUpActivityProvider>{children}</TopUpActivityProvider>
         </SynapseProvider>
-      </RainbowKitProvider>
-    </WagmiProvider>
+      </WagmiProvider>
+    </PrivyProvider>
   );
 };
 
