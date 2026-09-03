@@ -5,6 +5,7 @@ import { ArrowSquareOutIcon, KeyIcon, WalletIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { useState } from "react";
 import type { Hex } from "viem";
+import { getChain } from "@/constants/chains";
 import { type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { formatAddress } from "@/utils/formatter";
@@ -62,6 +63,7 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
 
 const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
   const { keys, addKey, removeKey, refetchStatuses, registry } = useSessionKeys(network, account);
+  const explorerUrl = getChain(network).blockExplorers?.default.url;
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<SessionKeyWithStatus | null>(null);
   const [activeOnly, setActiveOnly] = useState(false);
@@ -235,6 +237,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
         network={network}
         account={account}
         registry={registry}
+        explorerUrl={explorerUrl}
         onCreated={addKey}
         onConfirmed={refetchStatuses}
         onFailed={removeKey}
@@ -245,6 +248,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
           if (!open) setRevokeTarget(null);
         }}
         registry={registry}
+        explorerUrl={explorerUrl}
         onRevoked={refetchStatuses}
       />
     </div>

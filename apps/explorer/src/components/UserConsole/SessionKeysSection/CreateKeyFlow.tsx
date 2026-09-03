@@ -37,6 +37,8 @@ interface CreateKeyFlowProps {
   network: Network;
   account: Hex;
   registry: { address: Hex; abi: Abi };
+  /** Block explorer base URL for the transaction link in toasts. */
+  explorerUrl?: string;
   /** `identity` is the wallet and network at submit time, so a late callback still lands in the right inventory. */
   onCreated: (record: SessionKeyRecord, identity: SessionKeysIdentity) => void;
   /** Fires when the login tx is confirmed onchain (used to refresh chain-read statuses). */
@@ -69,6 +71,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   network,
   account,
   registry,
+  explorerUrl,
   onCreated,
   onConfirmed,
   onFailed,
@@ -89,6 +92,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
     abi: registry.abi,
+    explorerUrl,
     onSuccess: () => {
       const flight = inFlightRef.current;
       inFlightRef.current = null;

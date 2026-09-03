@@ -18,16 +18,25 @@ interface RevokeDialogProps {
   sessionKey: SessionKeyWithStatus | null;
   onOpenChange: (open: boolean) => void;
   registry: { address: Hex; abi: Abi };
+  /** Block explorer base URL for the transaction link in toasts. */
+  explorerUrl?: string;
   onRevoked: () => void;
 }
 
 /**
  * Whole-key revoke: one click, one tx, all granted scopes -> expiry 0.
  */
-export const RevokeDialog: React.FC<RevokeDialogProps> = ({ sessionKey, onOpenChange, registry, onRevoked }) => {
+export const RevokeDialog: React.FC<RevokeDialogProps> = ({
+  sessionKey,
+  onOpenChange,
+  registry,
+  explorerUrl,
+  onRevoked,
+}) => {
   const { execute, isExecuting } = useContractTransaction({
     contractAddress: registry.address,
     abi: registry.abi,
+    explorerUrl,
     onSuccess: () => {
       onRevoked();
       onOpenChange(false);
