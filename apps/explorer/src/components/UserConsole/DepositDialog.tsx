@@ -98,8 +98,10 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const publicClient = usePublicClient();
 
   const { execute, isExecuting } = useContractTransaction({
+    account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
+    chainId: constants.chain.id,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
 
