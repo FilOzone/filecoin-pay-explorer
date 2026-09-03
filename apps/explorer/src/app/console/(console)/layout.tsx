@@ -2,11 +2,13 @@
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
-import { BetaWarning } from "@/components/UserConsole/BetaWarning";
+import { BetaBadge } from "@/components/UserConsole/BetaBadge";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
+import { FundingHost } from "@/components/UserConsole/FundsSection/FundingHost";
+import { PendingDepositNotice } from "@/components/UserConsole/FundsSection/PendingDepositNotice";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
@@ -38,6 +40,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
   return (
     <div className='flex min-h-full flex-col bg-background text-foreground'>
       <ConsoleHeader
+        badge={<BetaBadge />}
         walletControls={
           <ConsoleWalletControls accessState={walletAccessState} chainId={chainId} isTopUpActive={isTopUpActive} />
         }
@@ -47,8 +50,8 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
       <div className='flex-1 pt-4 pb-12'>
         <Container>
           <div className='flex flex-col gap-6'>
-            {/* BetaWarning sits above the row so it shows on every console page. */}
-            <BetaWarning />
+            {/* An in-flight USDC deposit stays visible on every console page until it settles. */}
+            {displayAccessState === "ready" ? <PendingDepositNotice address={address} /> : null}
             <ConsoleAccessGate accessState={displayAccessState}>
               <ConsoleContent accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
                 {children}
@@ -57,6 +60,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
           </div>
         </Container>
       </div>
+      <FundingHost />
     </div>
   );
 };
