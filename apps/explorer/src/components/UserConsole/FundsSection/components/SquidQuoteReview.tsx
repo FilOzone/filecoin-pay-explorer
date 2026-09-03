@@ -505,7 +505,9 @@ export function SquidQuoteReview({
               sourceWalletClient: sourceWalletClient as SquidWalletClient,
             }),
           minimumDestinationAmount: quote.requirement.amount,
-          onCheckpoint: onAcquisitionSaved,
+          onCheckpoint: (checkpoint) => {
+            if (isCurrentExecutionOwner()) onAcquisitionSaved(checkpoint);
+          },
           onStarted: () => {
             if (isCurrentExecutionOwner()) onAcquisitionStateChange("processing");
           },
