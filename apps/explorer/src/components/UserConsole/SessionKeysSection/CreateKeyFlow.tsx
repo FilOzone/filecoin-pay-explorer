@@ -51,6 +51,8 @@ interface CreateKeyFlowProps {
 interface GeneratedKey {
   privateKey: Hex;
   address: Hex;
+  /** The wallet that authorized the key. Pinned at generation so a later wallet switch cannot relabel the snippet. */
+  walletAddress: Hex;
 }
 
 type TxState = "idle" | "pending" | "confirmed" | "failed";
@@ -126,7 +128,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     if (!expiry) return;
     const privateKey = generatePrivateKey();
     const keyAccount = privateKeyToAccount(privateKey);
-    const key: GeneratedKey = { privateKey, address: keyAccount.address };
+    const key: GeneratedKey = { privateKey, address: keyAccount.address, walletAddress: account };
     setGenerated(key);
     const signerAddress = keyAccount.address;
     // Captured now: the wallet may switch before the submission resolves.
@@ -211,7 +213,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     if (!generated) return;
     download(
       `session-key-${cleanName || "unnamed"}.env`,
-      buildEnvSnippet(generated.privateKey, generated.address, account),
+      buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress),
       "text/plain",
     );
   };
@@ -353,10 +355,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </p>
               <div className='relative'>
                 <code className='block rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 pr-10 text-xs break-all whitespace-pre-wrap'>
-                  {generated ? buildEnvSnippet(generated.privateKey, generated.address, account) : ""}
+                  {generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : ""}
                 </code>
                 <CopyButton
-                  value={generated ? buildEnvSnippet(generated.privateKey, generated.address, account) : ""}
+                  value={
+                    generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : ""
+                  }
                   tooltipText='Copy session key env snippet'
                   successMessage='Session key copied — it will not be shown again'
                   className='absolute top-2 right-2 bg-white/80 dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800'
