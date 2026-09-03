@@ -126,6 +126,14 @@ describe("sanitizeRecords", () => {
     assert.deepEqual(sanitizeRecords([{ ...good, scopes: ["evil"] }]), []);
   });
 
+  it("rejects inherited property names as scope ids", () => {
+    // "constructor" in SCOPE_BY_ID is true via Object.prototype; an own-property check is required.
+    assert.deepEqual(sanitizeRecords([{ ...good, scopes: ["constructor", "toString", "addPieces"] }])[0]?.scopes, [
+      "addPieces",
+    ]);
+    assert.deepEqual(sanitizeRecords([{ ...good, scopes: ["constructor"] }]), []);
+  });
+
   it("coerces missing name/createdAt instead of crashing", () => {
     const [rec] = sanitizeRecords([{ sessionKeyPublic: SIGNER, scopes: ["addPieces"] }]);
     assert.equal(rec?.name, "");
