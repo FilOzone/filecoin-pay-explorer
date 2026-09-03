@@ -55,3 +55,6 @@ jobs:
           NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION: ${{ secrets.NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION || 'https://placeholder.invalid/calibration' }}
           NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS: ${{ vars.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS || 'mainnet' }}
           NEXT_PUBLIC_NOTIFICATIONS_API_URL: ${{ secrets.NEXT_PUBLIC_NOTIFICATIONS_API_URL || 'https://placeholder.invalid/notifications' }}
+          # No placeholder: Privy rejects a made-up app ID, and the console renders a notice without one
+          NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.NEXT_PUBLIC_PRIVY_APP_ID }}
+          NEXT_PUBLIC_PRIVY_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_PRIVY_CLIENT_ID }}
