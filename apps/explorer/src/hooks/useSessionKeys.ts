@@ -4,7 +4,13 @@ import type { Hex } from "viem";
 import { useReadContracts } from "wagmi";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
-import { deriveSessionKeys, SCOPE_BY_ID, type SessionKeyRecord, sanitizeRecords } from "@/utils/sessionKeys";
+import {
+  deriveSessionKeys,
+  isSameIdentity,
+  SCOPE_BY_ID,
+  type SessionKeyRecord,
+  sanitizeRecords,
+} from "@/utils/sessionKeys";
 
 export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
@@ -15,9 +21,6 @@ export interface SessionKeysIdentity {
   network: Network;
   account: Hex;
 }
-
-const sameIdentity = (a: SessionKeysIdentity, b: SessionKeysIdentity) =>
-  a.network === b.network && a.account.toLowerCase() === b.account.toLowerCase();
 
 function loadRecords(network: Network, account: Hex): SessionKeyRecord[] {
   if (typeof window === "undefined") return [];
@@ -55,7 +58,7 @@ export function useSessionKeys(network: Network, account: Hex) {
   const persist = useCallback(
     (identity: SessionKeysIdentity, update: (prev: SessionKeyRecord[]) => SessionKeyRecord[]) => {
       setRecords((current) => {
-        const onScreen = sameIdentity(identityRef.current, identity);
+        const onScreen = isSameIdentity(identityRef.current, identity);
         const next = update(onScreen ? current : loadRecords(identity.network, identity.account));
         window.localStorage.setItem(storageKey(identity.network, identity.account), JSON.stringify(next));
         return onScreen ? next : current;
