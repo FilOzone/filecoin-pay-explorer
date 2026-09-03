@@ -144,7 +144,7 @@ These rows retain transaction-level history while mutable entities hold current 
 
 ### Metrics entities
 
-`PaymentsMetric`, `DailyMetric`, `WeeklyMetric`, `DailyTokenMetric`, and `DailyOperatorMetric` are mutable aggregate buckets. They support dashboards and leaderboards, not the user console's funds, rails, or approvals sections.
+`PaymentsMetric`, `DailyMetric`, `WeeklyMetric`, `DailyTokenMetric`, and `DailyOperatorMetric` are mutable aggregate buckets. They support the local Metrics dashboard and are not used by the user console's funds, rails, or approvals sections.
 
 ## Account and token accounting
 
@@ -331,11 +331,10 @@ The Explorer does not query `_meta.block.number` or `hasIndexingErrors`, so it c
 
 These items describe verified gaps in the current code rather than normal eventual consistency:
 
-1. Track payer and payee uniqueness independently; the current metrics infer both roles from the shared `Account.totalRails` counter.
-2. Fix zero-rate settlement discovery without changing the rail's `ACTIVE` lifecycle state.
-3. Replace the Authorized Services approval rows with the payer-scoped `AccountOperator` service list, using the relationship filter and cursor ordering described above.
-4. Read current contract approval values before constructing an Increase Approval transaction.
-5. Define and apply one receipt-to-indexer freshness pattern across console mutations.
+1. Fix zero-rate settlement discovery without changing the rail's `ACTIVE` lifecycle state.
+2. Replace the Authorized Services approval rows with the payer-scoped `AccountOperator` service list, using the relationship filter and cursor ordering described above.
+3. Read current contract approval values before constructing an Increase Approval transaction.
+4. Define and apply one receipt-to-indexer freshness pattern across console mutations.
 
 ## Verification and maintenance
 

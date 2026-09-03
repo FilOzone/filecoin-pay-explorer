@@ -29,10 +29,6 @@ export class MetricsEntityManager {
       metric.railsTerminated = ZERO_BIG_INT;
       metric.railsFinalized = ZERO_BIG_INT;
       metric.activeRailsCount = ZERO_BIG_INT;
-      metric.uniquePayers = ZERO_BIG_INT;
-      metric.uniquePayees = ZERO_BIG_INT;
-      metric.uniqueOperators = ZERO_BIG_INT;
-      metric.uniqueAccounts = ZERO_BIG_INT;
     }
 
     return metric;
@@ -56,10 +52,6 @@ export class MetricsEntityManager {
       metric.railsTerminated = ZERO_BIG_INT;
       metric.railsFinalized = ZERO_BIG_INT;
       metric.activeRailsCount = ZERO_BIG_INT;
-      metric.uniquePayers = ZERO_BIG_INT;
-      metric.uniquePayees = ZERO_BIG_INT;
-      metric.uniqueOperators = ZERO_BIG_INT;
-      metric.uniqueAccounts = ZERO_BIG_INT;
     }
 
     return metric;
@@ -84,7 +76,6 @@ export class MetricsEntityManager {
       metric.oneTimePaymentAmount = ZERO_BIG_INT;
       metric.commissionPaid = ZERO_BIG_INT;
       metric.activeRailsCount = ZERO_BIG_INT;
-      metric.uniqueHolders = ZERO_BIG_INT;
       metric.totalLocked = ZERO_BIG_INT;
     }
 
@@ -105,7 +96,6 @@ export class MetricsEntityManager {
 
       metric.railsCreated = ZERO_BIG_INT;
       metric.settlementsProcessed = ZERO_BIG_INT;
-      metric.uniqueClients = ZERO_BIG_INT;
       metric.totalApprovals = ZERO_BIG_INT;
     }
 
@@ -128,8 +118,6 @@ export class MetricsEntityManager {
       metric.totalActiveRails = ZERO_BIG_INT;
       metric.totalTerminatedRails = ZERO_BIG_INT;
       metric.totalFinalizedRails = ZERO_BIG_INT;
-      metric.uniquePayers = ZERO_BIG_INT;
-      metric.uniquePayees = ZERO_BIG_INT;
     }
 
     return metric;

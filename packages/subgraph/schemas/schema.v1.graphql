@@ -204,10 +204,6 @@ type PaymentsMetric @entity(immutable: false) {
   totalActiveRails: BigInt!
   totalTerminatedRails: BigInt!
   totalFinalizedRails: BigInt!
-
-  # Unique payers and payees
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
 }
 
 # Time-based metrics for analytics and graphs
@@ -225,12 +221,6 @@ type DailyMetric @entity(immutable: false) {
   railsTerminated: BigInt!
   railsFinalized: BigInt!
   activeRailsCount: BigInt!
-
-  # User metrics
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
-  uniqueOperators: BigInt!
-  uniqueAccounts: BigInt!
 }
 
 type WeeklyMetric @entity(immutable: false) {
@@ -246,12 +236,6 @@ type WeeklyMetric @entity(immutable: false) {
   railsTerminated: BigInt!
   railsFinalized: BigInt!
   activeRailsCount: BigInt!
-
-  # User metrics
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
-  uniqueOperators: BigInt!
-  uniqueAccounts: BigInt!
 }
 
 type DailyTokenMetric @entity(immutable: false) {
@@ -269,7 +253,6 @@ type DailyTokenMetric @entity(immutable: false) {
 
   # Token utilization
   activeRailsCount: BigInt!
-  uniqueHolders: BigInt!
   totalLocked: BigInt!
 }
 
@@ -281,9 +264,6 @@ type DailyOperatorMetric @entity(immutable: false) {
   # Rail management
   railsCreated: BigInt!
   settlementsProcessed: BigInt!
-
-  # Client metrics
-  uniqueClients: BigInt!
   totalApprovals: BigInt!
 }
 
