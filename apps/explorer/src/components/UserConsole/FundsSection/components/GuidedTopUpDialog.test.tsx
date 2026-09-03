@@ -343,6 +343,51 @@ describe("GuidedTopUpDialog", () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain("invalid and must be cleared");
   });
 
+  it("does not clear the new wallet's invalid recovery UI after a wallet change", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const ownerA = "0x1111111111111111111111111111111111111111" as const;
+    const ownerB = "0x2222222222222222222222222222222222222222" as const;
+    storage.setItem(`filecoin-pay:squid-acquisition:v1:${ownerA.toLowerCase()}`, "not json");
+    storage.setItem(`filecoin-pay:squid-acquisition:v1:${ownerB.toLowerCase()}`, "also not json");
+    vi.stubGlobal("window", { confirm: vi.fn().mockReturnValue(true), localStorage: storage });
+    wallet.address = ownerA;
+
+    let releaseLock!: () => Promise<void>;
+    lockManager.request.mockImplementationOnce(
+      (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
+        new Promise((resolve) => {
+          releaseLock = async () => resolve(await callback({} as Lock));
+        }),
+    );
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    const clearButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Clear invalid saved acquisition"));
+
+    await act(async () => clearButton?.props.onClick());
+    wallet.address = ownerB;
+    await act(async () => {
+      renderer.update(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    await act(async () => releaseLock());
+
+    expect(hasSavedSquidAcquisition(storage, ownerA)).toBe(false);
+    expect(hasSavedSquidAcquisition(storage, ownerB)).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("invalid and must be cleared");
+  });
+
   it("automatically continues with the verified delivered amount after refresh", async () => {
     const values = new Map<string, string>();
     const storage = {
@@ -441,6 +486,58 @@ describe("GuidedTopUpDialog", () => {
     await act(async () => releaseLock());
 
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Deposit acquired USDFC");
+  });
+
+  it("does not clear the new wallet's recovery UI after a wallet change", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const ownerA = "0x1111111111111111111111111111111111111111" as const;
+    const ownerB = "0x2222222222222222222222222222222222222222" as const;
+    const savePending = (owner: typeof ownerA | typeof ownerB, acquisitionId: string, hashDigit: string) =>
+      markSquidBroadcast(
+        storage,
+        markSquidSwapRequested(storage, beginSquidAcquisition(storage, owner, 10n, 100n, 42161, acquisitionId)),
+        `0x${hashDigit.repeat(64)}` as `0x${string}`,
+      );
+    const pendingA = savePending(ownerA, "11111111-1111-4111-8111-111111111111", "3");
+    const pendingB = savePending(ownerB, "22222222-2222-4222-8222-222222222222", "4");
+    vi.stubGlobal("window", { confirm: vi.fn().mockReturnValue(true), localStorage: storage });
+    wallet.address = ownerA;
+
+    let releaseLock!: () => Promise<void>;
+    lockManager.request.mockImplementationOnce(
+      (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
+        new Promise((resolve) => {
+          releaseLock = async () => resolve(await callback({} as Lock));
+        }),
+    );
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    const clearButton = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("USDFC did not arrive, clear"));
+
+    await act(async () => clearButton?.props.onClick());
+    wallet.address = ownerB;
+    await act(async () => {
+      renderer.update(
+        <GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />,
+      );
+    });
+    await act(async () => releaseLock());
+
+    expect(loadSquidAcquisition(storage, ownerA)).toBeNull();
+    expect(loadSquidAcquisition(storage, ownerB)).toEqual(pendingB);
+    expect(JSON.stringify(renderer.toJSON())).toContain(pendingB.transactionHashes[0]);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain(pendingA.transactionHashes[0]);
   });
 
   it("keeps a safe preflight marker until recovery is visible, then restarts cleanly", async () => {

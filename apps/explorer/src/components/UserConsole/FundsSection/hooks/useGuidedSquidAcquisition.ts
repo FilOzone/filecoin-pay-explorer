@@ -215,20 +215,24 @@ export function useGuidedSquidAcquisition({
   const isCurrentOwner = (owner: Address) => latestAddress.current?.toLowerCase() === owner.toLowerCase();
 
   const clearBlocked = async () => {
-    if (!savedAcquisition) return false;
-    await withSquidAcquisitionLock(globalThis.navigator?.locks, savedAcquisition.owner, () =>
-      clearSquidAcquisition(window.localStorage, savedAcquisition),
+    const pending = savedAcquisition;
+    if (!pending) return false;
+    await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, () =>
+      clearSquidAcquisition(window.localStorage, pending),
     );
-    const completedDeposit = savedAcquisition.status === "depositing";
+    if (!isCurrentOwner(pending.owner)) return false;
+    const completedDeposit = pending.status === "depositing";
     applySavedAcquisition(null, false);
     return completedDeposit;
   };
 
   const clearInvalid = async () => {
-    if (!address) return;
-    await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
-      clearInvalidSquidAcquisition(window.localStorage, address),
+    const owner = address;
+    if (!owner) return;
+    await withSquidAcquisitionLock(globalThis.navigator?.locks, owner, () =>
+      clearInvalidSquidAcquisition(window.localStorage, owner),
     );
+    if (!isCurrentOwner(owner)) return;
     setHasInvalidAcquisition(false);
     setAutomaticRecoveryError(null);
     setAcquisitionState("idle");
