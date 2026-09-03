@@ -10,7 +10,7 @@ function ApprovalSectionLayout({ children, handleOpenApprove }: ApprovalSectionL
   return (
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
-        <h3 className='text-2xl font-medium'>Authorized Services</h3>
+        <h2 className='text-2xl font-medium'>Authorized Services</h2>
         <Button variant='primary' onClick={handleOpenApprove} className='py-2'>
           <span className='flex items-center gap-2'>
             <Plus className='h-4 w-4' />

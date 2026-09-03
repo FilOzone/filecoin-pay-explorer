@@ -10,7 +10,7 @@ function FundsEmptyState({ onDeposit }: FundsEmptyStateProps) {
   return (
     <FundsSectionLayout handleOpenDeposit={onDeposit}>
       <EmptyStateCard
-        titleTag='h2'
+        titleTag='h3'
         title='No tokens yet'
         description="You haven't deposited any tokens yet. Deposit tokens to start using Filecoin Pay."
         icon={WalletIcon}

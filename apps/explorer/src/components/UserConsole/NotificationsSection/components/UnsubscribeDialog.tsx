@@ -14,7 +14,7 @@ export const UnsubscribeDialog = ({ open, onCancel, onConfirm }: UnsubscribeDial
     <DialogContent className='max-w-sm'>
       <div className='flex flex-col items-center gap-4 text-center'>
         <div className='flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30'>
-          <AlertTriangle className='h-6 w-6 text-orange-500' />
+          <AlertTriangle className='h-6 w-6 text-destructive' />
         </div>
         <DialogHeader>
           <DialogTitle>Turn off email alerts?</DialogTitle>

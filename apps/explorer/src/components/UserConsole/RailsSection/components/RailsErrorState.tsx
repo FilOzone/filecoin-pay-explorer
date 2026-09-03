@@ -5,7 +5,7 @@ function RailsErrorState() {
   return (
     <RailsSectionLayout>
       <ErrorStateCard
-        titleTag='h2'
+        titleTag='h3'
         title='Failed to load rails'
         description='Unable to fetch your payment rails. Please try again.'
       />

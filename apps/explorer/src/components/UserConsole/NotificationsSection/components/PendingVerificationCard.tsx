@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useMutation } from "@tanstack/react-query";
 import { Info, Loader2, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -69,11 +70,12 @@ export const PendingVerificationCard = ({
 
           <div className='flex w-full flex-col gap-3'>
             {secondsLeft === 0 && (
-              <button
-                type='button'
-                onClick={() => checkMutation.mutate()}
+              <Button
+                className='w-full'
                 disabled={checkMutation.isPending}
-                className='w-full rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 dark:hover:bg-blue-950/20'
+                onClick={() => checkMutation.mutate()}
+                type='button'
+                variant='tertiary'
               >
                 {checkMutation.isPending ? (
                   <span className='flex items-center justify-center gap-2'>
@@ -83,7 +85,7 @@ export const PendingVerificationCard = ({
                 ) : (
                   "Check verification status"
                 )}
-              </button>
+              </Button>
             )}
 
             {checkMessage && <p className='text-sm text-muted-foreground'>{checkMessage}</p>}

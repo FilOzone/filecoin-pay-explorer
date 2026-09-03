@@ -8,7 +8,7 @@ const NotConnected = () => {
       titleTag='h2'
       icon={WalletIcon}
       title='Access the Filecoin Pay console'
-      description='Connect your wallet to access the Filecoin Pay console and manage your payment rails, deposits, and authorized services.'
+      description='Log in or connect a wallet to manage your deposits, payment rails and services.'
     >
       <CustomConnectButton />
     </EmptyStateCard>

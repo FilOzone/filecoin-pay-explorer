@@ -108,7 +108,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, us
     <>
       <div className='flex flex-col gap-4'>
         <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
-          <h3 className='text-2xl font-medium'>Payment Rails</h3>
+          <h2 className='text-2xl font-medium'>Payment Rails</h2>
         </div>
 
         {/* Search */}

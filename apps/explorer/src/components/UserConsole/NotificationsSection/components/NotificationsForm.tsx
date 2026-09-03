@@ -94,12 +94,7 @@ export const NotificationsForm = ({
 
         {submitError && <p className='text-sm text-destructive'>{submitError}</p>}
 
-        <Button
-          type='submit'
-          variant='primary'
-          disabled={!isValid || isSubmitting}
-          className='border-0 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/50'
-        >
+        <Button type='submit' variant='primary' disabled={!isValid || isSubmitting}>
           {isSubmitting ? (
             <span className='flex items-center gap-2'>
               <Loader2 className='h-4 w-4 animate-spin' />

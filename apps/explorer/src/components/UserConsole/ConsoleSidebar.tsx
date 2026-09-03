@@ -82,8 +82,13 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
           <span className='flex items-baseline gap-1.5'>
             Email Alerts
             {isSubscribed === undefined ? null : (
-              <span className={cn("text-xs font-medium", isSubscribed ? "text-green-500" : "text-muted-foreground")}>
-                {isSubscribed ? "ON" : "OFF"}
+              <span
+                className={cn(
+                  "rounded-full border px-1.5 text-[10px] font-medium uppercase tracking-wide",
+                  isSubscribed ? "border-primary/40 text-primary" : "text-muted-foreground",
+                )}
+              >
+                {isSubscribed ? "On" : "Off"}
               </span>
             )}
           </span>

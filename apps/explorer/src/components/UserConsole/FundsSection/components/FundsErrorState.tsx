@@ -10,7 +10,7 @@ function FundsErrorState({ onDeposit }: FundsErrorStateProps) {
   return (
     <FundsSectionLayout handleOpenDeposit={onDeposit}>
       <ErrorStateCard
-        titleTag='h2'
+        titleTag='h3'
         title='Failed to load funds'
         description='Unable to fetch your token balances. Please try again.'
         IconComponent={AlertCircle}
