@@ -8,6 +8,7 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
+import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
 
 export function FundingHost() {
@@ -19,6 +20,7 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
+  const [isSquidOpen, setSquidOpen] = useState(false);
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
   const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
   const network = getNetworkFromChainId(chainId);
@@ -62,10 +64,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   return (
     <TopUpDialogController accountId={address.toLowerCase()}>
-      {(openTopUp) => {
+      {() => {
         const chooseMethod = (method: AddFundsMethod) => {
           launch.closeAddFunds();
-          if (method === "squid") openTopUp();
+          if (method === "squid") setSquidOpen(true);
           else setDepositOpen(true);
         };
 
@@ -80,6 +82,11 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
               />
             ) : null}
             {depositDialog}
+            <DirectSquidDepositDialog
+              accountId={address.toLowerCase()}
+              onOpenChange={setSquidOpen}
+              open={isSquidOpen}
+            />
           </>
         );
       }}
