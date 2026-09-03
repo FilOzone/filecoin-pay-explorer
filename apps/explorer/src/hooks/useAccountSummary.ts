@@ -15,14 +15,15 @@ interface UseAccountSummaryOptions {
  *
  * `queryFn` is provided unconditionally — react-query warns "No queryFn was
  * passed" when it is undefined while synapse initializes. `enabled` requires
- * synapse to be ready on the target chain, so the throw below can never fire
- * at runtime; it only narrows the type.
+ * Synapse to be ready for both the target chain and connected account.
  */
 const useAccountSummary = ({ address, chainId, enabled = true }: UseAccountSummaryOptions) => {
   const { synapse } = useSynapse();
+  const synapseAddress = synapse?.client.account.address;
+  const hasMatchingAccount = address !== undefined && synapseAddress?.toLowerCase() === address.toLowerCase();
 
   return useQuery({
-    enabled: enabled && Boolean(address) && synapse?.chain.id === chainId,
+    enabled: enabled && hasMatchingAccount && synapse?.chain.id === chainId,
     queryFn: () => {
       if (!synapse) throw new Error("Synapse is not ready");
       return synapse.payments.accountSummary();
