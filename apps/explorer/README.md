@@ -15,8 +15,12 @@ This app requires the following environment variables:
 | `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET`     | Subgraph URL for Filecoin Mainnet (chain 314) | Yes      |
 | `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` | Subgraph URL for Calibration testnet (314159) | Yes      |
 | `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`      | Optional Squid integrator ID override          | No       |
+| `NEXT_PUBLIC_PRIVY_APP_ID`             | Public Privy application ID                   | Yes      |
+| `NEXT_PUBLIC_PRIVY_CLIENT_ID`          | Public Privy web client ID                    | Yes      |
 
 Squid route quotes use the public `filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862` integrator ID by default.
+
+The example values use the development Privy app. Its dashboard must enable email, Google, and external-wallet login, and allow the exact local or preview origin being tested. Production uses a separately provisioned Privy app (see issue #382); no Privy app secret is used by the browser.
 
 **Setup:**
 
@@ -31,6 +35,8 @@ Squid route quotes use the public `filecoin-testing-94a4a25a-d40b-41cb-b148-e960
    ```bash
    NEXT_PUBLIC_SUBGRAPH_URL_MAINNET=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-mainnet/version/gn
    NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-calibration/version/gn
+   NEXT_PUBLIC_PRIVY_APP_ID=cmtkfb83p04du0bk0kofldq4e
+   NEXT_PUBLIC_PRIVY_CLIENT_ID=client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf
    ```
 
 ## Running Locally
