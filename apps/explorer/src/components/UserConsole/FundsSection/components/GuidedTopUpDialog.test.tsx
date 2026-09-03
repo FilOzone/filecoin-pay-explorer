@@ -251,7 +251,7 @@ describe("GuidedTopUpDialog", () => {
     });
     const depositButton = renderer.root
       .findAllByType("button")
-      .find((button) => button.children.includes("Deposit acquired USDFC"));
+      .find((button) => button.children.includes("Deposit the USDFC"));
     expect(depositButton?.props.disabled).toBe(true);
 
     await act(async () => {
@@ -301,7 +301,7 @@ describe("GuidedTopUpDialog", () => {
     });
     const depositButton = renderer.root
       .findAllByType("button")
-      .find((button) => button.children.includes("Deposit acquired USDFC"));
+      .find((button) => button.children.includes("Deposit the USDFC"));
     expect(JSON.stringify(renderer.toJSON())).toContain('"15"');
     await act(async () => {
       await depositButton?.props.onClick();

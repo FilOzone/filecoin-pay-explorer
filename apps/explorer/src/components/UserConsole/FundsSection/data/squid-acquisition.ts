@@ -1,8 +1,7 @@
-import { type Address, type Hash, isAddress } from "viem";
+import { type Address, type Hash, isAddress, isHash } from "viem";
+import type { StorageLike } from "./storage";
 
 const STORAGE_PREFIX = "filecoin-pay:squid-acquisition:v1";
-
-type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 export type SquidAcquisition = {
   acquisitionId?: string;
@@ -23,11 +22,11 @@ export function getSquidAcquisitionStorageKey(owner: Address) {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
 }
 
-export function hasSavedSquidAcquisition(storage: AcquisitionStorage, owner: Address) {
+export function hasSavedSquidAcquisition(storage: StorageLike, owner: Address) {
   return storage.getItem(getSquidAcquisitionStorageKey(owner)) !== null;
 }
 
-function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+function save(storage: StorageLike, acquisition: SquidAcquisition) {
   storage.setItem(
     getSquidAcquisitionStorageKey(acquisition.owner),
     JSON.stringify({
@@ -40,7 +39,7 @@ function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
   return acquisition;
 }
 
-export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner: Address): SquidAcquisition | null {
+export function loadSquidAcquisition(storage: StorageLike, expectedOwner: Address): SquidAcquisition | null {
   const value = storage.getItem(getSquidAcquisitionStorageKey(expectedOwner));
   if (value === null) return null;
 
@@ -122,7 +121,7 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
 }
 
 export function beginSquidAcquisition(
-  storage: AcquisitionStorage,
+  storage: StorageLike,
   owner: Address,
   destinationAmount: bigint,
   destinationBalanceBefore: bigint,
@@ -143,7 +142,7 @@ export function beginSquidAcquisition(
   });
 }
 
-export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function markSquidSwapRequested(storage: StorageLike, acquisition: SquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing" || !hasSameSquidAcquisitionSnapshot(current, acquisition)) {
     throw new Error("Saved Squid acquisition changed");
@@ -163,7 +162,7 @@ export function getDeliveredSquidAmount(acquisition: SquidAcquisition, currentDe
 }
 
 export function markSquidAcquiredFromBalance(
-  storage: AcquisitionStorage,
+  storage: StorageLike,
   acquisition: SquidAcquisition,
   currentDestinationBalance: bigint,
 ) {
@@ -172,7 +171,7 @@ export function markSquidAcquiredFromBalance(
   return markSquidAcquired(storage, acquisition, deliveredAmount);
 }
 
-export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash: Hash) {
+export function markSquidBroadcast(storage: StorageLike, acquisition: SquidAcquisition, hash: Hash) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
   if (current.executionStage === "swap-broadcast" && current.transactionHashes.includes(hash)) return current;
@@ -188,11 +187,7 @@ export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: Squ
   });
 }
 
-export function markSquidAcquired(
-  storage: AcquisitionStorage,
-  acquisition: SquidAcquisition,
-  deliveredAmount?: bigint,
-) {
+export function markSquidAcquired(storage: StorageLike, acquisition: SquidAcquisition, deliveredAmount?: bigint) {
   const current = requireCurrent(storage, acquisition);
   if (current.status === "acquired") return current;
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
@@ -208,7 +203,7 @@ export function markSquidAcquired(
   return save(storage, { ...current, deliveredAmount, status: "acquired" });
 }
 
-export function markSquidDepositPending(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash?: Hash) {
+export function markSquidDepositPending(storage: StorageLike, acquisition: SquidAcquisition, hash?: Hash) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== acquisition.status) throw new Error("Saved Squid acquisition changed");
   if (current.status !== "acquired" && current.status !== "depositing") {
@@ -224,7 +219,7 @@ export function markSquidDepositPending(storage: AcquisitionStorage, acquisition
   });
 }
 
-export function resetSquidDeposit(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function resetSquidDeposit(storage: StorageLike, acquisition: SquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "depositing" || !isSameState(current, acquisition)) {
     throw new Error("Squid deposit is not the expected pending transaction");
@@ -237,23 +232,23 @@ export function getSquidDepositAmount(acquisition: SquidAcquisition) {
   return acquisition.deliveredAmount ?? acquisition.destinationAmount;
 }
 
-export function clearSquidAcquisition(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function clearSquidAcquisition(storage: StorageLike, acquisition: SquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (!isSameState(current, acquisition)) throw new Error("Saved Squid acquisition changed");
   storage.removeItem(getSquidAcquisitionStorageKey(current.owner));
 }
 
-export function clearInvalidSquidAcquisition(storage: AcquisitionStorage, owner: Address) {
+export function clearInvalidSquidAcquisition(storage: StorageLike, owner: Address) {
   if (!hasSavedSquidAcquisition(storage, owner)) return;
   if (loadSquidAcquisition(storage, owner) !== null) throw new Error("The saved Squid acquisition is valid");
   storage.removeItem(getSquidAcquisitionStorageKey(owner));
 }
 
 function isTransactionHash(value: unknown): value is Hash {
-  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+  return typeof value === "string" && isHash(value);
 }
 
-function requireCurrent(storage: AcquisitionStorage, expected: SquidAcquisition) {
+function requireCurrent(storage: StorageLike, expected: SquidAcquisition) {
   const current = loadSquidAcquisition(storage, expected.owner);
   if (!current || !isSameAcquisition(current, expected)) throw new Error("Saved Squid acquisition changed");
   return current;

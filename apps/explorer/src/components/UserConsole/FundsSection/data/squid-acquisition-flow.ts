@@ -9,8 +9,7 @@ import {
   type SquidAcquisition,
 } from "./squid-acquisition";
 import { canClearSquidAcquisitionAfterError } from "./squid-execution";
-
-type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
+import type { StorageLike } from "./storage";
 
 export type SquidAcquisitionOutcome =
   | { acquisition: SquidAcquisition; status: "acquired" }
@@ -32,7 +31,7 @@ export async function runSquidAcquisition({
   owner: Address;
   readDestinationBalance: () => Promise<bigint>;
   sourceChainId: number;
-  storage: AcquisitionStorage;
+  storage: StorageLike;
 }): Promise<SquidAcquisitionOutcome> {
   let destinationBalanceBefore: bigint;
   try {

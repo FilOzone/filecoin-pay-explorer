@@ -33,6 +33,7 @@ import type { SquidAcquisition } from "../data/squid-acquisition";
 import { runSquidAcquisition } from "../data/squid-acquisition-flow";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import { executeSquidTopUp, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
+import { readSquidIntegratorId } from "../data/squid-integrator";
 import { planSquidTopUp, squidFetch } from "../data/squid-quote";
 import { readUsdfcBalance } from "../data/usdfc-balance";
 
@@ -130,8 +131,7 @@ export function SquidQuoteReview({
   const { data: sourceWalletClient, isPending: isPreparingWallet } = useWalletClient();
   const { isPending: isSwitchingChain, switchChainAsync } = useSwitchChain();
   const destinationClient = usePublicClient({ chainId: mainnet.id });
-  const integratorId =
-    process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
+  const integratorId = readSquidIntegratorId();
   const quotesUnavailable = integratorId === "";
   const sourceChainMeta = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChain);
   const {
@@ -860,7 +860,7 @@ export function SquidQuoteReview({
                 Acquiring USDFC…
               </span>
             ) : (
-              "Acquire USDFC"
+              "Swap to USDFC"
             )}
           </Button>
         </div>

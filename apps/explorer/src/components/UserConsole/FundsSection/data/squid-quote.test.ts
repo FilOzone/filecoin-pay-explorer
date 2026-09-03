@@ -34,6 +34,40 @@ describe("Squid quote review", () => {
     await expect(response.json()).resolves.toEqual({ tokens: [] });
   });
 
+  it("answers concurrent catalog reads with one request and caches the body", async () => {
+    vi.resetModules();
+    const { squidFetch: freshSquidFetch } = await import("./squid-quote");
+    let release!: (response: Response) => void;
+    const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => (release = resolve)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const reads = [1, 8453, 42161].map(() => freshSquidFetch("https://v2.api.squidrouter.com/v2/tokens"));
+    release(new Response(JSON.stringify({ tokens: [{ symbol: "USDC" }] })));
+    const bodies = await Promise.all(reads.map(async (read) => (await read).json()));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(bodies).toEqual(Array(3).fill({ tokens: [{ symbol: "USDC" }] }));
+
+    // A later read within the cache window needs no request either.
+    await expect((await freshSquidFetch("https://v2.api.squidrouter.com/v2/tokens")).json()).resolves.toEqual({
+      tokens: [{ symbol: "USDC" }],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes a failed catalog response through without caching it", async () => {
+    vi.resetModules();
+    const { squidFetch: freshSquidFetch } = await import("./squid-quote");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("nope", { status: 502 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ tokens: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect((await freshSquidFetch("https://v2.api.squidrouter.com/v2/tokens")).status).toBe(502);
+    expect((await freshSquidFetch("https://v2.api.squidrouter.com/v2/tokens")).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("plans an explicit Filecoin source cap", async () => {
     const quote = { id: "quote" };
     planSquidFunding.mockResolvedValue({

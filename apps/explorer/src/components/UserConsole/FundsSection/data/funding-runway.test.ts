@@ -106,8 +106,11 @@ describe("suggested top-up formatting", () => {
 
   it("parses only positive funding amounts at the token precision", () => {
     expect(parseFundingAmount("1.25", 6)).toBe(1_250_000n);
+    expect(parseFundingAmount(" 12.5 ", 6)).toBe(12_500_000n);
     expect(parseFundingAmount("0", 18)).toBeNull();
     expect(parseFundingAmount("not-a-number", 18)).toBeNull();
+    expect(parseFundingAmount("", 18)).toBeNull();
+    expect(parseFundingAmount(".", 18)).toBeNull();
   });
 });
 

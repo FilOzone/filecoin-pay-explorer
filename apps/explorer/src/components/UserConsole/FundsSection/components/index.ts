@@ -4,6 +4,7 @@ export { default as FundsErrorState } from "./FundsErrorState";
 export { default as FundsLoadingState } from "./FundsLoadingState";
 export { default as FundsOverview } from "./FundsOverview";
 export { default as FundsSectionLayout } from "./FundsSectionLayout";
+export { FundWithUsdcDialog } from "./FundWithUsdcDialog";
 export { GuidedTopUpDialog } from "./GuidedTopUpDialog";
 export { SquidQuoteReview } from "./SquidQuoteReview";
 export { default as TokenSelect } from "./TokenSelect";

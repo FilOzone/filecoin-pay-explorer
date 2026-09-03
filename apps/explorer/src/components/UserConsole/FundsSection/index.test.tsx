@@ -8,6 +8,7 @@ const USDFC = "0x3333333333333333333333333333333333333333";
 const OTHER_TOKEN = "0x4444444444444444444444444444444444444444";
 
 const tokenState = vi.hoisted(() => ({ userTokens: [] as UserToken[] }));
+const launch = vi.hoisted(() => ({ openAddFunds: vi.fn() }));
 
 vi.mock("@/hooks/useAccountDetails", () => ({
   useAccountTokens: () => ({ data: { userTokens: tokenState.userTokens }, isError: false, isLoading: false }),
@@ -15,13 +16,9 @@ vi.mock("@/hooks/useAccountDetails", () => ({
 vi.mock("@/hooks/useSynapse", () => ({
   default: () => ({ constants: { contracts: { usdfc: USDFC } } }),
 }));
-vi.mock("@/components/UserConsole/DepositDialog", () => ({
-  DepositDialog: ({ open }: { open: boolean }) => (open ? <div data-direct-deposit /> : null),
-}));
+vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({ useFundingLaunch: () => launch }));
 vi.mock("@/components/UserConsole/WithdrawDialog", () => ({ WithdrawDialog: () => null }));
 vi.mock("./components", () => ({
-  AddFundsDialog: ({ onSelect, open }: { onSelect: (method: "deposit" | "squid") => void; open: boolean }) =>
-    open ? <button aria-label='Choose Squid funding' onClick={() => onSelect("squid")} type='button' /> : null,
   FundsEmptyState: ({ onDeposit }: { onDeposit: () => void }) => (
     <button aria-label='Add funds to empty account' onClick={onDeposit} type='button' />
   ),
@@ -38,9 +35,19 @@ vi.mock("./components", () => ({
 }));
 
 const account = { id: "account" } as unknown as Account;
+const userToken = (id: string, tokenId: string) => ({ id, token: { id: tokenId } }) as unknown as UserToken;
+
+async function render() {
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<FundsSection account={account} network='mainnet' />);
+  });
+  return renderer;
+}
 
 beforeEach(() => {
   tokenState.userTokens = [];
+  vi.clearAllMocks();
   vi.stubGlobal("window", { clearInterval: vi.fn(), setInterval: vi.fn(() => 1) });
 });
 
@@ -48,39 +55,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function expectGuidedTopUpFrom(buttonLabel: string) {
-  const onGuidedTopUp = vi.fn();
-  let renderer!: ReturnType<typeof create>;
-  await act(async () => {
-    renderer = create(<FundsSection account={account} network='mainnet' onGuidedTopUp={onGuidedTopUp} />);
+describe("FundsSection add funds", () => {
+  it("hands the request to the funding host with no token when the account has none indexed", async () => {
+    const renderer = await render();
+    await act(async () => {
+      renderer.root.findByProps({ "aria-label": "Add funds to empty account" }).props.onClick();
+    });
+    expect(launch.openAddFunds).toHaveBeenCalledExactlyOnceWith({ depositToken: null });
+    await act(async () => renderer.unmount());
   });
 
-  await act(async () => {
-    renderer.root.findByProps({ "aria-label": buttonLabel }).props.onClick();
-  });
-  expect(renderer.root.findAllByProps({ "data-direct-deposit": true })).toHaveLength(0);
-
-  await act(async () => {
-    renderer.root.findByProps({ "aria-label": "Choose Squid funding" }).props.onClick();
-  });
-  expect(onGuidedTopUp).toHaveBeenCalledOnce();
-
-  await act(async () => renderer.unmount());
-}
-
-describe("FundsSection guided funding", () => {
-  it("offers guided funding when an existing account has no indexed tokens", async () => {
-    await expectGuidedTopUpFrom("Add funds to empty account");
-  });
-
-  it("offers guided funding when the visible token list does not contain USDFC", async () => {
-    tokenState.userTokens = [
-      {
-        id: "account-other-token",
-        token: { id: OTHER_TOKEN },
-      } as unknown as UserToken,
-    ];
-
-    await expectGuidedTopUpFrom("Add funds to populated account");
+  it("names the shown token, USDFC by contract address before anything else, so the deposit opens on it", async () => {
+    const other = userToken("account-other", OTHER_TOKEN);
+    const usdfc = userToken("account-usdfc", USDFC.toUpperCase().replace("0X", "0x"));
+    tokenState.userTokens = [other, usdfc];
+    const renderer = await render();
+    await act(async () => {
+      renderer.root.findByProps({ "aria-label": "Add funds to populated account" }).props.onClick();
+    });
+    expect(launch.openAddFunds).toHaveBeenCalledExactlyOnceWith({ depositToken: usdfc });
+    await act(async () => renderer.unmount());
   });
 });

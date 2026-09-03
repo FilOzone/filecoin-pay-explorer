@@ -1,0 +1,45 @@
+import { AlertCircle } from "lucide-react";
+import { formatUsdfcAmount } from "../../data/funding-runway";
+import { isUnfavorableRate, type SquidDepositQuote } from "../../data/squid-deposit-route";
+
+/** What the account receives for the typed amount, with the rate, fees and time. */
+export function QuoteSummary({
+  quote,
+  rate,
+  tokenSymbol,
+}: {
+  quote: SquidDepositQuote;
+  rate: number;
+  tokenSymbol: string;
+}) {
+  return (
+    <div className='grid gap-1 rounded-md border p-3'>
+      <div className='flex items-center justify-between gap-2'>
+        <span className='text-muted-foreground'>You receive at least</span>
+        <span className='font-medium'>{formatUsdfcAmount(quote.minimumDestinationAmount)} USDFC</span>
+      </div>
+      <div className='flex items-center justify-between gap-2 text-xs text-muted-foreground'>
+        <span>
+          1 {tokenSymbol} ≈ {rate.toFixed(3)} USDFC
+          {quote.priceImpactPercent ? ` · impact ${quote.priceImpactPercent}%` : ""}
+        </span>
+        <span>
+          {quote.fees.length > 0
+            ? `fees ${quote.fees.map((fee) => (fee.amountUsd ? `$${fee.amountUsd}` : fee.name)).join(" + ")}`
+            : "no route fees"}
+          {quote.estimatedSeconds !== undefined
+            ? ` · ~${Math.max(1, Math.round(quote.estimatedSeconds / 60))} min`
+            : ""}
+        </span>
+      </div>
+      {isUnfavorableRate(rate) && (
+        <p className='mt-1 inline-flex items-start gap-2 text-muted-foreground'>
+          <AlertCircle aria-hidden className='mt-0.5 h-4 w-4 shrink-0' />
+          <span>
+            This route returns noticeably less than 1 USDFC per {tokenSymbol}. Continue only if the rate is acceptable.
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}

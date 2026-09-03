@@ -8,18 +8,29 @@ const SQUID_TOKENS_PROXY_URL = "/api/squid/tokens";
 // through the same-origin proxy and cache successful responses locally.
 const TOKENS_CACHE_MS = 5 * 60_000;
 let tokensCache: { body: string; expires: number } | null = null;
+// The balance scan asks for the list once per network at the same moment;
+// one request answers them all.
+let tokensInFlight: Promise<{ body: string; status: number }> | null = null;
+
+const jsonResponse = (body: string, status: number) =>
+  new Response(body, { headers: { "content-type": "application/json" }, status });
+
+async function loadTokens(init?: RequestInit): Promise<{ body: string; status: number }> {
+  const response = await fetch(SQUID_TOKENS_PROXY_URL, init);
+  const body = await response.text();
+  if (response.ok) tokensCache = { body, expires: Date.now() + TOKENS_CACHE_MS };
+  return { body, status: response.status };
+}
 
 export const squidFetch: typeof globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (!url.includes("/tokens")) return fetch(input, init);
-  if (tokensCache && tokensCache.expires > Date.now()) {
-    return new Response(tokensCache.body, { headers: { "content-type": "application/json" }, status: 200 });
-  }
-  const response = await fetch(SQUID_TOKENS_PROXY_URL, init);
-  if (!response.ok) return response;
-  const body = await response.text();
-  tokensCache = { body, expires: Date.now() + TOKENS_CACHE_MS };
-  return new Response(body, { headers: { "content-type": "application/json" }, status: 200 });
+  if (tokensCache && tokensCache.expires > Date.now()) return jsonResponse(tokensCache.body, 200);
+  tokensInFlight ??= loadTokens(init).finally(() => {
+    tokensInFlight = null;
+  });
+  const { body, status } = await tokensInFlight;
+  return jsonResponse(body, status);
 };
 
 export async function planSquidTopUp({

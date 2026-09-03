@@ -19,6 +19,7 @@ import type { Address } from "viem";
 import { useConnection, usePublicClient, useSwitchChain } from "wagmi";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
+import { createDialogCloseGuard } from "../data/dialog-close-guard";
 import {
   calculateFundingRunway,
   calculateProjectedFundingRunway,
@@ -50,7 +51,7 @@ import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
 import { SquidQuoteReview } from "./SquidQuoteReview";
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
-  const steps = ["Acquire USDFC", "Deposit to Filecoin Pay"] as const;
+  const steps = ["Swap to USDFC", "Deposit to Filecoin Pay"] as const;
   return (
     <ol className='flex items-center gap-2 text-sm'>
       {steps.map((label, index) => {
@@ -340,16 +341,16 @@ export function GuidedTopUpDialog({
                   toast.error("The transaction was submitted, but its recovery state could not be updated.");
                 }
               }
-              if (isCurrentDepositOwner()) toast.info("Top-up transaction submitted");
+              if (isCurrentDepositOwner()) toast.info("Deposit submitted");
             },
           });
-          if (receipt.status !== "success") throw new Error("Top-up transaction reverted");
+          if (receipt.status !== "success") throw new Error("Deposit transaction reverted");
           await invalidateTopUpQueries(queryClient, accountId, depositOwner);
           try {
             clearSquidAcquisition(window.localStorage, pendingAcquisition);
           } catch {
             if (isCurrentDepositOwner()) {
-              toast.warning("Top-up succeeded, but the saved acquisition could not be cleared.");
+              toast.warning("Deposit succeeded, but the saved swap could not be cleared.");
             }
           }
           if (isCurrentDepositOwner()) {
@@ -512,24 +513,22 @@ export function GuidedTopUpDialog({
     });
   };
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && acquisitionState === "processing") {
-      toast.info("Wait for the acquisition request to finish before closing this dialog.");
-      return;
-    }
-    if (!nextOpen && isSwitchingNetwork) {
-      toast.info("Wait for the wallet network switch to finish before closing this dialog.");
-      return;
-    }
-    if (nextOpen) onOpenChange(true);
-    else closeDialog();
-  };
+  const handleOpenChange = createDialogCloseGuard({
+    blockReason: () => {
+      if (acquisitionState === "processing")
+        return "Wait for the acquisition request to finish before closing this dialog.";
+      if (isSwitchingNetwork) return "Wait for the wallet network switch to finish before closing this dialog.";
+      return null;
+    },
+    onClose: closeDialog,
+    onOpen: () => onOpenChange(true),
+  });
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[500px]'>
         <DialogHeader>
-          <DialogTitle>Fund with another token</DialogTitle>
+          <DialogTitle>Swap another token</DialogTitle>
           <DialogDescription>
             Acquire Filecoin USDFC through{" "}
             <a
@@ -550,10 +549,9 @@ export function GuidedTopUpDialog({
             <Input
               disabled={acquiredAmount !== null || acquisitionState !== "idle"}
               id='guided-top-up-amount'
-              min='0'
               onChange={setAmount}
-              step='any'
-              type='number'
+              type='text'
+              inputMode='decimal'
               value={amount}
             />
             {amount !== "" && parsedAmount === null && acquiredAmount === null && (
@@ -742,7 +740,7 @@ export function GuidedTopUpDialog({
                   Depositing…
                 </span>
               ) : (
-                "Deposit acquired USDFC"
+                "Deposit the USDFC"
               )}
             </Button>
           ) : null}

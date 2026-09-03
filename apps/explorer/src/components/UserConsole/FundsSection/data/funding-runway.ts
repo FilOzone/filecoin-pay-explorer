@@ -123,7 +123,7 @@ export function defaultTopUpSuggestion(
 
 export function parseFundingAmount(amount: string, decimals: number): bigint | null {
   try {
-    const parsedAmount = parseUnits(amount, decimals);
+    const parsedAmount = parseUnits(amount.trim(), decimals);
     return parsedAmount > 0n ? parsedAmount : null;
   } catch {
     return null;

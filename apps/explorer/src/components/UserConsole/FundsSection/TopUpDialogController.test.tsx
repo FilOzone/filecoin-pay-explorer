@@ -19,7 +19,8 @@ const storage = {
   setItem: (key: string, value: string) => storedValues.set(key, value),
 };
 
-vi.mock("@tanstack/react-query", () => ({
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQuery: () => ({ data: undefined, isFetching: false }),
 }));
 vi.mock("next/navigation", () => ({
@@ -30,6 +31,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
 }));
+vi.mock("../FundingLaunchContext", () => ({ useFundingLaunch: () => ({ setGuidedTopUp: () => undefined }) }));
 vi.mock("@/hooks/useSynapse", () => ({
   default: () => ({ synapse: undefined }),
 }));
@@ -168,8 +170,8 @@ describe("TopUpDialogController recovery", () => {
     act(() => dialog.onOpenChange?.(false));
     expect(dialog.open).toBe(false);
 
-    const launcher = renderer.root.findByProps({ "aria-label": "View top-up in progress" });
-    expect(JSON.stringify(renderer.toJSON())).toContain("Top-up in progress — view");
+    const launcher = renderer.root.findByProps({ "aria-label": "View swap in progress" });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Swap in progress — view");
     expect(dialog.open).toBe(false);
 
     act(() => launcher.props.onClick());

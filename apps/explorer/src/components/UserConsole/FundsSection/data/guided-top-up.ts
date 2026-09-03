@@ -20,7 +20,7 @@ export function withoutTopUpSearchParam(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
-function isNativeToken(address: string | undefined): boolean {
+export function isNativeToken(address: string | undefined): boolean {
   return address?.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
 }
 
