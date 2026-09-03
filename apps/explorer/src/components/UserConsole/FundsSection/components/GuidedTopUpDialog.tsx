@@ -15,7 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Address } from "viem";
+import { type Address, formatUnits } from "viem";
 import { useConnection, usePublicClient, useSwitchChain } from "wagmi";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import useSynapse from "@/hooks/useSynapse";
@@ -26,6 +26,7 @@ import {
   type FundingAccountSummary,
   formatUsdfcAmount,
   ONE_YEAR_EPOCHS,
+  USDFC_DECIMALS,
 } from "../data/funding-runway";
 import { invalidateTopUpQueries, parseTopUpAmount } from "../data/guided-top-up";
 import {
@@ -44,6 +45,7 @@ import {
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import { isAutomaticSquidRecoveryCandidate } from "../data/squid-acquisition-recovery";
 import { isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
+import { FILECOIN_FIL_REQUIREMENT_ID } from "../data/squid-quote";
 import { readUsdfcBalance } from "../data/usdfc-balance";
 import { useSquidAcquisitionRecovery } from "../hooks/useSquidAcquisitionRecovery";
 import { FundingRunwaySlider, RunwayCard } from "./RunwayCard";
@@ -142,6 +144,8 @@ export function GuidedTopUpDialog({
     (sourceChain) => sourceChain.id === savedAcquisition?.sourceChainId,
   );
   const automaticRecovery = useSquidAcquisitionRecovery(savedAcquisition, address);
+  const hasCompletedFilRoute =
+    savedAcquisition?.completedRequirementIds?.includes(FILECOIN_FIL_REQUIREMENT_ID) ?? false;
   useEffect(() => {
     // The controller advances this value when another tab changes recovery
     // storage, forcing the snapshot below to be reloaded even while open.
@@ -156,8 +160,18 @@ export function GuidedTopUpDialog({
       setAutomaticRecoveryError(null);
       setAcquisitionOwner(saved?.owner ?? null);
       setAcquiredAmount(saved?.status === "acquired" ? getSquidDepositAmount(saved) : null);
+      const isResumable =
+        saved?.status === "processing" &&
+        saved.executionStage === "preparing" &&
+        saved.completedRequirementIds?.includes(FILECOIN_FIL_REQUIREMENT_ID);
       setAcquisitionState(
-        saved?.status === "acquired" ? "acquired" : saved || hasInvalidSavedAcquisition ? "blocked" : "idle",
+        saved?.status === "acquired"
+          ? "acquired"
+          : isResumable
+            ? "idle"
+            : saved || hasInvalidSavedAcquisition
+              ? "blocked"
+              : "idle",
       );
     };
 
@@ -177,7 +191,13 @@ export function GuidedTopUpDialog({
       const hasSavedAcquisition = hasSavedSquidAcquisition(window.localStorage, address);
       const saved = loadSquidAcquisition(window.localStorage, address);
       applySavedAcquisition(saved, hasSavedAcquisition);
-      if (!open || saved?.status !== "processing" || saved.executionStage !== "preparing") return;
+      if (
+        !open ||
+        saved?.status !== "processing" ||
+        saved.executionStage !== "preparing" ||
+        saved.completedRequirementIds?.includes(FILECOIN_FIL_REQUIREMENT_ID)
+      )
+        return;
 
       void withSquidAcquisitionLock(globalThis.navigator?.locks, saved.owner, () => {
         const current = loadSquidAcquisition(window.localStorage, saved.owner);
@@ -301,6 +321,18 @@ export function GuidedTopUpDialog({
     didPrefillAmount.current = true;
     setAmount((previous) => (previous === "" ? defaultSuggestion : previous));
   }, [acquiredAmount, defaultSuggestion, open]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      savedAcquisition?.status !== "processing" ||
+      savedAcquisition.executionStage !== "preparing" ||
+      !hasCompletedFilRoute
+    )
+      return;
+    didPrefillAmount.current = true;
+    setAmount(formatUnits(savedAcquisition.destinationAmount, USDFC_DECIMALS));
+  }, [hasCompletedFilRoute, open, savedAcquisition]);
 
   const handleConfirm = async () => {
     if (
@@ -548,7 +580,7 @@ export function GuidedTopUpDialog({
           <div className='grid gap-2'>
             <Label htmlFor='guided-top-up-amount'>USDFC to receive and deposit</Label>
             <Input
-              disabled={acquiredAmount !== null || acquisitionState !== "idle"}
+              disabled={acquiredAmount !== null || acquisitionState !== "idle" || hasCompletedFilRoute}
               id='guided-top-up-amount'
               min='0'
               onChange={setAmount}
@@ -566,7 +598,7 @@ export function GuidedTopUpDialog({
               <FundingRunwaySlider
                 accountSummary={accountSummary}
                 amount={amount}
-                disabled={acquisitionState !== "idle"}
+                disabled={acquisitionState !== "idle" || hasCompletedFilRoute}
                 genesisTimestamp={constants.chain.genesisTimestamp}
                 onSelect={setAmount}
               />
@@ -680,9 +712,18 @@ export function GuidedTopUpDialog({
               )}
             </div>
           )}
+          {acquisitionState === "idle" && hasCompletedFilRoute && (
+            <div className='flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm'>
+              <p>FIL was added. Continue with the saved USDFC acquisition.</p>
+              <Button onClick={clearBlockedAcquisition} size='compact' type='button' variant='tertiary'>
+                Abandon saved acquisition
+              </Button>
+            </div>
+          )}
           {acquiredAmount === null && acquisitionState !== "blocked" && (
             <SquidQuoteReview
               acquisitionState={acquisitionState}
+              completedRequirementIds={savedAcquisition?.completedRequirementIds}
               destinationAmount={depositAmount}
               onAcquired={(acquired) => {
                 setSavedAcquisition(acquired);

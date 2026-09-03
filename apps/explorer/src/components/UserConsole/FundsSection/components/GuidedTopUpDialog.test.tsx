@@ -6,9 +6,11 @@ import {
   loadSquidAcquisition,
   markSquidAcquired,
   markSquidBroadcast,
+  markSquidIntermediateRouteCompleted,
   markSquidSwapRequested,
   type SquidAcquisition,
 } from "../data/squid-acquisition";
+import { FILECOIN_FIL_REQUIREMENT_ID } from "../data/squid-quote";
 import { GuidedTopUpDialog } from "./GuidedTopUpDialog";
 
 const wallet = vi.hoisted(() => ({
@@ -23,6 +25,7 @@ const sdk = vi.hoisted(() => ({
   synapse: undefined as { payments: { fundSync: ReturnType<typeof vi.fn> } } | undefined,
 }));
 const quoteReview = vi.hoisted(() => ({
+  destinationAmount: null as bigint | null,
   onAcquired: undefined as ((acquisition: SquidAcquisition) => void) | undefined,
   onNetworkSwitchingChange: undefined as ((isSwitching: boolean) => void) | undefined,
 }));
@@ -98,12 +101,15 @@ vi.mock("./RunwayCard", () => ({
 }));
 vi.mock("./SquidQuoteReview", () => ({
   SquidQuoteReview: ({
+    destinationAmount,
     onAcquired,
     onNetworkSwitchingChange,
   }: {
+    destinationAmount: bigint | null;
     onAcquired: NonNullable<typeof quoteReview.onAcquired>;
     onNetworkSwitchingChange: (isSwitching: boolean) => void;
   }) => {
+    quoteReview.destinationAmount = destinationAmount;
     quoteReview.onAcquired = onAcquired;
     quoteReview.onNetworkSwitchingChange = onNetworkSwitchingChange;
     return null;
@@ -122,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   wallet.address = undefined;
   wallet.chainId = 314;
+  quoteReview.destinationAmount = null;
   sdk.synapse = undefined;
   automaticRecovery.data = undefined;
   automaticRecovery.dataUpdatedAt = 0;
@@ -418,6 +425,38 @@ describe("GuidedTopUpDialog", () => {
     });
     expect(hasSavedSquidAcquisition(storage, owner)).toBe(false);
     expect(JSON.stringify(renderer.toJSON())).not.toContain("A saved transaction needs verification");
+  });
+
+  it("restores the saved amount when resuming after FIL completed", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const owner = "0x1111111111111111111111111111111111111111" as const;
+    const destinationAmount = 12_500_000_000_000_000_000n;
+    const processing = beginSquidAcquisition(
+      storage,
+      owner,
+      destinationAmount,
+      100n * 10n ** 18n,
+      42161,
+      "11111111-1111-4111-8111-111111111111",
+    );
+    markSquidIntermediateRouteCompleted(
+      storage,
+      markSquidBroadcast(storage, markSquidSwapRequested(storage, processing), `0x${"3".repeat(64)}`),
+      FILECOIN_FIL_REQUIREMENT_ID,
+    );
+    vi.stubGlobal("window", { confirm: vi.fn(), localStorage: storage });
+    wallet.address = owner;
+
+    await act(async () => {
+      create(<GuidedTopUpDialog accountId='account' isAccountSummaryLoading={false} onOpenChange={vi.fn()} open />);
+    });
+
+    expect(quoteReview.destinationAmount).toBe(destinationAmount);
   });
 
   it("preserves a preflight marker while another tab owns the acquisition lock", async () => {

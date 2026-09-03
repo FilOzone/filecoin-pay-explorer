@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadSquidAcquisition } from "./squid-acquisition";
 import { runSquidAcquisition } from "./squid-acquisition-flow";
+import { FILECOIN_FIL_REQUIREMENT_ID } from "./squid-quote";
 
 const owner = "0x1111111111111111111111111111111111111111" as const;
 const sourceHash = `0x${"3".repeat(64)}` as const;
@@ -157,7 +158,7 @@ describe("runSquidAcquisition", () => {
     expect(loadSquidAcquisition(storage, owner)).toBeNull();
   });
 
-  it("clears a confirmed first route before a later wallet request is rejected", async () => {
+  it("keeps a completed FIL checkpoint after a later wallet request is rejected", async () => {
     const storage = createStorage();
     const error = { code: 4001 };
 
@@ -165,7 +166,7 @@ describe("runSquidAcquisition", () => {
       execute: async ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) => {
         onSwapAttempt();
         onSwapBroadcast(sourceHash);
-        onIntermediateRouteComplete();
+        onIntermediateRouteComplete(FILECOIN_FIL_REQUIREMENT_ID);
         onSwapAttempt();
         throw error;
       },
@@ -177,10 +178,16 @@ describe("runSquidAcquisition", () => {
     });
 
     expect(outcome).toEqual({ error, status: "failed" });
-    expect(loadSquidAcquisition(storage, owner)).toBeNull();
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({
+        completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID],
+        executionStage: "preparing",
+        transactionHashes: [sourceHash],
+      }),
+    );
   });
 
-  it("clears a confirmed first route before a later preflight failure", async () => {
+  it("resumes only the remaining route after a later preflight failure", async () => {
     const storage = createStorage();
     const error = new Error("second quote refresh failed");
 
@@ -189,7 +196,7 @@ describe("runSquidAcquisition", () => {
         execute: async ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) => {
           onSwapAttempt();
           onSwapBroadcast(sourceHash);
-          onIntermediateRouteComplete();
+          onIntermediateRouteComplete(FILECOIN_FIL_REQUIREMENT_ID);
           throw error;
         },
         minimumDestinationAmount: 10n,
@@ -199,7 +206,27 @@ describe("runSquidAcquisition", () => {
         storage,
       }),
     ).resolves.toEqual({ error, status: "failed" });
-    expect(loadSquidAcquisition(storage, owner)).toBeNull();
+    const execute = vi.fn(async () => undefined);
+    await expect(
+      runSquidAcquisition({
+        execute,
+        minimumDestinationAmount: 10n,
+        owner,
+        readDestinationBalance: vi.fn().mockResolvedValue(110n),
+        sourceChainId: 42161,
+        storage,
+      }),
+    ).resolves.toEqual({ acquisition: expect.objectContaining({ status: "acquired" }), status: "acquired" });
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID] }),
+    );
+    expect(loadSquidAcquisition(storage, owner)).toEqual(
+      expect.objectContaining({
+        completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID],
+        status: "acquired",
+        transactionHashes: [sourceHash],
+      }),
+    );
   });
 
   it("returns the in-memory marker when storage becomes unreadable after it is saved", async () => {

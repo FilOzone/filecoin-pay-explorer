@@ -6,6 +6,7 @@ type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 export type SquidAcquisition = {
   acquisitionId?: string;
+  completedRequirementIds?: string[];
   depositTransactionHash?: Hash;
   deliveredAmount?: bigint;
   destinationBalanceBefore?: bigint;
@@ -55,6 +56,10 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
         acquisition.status !== "processing") ||
       (acquisition.acquisitionId !== undefined &&
         (typeof acquisition.acquisitionId !== "string" || !/^[0-9a-f-]{36}$/i.test(acquisition.acquisitionId))) ||
+      (acquisition.completedRequirementIds !== undefined &&
+        (!Array.isArray(acquisition.completedRequirementIds) ||
+          !acquisition.completedRequirementIds.every((id) => typeof id === "string" && id.length > 0) ||
+          new Set(acquisition.completedRequirementIds).size !== acquisition.completedRequirementIds.length)) ||
       typeof acquisition.sourceChainId !== "number" ||
       !Number.isSafeInteger(acquisition.sourceChainId) ||
       acquisition.sourceChainId <= 0 ||
@@ -74,6 +79,9 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
         acquisition.deliveredAmount === undefined) ||
       !Array.isArray(acquisition.transactionHashes) ||
       !acquisition.transactionHashes.every(isTransactionHash) ||
+      (Array.isArray(acquisition.completedRequirementIds) &&
+        acquisition.completedRequirementIds.length > 0 &&
+        acquisition.transactionHashes.length === 0) ||
       (acquisition.depositTransactionHash !== undefined &&
         (!isTransactionHash(acquisition.depositTransactionHash) || acquisition.status !== "depositing"))
     ) {
@@ -98,13 +106,16 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
     if (
       acquisition.status === "processing" &&
       (executionStage === undefined ||
-        (executionStage === "preparing" && acquisition.transactionHashes.length > 0) ||
+        (executionStage === "preparing" &&
+          acquisition.transactionHashes.length > 0 &&
+          (!Array.isArray(acquisition.completedRequirementIds) || acquisition.completedRequirementIds.length === 0)) ||
         (executionStage === "swap-broadcast" && acquisition.transactionHashes.length === 0))
     ) {
       return null;
     }
     return {
       acquisitionId: acquisition.acquisitionId as string | undefined,
+      completedRequirementIds: acquisition.completedRequirementIds as string[] | undefined,
       deliveredAmount: acquisition.deliveredAmount === undefined ? undefined : BigInt(acquisition.deliveredAmount),
       destinationBalanceBefore:
         acquisition.destinationBalanceBefore === undefined ? undefined : BigInt(acquisition.destinationBalanceBefore),
@@ -188,7 +199,11 @@ export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: Squ
   });
 }
 
-export function markSquidIntermediateRouteCompleted(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function markSquidIntermediateRouteCompleted(
+  storage: AcquisitionStorage,
+  acquisition: SquidAcquisition,
+  requirementId: string,
+) {
   const current = requireCurrent(storage, acquisition);
   if (
     current.status !== "processing" ||
@@ -198,7 +213,23 @@ export function markSquidIntermediateRouteCompleted(storage: AcquisitionStorage,
   ) {
     throw new Error("Saved Squid acquisition changed");
   }
-  return save(storage, { ...current, executionStage: "preparing", transactionHashes: [] });
+  return save(storage, {
+    ...current,
+    completedRequirementIds: [...(current.completedRequirementIds ?? []), requirementId],
+    executionStage: "preparing",
+  });
+}
+
+export function resetSquidRouteAttempt(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+  const current = requireCurrent(storage, acquisition);
+  if (
+    current.status !== "processing" ||
+    current.executionStage !== "swap-requested" ||
+    !hasSameSquidAcquisitionSnapshot(current, acquisition)
+  ) {
+    throw new Error("Saved Squid acquisition changed");
+  }
+  return save(storage, { ...current, executionStage: "preparing" });
 }
 
 export function markSquidAcquired(
@@ -291,6 +322,8 @@ function isSameState(current: SquidAcquisition, expected: SquidAcquisition) {
 export function hasSameSquidAcquisitionSnapshot(current: SquidAcquisition, expected: SquidAcquisition) {
   return (
     current.acquisitionId === expected.acquisitionId &&
+    (current.completedRequirementIds ?? []).length === (expected.completedRequirementIds ?? []).length &&
+    (current.completedRequirementIds ?? []).every((id, index) => id === expected.completedRequirementIds?.[index]) &&
     current.owner.toLowerCase() === expected.owner.toLowerCase() &&
     current.sourceChainId === expected.sourceChainId &&
     current.destinationAmount === expected.destinationAmount &&

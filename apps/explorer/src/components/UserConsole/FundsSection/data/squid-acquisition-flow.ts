@@ -7,9 +7,11 @@ import {
   markSquidBroadcast,
   markSquidIntermediateRouteCompleted,
   markSquidSwapRequested,
+  resetSquidRouteAttempt,
   type SquidAcquisition,
 } from "./squid-acquisition";
 import { canClearSquidAcquisitionAfterError } from "./squid-execution";
+import { FILECOIN_FIL_REQUIREMENT_ID } from "./squid-quote";
 
 type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
@@ -28,7 +30,8 @@ export async function runSquidAcquisition({
   storage,
 }: {
   execute: (callbacks: {
-    onIntermediateRouteComplete: () => void;
+    completedRequirementIds: readonly string[];
+    onIntermediateRouteComplete: (requirementId: string) => void;
     onSwapAttempt: () => void;
     onSwapBroadcast: (hash: Hash) => void;
   }) => Promise<unknown>;
@@ -39,22 +42,29 @@ export async function runSquidAcquisition({
   sourceChainId: number;
   storage: AcquisitionStorage;
 }): Promise<SquidAcquisitionOutcome> {
-  let destinationBalanceBefore: bigint;
-  try {
-    destinationBalanceBefore = await readDestinationBalance();
-  } catch (error) {
-    return { error, status: "failed" };
-  }
-
   let acquisition: SquidAcquisition;
   try {
-    acquisition = beginSquidAcquisition(
-      storage,
-      owner,
-      minimumDestinationAmount,
-      destinationBalanceBefore,
-      sourceChainId,
-    );
+    const saved = loadSquidAcquisition(storage, owner);
+    if (saved) {
+      if (
+        saved.status !== "processing" ||
+        saved.executionStage !== "preparing" ||
+        !saved.completedRequirementIds?.includes(FILECOIN_FIL_REQUIREMENT_ID) ||
+        saved.destinationAmount !== minimumDestinationAmount ||
+        saved.sourceChainId !== sourceChainId
+      ) {
+        throw new Error("A saved Squid acquisition already exists");
+      }
+      acquisition = saved;
+    } else {
+      acquisition = beginSquidAcquisition(
+        storage,
+        owner,
+        minimumDestinationAmount,
+        await readDestinationBalance(),
+        sourceChainId,
+      );
+    }
   } catch (error) {
     return { error, status: "failed" };
   }
@@ -62,8 +72,9 @@ export async function runSquidAcquisition({
   try {
     onStarted?.(acquisition);
     await execute({
-      onIntermediateRouteComplete: () => {
-        acquisition = markSquidIntermediateRouteCompleted(storage, acquisition);
+      completedRequirementIds: acquisition.completedRequirementIds ?? [],
+      onIntermediateRouteComplete: (requirementId) => {
+        acquisition = markSquidIntermediateRouteCompleted(storage, acquisition, requirementId);
       },
       onSwapAttempt: () => {
         acquisition = markSquidSwapRequested(storage, acquisition);
@@ -75,6 +86,19 @@ export async function runSquidAcquisition({
     const acquired = markSquidAcquiredFromBalance(storage, acquisition, await readDestinationBalance());
     return { acquisition: acquired, status: "acquired" };
   } catch (error) {
+    if (
+      acquisition.completedRequirementIds?.length &&
+      canClearSquidAcquisitionAfterError(acquisition.executionStage, error)
+    ) {
+      if (acquisition.executionStage === "swap-requested") {
+        try {
+          acquisition = resetSquidRouteAttempt(storage, acquisition);
+        } catch {
+          // Preserve the ambiguous request below if the checkpoint cannot be reset safely.
+        }
+      }
+      if (acquisition.executionStage === "preparing") return { error, status: "failed" };
+    }
     if (
       acquisition.transactionHashes.length === 0 &&
       canClearSquidAcquisitionAfterError(acquisition.executionStage, error)

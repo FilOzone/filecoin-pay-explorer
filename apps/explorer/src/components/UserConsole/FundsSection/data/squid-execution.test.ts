@@ -7,6 +7,7 @@ import {
   isUserRejectedRequest,
   walletErrorMessage,
 } from "./squid-execution";
+import { FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID } from "./squid-quote";
 
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
@@ -94,7 +95,7 @@ describe("executeSquidTopUp", () => {
 
   it("checkpoints a completed first requirement and preserves aggregate caps", async () => {
     const onIntermediateRouteComplete = vi.fn();
-    const requirements = ["fil", "usdfc"];
+    const requirements = [FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID];
     const plan = {
       maxSourceAmount: 20n,
       owner,
@@ -148,6 +149,102 @@ describe("executeSquidTopUp", () => {
       expect.anything(),
     );
     expect(onIntermediateRouteComplete).toHaveBeenCalledOnce();
+    expect(onIntermediateRouteComplete).toHaveBeenCalledWith(FILECOIN_FIL_REQUIREMENT_ID);
+  });
+
+  it("resumes a multi-route plan at USDFC after the FIL requirement was checkpointed", async () => {
+    const plan = {
+      maxSourceAmount: 20n,
+      owner,
+      quotes: [FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID].map((id) => ({
+        costs: [],
+        requirement: { amount: 1n, chainId: 314, id },
+        sourceAmount: 5n,
+      })),
+      slippage: 1,
+      source,
+    } as never;
+    vi.mocked(executeSquidFunding).mockResolvedValue({ nativeFee: 1n, routes: [], sourceAmount: 5n });
+
+    await executeSquidTopUp({
+      completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID],
+      destinationClient: {} as never,
+      integratorId: "test-integrator",
+      maxNativeFee: 10n,
+      maxTotalNativeRouteFee: 0n,
+      plan,
+      sourcePublicClient: {} as never,
+      sourceWalletClient: {} as never,
+    });
+
+    expect(executeSquidFunding).toHaveBeenCalledOnce();
+    expect(executeSquidFunding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          quotes: [
+            expect.objectContaining({ requirement: expect.objectContaining({ id: FILECOIN_USDFC_REQUIREMENT_ID }) }),
+          ],
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("rejects a completed singleton FIL plan", async () => {
+    const plan = {
+      maxSourceAmount: 10n,
+      owner,
+      quotes: [
+        {
+          costs: [],
+          requirement: { amount: 1n, chainId: 314, id: FILECOIN_FIL_REQUIREMENT_ID },
+          sourceAmount: 5n,
+        },
+      ],
+      slippage: 1,
+      source,
+    } as never;
+
+    await expect(
+      executeSquidTopUp({
+        completedRequirementIds: [FILECOIN_FIL_REQUIREMENT_ID],
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        maxNativeFee: 10n,
+        maxTotalNativeRouteFee: 0n,
+        plan,
+        sourcePublicClient: {} as never,
+        sourceWalletClient: {} as never,
+      }),
+    ).rejects.toThrow("Squid funding plan has no remaining routes");
+    expect(executeSquidFunding).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reversed multi-route plan before USDFC can execute first", async () => {
+    const plan = {
+      maxSourceAmount: 20n,
+      owner,
+      quotes: [FILECOIN_USDFC_REQUIREMENT_ID, FILECOIN_FIL_REQUIREMENT_ID].map((id) => ({
+        costs: [],
+        requirement: { amount: 1n, chainId: 314, id },
+        sourceAmount: 5n,
+      })),
+      slippage: 1,
+      source,
+    } as never;
+
+    await expect(
+      executeSquidTopUp({
+        destinationClient: {} as never,
+        integratorId: "test-integrator",
+        maxNativeFee: 10n,
+        maxTotalNativeRouteFee: 0n,
+        plan,
+        sourcePublicClient: {} as never,
+        sourceWalletClient: {} as never,
+      }),
+    ).rejects.toThrow("Invalid multi-route funding plan");
+    expect(executeSquidFunding).not.toHaveBeenCalled();
   });
 
   it("rejects a multi-route plan above the reviewed aggregate route-fee cap", async () => {
@@ -162,7 +259,11 @@ describe("executeSquidTopUp", () => {
             token: { address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", chainId: 10 },
           },
         ],
-        requirement: { amount: 1n, chainId: 314, id: String(index) },
+        requirement: {
+          amount: 1n,
+          chainId: 314,
+          id: [FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID][index],
+        },
         sourceAmount: 5n,
       })),
       slippage: 1,
@@ -188,7 +289,7 @@ describe("executeSquidTopUp", () => {
     const plan = {
       maxSourceAmount: 10n,
       owner,
-      quotes: ["fil", "usdfc"].map((id) => ({
+      quotes: [FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID].map((id) => ({
         costs: [],
         requirement: { amount: 1n, chainId: 314, id },
         sourceAmount: 8n,

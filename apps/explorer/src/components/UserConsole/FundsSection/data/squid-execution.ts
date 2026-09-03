@@ -10,6 +10,7 @@ import {
 } from "@filecoin-project/squid-evm-funding";
 import type { Hash } from "viem";
 import type { SquidAcquisitionExecutionStage } from "./squid-acquisition";
+import { FILECOIN_FIL_REQUIREMENT_ID, FILECOIN_USDFC_REQUIREMENT_ID } from "./squid-quote";
 
 const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
@@ -21,6 +22,7 @@ export function applyNetworkFeeExecutionBuffer(chainId: number, fee: bigint): bi
 
 export async function executeSquidTopUp({
   destinationClient,
+  completedRequirementIds = [],
   integratorId,
   maxNativeFee,
   maxTotalNativeRouteFee,
@@ -32,6 +34,7 @@ export async function executeSquidTopUp({
   sourcePublicClient,
   sourceWalletClient,
 }: {
+  completedRequirementIds?: readonly string[];
   destinationClient: SquidPublicClient;
   integratorId: string;
   maxNativeFee: bigint;
@@ -39,7 +42,7 @@ export async function executeSquidTopUp({
   nativeBalanceFloor?: bigint;
   onSwapAttempt?: () => void;
   onSwapBroadcast?: (transactionHash: Hash) => void;
-  onIntermediateRouteComplete?: () => Promise<void> | void;
+  onIntermediateRouteComplete?: (requirementId: string) => Promise<void> | void;
   plan: SquidFundingPlan;
   sourcePublicClient: SquidPublicClient;
   sourceWalletClient: SquidWalletClient;
@@ -86,13 +89,24 @@ export async function executeSquidTopUp({
       },
     );
 
-  if (plan.quotes.length <= 1) return execute(plan, maxNativeFee, maxTotalNativeRouteFee);
+  if (completedRequirementIds.some((id) => id !== FILECOIN_FIL_REQUIREMENT_ID)) {
+    throw new Error("Invalid completed Squid requirement");
+  }
+  if (plan.quotes.length <= 1) {
+    if (plan.quotes.some((quote) => completedRequirementIds.includes(quote.requirement.id))) {
+      throw new Error("Squid funding plan has no remaining routes");
+    }
+    return execute(plan, maxNativeFee, maxTotalNativeRouteFee);
+  }
 
   const plannedSourceAmount = plan.quotes.reduce((total, quote) => total + quote.sourceAmount, 0n);
   const requirementIds = new Set(plan.quotes.map((quote) => quote.requirement.id));
   const destinationChainIds = new Set(plan.quotes.map((quote) => quote.requirement.chainId));
   if (
     plan.maxSourceAmount <= 0n ||
+    plan.quotes.length !== 2 ||
+    plan.quotes[0]?.requirement.id !== FILECOIN_FIL_REQUIREMENT_ID ||
+    plan.quotes[1]?.requirement.id !== FILECOIN_USDFC_REQUIREMENT_ID ||
     plannedSourceAmount > plan.maxSourceAmount ||
     plan.quotes.some((quote) => quote.sourceAmount <= 0n || quote.requirement.amount <= 0n) ||
     requirementIds.size !== plan.quotes.length ||
@@ -123,9 +137,14 @@ export async function executeSquidTopUp({
   let nativeFee = 0n;
   let sourceAmount = 0n;
   const routes: SquidExecutionResult["routes"][number][] = [];
-  for (const [index, quote] of plan.quotes.entries()) {
+  const pendingQuotes = plan.quotes
+    .map((quote, index) => ({ index, quote }))
+    .filter(({ quote }) => !completedRequirementIds.includes(quote.requirement.id));
+  if (pendingQuotes.length === 0) throw new Error("Squid funding plan has no remaining routes");
+  for (const [pendingIndex, { index, quote }] of pendingQuotes.entries()) {
     const sourceBalanceFloor = plan.quotes
       .slice(index + 1)
+      .filter((remainingQuote) => !completedRequirementIds.includes(remainingQuote.requirement.id))
       .reduce((total, remainingQuote) => total + remainingQuote.sourceAmount, 0n);
     const nativeRouteFeeCap = nativeRouteFeeCaps[index];
     if (nativeRouteFeeCap > remainingNativeRouteFee) {
@@ -142,7 +161,7 @@ export async function executeSquidTopUp({
     nativeFee += result.nativeFee;
     sourceAmount += result.sourceAmount;
     routes.push(...result.routes);
-    if (index + 1 < plan.quotes.length) await onIntermediateRouteComplete?.();
+    if (pendingIndex + 1 < pendingQuotes.length) await onIntermediateRouteComplete?.(quote.requirement.id);
   }
   return { nativeFee, routes, sourceAmount };
 }

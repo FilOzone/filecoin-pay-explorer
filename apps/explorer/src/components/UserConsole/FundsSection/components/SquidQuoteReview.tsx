@@ -63,6 +63,7 @@ const SOURCE_CHAIN_OPTIONS: readonly SearchableOption[] = SQUID_SOURCE_CHAINS.ma
 
 type SquidQuoteReviewProps = {
   acquisitionState: "acquired" | "blocked" | "idle" | "processing";
+  completedRequirementIds?: readonly string[];
   destinationAmount: bigint | null;
   onAcquired: (acquisition: SquidAcquisition) => void;
   onAcquisitionStateChange: (state: "acquired" | "blocked" | "idle" | "processing") => void;
@@ -115,6 +116,7 @@ export function resolveSearchableOption(options: readonly SearchableOption[], qu
 
 export function SquidQuoteReview({
   acquisitionState,
+  completedRequirementIds = [],
   destinationAmount,
   onAcquired,
   onAcquisitionStateChange,
@@ -195,10 +197,15 @@ export function SquidQuoteReview({
     includeFilOverride && includeFilOverride.owner.toLowerCase() === address?.toLowerCase()
       ? includeFilOverride.value
       : null;
-  const includeFil =
-    currentIncludeFilOverride ?? shouldIncludeFilForFees(filecoinFilBalance, isFilecoinFilBalanceError);
+  const hasCompletedFilRequirement = completedRequirementIds.includes(FILECOIN_FIL_REQUIREMENT_ID);
+  const includeFil = hasCompletedFilRequirement
+    ? false
+    : (currentIncludeFilOverride ?? shouldIncludeFilForFees(filecoinFilBalance, isFilecoinFilBalanceError));
   const isFilecoinFilBalanceResolved =
-    currentIncludeFilOverride !== null || filecoinFilBalance !== undefined || isFilecoinFilBalanceError;
+    hasCompletedFilRequirement ||
+    currentIncludeFilOverride !== null ||
+    filecoinFilBalance !== undefined ||
+    isFilecoinFilBalanceError;
   const nativeBalanceFloor = isFilecoinFilSource ? FILECOIN_FIL_AMOUNT : 0n;
   const {
     data: sourceBalance,
@@ -478,15 +485,16 @@ export function SquidQuoteReview({
     try {
       const outcome = await withSquidAcquisitionLock(globalThis.navigator?.locks, address, () =>
         runSquidAcquisition({
-          execute: ({ onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) =>
+          execute: ({ completedRequirementIds, onIntermediateRouteComplete, onSwapAttempt, onSwapBroadcast }) =>
             executeSquidTopUp({
+              completedRequirementIds,
               destinationClient: destinationClient as unknown as SquidPublicClient,
               integratorId,
               maxNativeFee: reviewedNetworkGasMaximum,
               maxTotalNativeRouteFee: bridgeNativeFees.maximum,
               nativeBalanceFloor,
-              onIntermediateRouteComplete: async () => {
-                onIntermediateRouteComplete();
+              onIntermediateRouteComplete: async (requirementId) => {
+                onIntermediateRouteComplete(requirementId);
                 setIncludeFilOverride({ owner: address, value: false });
                 await Promise.all([refetchFilecoinFilBalance(), refetchSourceBalance()]);
               },
@@ -772,7 +780,7 @@ export function SquidQuoteReview({
           aria-describedby='squid-include-fil-hint'
           checked={includeFil}
           className='mt-0.5 h-4 w-4 shrink-0 accent-primary'
-          disabled={isBusy}
+          disabled={isBusy || hasCompletedFilRequirement}
           id='squid-include-fil'
           onChange={(event) => {
             setError(null);
@@ -785,15 +793,17 @@ export function SquidQuoteReview({
             Add 0.25 FIL for transaction fees
           </Label>
           <p className='text-xs leading-relaxed text-muted-foreground' id='squid-include-fil-hint'>
-            {isFilecoinFilBalanceError
-              ? includeFil
-                ? "Your FIL balance could not be read, so this is included by default."
-                : "Your FIL balance could not be read. FIL is not included."
-              : filecoinFilBalance !== undefined && filecoinFilBalance > 0n
-                ? "You already have FIL for fees."
-                : isLoadingFilecoinFilBalance
-                  ? "Checking your Filecoin wallet balance…"
-                  : "Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions."}
+            {hasCompletedFilRequirement
+              ? "FIL was already added in this acquisition."
+              : isFilecoinFilBalanceError
+                ? includeFil
+                  ? "Your FIL balance could not be read, so this is included by default."
+                  : "Your FIL balance could not be read. FIL is not included."
+                : filecoinFilBalance !== undefined && filecoinFilBalance > 0n
+                  ? "You already have FIL for fees."
+                  : isLoadingFilecoinFilBalance
+                    ? "Checking your Filecoin wallet balance…"
+                    : "Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions."}
           </p>
         </div>
       </div>
