@@ -213,5 +213,12 @@ describe("useCardPurchase", () => {
     privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));
     await act(async () => latest.buyWithCard());
     expect(toast.error).toHaveBeenCalledWith("Card purchase failed", { description: "Provider unavailable" });
+
+    vi.mocked(toast.error).mockClear();
+    privy.fund.mockRejectedValueOnce(undefined);
+    await act(async () => latest.buyWithCard());
+    expect(toast.error).toHaveBeenCalledWith("Card purchase failed", {
+      description: "Privy card funding is unavailable.",
+    });
   });
 });
