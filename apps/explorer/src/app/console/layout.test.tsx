@@ -10,6 +10,17 @@ vi.mock("@/components/shared/Balance", () => ({ default: () => <span>Filecoin ba
 vi.mock("@/components/shared/ChainSwitcher", () => ({ default: () => <span>Filecoin network</span> }));
 
 describe("console access and continuity", () => {
+  it("does not expose a default-chain console while the selected wallet reconnects", () => {
+    expect(
+      getConsoleAccessState({
+        isConnected: true,
+        isReconnecting: true,
+        hasAddress: true,
+        chainId: 314159,
+      }),
+    ).toBe("reconnecting");
+  });
+
   it("keeps the console page mounted on a Squid source chain", () => {
     expect(getConsoleAccessState({ isConnected: true, hasAddress: true, chainId: 8453 })).toBe("squid-source");
   });
