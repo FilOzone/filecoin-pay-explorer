@@ -5,6 +5,7 @@ import {
   type SquidClientOptions,
 } from "@filecoin-project/squid-evm-funding";
 import { type Address, encodeFunctionData, type Hash, type Hex, parseAbi } from "viem";
+import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
 const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
 
@@ -213,11 +214,20 @@ export function assertExecutableQuoteWithinReview(
 export function getDepositRequiredNativeBalance(
   quote: Pick<SquidDepositQuote, "fees" | "gasCosts">,
   sourceChainId: number,
-  approvalGasFee: bigint,
+  maximumNetworkFee: bigint,
 ): bigint {
-  const { fees, gas } = getSourceNativeCosts(quote, sourceChainId);
-  const gasWithApproval = gas + approvalGasFee;
-  return fees + gasWithApproval + gasWithApproval / 2n;
+  return getSourceNativeCosts(quote, sourceChainId).fees + maximumNetworkFee;
+}
+
+/** Mirrors the existing guided flow: one buffered route estimate per transaction the wallet may sign. */
+export function getDepositNetworkFeeMaximum(
+  quote: Pick<SquidDepositQuote, "gasCosts" | "sourceAmount">,
+  sourceChainId: number,
+  allowance: bigint,
+): bigint {
+  const routeFee = getSourceNativeCosts({ fees: [], gasCosts: quote.gasCosts }, sourceChainId).gas;
+  const transactionCount = allowance < quote.sourceAmount ? 2n : 1n;
+  return applyNetworkFeeExecutionBuffer(sourceChainId, routeFee) * transactionCount;
 }
 
 export async function requestSquidDepositRoute(
@@ -352,8 +362,8 @@ export function parseSquidDepositRoute(
     quoteId: route.quoteId,
     sourceChainId: request.sourceChainId,
     sourceAmount: request.sourceAmount,
-    destinationAmount: parseAmount(estimate.toAmount, "destination amount"),
-    minimumDestinationAmount: parseAmount(estimate.toAmountMin, "minimum destination amount"),
+    destinationAmount: parsePositiveAmount(estimate.toAmount, "destination amount"),
+    minimumDestinationAmount: parsePositiveAmount(estimate.toAmountMin, "minimum destination amount"),
     ...(typeof estimate.fromAmountUSD === "string" ? { sourceAmountUsd: estimate.fromAmountUSD } : {}),
     ...(typeof estimate.toAmountUSD === "string" ? { destinationAmountUsd: estimate.toAmountUSD } : {}),
     ...(typeof estimate.aggregatePriceImpact === "string" ? { priceImpactPercent: estimate.aggregatePriceImpact } : {}),
