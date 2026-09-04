@@ -73,8 +73,6 @@ type OperatorToken @entity(immutable: false) {
   id: Bytes! # operator address,token address
   commissionEarned: BigInt!
   volume: BigInt!
-  lockupAllowance: BigInt!
-  rateAllowance: BigInt!
   lockupUsage: BigInt!
   rateUsage: BigInt!
   settledAmount: BigInt!

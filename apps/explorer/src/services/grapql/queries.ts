@@ -345,8 +345,6 @@ export const GET_OPERATOR_TOKENS = gql`
       id
       commissionEarned
       volume
-      lockupAllowance
-      rateAllowance
       lockupUsage
       rateUsage
       settledAmount

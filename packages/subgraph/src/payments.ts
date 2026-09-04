@@ -157,9 +157,6 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
 
   operator.totalTokens = isNewOperatorToken ? operator.totalTokens.plus(ONE_BIG_INT) : operator.totalTokens;
 
-  operatorToken.lockupAllowance = lockupAllowance;
-  operatorToken.rateAllowance = rateAllowance;
-
   operatorApproval.rateAllowance = rateAllowance;
   operatorApproval.lockupAllowance = lockupAllowance;
   operatorApproval.isApproved = isApproved;
@@ -877,7 +874,6 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   operatorApproval.lockupAllowance = operatorApproval.lockupAllowance.minus(totalAmount);
   operatorApproval.lockupUsage = operatorApproval.lockupUsage.minus(totalAmount);
   operatorToken.oneTimePaymentAmount = operatorToken.oneTimePaymentAmount.plus(totalAmount);
-  operatorToken.lockupAllowance = operatorToken.lockupAllowance.minus(totalAmount);
   operatorToken.lockupUsage = operatorToken.lockupUsage.minus(totalAmount);
   operatorToken.commissionEarned = operatorToken.commissionEarned.plus(operatorCommission);
   operatorToken.volume = operatorToken.volume.plus(totalAmount);
