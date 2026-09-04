@@ -8,6 +8,7 @@ import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
+import { CARD_CHAIN_ID, CARD_USDC, CARD_USDC_DECIMALS, useCardPurchase } from "./FundsSection/hooks/useCardPurchase";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
 
 const TOKEN_PAGE_SIZE = 100;
@@ -22,6 +23,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [isSquidOpen, setSquidOpen] = useState(false);
+  const [cardSourceAmount, setCardSourceAmount] = useState<bigint>();
   const isMainnet = chainId === undefined || chainId === mainnet.id;
   const isCalibration = chainId === calibration.id;
   const network = isCalibration ? "calibration" : "mainnet";
@@ -30,6 +32,15 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const { data } = useAccountTokens(isMainnet || isCalibration ? address.toLowerCase() : "", 1, {
     networkOverride: network,
     pageSize: TOKEN_PAGE_SIZE,
+  });
+  const card = useCardPurchase({
+    address,
+    contextKey: `${address}:${chainId ?? "unknown"}`,
+    onPurchased: (amount) => {
+      setCardSourceAmount(amount);
+      launch.closeAddFunds();
+      setSquidOpen(true);
+    },
   });
 
   useEffect(() => {
@@ -47,6 +58,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     <TopUpDialogController accountId={address.toLowerCase()}>
       {() => {
         const chooseMethod = (method: AddFundsMethod) => {
+          if (method === "card") {
+            void card.buyWithCard();
+            return;
+          }
           launch.closeAddFunds();
           if (method === "squid") setSquidOpen(true);
           else setDepositOpen(true);
@@ -56,6 +71,9 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
           <>
             {isMainnet ? (
               <AddFundsDialog
+                cardLabel={card.label}
+                cardStatus={card.statusMessage}
+                isBusy={card.isBusy}
                 onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
                 onSelect={chooseMethod}
                 open={!chainChanged && launch.isAddFundsOpen}
@@ -73,7 +91,15 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
             ) : null}
             <DirectSquidDepositDialog
               accountId={address.toLowerCase()}
-              onOpenChange={setSquidOpen}
+              initialSource={
+                cardSourceAmount
+                  ? { amount: cardSourceAmount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC }
+                  : undefined
+              }
+              onOpenChange={(open) => {
+                setSquidOpen(open);
+                if (!open) setCardSourceAmount(undefined);
+              }}
               open={isSquidOpen}
             />
           </>

@@ -101,10 +101,12 @@ type ReviewedDeposit = {
 
 export function DirectSquidDepositDialog({
   accountId,
+  initialSource,
   onOpenChange,
   open,
 }: {
   accountId: string;
+  initialSource?: { amount: bigint; chainId: number; decimals: number; token: string };
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
@@ -269,15 +271,27 @@ export function DirectSquidDepositDialog({
   };
 
   useEffect(() => {
+    if (!open || !initialSource || pending) return;
+    setSourceChainId(initialSource.chainId);
+    setSourceTokenAddress(initialSource.token);
+    setAmount(formatUnits(initialSource.amount, initialSource.decimals));
+    initializedSelectionScope.current = "";
+  }, [initialSource, open, pending]);
+
+  useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
     const scope = `${owner}:${sourceChainId}:${sourceTokenCatalogIdentity(tokens)}`;
     if (initializedSelectionScope.current === scope) return;
     initializedSelectionScope.current = scope;
-    if (!tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
+    const isPurchasedSource =
+      initialSource?.chainId === sourceChainId &&
+      initialSource.token.toLowerCase() === sourceTokenAddress.toLowerCase();
+    if (!isPurchasedSource && !tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
       setSourceTokenAddress(orderedTokens[0]?.token ?? "");
     }
   }, [
     inventoryBalancesQuery.isPending,
+    initialSource,
     open,
     orderedTokens,
     owner,
@@ -734,6 +748,11 @@ export function DirectSquidDepositDialog({
                 ) : null}
                 {!tokensQuery.isPending && !tokensQuery.isError && tokens.length === 0 ? (
                   <p className='text-sm text-muted-foreground'>No supported tokens are available on this network.</p>
+                ) : null}
+                {initialSource && !tokensQuery.isPending && !tokensQuery.isError && !sourceToken ? (
+                  <p className='text-sm text-destructive' role='alert'>
+                    Purchased Base USDC is not currently supported by Squid.
+                  </p>
                 ) : null}
               </div>
               <div className='grid gap-1'>

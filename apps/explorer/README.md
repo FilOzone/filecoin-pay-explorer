@@ -17,6 +17,7 @@ This app requires the following environment variables:
 | `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`      | Optional Squid integrator ID override          | No       |
 | `NEXT_PUBLIC_PRIVY_APP_ID`             | Public Privy application ID                   | Yes      |
 | `NEXT_PUBLIC_PRIVY_CLIENT_ID`          | Public Privy web client ID                    | Yes      |
+| `NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX`     | Use Privy's fiat onramp sandbox when `true`   | No       |
 
 Squid route quotes use the public `filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862` integrator ID by default.
 
@@ -37,6 +38,7 @@ The example values use the development Privy app. Its dashboard must enable emai
    NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-calibration/version/gn
    NEXT_PUBLIC_PRIVY_APP_ID=cmtkfb83p04du0bk0kofldq4e
    NEXT_PUBLIC_PRIVY_CLIENT_ID=client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf
+   NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX=false
    ```
 
 ## Running Locally

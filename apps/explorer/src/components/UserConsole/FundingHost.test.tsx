@@ -11,8 +11,15 @@ const dialogs = vi.hoisted(() => ({
   accountId: "",
   openTopUp: vi.fn(),
   onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
-  onSelect: undefined as ((method: "deposit" | "squid") => void) | undefined,
+  onSelect: undefined as ((method: "card" | "deposit" | "squid") => void) | undefined,
+  squidInitialSource: undefined as { amount: bigint; chainId: number; decimals: number; token: string } | undefined,
   squidOpen: false,
+}));
+const card = vi.hoisted(() => ({
+  buyWithCard: vi.fn(),
+  isBusy: false,
+  onPurchased: undefined as ((amount: bigint) => void) | undefined,
+  statusMessage: null as string | null,
 }));
 
 vi.mock("wagmi", () => ({ useConnection: () => wallet }));
@@ -38,12 +45,21 @@ vi.mock("./FundsSection/components", () => ({
     open,
   }: {
     onOpenChange: (open: boolean) => void;
-    onSelect: (method: "deposit" | "squid") => void;
+    onSelect: (method: "card" | "deposit" | "squid") => void;
     open: boolean;
   }) => {
     dialogs.onPickerOpenChange = onOpenChange;
     dialogs.onSelect = onSelect;
     return <div data-picker-open={open} />;
+  },
+}));
+vi.mock("./FundsSection/hooks/useCardPurchase", () => ({
+  CARD_CHAIN_ID: 8453,
+  CARD_USDC: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  CARD_USDC_DECIMALS: 6,
+  useCardPurchase: ({ onPurchased }: { onPurchased: (amount: bigint) => void }) => {
+    card.onPurchased = onPurchased;
+    return card;
   },
 }));
 vi.mock("./DepositDialog", () => ({
@@ -68,7 +84,14 @@ vi.mock("./DepositDialog", () => ({
   ),
 }));
 vi.mock("./FundsSection/components/DirectSquidDepositDialog", () => ({
-  DirectSquidDepositDialog: ({ open }: { open: boolean }) => {
+  DirectSquidDepositDialog: ({
+    initialSource,
+    open,
+  }: {
+    initialSource?: { amount: bigint; chainId: number; decimals: number; token: string };
+    open: boolean;
+  }) => {
+    dialogs.squidInitialSource = initialSource;
     dialogs.squidOpen = open;
     return <div data-squid-open={open} />;
   },
@@ -117,6 +140,8 @@ beforeEach(() => {
   dialogs.accountId = "";
   dialogs.openTopUp.mockClear();
   dialogs.squidOpen = false;
+  dialogs.squidInitialSource = undefined;
+  card.buyWithCard.mockClear();
 });
 
 describe("FundingHost", () => {
@@ -138,6 +163,24 @@ describe("FundingHost", () => {
     act(() => dialogs.onSelect?.("squid"));
     expect(dialogs.squidOpen).toBe(true);
     expect(dialogs.openTopUp).not.toHaveBeenCalled();
+  });
+
+  it("keeps the picker context while Privy starts a card purchase", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
+    act(() => dialogs.onSelect?.("card"));
+
+    expect(card.buyWithCard).toHaveBeenCalledOnce();
+    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
+
+    act(() => card.onPurchased?.(12_500_000n));
+    expect(dialogs.squidOpen).toBe(true);
+    expect(dialogs.squidInitialSource).toEqual({
+      amount: 12_500_000n,
+      chainId: 8453,
+      decimals: 6,
+      token: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    });
   });
 
   it("opens direct deposit without a one-choice picker on Calibration", async () => {
