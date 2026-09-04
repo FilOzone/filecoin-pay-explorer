@@ -134,16 +134,6 @@ export const HeroStats: React.FC = () => {
             gradient='from-orange-500 to-red-600'
             delay={0.5}
           />
-
-          <MetricCard
-            title='Finalized Rails'
-            value={formatCompactNumber(paymentsMetric.totalFinalizedRails)}
-            subtitle='Successfully completed'
-            changeType='positive'
-            icon={Activity}
-            gradient='from-green-500 to-teal-600'
-            delay={0.8}
-          />
         </div>
       </motion.div>
     </div>

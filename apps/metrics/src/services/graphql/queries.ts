@@ -89,7 +89,6 @@ export const GET_DAILY_TOKEN_METRICS = gql`
       settledAmount
       commissionPaid
       activeRailsCount
-      totalLocked
     }
   }
 `;
