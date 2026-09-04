@@ -8,6 +8,7 @@ const OWNER = "0x1111111111111111111111111111111111111111" as const;
 const RECIPIENT = "0x2222222222222222222222222222222222222222" as const;
 const OTHER = "0x3333333333333333333333333333333333333333" as const;
 const USDC = "0x4444444444444444444444444444444444444444" as const;
+const USDT = "0x5555555555555555555555555555555555555555" as const;
 
 const state = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -25,6 +26,9 @@ const connectedWallets = vi.hoisted(() => ({
   current: [] as (typeof wallet)[],
 }));
 const query = vi.hoisted(() => ({
+  allowance: 100_000_000n,
+  balanceIsError: false,
+  nativeBalance: 10n ** 18n,
   quote: {
     destinationAmount: 93n,
     fees: [],
@@ -47,6 +51,23 @@ const query = vi.hoisted(() => ({
     symbol: "USDC",
     token: "0x4444444444444444444444444444444444444444" as const,
   },
+  tokenBalance: 200_000_000n,
+  tokens: [
+    {
+      chainId: 8453,
+      decimals: 6,
+      name: "USD Coin",
+      symbol: "USDC",
+      token: "0x4444444444444444444444444444444444444444" as const,
+    },
+    {
+      chainId: 8453,
+      decimals: 6,
+      name: "Tether",
+      symbol: "USDT",
+      token: "0x5555555555555555555555555555555555555555" as const,
+    },
+  ],
 }));
 connectedWallets.current.push(wallet);
 
@@ -60,9 +81,18 @@ vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey[0] === "squid-usdc-tokens") return { data: [query.token], isPending: false };
+    if (queryKey[0] === "squid-payment-tokens") {
+      return { data: query.tokens, isError: false, isPending: false, refetch: vi.fn() };
+    }
+    if (queryKey[0] === "squid" && queryKey[1] === "source-token-balances") {
+      return { data: { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n }, isPending: false };
+    }
     if (queryKey[0] === "direct-squid-deposit-balances") {
-      return { data: { allowance: 100_000_000n, native: 10n ** 18n, token: 200_000_000n } };
+      return {
+        data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
+        isError: query.balanceIsError,
+        refetch: vi.fn(),
+      };
     }
     return { data: query.quote, error: null, isFetching: false };
   },
@@ -98,6 +128,25 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
   DialogFooter: ({ children }: { children: React.ReactNode }) => children,
   DialogHeader: ({ children }: { children: React.ReactNode }) => children,
   DialogTitle: ({ children }: { children: React.ReactNode }) => children,
+}));
+vi.mock("./SearchableSelect", () => ({
+  SearchableSelect: ({
+    onValueChange,
+    options,
+    value,
+  }: {
+    onValueChange: (value: string) => void;
+    options: { label: string; value: string }[];
+    value: string;
+  }) => (
+    <select aria-label='Source token' onChange={(event) => onValueChange(event.target.value)} value={value}>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
@@ -139,6 +188,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
     state.liveRecipient = RECIPIENT;
     state.execute.mockReset();
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
+    query.allowance = 100_000_000n;
+    query.balanceIsError = false;
+    query.nativeBalance = 10n ** 18n;
+    query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
     wallet.switchChain.mockClear();
     vi.stubGlobal("navigator", {
@@ -234,5 +287,57 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     expect(JSON.stringify(renderer.toJSON())).toContain("Your wallet may have submitted this route");
     expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
+  });
+
+  it("uses the explicitly selected token as the reviewed and executed source", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByProps({ "aria-label": "Source token" }).props.onChange({ target: { value: USDT } });
+      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => button(renderer, "Review")?.props.onClick());
+    await act(async () => {
+      button(renderer, "Pay 100 USDT")?.props.onClick();
+      await vi.waitFor(() => expect(state.execute).toHaveBeenCalledOnce());
+    });
+    expect(state.requestRoute).toHaveBeenCalledWith(expect.objectContaining({ sourceToken: USDT }), expect.anything(), {
+      quoteOnly: false,
+    });
+    expect(state.execute.mock.calls[0][0].request.sourceToken).toBe(USDT);
+  });
+
+  it("does not display or review retained balances after a refresh error", async () => {
+    query.balanceIsError = true;
+    query.nativeBalance = 0n;
+    query.tokenBalance = 1n;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+    });
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance: 200 USDC");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("does not have enough");
+    expect(button(renderer, "Review")?.props.disabled).toBe(true);
+  });
+
+  it.each([
+    [0n, "an approval, then the Squid transaction"],
+    [1n, "an allowance reset, an approval, then the Squid transaction"],
+  ])("discloses the reviewed approval path for allowance %s", async (allowance, disclosure) => {
+    query.allowance = allowance;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => button(renderer, "Review")?.props.onClick());
+    expect(JSON.stringify(renderer.toJSON())).toContain(disclosure);
   });
 });

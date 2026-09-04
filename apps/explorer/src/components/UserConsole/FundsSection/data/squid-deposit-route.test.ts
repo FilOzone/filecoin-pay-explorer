@@ -8,12 +8,10 @@ import {
   getDepositNetworkFeeMaximum,
   getDepositRequiredNativeBalance,
   getSourceNativeCosts,
-  getUsdfcPerUsdc,
   isExecutableQuote,
-  isUnfavorableRate,
+  isNativeToken,
   parseSquidDepositRoute,
   requestSquidDepositRoute,
-  selectUsdcTokens,
   squidDepositAbi,
 } from "./squid-deposit-route";
 
@@ -134,38 +132,31 @@ describe("buildDepositPostHook", () => {
   });
 });
 
-describe("selectUsdcTokens", () => {
-  it("keeps USDC variants with plain USDC first and drops everything else", () => {
-    const tokens = [
-      { chainId: 314, token: USDFC, symbol: "USDFC", decimals: 18 },
-      { chainId: 314, token: "0x6666666666666666666666666666666666666666", symbol: "ceUSDC", decimals: 6 },
-      { chainId: 314, token: NATIVE_TOKEN_ADDRESS, symbol: "FIL", decimals: 18 },
-      { chainId: 314, token: USDC, symbol: "USDC", decimals: 6 },
-    ] as const;
-
-    expect(selectUsdcTokens(tokens)).toEqual([tokens[3], tokens[1]]);
-  });
-});
-
-describe("rate helpers", () => {
-  it("computes USDFC per USDC and flags a haircut below the threshold", () => {
-    const rate = getUsdfcPerUsdc({ sourceAmount: 100_000_000n, destinationAmount: 93_000_000_000_000_000_000n }, 6);
-    expect(rate).toBeCloseTo(0.93, 5);
-    expect(isUnfavorableRate(rate)).toBe(true);
-    expect(isUnfavorableRate(0.98)).toBe(false);
-    expect(getUsdfcPerUsdc({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBe(0);
-  });
-
+describe("source-native accounting", () => {
   it("sums source-network native costs and the reviewed network-fee maximum", () => {
     const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
     expect(getSourceNativeCosts(quote, 8453)).toEqual({ fees: 5_971_701_479_908n, gas: 3_596_394_000_000n });
     expect(getSourceNativeCosts(quote, 1)).toEqual({ fees: 0n, gas: 0n });
-    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, 0n);
+    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, USDC, 0n);
     expect(maximumNetworkFee).toBe(8_631_345_600_000n);
-    expect(getDepositRequiredNativeBalance(quote, 8453, maximumNetworkFee)).toBe(
+    expect(getDepositNetworkFeeMaximum(quote, 8453, USDC, 1n)).toBe(12_947_018_400_000n);
+    expect(getDepositRequiredNativeBalance(quote, 8453, USDC, maximumNetworkFee)).toBe(
       5_971_701_479_908n + 8_631_345_600_000n,
     );
-    expect(getDepositNetworkFeeMaximum(quote, 1, request.sourceAmount)).toBe(0n);
+    expect(getDepositNetworkFeeMaximum(quote, 1, USDC, request.sourceAmount)).toBe(0n);
+  });
+
+  it("includes the source spend in native-token requirements and allows only one transaction", () => {
+    const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
+    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, NATIVE_TOKEN_ADDRESS, 0n);
+    expect(maximumNetworkFee).toBe(4_315_672_800_000n);
+    expect(getDepositRequiredNativeBalance(quote, 8453, NATIVE_TOKEN_ADDRESS, maximumNetworkFee)).toBe(
+      request.sourceAmount + 5_971_701_479_908n + maximumNetworkFee,
+    );
+    expect(captureReviewedSquidDepositCaps(quote, NATIVE_TOKEN_ADDRESS).maxTransactionValue).toBe(
+      request.sourceAmount + 5_971_701_479_908n,
+    );
+    expect(isNativeToken(NATIVE_TOKEN_ADDRESS)).toBe(true);
   });
 });
 
@@ -217,7 +208,7 @@ describe("parseSquidDepositRoute", () => {
   });
 
   it("rejects executable spend, fee and minimum-output drift beyond the reviewed quote", () => {
-    const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now));
+    const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now), USDC);
     const executable = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);
     if (!isExecutableQuote(executable)) throw new Error("expected executable quote");
     expect(() => assertExecutableQuoteWithinReview(executable, reviewed)).not.toThrow();

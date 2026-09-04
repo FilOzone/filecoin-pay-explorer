@@ -1,4 +1,4 @@
-import { SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
+import { NATIVE_TOKEN_ADDRESS, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { type Address, decodeFunctionData, erc20Abi, getAddress, type Hash, type Hex } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -20,6 +20,7 @@ const USDFC = "0x4444444444444444444444444444444444444444" as const;
 const PAYMENTS = "0x5555555555555555555555555555555555555555" as const;
 const APPROVAL_HASH = `0x${"a".repeat(64)}` as Hash;
 const ROUTE_HASH = `0x${"b".repeat(64)}` as Hash;
+const RESET_HASH = `0x${"c".repeat(64)}` as Hash;
 
 const request = {
   owner: OWNER,
@@ -54,6 +55,7 @@ function fakeDestination(fundsSequence: bigint[]): SquidDepositDestinationClient
 
 function fakeSource({
   allowance = 0n,
+  allowanceSequence,
   approvalUpdatesAllowance = true,
   nativeBalance = 10n ** 18n,
   receiptStatus = "success" as "success" | "reverted",
@@ -61,6 +63,7 @@ function fakeSource({
   totalFee,
 }: {
   allowance?: bigint;
+  allowanceSequence?: bigint[];
   approvalUpdatesAllowance?: boolean;
   nativeBalance?: bigint;
   receiptStatus?: "success" | "reverted";
@@ -78,14 +81,15 @@ function fakeSource({
     readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return tokenBalance;
       allowanceReads += 1;
+      if (allowanceSequence?.length) return allowanceSequence.shift() as bigint;
       return allowance > 0n || (approvalUpdatesAllowance && allowanceReads > 1) ? 100_000_000n : 0n;
     }),
     waitForTransactionReceipt: vi.fn(async () => ({ status: receiptStatus })),
   } as unknown as SquidDepositSourceClient;
 }
 
-function fakeWallet() {
-  const hashes = [APPROVAL_HASH, ROUTE_HASH];
+function fakeWallet(hashes = [APPROVAL_HASH, ROUTE_HASH]) {
+  const pendingHashes = [...hashes];
   let nonce = 0;
   return {
     account: { address: OWNER },
@@ -96,7 +100,7 @@ function fakeWallet() {
       gasPrice: 1_000_000_000n,
       nonce: nonce++,
     })),
-    sendTransaction: vi.fn(async () => hashes.shift() as Hash),
+    sendTransaction: vi.fn(async () => pendingHashes.shift() as Hash),
   } as unknown as SquidDepositWalletClient & {
     prepareTransactionRequest: ReturnType<typeof vi.fn>;
     sendTransaction: ReturnType<typeof vi.fn>;
@@ -106,6 +110,7 @@ function fakeWallet() {
 const noSleep = async () => undefined;
 const signingChecks = {
   approvalRequired: true,
+  approvalResetRequired: false,
   assertCurrentContext: vi.fn(),
   getCurrentOwner: vi.fn(async () => OWNER),
   maxNativeFee: 1_000_000_000_000_000n,
@@ -353,6 +358,67 @@ describe("executeSquidDeposit", () => {
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it("resets a nonzero insufficient allowance before approving the payment amount", async () => {
+    const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
+    await executeSquidDeposit({
+      destinationClient: fakeDestination([100n, 195n]),
+      ...signingChecks,
+      approvalResetRequired: true,
+      quote,
+      request,
+      sleep: noSleep,
+      sourceClient: fakeSource({ allowanceSequence: [1n, 0n, request.sourceAmount] }),
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      walletClient: wallet,
+    });
+
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(3);
+    const [reset, approval] = wallet.sendTransaction.mock.calls as unknown as [[{ data: Hex }], [{ data: Hex }]];
+    expect(decodeFunctionData({ abi: erc20Abi, data: reset[0].data })).toMatchObject({
+      functionName: "approve",
+      args: [getAddress(SQUID_ROUTER_ADDRESS), 0n],
+    });
+    expect(decodeFunctionData({ abi: erc20Abi, data: approval[0].data })).toMatchObject({
+      functionName: "approve",
+      args: [getAddress(SQUID_ROUTER_ADDRESS), request.sourceAmount],
+    });
+  });
+
+  it("does not add an unreviewed allowance reset before the route", async () => {
+    const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination([100n]),
+        ...signingChecks,
+        quote,
+        request,
+        sourceClient: fakeSource({ allowanceSequence: [1n] }),
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("allowance changed after review");
+    expect(wallet.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("uses the native balance as the source balance without ERC-20 reads or approval", async () => {
+    const wallet = fakeWallet();
+    wallet.sendTransaction.mockResolvedValue(ROUTE_HASH);
+    const source = fakeSource({ nativeBalance: 10n ** 18n });
+    await executeSquidDeposit({
+      destinationClient: fakeDestination([100n, 195n]),
+      ...signingChecks,
+      approvalRequired: false,
+      quote: { ...quote, transaction: { ...quote.transaction, value: request.sourceAmount + 10n } },
+      request: { ...request, sourceToken: NATIVE_TOKEN_ADDRESS },
+      sleep: noSleep,
+      sourceClient: source,
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      walletClient: wallet,
+    });
+    expect(source.readContract).not.toHaveBeenCalled();
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses to run when the wallet is on another network", async () => {
     const wallet = { ...fakeWallet(), getChainId: vi.fn(async () => 1) };
     await expect(
@@ -561,7 +627,7 @@ describe("executeSquidDeposit", () => {
         squid: { integratorId: "id" },
         walletClient: lowBalanceWallet,
       }),
-    ).rejects.toThrow("USDC balance");
+    ).rejects.toThrow("Source-token balance");
     expect(lowBalanceWallet.sendTransaction).not.toHaveBeenCalled();
 
     const unchangedAllowanceWallet = fakeWallet();
