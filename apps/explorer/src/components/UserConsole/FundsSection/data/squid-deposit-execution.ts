@@ -15,6 +15,7 @@ import { formatAddress } from "@/utils/formatter";
 import {
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
+  isNativeToken,
   SQUID_API_BASE_URL,
   type SquidClient,
   type SquidDepositRef,
@@ -91,6 +92,8 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
   squid: SquidClient;
   /** Whether the reviewed allowance required an approval transaction. */
   approvalRequired: boolean;
+  /** Whether the reviewed allowance required a zero-reset before approval. */
+  approvalResetRequired: boolean;
   /** Maximum cumulative source-network transaction fee the user reviewed. */
   maxNativeFee: bigint;
   /** Reads the provider/UI account immediately before every signature. */
@@ -133,29 +136,35 @@ async function assertFreshSigningState({
   requireAllowance: boolean;
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
+  const nativeSource = isNativeToken(request.sourceToken);
+  const nativeBalancePromise = sourceClient.getBalance({ address: request.owner });
   const [providerOwner, walletChainId, rpcChainId, tokenBalance, nativeBalance, allowance] = await Promise.all([
     getCurrentOwner(),
     walletClient.getChainId(),
     sourceClient.getChainId(),
-    sourceClient.readContract({
-      abi: erc20Abi,
-      address: request.sourceToken,
-      args: [request.owner],
-      functionName: "balanceOf",
-    }),
-    sourceClient.getBalance({ address: request.owner }),
-    sourceClient.readContract({
-      abi: erc20Abi,
-      address: request.sourceToken,
-      args: [request.owner, quote.transaction.approvalSpender ?? quote.transaction.target],
-      functionName: "allowance",
-    }),
+    nativeSource
+      ? nativeBalancePromise
+      : sourceClient.readContract({
+          abi: erc20Abi,
+          address: request.sourceToken,
+          args: [request.owner],
+          functionName: "balanceOf",
+        }),
+    nativeBalancePromise,
+    nativeSource
+      ? Promise.resolve(request.sourceAmount)
+      : sourceClient.readContract({
+          abi: erc20Abi,
+          address: request.sourceToken,
+          args: [request.owner, quote.transaction.approvalSpender ?? quote.transaction.target],
+          functionName: "allowance",
+        }),
   ]);
   assertCurrentContext();
   assertSignerUnchanged(providerOwner, walletChainId, request, rpcChainId);
-  if (tokenBalance < request.sourceAmount) throw new Error("USDC balance no longer covers the reviewed spend");
+  if (tokenBalance < request.sourceAmount) throw new Error("Source-token balance no longer covers the reviewed spend");
   if (requireAllowance && allowance !== request.sourceAmount)
-    throw new Error("USDC allowance does not match the reviewed spend after approval");
+    throw new Error("Source-token allowance does not match the reviewed spend after approval");
   return { allowance, nativeBalance };
 }
 
@@ -408,12 +417,13 @@ export async function awaitSquidDepositSettlement({
 }
 
 /**
- * Approves USDC when needed, broadcasts the Squid route from the paying
+ * Approves an ERC-20 when needed, broadcasts the Squid route from the paying
  * wallet, then waits for the deposit to land in the recipient's account.
  */
 export async function executeSquidDeposit({
   destinationClient,
   approvalRequired,
+  approvalResetRequired,
   onBroadcast,
   onSwapAttempt,
   onStage,
@@ -437,9 +447,10 @@ export async function executeSquidDeposit({
 
   const fundsBefore = await readFilecoinPayFunds(destinationClient, request);
   const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
+  const nativeSource = isNativeToken(request.sourceToken);
   let totalNativeFee = 0n;
   {
-    const { allowance, nativeBalance } = await assertFreshSigningState({
+    let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
       getCurrentOwner,
       quote,
@@ -449,7 +460,9 @@ export async function executeSquidDeposit({
       walletClient,
     });
     if (allowance !== request.sourceAmount) {
-      if (!approvalRequired) throw new Error("USDC allowance changed after review. Review the payment again.");
+      if (!approvalRequired) throw new Error("Source-token allowance changed after review. Review the payment again.");
+      if (allowance !== 0n && !approvalResetRequired)
+        throw new Error("Source-token allowance changed after review. Review the payment again.");
       onStage?.("approving");
       // USDC accepts a direct overwrite, but USDT-style tokens revert unless a
       // non-zero allowance is zeroed first; one path keeps the plan the same for
@@ -471,7 +484,20 @@ export async function executeSquidDeposit({
         totalNativeFee += approval.fee;
         const approvalReceipt = await sourceClient.waitForTransactionReceipt({ hash: approvalHash });
         if (approvalReceipt.status !== "success") {
-          throw new SquidDepositError("The USDC approval transaction reverted", "reverted", approvalHash);
+          throw new SquidDepositError("The source-token approval transaction reverted", "reverted", approvalHash);
+        }
+        if (amount === 0n) {
+          ({ allowance, nativeBalance } = await assertFreshSigningState({
+            assertCurrentContext,
+            getCurrentOwner,
+            quote,
+            request,
+            requireAllowance: false,
+            sourceClient,
+            walletClient,
+          }));
+          if (allowance !== 0n)
+            throw new Error("Source-token allowance changed after reset. Review the payment again.");
         }
       }
     }
@@ -482,7 +508,7 @@ export async function executeSquidDeposit({
     getCurrentOwner,
     quote,
     request,
-    requireAllowance: true,
+    requireAllowance: !nativeSource,
     sourceClient,
     walletClient,
   });
