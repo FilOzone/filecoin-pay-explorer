@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
@@ -27,6 +27,18 @@ interface ExecuteTransactionParams {
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
   const { contractAddress, abi, explorerUrl, onSuccess, onError } = options;
 
+  // Latest callbacks without being effect deps: an inline callback changes
+  // identity every render, and the receipt effect must fire once per receipt.
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
+  // The hash whose receipt has been reported, so a dependency change during
+  // the cleanup delay (explorerUrl after a network switch) cannot report twice.
+  const handledTxRef = useRef<Hex | undefined>(undefined);
+
   const [transactions, setTransactions] = useState<
     Map<Hex, { toastId: string | number; metadata: TransactionMetadata }>
   >(new Map());
@@ -47,12 +59,13 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
   });
 
   useEffect(() => {
-    if (!currentTxHash) return;
+    if (!currentTxHash || handledTxRef.current === currentTxHash) return;
 
     const txData = transactions.get(currentTxHash);
     if (!txData) return;
 
     if (isSuccess && receipt) {
+      handledTxRef.current = currentTxHash;
       const content = getToastContent(txData.metadata, "success");
       const txHashShort = `${currentTxHash.slice(0, 6)}...${currentTxHash.slice(-4)}`;
 
@@ -72,7 +85,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
           : undefined,
       });
 
-      onSuccess?.(receipt);
+      onSuccessRef.current?.(receipt);
 
       setTimeout(() => {
         setTransactions((prev) => {
@@ -83,6 +96,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         setCurrentTxHash(undefined);
       }, 5000);
     } else if (isError && error) {
+      handledTxRef.current = currentTxHash;
       const content = getToastContent(txData.metadata, "error");
       const txHashShort = `${currentTxHash.slice(0, 6)}...${currentTxHash.slice(-4)}`;
 
@@ -109,7 +123,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
           : undefined,
       });
 
-      onError?.(error as Error);
+      onErrorRef.current?.(error as Error);
       setTimeout(() => {
         setTransactions((prev) => {
           const next = new Map(prev);
@@ -119,7 +133,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         setCurrentTxHash(undefined);
       }, 7000);
     }
-  }, [currentTxHash, isSuccess, isError, receipt, error, transactions, explorerUrl, onSuccess, onError]);
+  }, [currentTxHash, isSuccess, isError, receipt, error, transactions, explorerUrl]);
 
   const execute = async ({
     functionName,
