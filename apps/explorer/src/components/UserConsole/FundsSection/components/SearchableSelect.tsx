@@ -6,7 +6,9 @@ import { useId, useState } from "react";
 
 export type SearchableOption = {
   aliases?: readonly string[];
+  detail?: string;
   label: string;
+  secondaryLabel?: string;
   value: string;
 };
 
@@ -22,8 +24,9 @@ export function filterSearchableOptions(options: readonly SearchableOption[], qu
 
 export function resolveSearchableOption(options: readonly SearchableOption[], query: string) {
   const normalizedQuery = query.trim().toLowerCase();
-  const labelMatch = options.find((option) => option.label.toLowerCase() === normalizedQuery);
-  if (labelMatch) return labelMatch.value;
+  const labelMatches = options.filter((option) => option.label.toLowerCase() === normalizedQuery);
+  if (labelMatches.length === 1) return labelMatches[0].value;
+  if (labelMatches.length > 1) return "";
   const aliasMatches = options.filter((option) =>
     option.aliases?.some((alias) => alias.toLowerCase() === normalizedQuery),
   );
@@ -140,7 +143,15 @@ export function SearchableSelect({
                 role='option'
                 type='button'
               >
-                {option.label}
+                <span className='flex items-center justify-between gap-3'>
+                  <span className='flex min-w-0 items-baseline gap-2'>
+                    <span className='shrink-0'>{option.label}</span>
+                    {option.secondaryLabel && (
+                      <span className='truncate text-xs text-muted-foreground'>{option.secondaryLabel}</span>
+                    )}
+                  </span>
+                  {option.detail && <span className='shrink-0 text-xs text-muted-foreground'>{option.detail}</span>}
+                </span>
               </button>
             ))
           )}

@@ -17,15 +17,16 @@ vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
 }));
 
 const options = [
-  { aliases: ["USDC", "0x123"], label: "USDC (0x123…456)", value: "0x123" },
-  { aliases: ["USDC", "0x789"], label: "USDC (0x789…abc)", value: "0x789" },
-  { aliases: ["ETH", "0xeee"], label: "ETH (0xeee…eee)", value: "0xeee" },
+  { aliases: ["USDC", "0x123"], detail: "1.25", label: "USDC", secondaryLabel: "0x123…456", value: "0x123" },
+  { aliases: ["USDC", "0x789"], label: "USDC", secondaryLabel: "0x789…abc", value: "0x789" },
+  { aliases: ["ETH", "0xeee"], label: "ETH", secondaryLabel: "0xeee…eee", value: "0xeee" },
 ];
 
 function ControlledSearchableSelect() {
   const [network, setNetwork] = useState("base");
   const [value, setValue] = useState("");
-  const scopedOptions = network === "base" ? options : [{ aliases: ["OP"], label: "OP (0xaaa…bbb)", value: "0xaaa" }];
+  const scopedOptions =
+    network === "base" ? options : [{ aliases: ["OP"], label: "OP", secondaryLabel: "0xaaa…bbb", value: "0xaaa" }];
 
   return (
     <>
@@ -74,6 +75,8 @@ describe("SearchableSelect", () => {
     expect(input.props.onFocus).toBeUndefined();
     await act(async () => input.props.onClick());
     expect(input.props["aria-expanded"]).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("1.25");
+    expect(JSON.stringify(renderer.toJSON())).toContain("0x123…456");
   });
 
   it("keeps the menu open while its scrollbar is used and handles wheel scrolling", async () => {

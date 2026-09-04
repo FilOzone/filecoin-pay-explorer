@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { excludeDestinationUsdfc, nativeTokenFirst, sourceTokenCatalogMessage } from "./SquidQuoteReview";
+import { compactTokenBalance, excludeDestinationUsdfc, sourceTokenCatalogMessage } from "./SquidQuoteReview";
+
+describe("compact token balances", () => {
+  it("keeps useful precision without repeating the token symbol", () => {
+    expect(compactTokenBalance(32_156_494_224_197n, 18)).toBe("0.0000321565");
+    expect(compactTokenBalance(1_250_000_000_000n, 6)).toBe("1.25M");
+  });
+});
 
 describe("source token catalog messages", () => {
   it.each([
@@ -8,18 +15,6 @@ describe("source token catalog messages", () => {
     [true, false, "No supported tokens on this network."],
   ])("distinguishes configuration, request, and support states", (isConfigured, hasError, expected) => {
     expect(sourceTokenCatalogMessage(isConfigured, hasError)).toBe(expected);
-  });
-});
-
-describe("source token ordering", () => {
-  it("puts the native token first without changing the other catalog entries", () => {
-    const tokens = [
-      { token: "0x123", symbol: "USDC" },
-      { token: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", symbol: "ETH" },
-      { token: "0x456", symbol: "USDT" },
-    ];
-
-    expect(nativeTokenFirst(tokens).map(({ symbol }) => symbol)).toEqual(["ETH", "USDC", "USDT"]);
   });
 });
 
