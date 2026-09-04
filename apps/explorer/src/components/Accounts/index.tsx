@@ -4,17 +4,12 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isAddress } from "viem";
+import { ListEmptyInitial, ListEmptyNoResults, ListErrorState } from "@/components/shared";
 import { getChain } from "@/constants/chains";
 import type { AccountsFilter } from "@/hooks/useInfiniteAccounts";
 import useInfiniteAccounts from "@/hooks/useInfiniteAccounts";
 import useNetwork from "@/hooks/useNetwork";
-import {
-  AccountsEmptyInitial,
-  AccountsEmptyNoResults,
-  AccountsErrorState,
-  AccountsSearchBar,
-  AccountsTable,
-} from "./components";
+import { AccountsSearchBar, AccountsTable } from "./components";
 
 const Accounts = () => {
   const [searchInput, setSearchInput] = useState("");
@@ -108,12 +103,18 @@ const Accounts = () => {
 
           {isLoading && <LoadingStateCard message='Loading Accounts...' />}
 
-          {isError && <AccountsErrorState error={error} onRetry={refetch} />}
+          {isError && <ListErrorState entityLabel='accounts' error={error} onRetry={refetch} />}
 
-          {!isError && !isLoading && allAccounts.length === 0 && !hasActiveFilters && <AccountsEmptyInitial />}
+          {!isError && !isLoading && allAccounts.length === 0 && !hasActiveFilters && (
+            <ListEmptyInitial entityLabel='accounts' />
+          )}
 
           {!isError && !isLoading && allAccounts.length === 0 && hasActiveFilters && (
-            <AccountsEmptyNoResults onClear={handleClearFilters} />
+            <ListEmptyNoResults
+              description={"No account found with this address. Make sure the address is correct and try again."}
+              clearLabel='Clear Search'
+              onClear={handleClearFilters}
+            />
           )}
 
           {!isError && !isLoading && allAccounts.length > 0 && (

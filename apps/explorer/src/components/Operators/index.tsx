@@ -4,15 +4,10 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isAddress } from "viem";
+import { ListEmptyInitial, ListEmptyNoResults, ListErrorState } from "@/components/shared";
 import type { OperatorsFilter } from "@/hooks/useInfiniteOperators";
 import useInfiniteOperators from "@/hooks/useInfiniteOperators";
-import {
-  OperatorsEmptyInitial,
-  OperatorsEmptyNoResults,
-  OperatorsErrorState,
-  OperatorsSearchBar,
-  OperatorsTable,
-} from "./components";
+import { OperatorsSearchBar, OperatorsTable } from "./components";
 
 const Operators = () => {
   const [searchInput, setSearchInput] = useState("");
@@ -104,12 +99,18 @@ const Operators = () => {
 
           {isLoading && <LoadingStateCard message='Loading Operators...' />}
 
-          {isError && <OperatorsErrorState error={error} onRetry={refetch} />}
+          {isError && <ListErrorState entityLabel='operators' error={error} onRetry={refetch} />}
 
-          {!isError && !isLoading && allOperators.length === 0 && !hasActiveFilters && <OperatorsEmptyInitial />}
+          {!isError && !isLoading && allOperators.length === 0 && !hasActiveFilters && (
+            <ListEmptyInitial entityLabel='operators' />
+          )}
 
           {!isError && !isLoading && allOperators.length === 0 && hasActiveFilters && (
-            <OperatorsEmptyNoResults onClear={handleClearFilters} />
+            <ListEmptyNoResults
+              description={"No operator found with this address. Make sure the address is correct and try again."}
+              clearLabel='Clear Search'
+              onClear={handleClearFilters}
+            />
           )}
 
           {!isError && !isLoading && allOperators.length > 0 && (
