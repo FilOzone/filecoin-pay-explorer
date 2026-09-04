@@ -69,13 +69,18 @@ export async function fetchAuthorizationEvents(
       throw new Error(body.message || "Blockscout request failed");
     }
     const page = Array.isArray(body.result) ? (body.result as BlockscoutLogEntry[]) : [];
+    let added = 0;
     for (const log of page) {
       const id = `${log.blockNumber}:${log.logIndex}`;
       if (seen.has(id)) continue;
       seen.add(id);
       rawLogs.push(log);
+      added += 1;
     }
     if (page.length < PAGE_SIZE) break;
+    // A full page with nothing new means the range cannot advance: one block
+    // holds more logs than a page, and block ranges cannot split a block.
+    if (added === 0) throw new Error(`Blockscout returned more logs at block ${fromBlock} than one page holds`);
     fromBlock = page.reduce((max, log) => (BigInt(log.blockNumber) > max ? BigInt(log.blockNumber) : max), 0n);
   }
 
