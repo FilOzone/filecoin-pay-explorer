@@ -33,4 +33,27 @@ describe("AddFundsDialog", () => {
     act(() => swap.props.onClick());
     expect(onSelect.mock.calls).toEqual([["card"], ["deposit"], ["squid"]]);
   });
+
+  it("offers a separate explicit restart after a delayed card purchase", () => {
+    const onRestart = vi.fn();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <AddFundsDialog
+          cardLabel='Check for purchased USDC'
+          onOpenChange={() => undefined}
+          onSelect={() => undefined}
+          onStartNewCardPurchase={onRestart}
+          open
+          squidAvailable
+        />,
+      );
+    });
+
+    const restart = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Start another purchase"));
+    act(() => restart?.props.onClick());
+    expect(onRestart).toHaveBeenCalledOnce();
+  });
 });
