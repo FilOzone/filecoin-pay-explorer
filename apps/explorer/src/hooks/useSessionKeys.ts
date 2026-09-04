@@ -54,12 +54,9 @@ export function useSessionKeys(network: Network, account: Hex) {
     confirmedRef.current = new Set();
   }, [network, account]);
 
-  // Every write names the identity that submitted the transaction. A wallet
-  // or network switch while a login is pending must neither park the record
-  // under the wrong key nor lose it, so an off-screen identity is updated in
-  // storage only and the list on screen is left alone. Updater form so a
-  // callback captured by an in-flight transaction never writes a record list
-  // older than the one on screen.
+  // Writes name the identity that submitted: after a wallet switch mid-login,
+  // an off-screen identity is updated in storage only. Updater form so a late
+  // callback never writes a list older than the one on screen.
   const persist = useCallback(
     (identity: SessionKeysIdentity, update: (prev: SessionKeyRecord[]) => SessionKeyRecord[]) => {
       setRecords((current) => {

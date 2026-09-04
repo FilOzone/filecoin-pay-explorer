@@ -9,6 +9,7 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Loader2 } from "lucide-react";
 import type { Abi, Hex } from "viem";
+import { Notice } from "@/components/shared/Notice";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeyWithStatus } from "@/hooks/useSessionKeys";
 import { formatAddress } from "@/utils/formatter";
@@ -67,10 +68,10 @@ export const RevokeDialog: React.FC<RevokeDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-200'>
+        <Notice tone='warn'>
           <b>This cannot be undone.</b> Once revoked, the key is dead for good. If something still needs access, create
           a new session key and give it the new secret.
-        </div>
+        </Notice>
 
         {sessionKey && (
           <dl className='grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm'>

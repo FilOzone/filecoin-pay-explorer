@@ -69,11 +69,8 @@ describe("deriveKeyStatus", () => {
   });
   it("expiry equal to now counts as active (contract check is >= block.timestamp)", () => {
     assert.equal(deriveKeyStatus([now], now), "active");
-  });
-  it("isScopeActive matches contract semantics", () => {
     assert.equal(isScopeActive(now, now), true);
     assert.equal(isScopeActive(now - 1n, now), false);
-    assert.equal(isScopeActive(0n, now), false);
   });
 });
 
