@@ -62,7 +62,7 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
 };
 
 const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
-  const { keys, addKey, removeKey, refetchStatuses, registry } = useSessionKeys(network, account);
+  const { keys, addKey, removeKey, refetchStatuses, markConfirmed, registry } = useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
   const [createOpen, setCreateOpen] = useState(false);
   // The target remembers the identity it was chosen under: a revoke is sent
@@ -208,7 +208,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                       </span>
                     </td>
                     <td className='px-4 py-3 text-right'>
-                      {(key.status === "active" || key.status === "unknown") && (
+                      {key.status === "active" && (
                         <button
                           type='button'
                           onClick={() => setRevokeTarget(key)}
@@ -245,7 +245,7 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
         registry={registry}
         explorerUrl={explorerUrl}
         onCreated={addKey}
-        onConfirmed={refetchStatuses}
+        onConfirmed={markConfirmed}
         onFailed={removeKey}
       />
       <RevokeDialog
