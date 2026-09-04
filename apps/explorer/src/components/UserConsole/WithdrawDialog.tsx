@@ -39,8 +39,10 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
 
   // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
+    account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
+    chainId: constants.chain.id,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
   // Reset state when dialog closes

@@ -8,6 +8,7 @@ import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config, walletChains } from "@/services/wagmi/config";
 import { consoleWalletSelector } from "./console-wallet";
+import { FundingLaunchProvider } from "./FundingLaunchContext";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
 export const PRIVY_CONFIG = {
@@ -38,7 +39,9 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
           <SynapseProvider>
-            <TopUpActivityProvider>{children}</TopUpActivityProvider>
+            <TopUpActivityProvider>
+              <FundingLaunchProvider>{children}</FundingLaunchProvider>
+            </TopUpActivityProvider>
           </SynapseProvider>
         </WagmiProvider>
       </QueryClientProvider>

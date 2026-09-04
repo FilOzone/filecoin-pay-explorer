@@ -234,8 +234,10 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { execute, isExecuting } = useContractTransaction({
+    account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
+    chainId: constants.chain.id,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
 
