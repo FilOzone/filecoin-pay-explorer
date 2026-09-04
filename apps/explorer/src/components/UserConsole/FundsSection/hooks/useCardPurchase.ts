@@ -234,6 +234,13 @@ export function useCardPurchase({
       }
       await checkPendingPurchase(result.status === "submitted");
     } catch (error) {
+      if (claimed && pendingPurchase.current && !isFundingExit(error)) {
+        if (mounted.current) setStatus("delayed");
+        toast.error("Card purchase status is unknown", {
+          description: "Check for purchased USDC before starting another card purchase.",
+        });
+        return;
+      }
       pendingPurchase.current = null;
       if (claimed) {
         try {
@@ -297,7 +304,7 @@ export function useCardPurchase({
         : status === "waiting"
           ? "Waiting for Base USDC to arrive…"
           : status === "delayed"
-            ? "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears."
+            ? "Card purchase is unresolved. Check for Base USDC before starting another purchase."
             : null,
   };
 }

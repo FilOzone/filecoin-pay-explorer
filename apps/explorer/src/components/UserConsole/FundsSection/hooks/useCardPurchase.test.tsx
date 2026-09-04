@@ -262,25 +262,47 @@ describe("useCardPurchase", () => {
     expect(toast.error).toHaveBeenCalledWith("Wallet changed during card purchase", expect.anything());
   });
 
-  it("keeps cancellation recoverable and reports provider failures", async () => {
+  it("allows retry after a definite cancellation", async () => {
     chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockRejectedValueOnce(new Error("User exited flow"));
     await act(async () => {
       create(<Harness />);
     });
-
-    privy.fund.mockRejectedValueOnce(new Error("User exited flow"));
     await act(async () => latest.buyWithCard());
     expect(toast.error).not.toHaveBeenCalled();
+    expect(stored.size).toBe(0);
 
-    privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));
+    privy.fund.mockResolvedValueOnce({ status: "confirmed" });
+    chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(25n);
     await act(async () => latest.buyWithCard());
-    expect(toast.error).toHaveBeenCalledWith("Card purchase failed", { description: "Provider unavailable" });
+    expect(privy.fund).toHaveBeenCalledTimes(2);
+    expect(onPurchased).toHaveBeenCalledWith(15n);
+  });
 
-    vi.mocked(toast.error).mockClear();
-    privy.fund.mockRejectedValueOnce(undefined);
-    await act(async () => latest.buyWithCard());
-    expect(toast.error).toHaveBeenCalledWith("Card purchase failed", {
-      description: "Privy card funding is unavailable.",
+  it.each([
+    new Error("Confirmation request timed out"),
+    undefined,
+  ])("preserves and reconciles a purchase after an ambiguous error: %s", async (error) => {
+    chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockRejectedValueOnce(error);
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
     });
+    await act(async () => latest.buyWithCard());
+    expect(stored.size).toBe(1);
+    expect(latest.label).toBe("Check for purchased USDC");
+    expect(toast.error).toHaveBeenCalledWith("Card purchase status is unknown", expect.anything());
+
+    await act(async () => renderer.unmount());
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+    expect(latest.label).toBe("Check for purchased USDC");
+    chain.readContract.mockResolvedValue(25n);
+    await act(async () => latest.buyWithCard());
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(onPurchased).toHaveBeenCalledWith(15n);
+    expect(stored.size).toBe(0);
   });
 });

@@ -145,7 +145,7 @@ export function DirectSquidDepositDialog({
   const payingWallet =
     wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
     wallets.find((wallet) => wallet.address.toLowerCase() === recipient?.toLowerCase()) ??
-    wallets[0];
+    (initialSource ? undefined : wallets[0]);
   const sourceChain = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChainId);
   const sourceClient = usePublicClient({ chainId: sourceChainId });
   const destinationClient = usePublicClient({ chainId: mainnet.id });
@@ -287,11 +287,12 @@ export function DirectSquidDepositDialog({
       pending
     )
       return;
+    setPayingAddress(recipient ?? "");
     setSourceChainId(initialSourceChainId);
     setSourceTokenAddress(initialSourceToken);
     setAmount(formatUnits(initialSourceAmount, initialSourceDecimals));
     initializedSelectionScope.current = "";
-  }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending]);
+  }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending, recipient]);
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
@@ -588,6 +589,7 @@ export function DirectSquidDepositDialog({
       ? getDepositRequiredNativeBalance(quote, sourceChainId, sourceToken.token, networkFeeMaximum)
       : null;
   const canReview =
+    !!payingWallet &&
     !!quote &&
     parsedAmount !== null &&
     !balancesQuery.isError &&
