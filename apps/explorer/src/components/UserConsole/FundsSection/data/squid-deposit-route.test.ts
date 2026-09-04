@@ -162,6 +162,7 @@ describe("rate helpers", () => {
     expect(getSourceNativeCosts(quote, 1)).toEqual({ fees: 0n, gas: 0n });
     const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, 0n);
     expect(maximumNetworkFee).toBe(8_631_345_600_000n);
+    expect(getDepositNetworkFeeMaximum(quote, 8453, request.sourceAmount + 1n)).toBe(12_947_018_400_000n);
     expect(getDepositRequiredNativeBalance(quote, 8453, maximumNetworkFee)).toBe(
       5_971_701_479_908n + 8_631_345_600_000n,
     );
