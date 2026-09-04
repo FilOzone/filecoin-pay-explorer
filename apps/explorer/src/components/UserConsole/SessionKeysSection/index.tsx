@@ -70,7 +70,7 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
 };
 
 const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes, prefillNetwork }: ConnectedProps) => {
-  const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsFailed, markConfirmed, registry } =
+  const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsPending, markConfirmed, registry } =
     useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
   const registryLinks = [
@@ -121,7 +121,9 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
     : null;
   // A link for a key this list holds waits for that key's live reads: opening
   // before they resolve would offer a fresh expiry for a key that may be active.
+  // Reads that came back with a failed entry leave the key unknown too; that gets a retry.
   const prefillPending = existingForPrefill?.status === "unknown";
+  const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
 
   const handleSync = async () => {
@@ -182,7 +184,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
               )}
             </p>
           </div>
-          {prefillPending && statusReadsFailed ? (
+          {prefillUnreadable ? (
             <Button variant='primary' size='compact' onClick={() => refetchStatuses()}>
               Could not read this key's status. Retry
             </Button>
