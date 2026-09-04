@@ -16,7 +16,6 @@ type AddFundsDialogProps = {
   cardStatus?: string | null;
   isBusy?: boolean;
   onOpenChange: (open: boolean) => void;
-  onStartNewCardPurchase?: () => void;
   onSelect: (method: AddFundsMethod) => void;
   open: boolean;
   squidAvailable: boolean;
@@ -34,7 +33,6 @@ export function AddFundsDialog({
   cardStatus,
   isBusy = false,
   onOpenChange,
-  onStartNewCardPurchase,
   onSelect,
   open,
   squidAvailable,
@@ -71,15 +69,6 @@ export function AddFundsDialog({
                 <span className='mt-1 block text-xs text-muted-foreground' role='status'>
                   {cardStatus}
                 </span>
-              ) : null}
-              {onStartNewCardPurchase ? (
-                <button
-                  className='relative z-10 mt-2 text-xs text-primary underline underline-offset-2'
-                  onClick={onStartNewCardPurchase}
-                  type='button'
-                >
-                  Start another purchase
-                </button>
               ) : null}
             </span>
           </div>
