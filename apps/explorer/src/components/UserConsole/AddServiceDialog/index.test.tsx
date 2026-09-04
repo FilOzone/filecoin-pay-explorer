@@ -283,6 +283,9 @@ describe("AddServiceDialog", () => {
       mocks.isCorrectChain = false;
     }
     act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
+    mocks.isCorrectChain = true;
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
 
     await act(async () => {
       resolveRefresh("funded");

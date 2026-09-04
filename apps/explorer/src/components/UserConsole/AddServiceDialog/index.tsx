@@ -92,8 +92,21 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const gasBalance = useFilecoinGasBalance(open);
   const funding = useFundingLaunch();
   const formOwner = useRef(gasBalance.owner);
-  const currentGasContext = useRef({ owner: gasBalance.owner, isCorrectChain: gasBalance.isCorrectChain });
-  currentGasContext.current = { owner: gasBalance.owner, isCorrectChain: gasBalance.isCorrectChain };
+  const currentGasContext = useRef({
+    owner: gasBalance.owner,
+    isCorrectChain: gasBalance.isCorrectChain,
+    generation: 0,
+  });
+  if (
+    currentGasContext.current.owner !== gasBalance.owner ||
+    currentGasContext.current.isCorrectChain !== gasBalance.isCorrectChain
+  ) {
+    currentGasContext.current = {
+      owner: gasBalance.owner,
+      isCorrectChain: gasBalance.isCorrectChain,
+      generation: currentGasContext.current.generation + 1,
+    };
+  }
   const previousSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
@@ -198,12 +211,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const handleSubmit = async () => {
     if (gasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
     const submittingOwner = gasBalance.owner;
+    const contextGeneration = currentGasContext.current.generation;
     gasCheckInFlight.current = true;
     setIsCheckingGas(true);
     try {
       const refreshedStatus = await gasBalance.refresh();
       if (
         refreshedStatus !== "funded" ||
+        currentGasContext.current.generation !== contextGeneration ||
         currentGasContext.current.owner !== submittingOwner ||
         !currentGasContext.current.isCorrectChain
       )
