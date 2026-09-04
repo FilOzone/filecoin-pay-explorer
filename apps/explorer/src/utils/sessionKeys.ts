@@ -121,14 +121,25 @@ export interface ExistingKeyPrefill {
  * Prefill for re-authorizing a signer the list already knows. An active key
  * keeps its expiry so new scopes line up with the old ones. An expired,
  * revoked, or unresolved key inherits nothing: the owner picks a fresh expiry
- * and the same signer is granted again, so no new key is made.
+ * and the same signer is granted again, so no new key is made. Only scopes
+ * with a live or lapsed grant come along: one revoked to zero on chain was
+ * taken away on purpose and must not be re-granted by a renewal.
  */
 export function existingKeyPrefill(
-  key: { name: string; scopes: ScopeId[]; status: SessionKeyStatus | "unknown"; maxExpiry: bigint } | undefined,
+  key:
+    | {
+        name: string;
+        scopes: ScopeId[];
+        scopeExpiries: Partial<Record<ScopeId, bigint>>;
+        status: SessionKeyStatus | "unknown";
+        maxExpiry: bigint;
+      }
+    | undefined,
 ): ExistingKeyPrefill | null {
   if (!key) return null;
   const keepExpiry = key.status === "active" && key.maxExpiry > 0n;
-  return { name: key.name, scopes: key.scopes, expirySec: keepExpiry ? key.maxExpiry : null };
+  const scopes = key.scopes.filter((id) => (key.scopeExpiries[id] ?? 0n) > 0n);
+  return { name: key.name, scopes, expirySec: keepExpiry ? key.maxExpiry : null };
 }
 
 export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [

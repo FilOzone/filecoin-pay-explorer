@@ -310,7 +310,7 @@ describe("sanitizeRecords chain-sync fields", () => {
 
 describe("existingKeyPrefill", () => {
   const scopes: ScopeId[] = ["createDataSet", "addPieces"];
-  const base = { name: "ci", scopes, maxExpiry: 1_000n };
+  const base = { name: "ci", scopes, scopeExpiries: { createDataSet: 1_000n, addPieces: 900n }, maxExpiry: 1_000n };
 
   it("re-authorizes an expired key: same name and scopes, no inherited expiry, so a new one is picked", () => {
     assert.deepEqual(existingKeyPrefill({ ...base, status: "expired" }), { name: "ci", scopes, expirySec: null });
@@ -318,6 +318,15 @@ describe("existingKeyPrefill", () => {
 
   it("keeps the expiry of an active key so added scopes line up with it", () => {
     assert.deepEqual(existingKeyPrefill({ ...base, status: "active" }), { name: "ci", scopes, expirySec: 1_000n });
+  });
+
+  it("leaves out a scope that was revoked to zero, so a renewal cannot re-grant it", () => {
+    const partlyRevoked = {
+      ...base,
+      status: "expired" as const,
+      scopeExpiries: { createDataSet: 1_000n, addPieces: 0n },
+    };
+    assert.deepEqual(existingKeyPrefill(partlyRevoked), { name: "ci", scopes: ["createDataSet"], expirySec: null });
   });
 
   it("inherits nothing from a revoked or unresolved key", () => {
