@@ -1,5 +1,5 @@
 import { SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { decodeFunctionData, erc20Abi, getAddress, type Hash } from "viem";
+import { type Address, decodeFunctionData, erc20Abi, getAddress, type Hash, type Hex } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
   awaitSquidDepositSettlement,
@@ -9,6 +9,7 @@ import {
   SquidDepositError,
   type SquidDepositSourceClient,
   type SquidDepositStage,
+  type SquidDepositWalletClient,
 } from "./squid-deposit-execution";
 import type { ExecutableSquidDepositQuote } from "./squid-deposit-route";
 
@@ -34,8 +35,8 @@ const quote: ExecutableSquidDepositQuote = {
   quoteId: "quote-1",
   sourceChainId: 8453,
   sourceAmount: 100_000_000n,
-  destinationAmount: 93n * 10n ** 18n,
-  minimumDestinationAmount: 92n * 10n ** 18n,
+  destinationAmount: 93n,
+  minimumDestinationAmount: 92n,
   fees: [],
   gasCosts: [],
   transaction: { target: SQUID_ROUTER_ADDRESS, data: "0xabcdef", value: 10n, gasLimit: 599_399n },
@@ -57,12 +58,23 @@ function fakeSource({
   nativeBalance = 10n ** 18n,
   receiptStatus = "success" as "success" | "reverted",
   tokenBalance = 200_000_000n,
+  totalFee,
+}: {
+  allowance?: bigint;
+  approvalUpdatesAllowance?: boolean;
+  nativeBalance?: bigint;
+  receiptStatus?: "success" | "reverted";
+  tokenBalance?: bigint;
+  totalFee?: bigint;
 } = {}) {
   let allowanceReads = 0;
   return {
     getBalance: vi.fn(async () => nativeBalance),
     getChainId: vi.fn(async () => 8453),
-    getGasPrice: vi.fn(async () => 1_000_000_000n),
+    estimateTotalFee: vi.fn(
+      async ({ gas, gasPrice, maxFeePerGas }: { gas: bigint; gasPrice?: bigint; maxFeePerGas?: bigint }) =>
+        totalFee ?? gas * (gasPrice ?? maxFeePerGas ?? 0n),
+    ),
     readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return tokenBalance;
       allowanceReads += 1;
@@ -74,18 +86,29 @@ function fakeSource({
 
 function fakeWallet() {
   const hashes = [APPROVAL_HASH, ROUTE_HASH];
+  let nonce = 0;
   return {
     account: { address: OWNER },
     getChainId: vi.fn(async () => 8453),
+    prepareTransactionRequest: vi.fn(async (transaction: { to: Address; data: Hex; value: bigint }) => ({
+      ...transaction,
+      gas: transaction.to === USDC ? 60_000n : 599_399n,
+      gasPrice: 1_000_000_000n,
+      nonce: nonce++,
+    })),
     sendTransaction: vi.fn(async () => hashes.shift() as Hash),
+  } as unknown as SquidDepositWalletClient & {
+    prepareTransactionRequest: ReturnType<typeof vi.fn>;
+    sendTransaction: ReturnType<typeof vi.fn>;
   };
 }
 
 const noSleep = async () => undefined;
 const signingChecks = {
+  approvalRequired: true,
   assertCurrentContext: vi.fn(),
   getCurrentOwner: vi.fn(async () => OWNER),
-  maxNativeGas: 1_000_000_000_000_000n,
+  maxNativeFee: 1_000_000_000_000_000n,
 };
 
 describe("fetchSquidDepositStatus", () => {
@@ -132,6 +155,7 @@ describe("awaitSquidDepositSettlement", () => {
     const result = await awaitSquidDepositSettlement({
       destinationClient: fakeDestination([100n, 100n, 192n]),
       fundsBefore: 100n,
+      minimumDestinationAmount: 92n,
       onStage: (stage) => stages.push(stage),
       quoteId: "quote-1",
       sleep: noSleep,
@@ -151,6 +175,7 @@ describe("awaitSquidDepositSettlement", () => {
     const result = await awaitSquidDepositSettlement({
       destinationClient: fakeDestination([150n]),
       fundsBefore: 100n,
+      minimumDestinationAmount: 50n,
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 314,
@@ -170,6 +195,7 @@ describe("awaitSquidDepositSettlement", () => {
     const attempt = awaitSquidDepositSettlement({
       destinationClient: fakeDestination([100n]),
       fundsBefore: 100n,
+      minimumDestinationAmount: 1n,
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
@@ -187,6 +213,7 @@ describe("awaitSquidDepositSettlement", () => {
     const result = await awaitSquidDepositSettlement({
       destinationClient: fakeDestination([192n]),
       fundsBefore: 100n,
+      minimumDestinationAmount: 92n,
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
@@ -203,6 +230,7 @@ describe("awaitSquidDepositSettlement", () => {
     const attempt = awaitSquidDepositSettlement({
       destinationClient: fakeDestination([100n]),
       fundsBefore: 100n,
+      minimumDestinationAmount: 1n,
       maxStatusFailures: 3,
       quoteId: "quote-1",
       sleep: noSleep,
@@ -228,6 +256,7 @@ describe("awaitSquidDepositSettlement", () => {
       awaitSquidDepositSettlement({
         destinationClient: fakeDestination([100n]),
         fundsBefore: 100n,
+        minimumDestinationAmount: 1n,
         maxStatusAttempts: 2,
         quoteId: "quote-1",
         sleep: noSleep,
@@ -238,6 +267,23 @@ describe("awaitSquidDepositSettlement", () => {
       }),
     ).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not treat an unrelated credit below the reviewed minimum as settlement", async () => {
+    await expect(
+      awaitSquidDepositSettlement({
+        destinationClient: fakeDestination([101n]),
+        fundsBefore: 100n,
+        maxVerifyAttempts: 2,
+        minimumDestinationAmount: 92n,
+        quoteId: "quote-1",
+        sleep: noSleep,
+        sourceChainId: 314,
+        squid: { integratorId: "id" },
+        target,
+        transactionHash: ROUTE_HASH,
+      }),
+    ).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
   });
 });
 
@@ -264,6 +310,7 @@ describe("executeSquidDeposit", () => {
 
     expect(result).toEqual({ transactionHash: ROUTE_HASH, fundsBefore: 100n, fundsAfter: 195n, depositedAmount: 95n });
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
+    expect(source.estimateTotalFee).toHaveBeenCalledTimes(2);
     const [approval, route] = wallet.sendTransaction.mock.calls as unknown as [
       [{ to: string; data: `0x${string}` }],
       [{ to: string; data: string; value: bigint; gas: bigint }],
@@ -274,7 +321,7 @@ describe("executeSquidDeposit", () => {
       args: [getAddress(SQUID_ROUTER_ADDRESS), 100_000_000n],
     });
     expect(approval[0]).toMatchObject({ gas: 60_000n, gasPrice: 1_000_000_000n });
-    expect(route[0]).toEqual({
+    expect(route[0]).toMatchObject({
       to: SQUID_ROUTER_ADDRESS,
       data: "0xabcdef",
       value: 10n,
@@ -360,7 +407,7 @@ describe("executeSquidDeposit", () => {
       executeSquidDeposit({
         ...signingChecks,
         destinationClient: fakeDestination([100n]),
-        maxNativeGas: 1n,
+        maxNativeFee: 1n,
         quote,
         request,
         sourceClient: fakeSource(),
@@ -368,6 +415,24 @@ describe("executeSquidDeposit", () => {
         walletClient: wallet,
       }),
     ).rejects.toThrow("Native gas exceeded");
+    expect(wallet.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("uses the buffered OP Stack total fee, including L1 fees, for the reviewed cap", async () => {
+    const wallet = fakeWallet();
+    await expect(
+      executeSquidDeposit({
+        ...signingChecks,
+        approvalRequired: false,
+        destinationClient: fakeDestination([100n]),
+        maxNativeFee: 700_000_000_000_000n,
+        quote,
+        request,
+        sourceClient: fakeSource({ allowance: request.sourceAmount, totalFee: 900_000_000_000_000n }),
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Native gas exceeded the reviewed maximum");
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
   });
 
@@ -405,6 +470,83 @@ describe("executeSquidDeposit", () => {
       }),
     ).rejects.toMatchObject({ code: 4001 });
     expect(onBroadcast).not.toHaveBeenCalled();
+  });
+
+  it("marks the route before send so a lost provider response remains recoverable", async () => {
+    const wallet = fakeWallet();
+    wallet.sendTransaction.mockRejectedValueOnce(new Error("provider response lost"));
+    const onSwapAttempt = vi.fn();
+    const onBroadcast = vi.fn();
+    await expect(
+      executeSquidDeposit({
+        ...signingChecks,
+        approvalRequired: false,
+        destinationClient: fakeDestination([100n]),
+        onBroadcast,
+        onSwapAttempt,
+        quote,
+        request,
+        sourceClient: fakeSource({ allowance: request.sourceAmount }),
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("provider response lost");
+    expect(onSwapAttempt).toHaveBeenCalledWith(100n);
+    expect(onBroadcast).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "destination account changed",
+    "dialog unmounted",
+  ])("rechecks the live context after transaction preparation when the %s", async (change) => {
+    const wallet = fakeWallet();
+    let mounted = true;
+    let liveRecipient: Address = RECIPIENT;
+    wallet.prepareTransactionRequest.mockImplementationOnce(
+      async (transaction: { to: Address; data: Hex; value: bigint }) => {
+        if (change === "dialog unmounted") mounted = false;
+        else liveRecipient = OWNER;
+        return { ...transaction, gas: 599_399n, gasPrice: 1_000_000_000n, nonce: 0 };
+      },
+    );
+    const assertCurrentContext = () => {
+      if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
+    };
+    await expect(
+      executeSquidDeposit({
+        ...signingChecks,
+        approvalRequired: false,
+        assertCurrentContext,
+        destinationClient: fakeDestination([100n]),
+        quote,
+        request,
+        sourceClient: fakeSource({ allowance: request.sourceAmount }),
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Funding details changed after review");
+    expect(wallet.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("rechecks expiry after approval before sending the route", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValueOnce(1_000_000).mockReturnValue(2_000_000);
+    const wallet = fakeWallet();
+    try {
+      await expect(
+        executeSquidDeposit({
+          ...signingChecks,
+          destinationClient: fakeDestination([100n]),
+          quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 1_500 } },
+          request,
+          sourceClient: fakeSource(),
+          squid: { integratorId: "id" },
+          walletClient: wallet,
+        }),
+      ).rejects.toThrow("route expired");
+      expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("rechecks token balance and approval allowance before broadcasting the swap", async () => {
