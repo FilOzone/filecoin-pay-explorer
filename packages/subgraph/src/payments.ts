@@ -19,6 +19,7 @@ import {
   computeSettledLockup,
   createOneTimePayment,
   createOrLoadAccountByAddress,
+  createOrLoadAccountOperator,
   createOrLoadOperator,
   createOrLoadOperatorToken,
   createOrLoadUserToken,
@@ -28,6 +29,7 @@ import {
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   isNativeToken,
+  latestRateChangeEpoch,
   remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
@@ -84,6 +86,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
   const operator = operatorWithIsNew.operator;
   const isNewOperator = operatorWithIsNew.isNew;
+  const accountOperator = createOrLoadAccountOperator(clientAddress, operatorAddress).accountOperator;
 
   const operatorTokenWithIsNew = createOrLoadOperatorToken(operator.id, tokenAddress);
   const operatorToken = operatorTokenWithIsNew.operatorToken;
@@ -91,6 +94,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
 
   const id = clientAddress.concat(operator.id).concat(tokenAddress);
   let operatorApproval = OperatorApproval.load(id);
+  const wasApproved = operatorApproval ? operatorApproval.isApproved : false;
 
   if (!operatorApproval) {
     isNewApproval = true;
@@ -107,6 +111,16 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
       clientAccount.totalApprovals = clientAccount.totalApprovals.plus(ONE_BIG_INT);
       clientAccount.save();
     }
+
+    accountOperator.totalApprovals = accountOperator.totalApprovals.plus(ONE_BIG_INT);
+  }
+
+  if (isApproved && !wasApproved) {
+    accountOperator.totalActiveApprovals = accountOperator.totalActiveApprovals.plus(ONE_BIG_INT);
+  } else if (!isApproved && wasApproved) {
+    accountOperator.totalActiveApprovals = accountOperator.totalActiveApprovals.gt(ZERO_BIG_INT)
+      ? accountOperator.totalActiveApprovals.minus(ONE_BIG_INT)
+      : ZERO_BIG_INT;
   }
 
   operator.totalTokens = isNewOperatorToken ? operator.totalTokens.plus(ONE_BIG_INT) : operator.totalTokens;
@@ -122,6 +136,7 @@ export function handleOperatorApprovalUpdated(event: OperatorApprovalUpdatedEven
   operator.save();
   operatorApproval.save();
   operatorToken.save();
+  accountOperator.save();
 
   // update Metrics
   MetricsCollectionOrchestrator.collectOperatorApprovalMetrics(
@@ -159,10 +174,12 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
   const operator = operatorWithIsNew.operator;
   const isNewOperator = operatorWithIsNew.isNew;
+  const accountOperator = createOrLoadAccountOperator(payerAddress, operatorAddress).accountOperator;
 
   payerAccount.totalRails = payerAccount.totalRails.plus(ONE_BIG_INT);
   payeeAccount.totalRails = payeeAccount.totalRails.plus(ONE_BIG_INT);
   operator.totalRails = operator.totalRails.plus(ONE_BIG_INT);
+  accountOperator.totalRails = accountOperator.totalRails.plus(ONE_BIG_INT);
 
   const rail = createRail(
     railId,
@@ -180,6 +197,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   payerAccount.save();
   payeeAccount.save();
   operator.save();
+  accountOperator.save();
 
   // Collect Metrics
   const newAccounts = (isNewPayerAccount ? ONE_BIG_INT : ZERO_BIG_INT)
@@ -209,6 +227,14 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
   const previousRailState = rail.state;
   rail.state = "TERMINATED";
   rail.endEpoch = event.params.endEpoch;
+
+  if (previousRailState == "ACTIVE") {
+    const accountOperator = createOrLoadAccountOperator(rail.payer, rail.operator).accountOperator;
+    accountOperator.totalActiveRails = accountOperator.totalActiveRails.gt(ZERO_BIG_INT)
+      ? accountOperator.totalActiveRails.minus(ONE_BIG_INT)
+      : ZERO_BIG_INT;
+    accountOperator.save();
+  }
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   if (payerToken) {
@@ -309,6 +335,10 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   if (oldRate.equals(ZERO_BIG_INT) && newRate.gt(ZERO_BIG_INT) && rail.state == "ZERORATE") {
     rail.state = "ACTIVE";
 
+    const accountOperator = createOrLoadAccountOperator(rail.payer, rail.operator).accountOperator;
+    accountOperator.totalActiveRails = accountOperator.totalActiveRails.plus(ONE_BIG_INT);
+    accountOperator.save();
+
     // Collect rail State change metrics
     MetricsCollectionOrchestrator.collectRailStateChangeMetrics(
       "ZERORATE",
@@ -319,16 +349,13 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   }
 
   const rateChangeQueue = rail.rateChangeQueue.load();
+  const latestRateChange = latestRateChangeEpoch(rateChangeQueue, rail.settledUpto);
   if (oldRate.notEqual(newRate) && rail.settledUpto.notEqual(event.block.number)) {
     if (oldRate.equals(ZERO_BIG_INT) && rateChangeQueue.length === 0) {
       rail.settledUpto = event.block.number;
     } else {
-      if (
-        rateChangeQueue.length === 0 ||
-        event.block.number.notEqual(rateChangeQueue[rateChangeQueue.length - 1].untilEpoch)
-      ) {
-        const startEpoch =
-          rateChangeQueue.length === 0 ? rail.settledUpto : rateChangeQueue[rateChangeQueue.length - 1].untilEpoch;
+      if (rateChangeQueue.length === 0 || event.block.number.notEqual(latestRateChange)) {
+        const startEpoch = latestRateChange;
         const isNew = createRateChangeQueue(rail, startEpoch, event.block.number, oldRate).isNew;
         rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
       }
@@ -486,10 +513,10 @@ export function handleRailSettled(event: RailSettledEvent): void {
     }
 
     // Calculate lockup reduction from current rate (for epochs not covered by rate change queue)
-    // Start from the later of: last queue entry's untilEpoch OR previousSettledUpto
+    // Start from the later of: latest queue entry's untilEpoch OR previousSettledUpto.
+    // Derived relationship order is unspecified, so find the latest epoch explicitly.
     // This handles cases where the rail was already settled beyond the last rate change
-    const lastQueueEpoch = rateChangeCount > 0 ? rateChanges[rateChangeCount - 1].untilEpoch : previousSettledUpto;
-    const currentRateStartEpoch = lastQueueEpoch.gt(previousSettledUpto) ? lastQueueEpoch : previousSettledUpto;
+    const currentRateStartEpoch = latestRateChangeEpoch(rateChanges, previousSettledUpto);
     if (currentRateStartEpoch.lt(event.params.settledUpTo)) {
       const currentRateDuration = event.params.settledUpTo.minus(currentRateStartEpoch);
       lockupReduction = lockupReduction.plus(rail.paymentRate.times(currentRateDuration));

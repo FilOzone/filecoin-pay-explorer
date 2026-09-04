@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
-import { useQuery } from "@tanstack/react-query";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
@@ -28,6 +27,7 @@ import {
   ONE_YEAR_EPOCHS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
+import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
@@ -227,10 +227,10 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   });
 
   const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
-  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
-    enabled: open && isUsdfcDeposit && Boolean(userAddress) && synapse?.chain.id === constants.chain.id,
-    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
-    queryKey: ["payments", "account-summary", constants.chain.id, userAddress],
+  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useAccountSummary({
+    address: userAddress,
+    chainId: constants.chain.id,
+    enabled: open && isUsdfcDeposit,
   });
 
   // Amounts are denominated in the token that was on screen when they were

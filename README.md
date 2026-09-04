@@ -163,7 +163,7 @@ cd ../..
 
 - **[`apps/explorer/`](apps/explorer/)** — The Explorer app: a statically-built Next.js frontend for browsing Filecoin Pay rails, accounts, and deal activity. This is the primary focus of the repo.
 - **[`apps/metrics/`](apps/metrics/)** — A Vite-based metrics dashboard. Not a current focus.
-- **[`packages/subgraph/`](packages/subgraph/)** — A [The Graph](https://thegraph.com/) subgraph hosted on [Goldsky](https://goldsky.com/) that indexes Filecoin Pay contract events on mainnet and Filecoin calibration testnet.
+- **[`packages/subgraph/`](packages/subgraph/)** — A [The Graph](https://thegraph.com/) subgraph hosted on [Goldsky](https://goldsky.com/) that indexes Filecoin Pay contract events on mainnet and Filecoin calibration testnet. See the [subgraph architecture guide](docs/subgraph-architecture.md) for its data model and Explorer integration.
 - **[`packages/ui/`](packages/ui/), [`packages/types/`](packages/types/), [`packages/configs/`](packages/configs/)** — Shared libraries consumed by the apps.
 
 ### Hosting

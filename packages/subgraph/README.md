@@ -2,6 +2,8 @@
 
 This guide details the steps required to deploy the provided subgraph to supported subgraph hosting platforms (e.g., Goldsky, Protofire etc.).
 
+For the indexed data model, event mappings, rail accounting, Explorer queries, and freshness boundary, read the [subgraph architecture guide](../../docs/subgraph-architecture.md).
+
 For a full end-to-end release walkthrough, use the [release issue template](../../.github/ISSUE_TEMPLATE/release.md).
 
 ## CI/CD

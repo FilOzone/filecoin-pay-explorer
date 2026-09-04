@@ -1,4 +1,4 @@
-import type { Hex, PublicClient, WalletClient } from "viem";
+import { type Hex, hashDomain, type PublicClient, type WalletClient } from "viem";
 
 export interface PermitParams {
   tokenAddress: Hex;
@@ -15,6 +15,29 @@ export interface PermitSignature {
   r: Hex;
   s: Hex;
   deadline: bigint;
+}
+
+export function getPermitDomain(tokenAddress: Hex, tokenName: string, chainId: number) {
+  return {
+    name: tokenName,
+    version: "1",
+    chainId: BigInt(chainId),
+    verifyingContract: tokenAddress,
+  } as const;
+}
+
+export function getPermitDomainSeparator(tokenAddress: Hex, tokenName: string, chainId: number) {
+  return hashDomain({
+    domain: getPermitDomain(tokenAddress, tokenName, chainId),
+    types: {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+    },
+  });
 }
 
 export async function getPermitNonce(
@@ -78,12 +101,7 @@ export async function getPermitSignature(
     getPermitNonce(tokenAddress, ownerAddress, publicClient),
   ]);
 
-  const domain = {
-    name: tokenNameFetched,
-    version: "1",
-    chainId: chainId,
-    verifyingContract: tokenAddress,
-  } as const;
+  const domain = getPermitDomain(tokenAddress, tokenNameFetched, chainId);
 
   const types = {
     Permit: [
