@@ -108,6 +108,40 @@ export function hasUniformExpiry(scopes: ScopeId[], scopeExpiries: Partial<Recor
   return values.size <= 1;
 }
 
+/** What the consent dialog needs to know about a key this browser already lists. */
+export interface ExistingKeyPrefill {
+  name: string;
+  /** Scopes the key holds or held; a renewal pre-checks them so none is left expired by accident. */
+  scopes: ScopeId[];
+  /** Kept expiry for an active key; null means the owner picks a new one. */
+  expirySec: bigint | null;
+}
+
+/**
+ * Prefill for re-authorizing a signer the list already knows. An active key
+ * keeps its expiry so new scopes line up with the old ones. An expired,
+ * revoked, or unresolved key inherits nothing: the owner picks a fresh expiry
+ * and the same signer is granted again, so no new key is made. Only scopes
+ * with a live or lapsed grant come along: one revoked to zero on chain was
+ * taken away on purpose and must not be re-granted by a renewal.
+ */
+export function existingKeyPrefill(
+  key:
+    | {
+        name: string;
+        scopes: ScopeId[];
+        scopeExpiries: Partial<Record<ScopeId, bigint>>;
+        status: SessionKeyStatus | "unknown";
+        maxExpiry: bigint;
+      }
+    | undefined,
+): ExistingKeyPrefill | null {
+  if (!key) return null;
+  const keepExpiry = key.status === "active" && key.maxExpiry > 0n;
+  const scopes = key.scopes.filter((id) => (key.scopeExpiries[id] ?? 0n) > 0n);
+  return { name: key.name, scopes, expirySec: keepExpiry ? key.maxExpiry : null };
+}
+
 export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
   { label: "7 days", seconds: 7 * 86400 },
   { label: "30 days", seconds: 30 * 86400 },

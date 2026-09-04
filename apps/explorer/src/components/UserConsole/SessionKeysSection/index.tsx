@@ -15,7 +15,7 @@ import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } f
 import type { Network } from "@/types";
 import type { AuthorizeParamError } from "@/utils/authorizeParam";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
-import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId } from "@/utils/sessionKeys";
+import { existingKeyPrefill, hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -127,15 +127,7 @@ const ConnectedSessionKeys = ({
   const existingForPrefill = cliPrefill
     ? keys.find((k) => k.sessionKeyPublic.toLowerCase() === cliPrefill.toLowerCase())
     : undefined;
-  const existingKeyForPrefill = existingForPrefill
-    ? {
-        name: existingForPrefill.name,
-        expirySec:
-          existingForPrefill.status === "active" && existingForPrefill.maxExpiry > 0n
-            ? existingForPrefill.maxExpiry
-            : null,
-      }
-    : null;
+  const existingKeyForPrefill = existingKeyPrefill(existingForPrefill);
   // A link for a key this list holds waits for that key's live reads: opening
   // before they resolve would offer a fresh expiry for a key that may be active.
   // Reads that came back with a failed entry leave the key unknown too; that gets a retry.
