@@ -119,7 +119,6 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     [prefillAddress, prefillScopes],
   );
   const isExistingKey = prefillAddress != null && existingKey != null;
-  const nameLocked = isExistingKey;
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
 
@@ -327,16 +326,18 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-name'>
                   Name{" "}
-                  {!nameLocked && <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>}
+                  {!isExistingKey && (
+                    <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
+                  )}
                 </Label>
                 <Input
                   id='sk-name'
                   placeholder='e.g. ci-uploader'
                   value={name}
                   onChange={setName}
-                  disabled={nameLocked}
+                  disabled={isExistingKey}
                 />
-                {nameLocked ? (
+                {isExistingKey ? (
                   <p className='text-xs text-zinc-500'>Existing key name.</p>
                 ) : (
                   <p className='text-xs text-zinc-500'>

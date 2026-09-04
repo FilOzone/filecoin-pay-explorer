@@ -9,6 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
+import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
@@ -169,7 +170,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
   return (
     <div className='flex flex-col gap-4'>
       {cliPrefill && (
-        <div className='rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start justify-between gap-4 flex-wrap'>
+        <Notice tone='info' className='p-4 flex items-start justify-between gap-4 flex-wrap'>
           <div>
             <p className='font-semibold'>
               A link is requesting authorization for <span className='font-mono break-all'>{cliPrefill}</span>
@@ -193,16 +194,16 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
               {prefillPending ? "Checking key status…" : "Review & authorize"}
             </Button>
           )}
-        </div>
+        </Notice>
       )}
       {isSelfAuthRequest && (
-        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+        <Notice tone='warn' className='p-4'>
           <p className='font-semibold'>Authorization request ignored: it names your connected wallet address.</p>
           <p className='text-xs mt-1'>A session key must be a separate keypair, retry with a new address.</p>
-        </div>
+        </Notice>
       )}
       {isNetworkMismatch && !isSelfAuthRequest && (
-        <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'>
+        <Notice tone='warn' className='p-4'>
           <p className='font-semibold'>
             This authorization request is for <span className='capitalize'>{prefillNetwork}</span>, but your wallet is
             connected to <span className='capitalize'>{network}</span>.
@@ -212,7 +213,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
             <span className='capitalize'>{network}</span> instead. Switch your wallet to{" "}
             <span className='capitalize'>{prefillNetwork}</span> to review the request.
           </p>
-        </div>
+        </Notice>
       )}
 
       <div className='flex items-start justify-between gap-4 flex-wrap'>
