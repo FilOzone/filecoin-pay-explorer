@@ -63,7 +63,7 @@ describe("fetchAuthorizationEvents", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("walks past Blockscout's 1000-row cap by continuing from the last block, without double counting", async () => {
-    // Page 1 fills the cap and ends at block 2000; page 2 starts at 2000 (repeating that row) and is short.
+    // Page 1 fills the cap and ends at block 1999; page 2 starts at 1999 (repeating that row) and is short.
     const page1 = Array.from({ length: 1000 }, (_, i) => row(OWNER, 1000 + i, 0));
     const page2 = [row(OWNER, 2000 - 1, 0), row(OWNER, 3000, 0), row(OWNER, 3000, 1)];
     const calls: string[] = [];
@@ -78,5 +78,16 @@ describe("fetchAuthorizationEvents", () => {
     expect(calls).toEqual(["3185523", "1999"]);
     expect(events).toHaveLength(1002);
     expect(events.at(-1)).toMatchObject({ blockNumber: 3000n, logIndex: 1 });
+  });
+
+  it("stops instead of looping when a full page cannot be moved past by block", async () => {
+    // Every row in one block: the next request from that block would return the same page forever.
+    const stuck = Array.from({ length: 1000 }, (_, i) => row(OWNER, 5000, i));
+    vi.stubGlobal("fetch", async () => ({
+      ok: true,
+      json: async () => ({ status: "1", message: "OK", result: stuck }),
+    }));
+
+    await expect(fetchAuthorizationEvents("calibration", registry, OWNER)).rejects.toThrow(/more logs at block 5000/);
   });
 });
