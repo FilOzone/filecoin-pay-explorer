@@ -8,6 +8,7 @@ import { erc20Abi, getAddress, isAddress } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { config } from "@/services/wagmi/config";
+import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 
 export const CARD_CHAIN_ID = 8453;
 export const CARD_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
@@ -192,6 +193,7 @@ export function useCardPurchase({
   const purchase = async (requested?: LoginContext) => {
     if (!publicClient) return;
     const intent = requested ?? { contextKey, recipient: getAddress(address) };
+    let claimed = false;
 
     setStatus("opening");
     try {
@@ -199,14 +201,25 @@ export function useCardPurchase({
         if (mounted.current) setStatus("idle");
         return;
       }
-      const before = await read(intent.recipient);
-      if (before === undefined || !isCurrent(intent)) {
+      const pending = await withSquidAcquisitionLock(globalThis.navigator?.locks, intent.recipient, async () => {
+        const existing = loadPendingCardPurchase(intent.recipient);
+        if (existing) return existing;
+        const before = await read(intent.recipient);
+        if (before === undefined || !isCurrent(intent)) return null;
+        const next = { before, ...intent };
+        savePendingCardPurchase(next);
+        claimed = true;
+        return next;
+      });
+      if (!pending) {
         if (mounted.current) setStatus("idle");
         return;
       }
-      const pending = { before, ...intent };
-      savePendingCardPurchase(pending);
       pendingPurchase.current = pending;
+      if (!claimed) {
+        setStatus("delayed");
+        return;
+      }
       const result = await fund({
         source: {},
         destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
@@ -222,10 +235,12 @@ export function useCardPurchase({
       await checkPendingPurchase(result.status === "submitted");
     } catch (error) {
       pendingPurchase.current = null;
-      try {
-        clearPendingCardPurchase(intent.recipient);
-      } catch {
-        // The original error already explains why card funding could not start safely.
+      if (claimed) {
+        try {
+          clearPendingCardPurchase(intent.recipient);
+        } catch {
+          // The original error already explains why card funding could not start safely.
+        }
       }
       if (!isFundingExit(error)) {
         toast.error("Card purchase failed", {
