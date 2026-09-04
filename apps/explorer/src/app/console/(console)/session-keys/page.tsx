@@ -3,12 +3,7 @@ import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import SessionKeysSection from "@/components/UserConsole/SessionKeysSection";
 import type { Network } from "@/types";
-import {
-  type AuthorizeParamError,
-  parseAuthorizeParam,
-  parseNetworkParam,
-  parseScopesParam,
-} from "@/utils/authorizeParam";
+import { type AuthorizeParamError, parseAuthorizeLink } from "@/utils/authorizeParam";
 import { getNetworkFromChainId } from "@/utils/network";
 import type { ScopeId } from "@/utils/sessionKeys";
 
@@ -25,16 +20,15 @@ const SessionKeysPage = () => {
   const [prefillError, setPrefillError] = useState<AuthorizeParamError | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("authorize") && !params.has("scopes")) return;
-    const requested = parseAuthorizeParam(params.get("authorize"));
-    // Scopes only mean something as part of a valid authorization request.
-    if (requested && "address" in requested) {
-      setPrefillAddress(requested.address);
-      setPrefillScopes(parseScopesParam(params.get("scopes")));
-      // the section refuses to prefill while the wallet is connected to a different chain.
-      setPrefillNetwork(parseNetworkParam(params.get("network")));
-    } else if (requested) {
-      setPrefillError(requested.error);
+    const link = parseAuthorizeLink(params);
+    if (!link) return;
+    if ("error" in link) {
+      setPrefillError(link.error);
+    } else {
+      setPrefillAddress(link.address);
+      setPrefillScopes(link.scopes);
+      // The section refuses to prefill while the wallet is on a different chain.
+      setPrefillNetwork(link.network);
     }
     params.delete("authorize");
     params.delete("scopes");

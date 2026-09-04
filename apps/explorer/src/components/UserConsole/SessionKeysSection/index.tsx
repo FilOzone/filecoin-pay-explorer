@@ -76,6 +76,7 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
 const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
   "bad-checksum": "The address in this link is misspelled, so nothing was added. Ask for a new link.",
   "not-an-address": "This link does not contain a valid address, so nothing was added. Ask for a new link.",
+  "no-network": "This link does not say which network it is for, so nothing was added. Ask for a new link.",
 };
 
 const ConnectedSessionKeys = ({
@@ -120,7 +121,7 @@ const ConnectedSessionKeys = ({
 
   // URL request (?authorize=) guards
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
-  const isNetworkMismatch = prefillAddress != null && prefillNetwork != null && prefillNetwork !== network;
+  const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
@@ -216,7 +217,7 @@ const ConnectedSessionKeys = ({
           role='alert'
           className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
         >
-          <p className='font-semibold'>Invalid address in link</p>
+          <p className='font-semibold'>This link could not be used</p>
           <p className='text-xs mt-1'>{PREFILL_ERROR_COPY[prefillError]}</p>
         </div>
       )}
