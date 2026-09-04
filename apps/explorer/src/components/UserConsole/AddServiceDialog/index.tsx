@@ -102,17 +102,20 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
   const funding = useFundingLaunch();
   const formOwner = useRef(gasBalance.owner);
   const currentGasContext = useRef({
+    chainId: gasBalance.chainId,
     owner: gasBalance.owner,
-    isCorrectChain: gasBalance.isCorrectChain,
+    targetChainId: gasBalance.targetChainId,
     generation: 0,
   });
   if (
+    currentGasContext.current.chainId !== gasBalance.chainId ||
     currentGasContext.current.owner !== gasBalance.owner ||
-    currentGasContext.current.isCorrectChain !== gasBalance.isCorrectChain
+    currentGasContext.current.targetChainId !== gasBalance.targetChainId
   ) {
     currentGasContext.current = {
+      chainId: gasBalance.chainId,
       owner: gasBalance.owner,
-      isCorrectChain: gasBalance.isCorrectChain,
+      targetChainId: gasBalance.targetChainId,
       generation: currentGasContext.current.generation + 1,
     };
   }
@@ -256,7 +259,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
         refreshedStatus !== "funded" ||
         currentGasContext.current.generation !== contextGeneration ||
         currentGasContext.current.owner !== submittingOwner ||
-        !currentGasContext.current.isCorrectChain
+        currentGasContext.current.chainId !== currentGasContext.current.targetChainId
       )
         return;
       await submit({
