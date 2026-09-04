@@ -159,6 +159,9 @@ describe("sanitizeRecords", () => {
 
   it("drops records with a malformed address or no scope array", () => {
     assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: "0xnot-an-address" }]), []);
+    // Mixed case with a wrong checksum: viem would throw on the read, so the record is rejected here.
+    assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: `${SIGNER.slice(0, -1)}a` }]), []);
+    assert.equal(sanitizeRecords([{ ...good, sessionKeyPublic: SIGNER.toLowerCase() }]).length, 1);
     assert.deepEqual(sanitizeRecords([{ ...good, scopes: "addPieces" }]), []);
   });
 
@@ -203,10 +206,10 @@ describe("resolveExpiry", () => {
   const nowMs = 1_700_000_000_123;
   const nowSec = 1_700_000_000n;
 
-  it("adds a preset duration to now", () => {
-    EXPIRY_PRESETS.forEach((preset, i) => {
-      assert.equal(resolveExpiry(String(i), "", nowMs), nowSec + BigInt(preset.seconds));
-    });
+  it("adds the preset's days to now", () => {
+    assert.equal(resolveExpiry("0", "", nowMs), nowSec + 7n * 86400n);
+    assert.equal(resolveExpiry("1", "", nowMs), nowSec + 30n * 86400n);
+    assert.equal(resolveExpiry("2", "", nowMs), nowSec + 90n * 86400n);
   });
 
   it("treats a custom date as the absolute end of that local day", () => {
@@ -255,10 +258,15 @@ describe("deriveSessionKeys", () => {
     assert.equal(deriveSessionKeys([keyA], reads, now + 11n, nowMs)[0].status, "expired");
   });
 
-  it("treats an all-zero read on a key created moments ago as unknown, not revoked", () => {
-    const fresh = { ...keyA, createdAt: nowMs - 60_000 };
+  it("treats an all-zero read on a fresh key as unknown only until its login receipt is seen", () => {
+    const fresh = { ...keyA, createdAt: nowMs - 60_000, txHash: "0xabc" };
     const zeros = [ok(0n), ok(0n)];
     assert.equal(deriveSessionKeys([fresh], zeros, now, nowMs)[0].status, "unknown");
-    assert.equal(deriveSessionKeys([keyA], zeros, now, nowMs)[0].status, "revoked");
+    // Receipt seen: a zero read is a real revoke, even seconds after creation.
+    assert.equal(deriveSessionKeys([fresh], zeros, now, nowMs, new Set([SIGNER.toLowerCase()]))[0].status, "revoked");
+    // No login was sent from here (synced or imported record): nothing to wait for.
+    assert.equal(deriveSessionKeys([{ ...fresh, txHash: undefined }], zeros, now, nowMs)[0].status, "revoked");
+    // Old record: the grace has lapsed regardless.
+    assert.equal(deriveSessionKeys([{ ...keyA, txHash: "0xabc" }], zeros, now, nowMs)[0].status, "revoked");
   });
 });
