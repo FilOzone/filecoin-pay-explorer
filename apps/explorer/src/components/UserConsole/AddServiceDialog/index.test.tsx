@@ -264,6 +264,33 @@ describe("AddServiceDialog", () => {
     expect(mocks.submit).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    "account",
+    "chain",
+  ] as const)("stops submission when the %s changes during the fresh FIL check", async (changedContext) => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+
+    act(() => primaryButton(renderer).props.onClick());
+    if (changedContext === "account") {
+      mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
+    } else {
+      mocks.isCorrectChain = false;
+    }
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
   it("keeps the form while Squid is open and restores it after cancellation", () => {
     const { renderer } = renderDialog();
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));

@@ -91,7 +91,9 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const isBusy = isCheckingGas || isSubmitting || isExecuting;
   const gasBalance = useFilecoinGasBalance(open);
   const funding = useFundingLaunch();
-  const previousOwner = useRef(gasBalance.owner);
+  const formOwner = useRef(gasBalance.owner);
+  const currentGasContext = useRef({ owner: gasBalance.owner, isCorrectChain: gasBalance.isCorrectChain });
+  currentGasContext.current = { owner: gasBalance.owner, isCorrectChain: gasBalance.isCorrectChain };
   const previousSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
@@ -109,8 +111,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
   useEffect(() => {
-    const ownerChanged = previousOwner.current !== gasBalance.owner;
-    previousOwner.current = gasBalance.owner;
+    const ownerChanged = formOwner.current !== gasBalance.owner;
+    formOwner.current = gasBalance.owner;
     if (!open || ownerChanged) {
       serviceSelection.reset();
       tokenSelection.reset();
@@ -185,6 +187,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
     areLimitsValid &&
     gasBalance.status === "funded" &&
     gasBalance.isCorrectChain &&
+    formOwner.current === gasBalance.owner &&
     !isBusy;
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
@@ -194,10 +197,17 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const handleSubmit = async () => {
     if (gasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
+    const submittingOwner = gasBalance.owner;
     gasCheckInFlight.current = true;
     setIsCheckingGas(true);
     try {
-      if (!gasBalance.isCorrectChain || (await gasBalance.refresh()) !== "funded") return;
+      const refreshedStatus = await gasBalance.refresh();
+      if (
+        refreshedStatus !== "funded" ||
+        currentGasContext.current.owner !== submittingOwner ||
+        !currentGasContext.current.isCorrectChain
+      )
+        return;
       await submit({
         operatorAddress,
         token,
