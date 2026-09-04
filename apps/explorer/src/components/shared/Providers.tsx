@@ -8,7 +8,7 @@ import { initUIConfig } from "@/app/config-initializer";
 import { NetworkProvider } from "@/context/Network";
 import { DEFAULT_TOAST_POSITION } from "@/utils/constants";
 
-const queryClient = new QueryClient();
+export const queryClient = new QueryClient();
 
 initUIConfig();
 
