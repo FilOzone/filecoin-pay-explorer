@@ -1,4 +1,13 @@
-import { type Address, encodeFunctionData, erc20Abi, type Hash, type Hex, type PublicClient } from "viem";
+import {
+  type Account,
+  type Address,
+  encodeFunctionData,
+  erc20Abi,
+  type Hash,
+  type Hex,
+  type PublicClient,
+  type WalletClient,
+} from "viem";
 import {
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
@@ -9,8 +18,7 @@ import {
   type SquidDepositTarget,
   squidDepositAbi,
 } from "./squid-deposit-route";
-
-const APPROVAL_GAS_UNITS = 60_000n;
+import { applyNetworkFeeExecutionBuffer, isOpStackChain } from "./squid-execution";
 
 export type SquidDepositStage = "approving" | "swap-requested" | "swap-broadcast" | "bridging" | "verifying";
 export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed";
@@ -28,16 +36,29 @@ export class SquidDepositError extends Error {
   }
 }
 
-export interface SquidDepositWalletClient {
-  account: { address: Address };
-  getChainId(): Promise<number>;
-  sendTransaction(request: { to: Address; data: Hex; value?: bigint; gas: bigint; gasPrice: bigint }): Promise<Hash>;
-}
+export type SquidDepositWalletClient = Pick<
+  WalletClient,
+  "getChainId" | "prepareTransactionRequest" | "sendTransaction"
+> & {
+  account: Account;
+};
 
 export type SquidDepositSourceClient = Pick<
   PublicClient,
-  "getBalance" | "getChainId" | "getGasPrice" | "readContract" | "waitForTransactionReceipt"
->;
+  "getBalance" | "getChainId" | "readContract" | "waitForTransactionReceipt"
+> & {
+  estimateTotalFee?: (request: {
+    account: Address;
+    to: Address;
+    data: Hex;
+    value: bigint;
+    nonce: number;
+    gas: bigint;
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    gasPrice?: bigint;
+  }) => Promise<bigint>;
+};
 export type SquidDepositDestinationClient = Pick<PublicClient, "readContract">;
 
 export interface SquidDepositResult {
@@ -65,13 +86,17 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
   sourceClient: SquidDepositSourceClient;
   destinationClient: SquidDepositDestinationClient;
   squid: SquidClient;
-  /** Maximum native-denominated gas the user reviewed, including a possible approval. */
-  maxNativeGas: bigint;
+  /** Whether the reviewed allowance required an approval transaction. */
+  approvalRequired: boolean;
+  /** Maximum cumulative source-network transaction fee the user reviewed. */
+  maxNativeFee: bigint;
   /** Reads the provider/UI account immediately before every signature. */
   getCurrentOwner(): Promise<Address | undefined>;
   /** Fails when recipient, source wallet, chain or token no longer match the reviewed screen. */
   assertCurrentContext(): void;
   onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
+  /** Persists a durable marker synchronously before asking the wallet to submit the route. */
+  onSwapAttempt?: (fundsBefore: bigint) => void;
   /** Fires once the route is broadcast, with what a resume needs to finish it. */
   onBroadcast?: (broadcast: { transactionHash: Hash; fundsBefore: bigint }) => void;
 }
@@ -79,7 +104,6 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
 async function assertFreshSigningState({
   assertCurrentContext,
   getCurrentOwner,
-  maxNativeGas,
   quote,
   request,
   requireAllowance,
@@ -87,31 +111,29 @@ async function assertFreshSigningState({
   walletClient,
 }: Pick<
   ExecuteSquidDepositInput,
-  "assertCurrentContext" | "getCurrentOwner" | "maxNativeGas" | "quote" | "request" | "sourceClient" | "walletClient"
+  "assertCurrentContext" | "getCurrentOwner" | "quote" | "request" | "sourceClient" | "walletClient"
 > & {
   requireAllowance: boolean;
-}): Promise<{ allowance: bigint; gasPrice: bigint }> {
+}): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
-  const [providerOwner, walletChainId, rpcChainId, tokenBalance, nativeBalance, gasPrice, allowance] =
-    await Promise.all([
-      getCurrentOwner(),
-      walletClient.getChainId(),
-      sourceClient.getChainId(),
-      sourceClient.readContract({
-        abi: erc20Abi,
-        address: request.sourceToken,
-        args: [request.owner],
-        functionName: "balanceOf",
-      }),
-      sourceClient.getBalance({ address: request.owner }),
-      sourceClient.getGasPrice(),
-      sourceClient.readContract({
-        abi: erc20Abi,
-        address: request.sourceToken,
-        args: [request.owner, quote.transaction.approvalSpender ?? quote.transaction.target],
-        functionName: "allowance",
-      }),
-    ]);
+  const [providerOwner, walletChainId, rpcChainId, tokenBalance, nativeBalance, allowance] = await Promise.all([
+    getCurrentOwner(),
+    walletClient.getChainId(),
+    sourceClient.getChainId(),
+    sourceClient.readContract({
+      abi: erc20Abi,
+      address: request.sourceToken,
+      args: [request.owner],
+      functionName: "balanceOf",
+    }),
+    sourceClient.getBalance({ address: request.owner }),
+    sourceClient.readContract({
+      abi: erc20Abi,
+      address: request.sourceToken,
+      args: [request.owner, quote.transaction.approvalSpender ?? quote.transaction.target],
+      functionName: "allowance",
+    }),
+  ]);
   assertCurrentContext();
   if (!providerOwner || providerOwner.toLowerCase() !== request.owner.toLowerCase()) {
     throw new Error("Wallet account changed before signing");
@@ -122,19 +144,81 @@ async function assertFreshSigningState({
   if (tokenBalance < request.sourceAmount) throw new Error("USDC balance no longer covers the reviewed spend");
   if (requireAllowance && allowance < request.sourceAmount)
     throw new Error("USDC allowance is insufficient after approval");
-  const approvalGas = allowance < request.sourceAmount ? APPROVAL_GAS_UNITS * gasPrice : 0n;
-  const routeGas = quote.transaction.gasLimit * gasPrice;
-  const actualGas = approvalGas + routeGas;
-  if (actualGas > maxNativeGas) throw new Error("Native gas exceeded the reviewed maximum");
-  if (nativeBalance < actualGas + quote.transaction.value) {
-    throw new Error("Native balance no longer covers gas and route fees");
+  return { allowance, nativeBalance };
+}
+
+async function assertCurrentWallet({
+  assertCurrentContext,
+  getCurrentOwner,
+  request,
+  walletClient,
+}: Pick<ExecuteSquidDepositInput, "assertCurrentContext" | "getCurrentOwner" | "request" | "walletClient">) {
+  assertCurrentContext();
+  const [providerOwner, walletChainId] = await Promise.all([getCurrentOwner(), walletClient.getChainId()]);
+  assertCurrentContext();
+  if (!providerOwner || providerOwner.toLowerCase() !== request.owner.toLowerCase()) {
+    throw new Error("Wallet account changed before signing");
   }
-  return { allowance, gasPrice };
+  if (walletChainId !== request.sourceChainId) throw new Error("Source network changed before signing");
+}
+
+async function prepareTransaction(
+  sourceClient: SquidDepositSourceClient,
+  walletClient: SquidDepositWalletClient,
+  sourceChainId: number,
+  transaction: { to: Address; data: Hex; value: bigint },
+) {
+  const request = await walletClient.prepareTransactionRequest({
+    account: walletClient.account,
+    chain: undefined,
+    ...transaction,
+  });
+  const { gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce } = request;
+  const hasLegacyFee = gasPrice !== undefined && gasPrice > 0n;
+  const hasEip1559Fee =
+    maxFeePerGas !== undefined &&
+    maxPriorityFeePerGas !== undefined &&
+    maxFeePerGas > 0n &&
+    maxPriorityFeePerGas >= 0n &&
+    maxPriorityFeePerGas <= maxFeePerGas;
+  if (gas === undefined || gas <= 0n || (!hasLegacyFee && !hasEip1559Fee)) {
+    throw new Error("Complete execution fee is unavailable");
+  }
+  if (!isOpStackChain(sourceChainId)) {
+    return { fee: gas * (hasLegacyFee ? gasPrice : (maxFeePerGas as bigint)), request };
+  }
+  if (!sourceClient.estimateTotalFee || !Number.isSafeInteger(nonce)) {
+    throw new Error("OP Stack total-fee accounting is unavailable");
+  }
+  const totalFee = await sourceClient.estimateTotalFee({
+    account: walletClient.account.address,
+    to: transaction.to,
+    data: transaction.data,
+    value: transaction.value,
+    nonce,
+    gas,
+    ...(gasPrice === undefined ? {} : { gasPrice }),
+    ...(maxFeePerGas === undefined ? {} : { maxFeePerGas }),
+    ...(maxPriorityFeePerGas === undefined ? {} : { maxPriorityFeePerGas }),
+  });
+  return { fee: applyNetworkFeeExecutionBuffer(sourceChainId, totalFee), request };
+}
+
+function assertFeeWithinReview(
+  feeSoFar: bigint,
+  fee: bigint,
+  maxNativeFee: bigint,
+  nativeBalance: bigint,
+  value: bigint,
+) {
+  if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
+  if (nativeBalance < fee + value) throw new Error("Native balance no longer covers gas and route fees");
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {
   target: SquidDepositTarget;
   fundsBefore: bigint;
+  minimumDestinationAmount: bigint;
   destinationClient: SquidDepositDestinationClient;
   squid: SquidClient;
   onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
@@ -187,6 +271,7 @@ export async function fetchSquidDepositStatus(
 export async function awaitSquidDepositSettlement({
   destinationClient,
   fundsBefore,
+  minimumDestinationAmount,
   maxStatusAttempts = 90,
   maxStatusFailures = 6,
   maxVerifyAttempts = 12,
@@ -248,7 +333,7 @@ export async function awaitSquidDepositSettlement({
   onStage?.("verifying", transactionHash);
   for (let attempt = 0; attempt < maxVerifyAttempts; attempt += 1) {
     const fundsAfter = await readFilecoinPayFunds(destinationClient, target);
-    if (fundsAfter > fundsBefore) {
+    if (fundsAfter >= fundsBefore + minimumDestinationAmount) {
       return { transactionHash, fundsBefore, fundsAfter, depositedAmount: fundsAfter - fundsBefore };
     }
     await sleep(pollIntervalMs);
@@ -266,14 +351,16 @@ export async function awaitSquidDepositSettlement({
  */
 export async function executeSquidDeposit({
   destinationClient,
+  approvalRequired,
   onBroadcast,
+  onSwapAttempt,
   onStage,
   quote,
   request,
   sourceClient,
   squid,
   walletClient,
-  maxNativeGas,
+  maxNativeFee,
   getCurrentOwner,
   assertCurrentContext,
   ...polling
@@ -288,11 +375,11 @@ export async function executeSquidDeposit({
 
   const fundsBefore = await readFilecoinPayFunds(destinationClient, request);
   const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
+  let totalNativeFee = 0n;
   {
-    const { allowance, gasPrice } = await assertFreshSigningState({
+    const { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
       getCurrentOwner,
-      maxNativeGas,
       quote,
       request,
       requireAllowance: false,
@@ -300,13 +387,21 @@ export async function executeSquidDeposit({
       walletClient,
     });
     if (allowance < request.sourceAmount) {
+      if (!approvalRequired) throw new Error("USDC allowance changed after review. Review the payment again.");
       onStage?.("approving");
-      const approvalHash = await walletClient.sendTransaction({
+      const approval = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
         to: request.sourceToken,
         data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, request.sourceAmount] }),
-        gas: APPROVAL_GAS_UNITS,
-        gasPrice,
+        value: 0n,
       });
+      assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee, nativeBalance, 0n);
+      await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
+      const approvalHash = await walletClient.sendTransaction({
+        ...approval.request,
+        account: walletClient.account,
+        chain: undefined,
+      });
+      totalNativeFee += approval.fee;
       const approvalReceipt = await sourceClient.waitForTransactionReceipt({ hash: approvalHash });
       if (approvalReceipt.status !== "success") {
         throw new SquidDepositError("The USDC approval transaction reverted", "reverted", approvalHash);
@@ -314,10 +409,9 @@ export async function executeSquidDeposit({
     }
   }
 
-  const { gasPrice } = await assertFreshSigningState({
+  const { nativeBalance } = await assertFreshSigningState({
     assertCurrentContext,
     getCurrentOwner,
-    maxNativeGas,
     quote,
     request,
     requireAllowance: true,
@@ -325,13 +419,22 @@ export async function executeSquidDeposit({
     walletClient,
   });
 
-  onStage?.("swap-requested");
-  const transactionHash = await walletClient.sendTransaction({
+  const route = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
     to: quote.transaction.target,
     data: quote.transaction.data,
     value: quote.transaction.value,
-    gas: quote.transaction.gasLimit,
-    gasPrice,
+  });
+  assertFeeWithinReview(totalNativeFee, route.fee, maxNativeFee, nativeBalance, quote.transaction.value);
+  await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
+  if (quote.transaction.expiresAt !== undefined && quote.transaction.expiresAt <= Math.floor(Date.now() / 1000)) {
+    throw new Error("The Squid route expired. Refresh the quote.");
+  }
+  onStage?.("swap-requested");
+  onSwapAttempt?.(fundsBefore);
+  const transactionHash = await walletClient.sendTransaction({
+    ...route.request,
+    account: walletClient.account,
+    chain: undefined,
   });
   onStage?.("swap-broadcast", transactionHash);
   onBroadcast?.({ transactionHash, fundsBefore });
@@ -344,6 +447,7 @@ export async function executeSquidDeposit({
     ...polling,
     destinationClient,
     fundsBefore,
+    minimumDestinationAmount: quote.minimumDestinationAmount,
     onStage,
     quoteId: quote.quoteId,
     sourceChainId: request.sourceChainId,

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearPendingSquidDeposit,
   getPendingSquidDepositKey,
+  hasPendingSquidDeposit,
   loadPendingSquidDeposit,
   PENDING_SQUID_DEPOSIT_EVENT,
   type PendingSquidDeposit,
@@ -14,6 +15,7 @@ const RECIPIENT = "0x2222222222222222222222222222222222222222";
 const OWNER = "0x1111111111111111111111111111111111111111";
 const USDC = "0x3333333333333333333333333333333333333333";
 const pending: PendingSquidDeposit = {
+  executionStage: "swap-broadcast",
   recipient: RECIPIENT,
   owner: OWNER,
   sourceToken: USDC,
@@ -55,11 +57,38 @@ describe("pending Squid deposit tracker", () => {
     expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
   });
 
+  it("survives reload before a provider returns the broadcast hash and blocks a second tab", () => {
+    const listeners: Record<string, (event: { key: string | null }) => void> = {};
+    vi.stubGlobal("window", {
+      addEventListener: vi.fn((type: string, listener: (event: { key: string | null }) => void) => {
+        listeners[type] = listener;
+      }),
+      dispatchEvent: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    const requested: PendingSquidDeposit = {
+      ...pending,
+      executionStage: "swap-requested",
+      transactionHash: undefined,
+    };
+    savePendingSquidDeposit(storage, requested);
+    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toEqual(requested);
+    expect(hasPendingSquidDeposit(storage, OWNER)).toBe(true);
+
+    const secondTabRefresh = vi.fn(() => loadPendingSquidDeposit(storage, OWNER, RECIPIENT));
+    subscribeToPendingSquidDeposit(OWNER, secondTabRefresh);
+    listeners.storage?.({ key: getPendingSquidDepositKey(OWNER) });
+    expect(secondTabRefresh).toHaveReturnedWith(requested);
+  });
+
   it("ignores entries that are corrupt or belong to another account", () => {
     storage.setItem(getPendingSquidDepositKey(OWNER), "{not json");
     expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
 
     savePendingSquidDeposit(storage, { ...pending, transactionHash: "0x1234" as Hash });
+    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+
+    savePendingSquidDeposit(storage, { ...pending, executionStage: "swap-requested" });
     expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
 
     savePendingSquidDeposit(storage, pending);
