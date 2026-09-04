@@ -42,11 +42,16 @@ function loadRecords(network: Network, account: Hex): SessionKeyRecord[] {
 export function useSessionKeys(network: Network, account: Hex) {
   const [records, setRecords] = useState<SessionKeyRecord[]>(() => loadRecords(network, account));
   const identityRef = useRef<SessionKeysIdentity>({ network, account });
+  // Signers whose login receipt was seen, or that have read as active: for
+  // them an all-zero read is a real revoke, not a login still confirming.
+  const confirmedRef = useRef(new Set<string>());
 
   // Reload when wallet or network changes.
   useEffect(() => {
     identityRef.current = { network, account };
     setRecords(loadRecords(network, account));
+    // Confirmations belong to one inventory: the same signer under another wallet is a different grant.
+    confirmedRef.current = new Set();
   }, [network, account]);
 
   // Every write names the identity that submitted the transaction. A wallet
@@ -95,9 +100,6 @@ export function useSessionKeys(network: Network, account: Hex) {
     return () => window.clearInterval(id);
   }, []);
 
-  // Signers whose login receipt was seen, or that have read as active: for
-  // them an all-zero read is a real revoke, not a login still confirming.
-  const confirmedRef = useRef(new Set<string>());
   const keys = useMemo(
     () => deriveSessionKeys(records, reads, nowSec, Date.now(), confirmedRef.current),
     [records, reads, nowSec],
