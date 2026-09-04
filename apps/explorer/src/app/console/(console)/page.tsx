@@ -4,6 +4,7 @@ import type { Account } from "@filecoin-pay/types";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { useMemo, useState } from "react";
 import { useConnection } from "wagmi";
+import { Notice } from "@/components/shared/Notice";
 import {
   AlertsBanner,
   FundsSection,
@@ -153,19 +154,12 @@ const UserConsole = () => {
   return (
     <div className='flex flex-col gap-15'>
       {fundingLink && !depositLink && (fundingLink.has("deposit") || fundingLink.has("operator")) && (
-        <div
-          role='alert'
-          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
-        >
-          <p className='font-semibold'>This funding link could not be read</p>
+        <Notice tone='warn' role='alert' title='This funding link could not be read' className='p-4'>
           <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
-        </div>
+        </Notice>
       )}
       {isLinkNetworkMismatch && (
-        <div
-          role='alert'
-          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
-        >
+        <Notice tone='warn' role='alert' className='p-4'>
           <p className='font-semibold'>
             This funding link is for <span className='capitalize'>{depositLink?.network}</span>, but your wallet is
             connected to <span className='capitalize'>{walletNetwork}</span>.
@@ -174,7 +168,7 @@ const UserConsole = () => {
             Nothing was filled in. Switch your wallet to <span className='capitalize'>{depositLink?.network}</span> and
             open the link again.
           </p>
-        </div>
+        </Notice>
       )}
       {depositPrefill && (
         <DepositAndApproveDialog
