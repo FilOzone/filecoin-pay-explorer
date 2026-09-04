@@ -19,6 +19,8 @@ export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
 export interface SyncFromChainResult {
   addedCount: number;
+  /** Existing records healed from chain history */
+  updatedCount: number;
   skippedUnrecognized: number;
 }
 
@@ -92,7 +94,11 @@ export function useSessionKeys(network: Network, account: Hex) {
     [records, registry, account],
   );
 
-  const { data: reads, refetch: refetchStatuses } = useReadContracts({
+  const {
+    data: reads,
+    isPending: statusReadsPending,
+    refetch: refetchStatuses,
+  } = useReadContracts({
     contracts,
     query: { enabled: records.length > 0, refetchInterval: 30_000 },
   });
@@ -156,21 +162,21 @@ export function useSessionKeys(network: Network, account: Hex) {
   );
 
   /**
-   * Imports session-key history from the registry's onchain event log. Only
-   * ever adds signers this browser doesn't already know about — an existing
-   * local record always wins over the synced version of the same address.
+   * Imports session-key history from the registry's onchain event log: adds
+   * signers this browser does not know, and fills in scopes, name, and
+   * revocation time on ones it does. A local name is never overwritten.
    */
   const syncFromChain = useCallback(async (): Promise<SyncFromChainResult> => {
     // Captured before the fetch: the events belong to this wallet even if it switches meanwhile.
     const identity: SessionKeysIdentity = { network, account };
     const events = await fetchAuthorizationEvents(network, registry, account);
     const { records: synced, skippedUnrecognized } = foldAuthorizationEvents(events, SESSION_KEY_SCOPES);
-    const { addedCount } = mergeSyncedRecords(records, synced);
-    if (addedCount > 0) {
+    const { addedCount, updatedCount } = mergeSyncedRecords(records, synced);
+    if (addedCount > 0 || updatedCount > 0) {
       persist(identity, (prev) => mergeSyncedRecords(prev, synced).merged);
       refetchStatuses();
     }
-    return { addedCount, skippedUnrecognized };
+    return { addedCount, updatedCount, skippedUnrecognized };
   }, [network, account, registry, records, persist, refetchStatuses]);
 
   return {
@@ -179,6 +185,8 @@ export function useSessionKeys(network: Network, account: Hex) {
     removeKey,
     syncFromChain,
     refetchStatuses,
+    /** True until the first batch of status reads has come back, failed entries included. */
+    statusReadsPending,
     markConfirmed,
     registry,
   };
