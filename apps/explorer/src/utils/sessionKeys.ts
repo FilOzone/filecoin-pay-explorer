@@ -14,6 +14,8 @@
  \* stays unit-testable in isolation.
  */
 
+import { isAddress } from "viem";
+
 export type ScopeId = "createDataSet" | "addPieces" | "schedulePieceRemovals" | "terminateService";
 
 export interface SessionKeyScope {
@@ -133,7 +135,11 @@ export interface ExpiryRead {
   result?: unknown;
 }
 
-/** A key created this recently reads all-zero until its login confirms, so it is not yet "revoked". */
+/**
+ * A key created here reads all-zero until its login confirms. Until the
+ * receipt is seen (`confirmed`), an all-zero read on a record this recent is
+ * "unknown", not "revoked". The time bound covers a login that never lands.
+ */
 const FRESH_KEY_MS = 3 * 60_000;
 
 /**
@@ -146,6 +152,8 @@ export function deriveSessionKeys(
   reads: readonly ExpiryRead[] | undefined,
   nowSec: bigint,
   nowMs: number,
+  /** Lowercased signers whose login receipt has been seen, or that have read as active. */
+  confirmed: ReadonlySet<string> = new Set(),
 ): SessionKeyWithStatus[] {
   let cursor = 0;
   return records.map((record) => {
@@ -167,7 +175,8 @@ export function deriveSessionKeys(
     const maxExpiry = expiries.reduce((max, e) => (e > max ? e : max), 0n);
     let status: SessionKeyWithStatus["status"] =
       resolved && expiries.length > 0 ? deriveKeyStatus(expiries, nowSec) : "unknown";
-    if (status === "revoked" && nowMs - record.createdAt < FRESH_KEY_MS) status = "unknown";
+    const awaitingLogin = record.txHash !== undefined && !confirmed.has(record.sessionKeyPublic.toLowerCase());
+    if (status === "revoked" && awaitingLogin && nowMs - record.createdAt < FRESH_KEY_MS) status = "unknown";
     return { ...record, status, scopeExpiries, scopeActive, maxExpiry };
   });
 }
@@ -214,7 +223,8 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
   for (const item of value) {
     if (typeof item !== "object" || item === null) continue;
     const r = item as Record<string, unknown>;
-    if (typeof r.sessionKeyPublic !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(r.sessionKeyPublic)) continue;
+    // Strict: viem throws on a mixed-case address with a wrong checksum, which would take down every read.
+    if (typeof r.sessionKeyPublic !== "string" || !isAddress(r.sessionKeyPublic)) continue;
     if (!Array.isArray(r.scopes)) continue;
     const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && Object.hasOwn(SCOPE_BY_ID, s));
     if (scopes.length === 0) continue;
