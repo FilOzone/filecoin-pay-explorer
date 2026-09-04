@@ -247,12 +247,14 @@ export function useFilecoinGasBalance(open: boolean) {
     return filecoinGasBalanceStatus(result.data?.value, false, result.isError, FIL_GAS_TOP_UP_AMOUNT);
   };
   return {
+    chainId,
     isCorrectChain: chainId === constants.chain.id,
     isSwitchingNetwork,
     owner,
     refresh,
     status,
     switchToFilecoin: () => switchChain({ chainId: constants.chain.id }),
+    targetChainId: constants.chain.id,
   };
 }
 

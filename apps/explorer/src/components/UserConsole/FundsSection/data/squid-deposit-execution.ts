@@ -22,8 +22,8 @@ import {
 import { applyNetworkFeeExecutionBuffer, isOpStackChain } from "./squid-execution";
 
 export type SquidDepositStage = "approving" | "swap-requested" | "swap-broadcast" | "bridging" | "verifying";
-export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed";
-export type SquidDepositFailure = "failed" | "hook-failed" | "reverted" | "timeout";
+export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed" | "needs-gas";
+export type SquidDepositFailure = "failed" | "hook-failed" | "needs-gas" | "reverted" | "timeout";
 
 export class SquidDepositError extends Error {
   readonly reason: SquidDepositFailure;
@@ -151,8 +151,8 @@ async function assertFreshSigningState({
     throw new Error("Source network changed before signing");
   }
   if (tokenBalance < request.sourceAmount) throw new Error("Source-token balance no longer covers the reviewed spend");
-  if (requireAllowance && allowance < request.sourceAmount)
-    throw new Error("Source-token allowance is insufficient after approval");
+  if (requireAllowance && allowance !== request.sourceAmount)
+    throw new Error("Source-token allowance does not match the reviewed spend after approval");
   return { allowance, nativeBalance };
 }
 
@@ -221,7 +221,7 @@ function assertFeeWithinReview(
   value: bigint,
 ) {
   if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
-  if (nativeBalance < fee + value) throw new Error("Native balance no longer covers gas and route fees");
+  if (nativeBalance < feeSoFar + fee + value) throw new Error("Native balance no longer covers gas and route fees");
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {
@@ -268,7 +268,8 @@ export async function fetchSquidDepositStatus(
   if (normalized === "success") return "success";
   // Squid delivers the swapped USDFC to `toAddress` when the post-hook fails.
   if (normalized === "partial_success") return "hook-failed";
-  if (["failed", "refund", "needs_gas"].includes(normalized)) return "failed";
+  if (normalized === "needs_gas") return "needs-gas";
+  if (["failed", "refund"].includes(normalized)) return "failed";
   return "pending";
 }
 
@@ -327,6 +328,13 @@ export async function awaitSquidDepositSettlement({
       throw new SquidDepositError(
         "USDFC reached your wallet but the Filecoin Pay deposit step failed. Deposit it directly from your wallet.",
         "hook-failed",
+        transactionHash,
+      );
+    }
+    if (status === "needs-gas") {
+      throw new SquidDepositError(
+        "Squid paused the route because the destination needs more gas. Add gas from the Squid route link, then check again.",
+        "needs-gas",
         transactionHash,
       );
     }
@@ -397,16 +405,15 @@ export async function executeSquidDeposit({
       sourceClient,
       walletClient,
     });
-    if (allowance < request.sourceAmount) {
+    if (allowance !== request.sourceAmount) {
       if (!approvalRequired) throw new Error("Source-token allowance changed after review. Review the payment again.");
       if (allowance !== 0n && !approvalResetRequired)
         throw new Error("Source-token allowance changed after review. Review the payment again.");
       onStage?.("approving");
-      const approvalAmounts = allowance === 0n ? [request.sourceAmount] : [0n, request.sourceAmount];
-      for (const approvalAmount of approvalAmounts) {
+      for (const amount of allowance > 0n ? [0n, request.sourceAmount] : [request.sourceAmount]) {
         const approval = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
           to: request.sourceToken,
-          data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, approvalAmount] }),
+          data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
           value: 0n,
         });
         assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee, nativeBalance, 0n);
@@ -421,7 +428,7 @@ export async function executeSquidDeposit({
         if (approvalReceipt.status !== "success") {
           throw new SquidDepositError("The source-token approval transaction reverted", "reverted", approvalHash);
         }
-        if (approvalAmount === 0n) {
+        if (amount === 0n) {
           ({ allowance, nativeBalance } = await assertFreshSigningState({
             assertCurrentContext,
             getCurrentOwner,

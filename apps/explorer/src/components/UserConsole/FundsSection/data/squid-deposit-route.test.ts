@@ -214,6 +214,7 @@ describe("source-native accounting", () => {
     const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, USDC, 0n);
     expect(maximumNetworkFee).toBe(8_631_345_600_000n);
     expect(getDepositNetworkFeeMaximum(quote, 8453, USDC, 1n)).toBe(12_947_018_400_000n);
+    expect(getDepositNetworkFeeMaximum(quote, 8453, USDC, request.sourceAmount + 1n)).toBe(12_947_018_400_000n);
     expect(getDepositRequiredNativeBalance(quote, 8453, USDC, maximumNetworkFee)).toBe(
       5_971_701_479_908n + 8_631_345_600_000n,
     );

@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecuteSquidDepositInput } from "../data/squid-deposit-execution";
+import { type ExecuteSquidDepositInput, SquidDepositError } from "../data/squid-deposit-execution";
 import { getPendingSquidDepositKey, type PendingSquidDeposit } from "../data/squid-deposit-tracker";
 import { DirectSquidDepositDialog } from "./DirectSquidDepositDialog";
 
@@ -9,6 +9,7 @@ const RECIPIENT = "0x2222222222222222222222222222222222222222" as const;
 const OTHER = "0x3333333333333333333333333333333333333333" as const;
 const USDC = "0x4444444444444444444444444444444444444444" as const;
 const USDT = "0x5555555555555555555555555555555555555555" as const;
+const ROUTE_HASH = `0x${"b".repeat(64)}` as const;
 
 const state = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -25,6 +26,7 @@ const wallet = vi.hoisted(() => ({
 const connectedWallets = vi.hoisted(() => ({
   current: [] as (typeof wallet)[],
 }));
+const topUp = vi.hoisted(() => ({ setActive: vi.fn() }));
 const query = vi.hoisted(() => ({
   allowance: 100_000_000n,
   balanceIsError: false,
@@ -86,6 +88,9 @@ vi.mock("wagmi", () => ({
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => ({ address: state.liveRecipient }) }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
+vi.mock("../../TopUpActivityContext", () => ({
+  useTopUpActivity: () => ({ setTopUpActive: topUp.setActive }),
+}));
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
@@ -224,6 +229,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
     wallet.switchChain.mockClear();
+    topUp.setActive.mockClear();
     vi.stubGlobal("navigator", {
       locks: {
         request: vi.fn(async (_name: string, _options: LockOptions, callback: (lock: Lock | null) => unknown) =>
@@ -438,5 +444,47 @@ describe("DirectSquidDepositDialog safety integration", () => {
       expect.anything(),
       { quoteOnly: false },
     );
+  });
+
+  it("keeps NEEDS_GAS recoverable with the route link", async () => {
+    state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
+      input.onSwapAttempt?.(5n);
+      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      throw new SquidDepositError("Add gas from the Squid route link, then check again.", "needs-gas", ROUTE_HASH);
+    });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("Add gas from the Squid route link"));
+
+    expect(storage.getItem(getPendingSquidDepositKey(OWNER))).not.toBeNull();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Squid route / add gas");
+  });
+
+  it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
+    state.execute.mockResolvedValueOnce({
+      depositedAmount: 92n,
+      fundsAfter: 97n,
+      fundsBefore: 5n,
+      transactionHash: ROUTE_HASH,
+    });
+    const onOpenChange = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenLastCalledWith(314));
+
+    expect(wallet.switchChain.mock.calls).toEqual([[8453], [314]]);
+    expect(topUp.setActive).toHaveBeenCalledWith(true);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open={false} />);
+    });
+    expect(topUp.setActive).toHaveBeenCalledWith(false);
   });
 });

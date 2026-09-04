@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   filBalanceStatus: "funded" as "loading" | "unavailable" | "insufficient" | "funded",
   filBalanceOwner: "0xABCDEF0000000000000000000000000000000001",
   refreshFilBalance: vi.fn(),
+  chainId: 314 as number | undefined,
   isCorrectChain: true,
   isSwitchingNetwork: false,
   switchToFilecoin: vi.fn(),
   isSquidOpen: false,
   openSquid: vi.fn(),
   network: "mainnet" as "mainnet" | "calibration",
+  targetChainId: 314,
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -110,12 +112,14 @@ vi.mock("./hooks", () => ({
     reset: vi.fn(),
   }),
   useFilecoinGasBalance: () => ({
+    chainId: mocks.chainId,
     isCorrectChain: mocks.isCorrectChain,
     isSwitchingNetwork: mocks.isSwitchingNetwork,
     owner: mocks.filBalanceOwner,
     refresh: mocks.refreshFilBalance,
     status: mocks.filBalanceStatus,
     switchToFilecoin: mocks.switchToFilecoin,
+    targetChainId: mocks.targetChainId,
   }),
   useAddServiceSubmit: (onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
@@ -144,10 +148,12 @@ beforeEach(() => {
   mocks.dialogOpen = false;
   mocks.filBalanceStatus = "funded";
   mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
+  mocks.chainId = 314;
   mocks.isCorrectChain = true;
   mocks.isSwitchingNetwork = false;
   mocks.isSquidOpen = false;
   mocks.network = "mainnet";
+  mocks.targetChainId = 314;
   mocks.openSquid.mockReset();
   mocks.refreshFilBalance.mockReset().mockResolvedValue("funded");
   mocks.switchToFilecoin.mockReset();
@@ -264,10 +270,7 @@ describe("AddServiceDialog", () => {
     expect(mocks.submit).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    "account",
-    "chain",
-  ] as const)("stops submission when the %s changes during the fresh FIL check", async (changedContext) => {
+  it("stops submission when the account changes during the fresh FIL check", async () => {
     let resolveRefresh!: (status: "funded") => void;
     mocks.refreshFilBalance.mockReturnValue(
       new Promise((resolve) => {
@@ -277,15 +280,36 @@ describe("AddServiceDialog", () => {
     const { renderer } = renderDialog();
 
     act(() => primaryButton(renderer).props.onClick());
-    if (changedContext === "account") {
-      mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
-    } else {
-      mocks.isCorrectChain = false;
-    }
+    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
     act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
     mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
-    mocks.isCorrectChain = true;
     act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["314 → 314159", [314159]],
+    ["314 → 314159 → 314", [314159, 314]],
+  ] as const)("stops submission across supported chain transition %s", async (_label, chainIds) => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+
+    act(() => primaryButton(renderer).props.onClick());
+    for (const chainId of chainIds) {
+      mocks.chainId = chainId;
+      mocks.targetChainId = chainId;
+      act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    }
 
     await act(async () => {
       resolveRefresh("funded");
