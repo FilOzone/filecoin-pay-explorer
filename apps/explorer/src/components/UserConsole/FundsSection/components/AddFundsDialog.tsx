@@ -7,11 +7,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { ArrowRight, Repeat, Wallet } from "lucide-react";
+import { ArrowRight, CreditCard, Repeat, Wallet } from "lucide-react";
 
-export type AddFundsMethod = "deposit" | "squid";
+export type AddFundsMethod = "card" | "deposit" | "squid";
 
 type AddFundsDialogProps = {
+  cardLabel?: string;
+  cardStatus?: string | null;
+  isBusy?: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (method: AddFundsMethod) => void;
   open: boolean;
@@ -26,6 +29,9 @@ const iconEnabled = "mt-0.5 rounded-md bg-primary/10 p-2 text-primary";
 const iconDisabled = "mt-0.5 rounded-md bg-muted p-2 text-muted-foreground";
 
 export function AddFundsDialog({
+  cardLabel = "Buy USDC with card",
+  cardStatus,
+  isBusy = false,
   onOpenChange,
   onSelect,
   open,
@@ -41,11 +47,39 @@ export function AddFundsDialog({
         </DialogHeader>
         <div className='grid gap-3'>
           <div className={enabledCard}>
+            <button
+              aria-label={cardLabel}
+              className='absolute inset-0 cursor-pointer rounded-lg disabled:cursor-wait'
+              disabled={isBusy}
+              onClick={() => onSelect("card")}
+              type='button'
+            />
+            <span className={iconEnabled}>
+              <CreditCard className='h-5 w-5' />
+            </span>
+            <span className='flex-1'>
+              <span className='flex items-center justify-between font-medium'>
+                {cardLabel}
+                <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
+              </span>
+              <span className='mt-1 block text-sm text-muted-foreground'>
+                Buy USDC on Base, then swap and deposit it into Filecoin Pay.
+              </span>
+              {cardStatus ? (
+                <span className='mt-1 block text-xs text-muted-foreground' role='status'>
+                  {cardStatus}
+                </span>
+              ) : null}
+            </span>
+          </div>
+
+          <div className={enabledCard}>
             {/* Stretched button keeps the whole card clickable without nesting
                 interactive elements inside a <button>. */}
             <button
               aria-label='Deposit token'
               className='absolute inset-0 cursor-pointer rounded-lg'
+              disabled={isBusy}
               onClick={() => onSelect("deposit")}
               type='button'
             />
@@ -67,7 +101,7 @@ export function AddFundsDialog({
             <button
               aria-label='Swap to USDFC'
               className={`absolute inset-0 rounded-lg ${squidAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}
-              disabled={!squidAvailable}
+              disabled={isBusy || !squidAvailable}
               onClick={() => onSelect("squid")}
               type='button'
             />
