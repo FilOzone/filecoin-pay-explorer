@@ -305,8 +305,8 @@ export function getDepositNetworkFeeMaximum(
   allowance: bigint,
 ): bigint {
   const routeFee = getSourceNativeCosts({ fees: [], gasCosts: quote.gasCosts }, sourceChainId).gas;
-  const approvalCount = isNativeToken(sourceToken) || allowance >= quote.sourceAmount ? 0n : allowance === 0n ? 1n : 2n;
-  const transactionCount = 1n + approvalCount;
+  const transactionCount =
+    isNativeToken(sourceToken) || allowance === quote.sourceAmount ? 1n : allowance > 0n ? 3n : 2n;
   return applyNetworkFeeExecutionBuffer(sourceChainId, routeFee) * transactionCount;
 }
 
