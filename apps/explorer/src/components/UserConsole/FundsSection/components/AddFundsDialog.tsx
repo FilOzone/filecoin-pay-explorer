@@ -88,7 +88,7 @@ export function AddFundsDialog({
               <span className='mt-1 block text-sm text-muted-foreground'>
                 {squidAvailable ? (
                   <>
-                    Swap ETH, USDC and more from another chain into USDFC via{" "}
+                    Pay USDC from another chain and deposit the resulting USDFC directly into Filecoin Pay via{" "}
                     {/* `relative` lifts the link above the stretched button so it stays clickable. */}
                     <a
                       className='relative underline underline-offset-2'
