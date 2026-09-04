@@ -114,20 +114,17 @@ describe("mergeSyncedRecords", () => {
     assert.equal(merged[0].source, "chain");
   });
 
-  it("dedupes case-insensitively and lets the local record win entirely", () => {
-    const local = [
-      {
-        name: "my-local-name",
-        sessionKeyPublic: SIGNER_A.toUpperCase() as `0x${string}`,
-        scopes: ["terminateService"] as ScopeId[],
-        createdAt: 1,
-      },
-    ];
-    const { merged, addedCount } = mergeSyncedRecords(local, [synced({ name: "chain-name" })]);
+  it("dedupes case-insensitively, keeps the local name and source, and unions in scopes from chain", () => {
+    const local = {
+      name: "my-local-name",
+      sessionKeyPublic: SIGNER_A.toUpperCase() as `0x${string}`,
+      scopes: ["terminateService"] as ScopeId[],
+      createdAt: 1,
+    };
+    const { merged, addedCount, updatedCount } = mergeSyncedRecords([local], [synced({ name: "chain-name" })]);
     assert.equal(addedCount, 0);
-    assert.equal(merged.length, 1);
-    assert.equal(merged[0].name, "my-local-name");
-    assert.equal(merged[0].source, undefined);
+    assert.equal(updatedCount, 1);
+    assert.deepEqual(merged, [{ ...local, scopes: ["terminateService", "createDataSet"] }]);
   });
 
   it("reports 0 added when everything is already up to date", () => {
