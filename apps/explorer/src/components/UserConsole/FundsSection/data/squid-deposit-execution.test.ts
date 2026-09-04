@@ -78,14 +78,13 @@ function fakeSource({
     readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
       if (functionName === "balanceOf") return tokenBalance;
       allowanceReads += 1;
-      return allowance > 0n || (approvalUpdatesAllowance && allowanceReads > 1) ? 100_000_000n : 0n;
+      return approvalUpdatesAllowance && allowanceReads > 1 ? request.sourceAmount : allowance;
     }),
     waitForTransactionReceipt: vi.fn(async () => ({ status: receiptStatus })),
   } as unknown as SquidDepositSourceClient;
 }
 
 function fakeWallet() {
-  const hashes = [APPROVAL_HASH, ROUTE_HASH];
   let nonce = 0;
   return {
     account: { address: OWNER },
@@ -96,7 +95,7 @@ function fakeWallet() {
       gasPrice: 1_000_000_000n,
       nonce: nonce++,
     })),
-    sendTransaction: vi.fn(async () => hashes.shift() as Hash),
+    sendTransaction: vi.fn(async ({ to }: { to: Address }) => (to === USDC ? APPROVAL_HASH : ROUTE_HASH)),
   } as unknown as SquidDepositWalletClient & {
     prepareTransactionRequest: ReturnType<typeof vi.fn>;
     sendTransaction: ReturnType<typeof vi.fn>;
@@ -117,7 +116,7 @@ describe("fetchSquidDepositStatus", () => {
     ["success", "success", 200],
     ["hook-failed", "partial_success", 200],
     ["failed", "refund", 200],
-    ["failed", "needs_gas", 200],
+    ["needs-gas", "needs_gas", 200],
     ["pending", "ongoing", 200],
   ])("maps Squid's answer to %s", async (expected, status, httpStatus) => {
     const fetch = vi.fn(async () => statusResponse(status, httpStatus));
@@ -205,6 +204,22 @@ describe("awaitSquidDepositSettlement", () => {
     });
     await expect(attempt).rejects.toMatchObject({ name: "SquidDepositError", reason, transactionHash: ROUTE_HASH });
     await expect(attempt).rejects.toThrow(message);
+  });
+
+  it("keeps NEEDS_GAS distinct and actionable for later recovery", async () => {
+    const attempt = awaitSquidDepositSettlement({
+      destinationClient: fakeDestination([100n]),
+      fundsBefore: 100n,
+      minimumDestinationAmount: 1n,
+      quoteId: "quote-1",
+      sleep: noSleep,
+      sourceChainId: 8453,
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("needs_gas")) },
+      target,
+      transactionHash: ROUTE_HASH,
+    });
+    await expect(attempt).rejects.toMatchObject({ reason: "needs-gas", transactionHash: ROUTE_HASH });
+    await expect(attempt).rejects.toThrow("Add gas from the Squid route link");
   });
 
   it("tolerates a single failed status request", async () => {
@@ -338,7 +353,7 @@ describe("executeSquidDeposit", () => {
     expect(broadcasts).toEqual([{ transactionHash: ROUTE_HASH, fundsBefore: 100n }]);
   });
 
-  it("skips the approval when the allowance already covers the amount", async () => {
+  it("skips the approval only when the allowance exactly matches the amount", async () => {
     const wallet = fakeWallet();
     await executeSquidDeposit({
       destinationClient: fakeDestination([100n, 195n]),
@@ -351,6 +366,28 @@ describe("executeSquidDeposit", () => {
       walletClient: wallet,
     });
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("zeros an oversized allowance before approving the exact amount", async () => {
+    const wallet = fakeWallet();
+    await executeSquidDeposit({
+      destinationClient: fakeDestination([100n, 195n]),
+      ...signingChecks,
+      quote,
+      request,
+      sleep: noSleep,
+      sourceClient: fakeSource({ allowance: request.sourceAmount + 1n }),
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      walletClient: wallet,
+    });
+    const transactions = wallet.sendTransaction.mock.calls as unknown as Array<[{ data: Hex }]>;
+    expect(
+      transactions.slice(0, 2).map(([transaction]) => decodeFunctionData({ abi: erc20Abi, data: transaction.data })),
+    ).toEqual([
+      { functionName: "approve", args: [getAddress(SQUID_ROUTER_ADDRESS), 0n] },
+      { functionName: "approve", args: [getAddress(SQUID_ROUTER_ADDRESS), request.sourceAmount] },
+    ]);
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(3);
   });
 
   it("refuses to run when the wallet is on another network", async () => {
@@ -381,7 +418,7 @@ describe("executeSquidDeposit", () => {
       walletClient: fakeWallet(),
     });
     await expect(attempt).rejects.toBeInstanceOf(SquidDepositError);
-    await expect(attempt).rejects.toMatchObject({ reason: "reverted", transactionHash: APPROVAL_HASH });
+    await expect(attempt).rejects.toMatchObject({ reason: "reverted", transactionHash: ROUTE_HASH });
   });
 
   it("revalidates the provider account immediately before signing", async () => {
@@ -575,7 +612,7 @@ describe("executeSquidDeposit", () => {
         squid: { integratorId: "id" },
         walletClient: unchangedAllowanceWallet,
       }),
-    ).rejects.toThrow("allowance is insufficient after approval");
+    ).rejects.toThrow("allowance does not match the reviewed spend after approval");
     expect(unchangedAllowanceWallet.sendTransaction).toHaveBeenCalledTimes(1);
   });
 });
