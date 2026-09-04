@@ -18,14 +18,21 @@ import {
   SelectValue,
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
-import { CUSTOM_OPTION, useAddServiceSubmit, useServiceSelection, useTokenSelection } from "./hooks";
+import {
+  CUSTOM_OPTION,
+  useAddServiceSubmit,
+  useFilecoinGasBalance,
+  useServiceSelection,
+  useTokenSelection,
+} from "./hooks";
 
 interface AddServiceDialogProps {
   open: boolean;
@@ -79,6 +86,9 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const tokenSelection = useTokenSelection(open);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
   const isBusy = isSubmitting || isExecuting;
+  const gasBalance = useFilecoinGasBalance(open);
+  const funding = useFundingLaunch();
+  const previousOwner = useRef(gasBalance.owner);
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -91,9 +101,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; open is the only real dependency
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
   useEffect(() => {
-    if (!open) {
+    const ownerChanged = previousOwner.current !== gasBalance.owner;
+    previousOwner.current = gasBalance.owner;
+    if (!open || ownerChanged) {
       serviceSelection.reset();
       tokenSelection.reset();
       setDepositAmount("");
@@ -102,7 +114,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
       setLockupAllowance("");
       setRateAllowance("");
     }
-  }, [open]);
+  }, [open, gasBalance.owner]);
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
@@ -154,7 +166,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
     !isDepositing || (balance !== undefined && parsedDeposit !== null && parsedDeposit <= balance);
-  const canSubmit = isOperatorValid && !!token && isDepositValid && hasSufficientBalance && areLimitsValid && !isBusy;
+  const canSubmit =
+    isOperatorValid &&
+    !!token &&
+    isDepositValid &&
+    hasSufficientBalance &&
+    areLimitsValid &&
+    gasBalance.status === "funded" &&
+    !isBusy;
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && isBusy) return;
@@ -174,7 +193,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+    <Dialog open={open && !funding.isSquidOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'
         showCloseButton={!isBusy}
@@ -467,6 +486,32 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
               </div>
             )}
           </div>
+
+          {gasBalance.status === "loading" ? (
+            <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
+            </p>
+          ) : gasBalance.status === "unavailable" ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Your FIL balance could not be loaded. Retry before adding the service.
+              </span>
+              <Button onClick={gasBalance.refetch} size='compact' type='button' variant='tertiary'>
+                Retry
+              </Button>
+            </div>
+          ) : gasBalance.status === "empty" ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Add FIL for transaction fees before adding this service.
+              </span>
+              <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
+                Add FIL
+              </Button>
+            </div>
+          ) : null}
 
           <p className='text-xs text-muted-foreground'>
             The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any time.

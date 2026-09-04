@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { erc20Abi, type Hex, isAddress, zeroAddress } from "viem";
-import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import { useAccount, useBalance, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
+import { filecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -212,6 +213,21 @@ export function useTokenSelection(open: boolean): TokenSelection {
     balance,
     isLoadingBalance,
     reset,
+  };
+}
+
+export function useFilecoinGasBalance(open: boolean) {
+  const { constants } = useSynapse();
+  const { address: owner } = useAccount();
+  const query = useBalance({
+    address: owner,
+    chainId: constants.chain.id,
+    query: { enabled: !!owner && open, refetchOnMount: "always" },
+  });
+  return {
+    owner,
+    status: filecoinGasBalanceStatus(query.data?.value, query.isFetching, query.isError),
+    refetch: () => void query.refetch(),
   };
 }
 
