@@ -24,6 +24,12 @@ const localStorage = {
   removeItem: (key: string) => stored.delete(key),
   setItem: (key: string, value: string) => stored.set(key, value),
 };
+const locks = {
+  request: vi.fn(
+    async <T,>(_name: string, _options: LockOptions, callback: (lock: Lock | null) => T | PromiseLike<T>) =>
+      callback({} as Lock),
+  ),
+} as unknown as LockManager;
 
 vi.mock("@privy-io/react-auth", () => ({
   useFiatOnramp: () => ({ fund: privy.fund }),
@@ -50,6 +56,7 @@ function Harness() {
 beforeEach(() => {
   stored.clear();
   vi.stubGlobal("window", { localStorage });
+  vi.stubGlobal("navigator", { locks });
   account.address = ADDRESS;
   chain.readContract.mockReset();
   onPurchased.mockReset();
@@ -59,6 +66,7 @@ beforeEach(() => {
   queries.invalidateQueries.mockReset();
   toast.error.mockReset();
   toast.info.mockReset();
+  vi.mocked(locks.request).mockClear();
   harness.contextKey = `${ADDRESS}:314`;
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -219,6 +227,23 @@ describe("useCardPurchase", () => {
     expect(privy.fund).toHaveBeenCalledOnce();
     expect(onPurchased).toHaveBeenCalledWith(15n);
     expect(stored.size).toBe(0);
+  });
+
+  it("blocks a marker written by another tab after this hook mounts", async () => {
+    await act(async () => {
+      create(<Harness />);
+    });
+    stored.set(
+      `filecoin-pay:card-purchase:v1:${ADDRESS.toLowerCase()}`,
+      JSON.stringify({ before: "10", contextKey: harness.contextKey, recipient: ADDRESS }),
+    );
+
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.fund).not.toHaveBeenCalled();
+    expect(latest.label).toBe("Check for purchased USDC");
+    expect(stored.size).toBe(1);
+    expect(locks.request).toHaveBeenCalledOnce();
   });
 
   it("does not resume a stale destination after the wallet changes", async () => {
