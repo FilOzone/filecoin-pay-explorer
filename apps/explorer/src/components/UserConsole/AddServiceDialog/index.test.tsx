@@ -240,6 +240,30 @@ describe("AddServiceDialog", () => {
     expect(primaryButton(renderer).props.disabled).toBe(false);
   });
 
+  it("allows only one submission while the fresh FIL check is pending", async () => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+    const submitButton = primaryButton(renderer);
+
+    act(() => {
+      submitButton.props.onClick();
+      submitButton.props.onClick();
+    });
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+    expect(mocks.submit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).toHaveBeenCalledOnce();
+  });
+
   it("keeps the form while Squid is open and restores it after cancellation", () => {
     const { renderer } = renderDialog();
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
