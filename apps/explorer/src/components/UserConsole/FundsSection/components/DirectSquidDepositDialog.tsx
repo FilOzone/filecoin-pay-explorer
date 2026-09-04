@@ -55,10 +55,12 @@ import {
 import {
   assertExecutableQuoteWithinReview,
   captureReviewedSquidDepositCaps,
+  FIL_GAS_TOP_UP_AMOUNT,
   getDepositNetworkFeeMaximum,
   getDepositRequiredNativeBalance,
   isExecutableQuote,
   isNativeToken,
+  planFilGasTopUp,
   requestSquidDepositRoute,
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
@@ -117,6 +119,7 @@ export function DirectSquidDepositDialog({
   const [sourceChainId, setSourceChainId] = useState(DEFAULT_SOURCE_CHAIN);
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [includeFilGas, setIncludeFilGas] = useState(true);
   const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositStage | "preparing" | null>(null);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
@@ -125,6 +128,7 @@ export function DirectSquidDepositDialog({
   const submitting = useRef(false);
   const mounted = useRef(true);
   const initializedSelectionScope = useRef("");
+  const initializedFilGasScope = useRef("");
   const switchedToSource = useRef(false);
   const latestContext = useRef<{
     open: boolean;
@@ -226,6 +230,17 @@ export function DirectSquidDepositDialog({
     queryKey: ["direct-squid-deposit-balances", sourceChainId, sourceToken?.token, owner],
     refetchInterval: 15_000,
   });
+  const recipientFilQuery = useQuery({
+    enabled: open && !!recipient && !!destinationClient,
+    queryFn: () => {
+      if (!recipient || !destinationClient) throw new Error("Filecoin balance is unavailable");
+      return destinationClient.getBalance({ address: recipient });
+    },
+    queryKey: ["direct-squid-destination-fil", recipient],
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+    retry: 1,
+  });
   const quoteQuery = useQuery({
     enabled:
       open &&
@@ -234,22 +249,28 @@ export function DirectSquidDepositDialog({
       !!payingWallet &&
       !!sourceToken &&
       parsedAmount !== null &&
+      !recipientFilQuery.isFetching &&
       !balancesQuery.isError &&
       (balancesQuery.data?.token ?? 0n) >= parsedAmount,
-    queryFn: () => {
+    queryFn: async () => {
       if (!recipient || !payingWallet || !sourceToken || parsedAmount === null) throw new Error("Quote unavailable");
-      return requestSquidDepositRoute(
-        {
-          ...DEPOSIT_TARGET,
-          owner: getAddress(payingWallet.address),
-          recipient,
-          sourceAmount: parsedAmount,
-          sourceChainId,
-          sourceToken: sourceToken.token,
-        },
-        squid,
-        { quoteOnly: true },
-      );
+      const request = {
+        ...DEPOSIT_TARGET,
+        owner: getAddress(payingWallet.address),
+        recipient,
+        sourceAmount: parsedAmount,
+        sourceChainId,
+        sourceToken: sourceToken.token,
+      };
+      const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
+      if (!includeFilGas) return quote;
+      const filGasTopUp = planFilGasTopUp(quote, Date.now);
+      if (!filGasTopUp) {
+        throw new Error(
+          "Squid could not safely add 0.25 FIL for this amount. Increase the amount or turn off the FIL option.",
+        );
+      }
+      return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
     },
     queryKey: [
       "direct-squid-deposit-quote",
@@ -258,6 +279,7 @@ export function DirectSquidDepositDialog({
       sourceChainId,
       sourceToken?.token,
       parsedAmount?.toString(),
+      includeFilGas,
     ],
     retry: false,
   });
@@ -270,6 +292,17 @@ export function DirectSquidDepositDialog({
     token: sourceToken?.token,
     amount: parsedAmount ?? undefined,
   };
+
+  useEffect(() => {
+    if (!open) {
+      initializedFilGasScope.current = "";
+      return;
+    }
+    if (!recipient || recipientFilQuery.isFetching) return;
+    if (initializedFilGasScope.current === recipient) return;
+    initializedFilGasScope.current = recipient;
+    setIncludeFilGas(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
+  }, [open, recipient, recipientFilQuery.data, recipientFilQuery.isError, recipientFilQuery.isFetching]);
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
@@ -456,6 +489,7 @@ export function DirectSquidDepositDialog({
       const request: SquidDepositRouteRequest = {
         ...DEPOSIT_TARGET,
         ...snapshot,
+        ...(reviewed.quote.filGasTopUp ? { filGasTopUp: reviewed.quote.filGasTopUp } : {}),
       };
       const reviewedCaps = captureReviewedSquidDepositCaps(reviewed.quote, snapshot.sourceToken);
 
@@ -587,8 +621,8 @@ export function DirectSquidDepositDialog({
         <DialogHeader>
           <DialogTitle>{reviewed ? "Review Squid deposit" : "Pay with another token"}</DialogTitle>
           <DialogDescription>
-            Squid swaps your selected token to USDFC and deposits it directly into Filecoin Pay. There is no Filecoin
-            wallet signature and no FIL is required.
+            Squid swaps your selected token to USDFC and deposits it directly into Filecoin Pay. Squid covers the
+            Filecoin destination transaction, so no Filecoin wallet signature is required.
             {recipient ? (
               <span className='mt-1 block font-mono text-xs'>Pay account {formatAddress(recipient)}</span>
             ) : null}
@@ -685,6 +719,13 @@ export function DirectSquidDepositDialog({
                 <span className='text-muted-foreground'>Receive at least:</span>{" "}
                 {formatUnits(reviewed.quote.minimumDestinationAmount, 18)} USDFC
               </p>
+              {reviewed.quote.filGasTopUp ? (
+                <p>
+                  <span className='text-muted-foreground'>Wallet top-up:</span> At least{" "}
+                  {formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL for transaction fees, using{" "}
+                  {formatUnits(reviewed.quote.filGasTopUp.spendUsdfc, 18)} USDFC
+                </p>
+              ) : null}
               <p>
                 <span className='text-muted-foreground'>Destination:</span> Filecoin Pay account{" "}
                 {formatAddress(reviewed.context.recipient)}
@@ -799,6 +840,29 @@ export function DirectSquidDepositDialog({
                     </Button>
                   </div>
                 ) : null}
+              </div>
+              <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
+                <input
+                  checked={includeFilGas}
+                  className='mt-0.5 h-4 w-4 accent-primary'
+                  id='direct-squid-fil-gas'
+                  onChange={(event) => {
+                    setIncludeFilGas(event.target.checked);
+                    setReviewed(null);
+                  }}
+                  type='checkbox'
+                />
+                <div className='grid gap-1'>
+                  <Label htmlFor='direct-squid-fil-gas'>Add 0.25 FIL for transaction fees</Label>
+                  <p className='text-xs text-muted-foreground'>
+                    Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions.
+                  </p>
+                  {quote?.filGasTopUp ? (
+                    <p className='text-xs text-muted-foreground'>
+                      Uses {formatUnits(quote.filGasTopUp.spendUsdfc, 18)} USDFC from the amount received.
+                    </p>
+                  ) : null}
+                </div>
               </div>
               {quoteQuery.isFetching ? (
                 <p className='inline-flex items-center gap-2 text-muted-foreground'>
