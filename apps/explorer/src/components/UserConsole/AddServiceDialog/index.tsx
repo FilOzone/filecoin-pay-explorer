@@ -23,6 +23,7 @@ import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
 import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
+import { FIL_GAS_TOP_UP_AMOUNT } from "@/components/UserConsole/FundsSection/data/squid-deposit-route";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -89,6 +90,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const gasBalance = useFilecoinGasBalance(open);
   const funding = useFundingLaunch();
   const previousOwner = useRef(gasBalance.owner);
+  const previousSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -100,6 +102,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
+  const filFaucet = constants.faucets?.find((faucet) => faucet.name.toLowerCase().includes("fil"));
+  const requiredFil = formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
   useEffect(() => {
@@ -115,6 +119,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
       setRateAllowance("");
     }
   }, [open, gasBalance.owner]);
+
+  useEffect(() => {
+    if (previousSquidOpen.current && !funding.isSquidOpen) void gasBalance.refresh();
+    previousSquidOpen.current = funding.isSquidOpen;
+  }, [funding.isSquidOpen, gasBalance.refresh]);
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
@@ -173,6 +182,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
     hasSufficientBalance &&
     areLimitsValid &&
     gasBalance.status === "funded" &&
+    gasBalance.isCorrectChain &&
     !isBusy;
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
@@ -180,9 +190,10 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
     onOpenChange(nextOpen);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    void submit({
+    if (!gasBalance.isCorrectChain || (await gasBalance.refresh()) !== "funded") return;
+    await submit({
       operatorAddress,
       token,
       parsedDeposit,
@@ -487,7 +498,23 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
             )}
           </div>
 
-          {gasBalance.status === "loading" ? (
+          {!gasBalance.isCorrectChain ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Switch back to {constants.label} before adding this service.
+              </span>
+              <Button
+                disabled={gasBalance.isSwitchingNetwork}
+                onClick={gasBalance.switchToFilecoin}
+                size='compact'
+                type='button'
+                variant='primary'
+              >
+                {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${constants.label}`}
+              </Button>
+            </div>
+          ) : gasBalance.status === "loading" ? (
             <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
               <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
             </p>
@@ -497,19 +524,30 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
                 <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
                 Your FIL balance could not be loaded. Retry before adding the service.
               </span>
-              <Button onClick={gasBalance.refetch} size='compact' type='button' variant='tertiary'>
+              <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
                 Retry
               </Button>
             </div>
-          ) : gasBalance.status === "empty" ? (
+          ) : gasBalance.status === "insufficient" ? (
             <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
               <span className='inline-flex items-start gap-2'>
                 <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
-                Add FIL for transaction fees before adding this service.
+                Add at least {requiredFil} FIL for transaction fees before adding this service.
               </span>
-              <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
-                Add FIL
-              </Button>
+              {constants.chain.slug === "mainnet" ? (
+                <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
+                  Add FIL
+                </Button>
+              ) : filFaucet ? (
+                <a
+                  className='font-medium text-primary hover:underline'
+                  href={filFaucet.url}
+                  rel='noreferrer'
+                  target='_blank'
+                >
+                  Get testnet FIL
+                </a>
+              ) : null}
             </div>
           ) : null}
 
@@ -522,7 +560,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
           <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
-          <Button variant='primary' onClick={handleSubmit} disabled={!canSubmit} size='compact'>
+          <Button variant='primary' onClick={() => void handleSubmit()} disabled={!canSubmit} size='compact'>
             {isBusy ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

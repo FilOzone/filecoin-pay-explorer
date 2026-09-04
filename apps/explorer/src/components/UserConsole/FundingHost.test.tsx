@@ -153,6 +153,26 @@ describe("FundingHost", () => {
     expect(dialogs.squidOpen).toBe(false);
   });
 
+  it("keeps Squid open across its intentional source-chain switch", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-squid": true }).props.onClick());
+
+    wallet.chainId = 8453;
+    await rerenderHost(renderer);
+
+    expect(dialogs.squidOpen).toBe(true);
+  });
+
+  it("closes Squid when the connected account changes", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-squid": true }).props.onClick());
+
+    wallet.address = "0xABCDEF0000000000000000000000000000000002";
+    await rerenderHost(renderer);
+
+    expect(dialogs.squidOpen).toBe(false);
+  });
+
   it("opens direct deposit without a one-choice picker on Calibration", async () => {
     wallet.chainId = 314159;
     const renderer = await renderHost();
