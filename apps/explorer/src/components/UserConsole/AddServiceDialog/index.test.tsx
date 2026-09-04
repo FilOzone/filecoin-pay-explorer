@@ -13,11 +13,15 @@ const mocks = vi.hoisted(() => ({
   isSubmitting: false,
   isExecuting: false,
   submit: vi.fn(),
-  filBalanceStatus: "funded" as "loading" | "unavailable" | "empty" | "funded",
+  filBalanceStatus: "funded" as "loading" | "unavailable" | "insufficient" | "funded",
   filBalanceOwner: "0xABCDEF0000000000000000000000000000000001",
-  refetchFilBalance: vi.fn(),
+  refreshFilBalance: vi.fn(),
+  isCorrectChain: true,
+  isSwitchingNetwork: false,
+  switchToFilecoin: vi.fn(),
   isSquidOpen: false,
   openSquid: vi.fn(),
+  network: "mainnet" as "mainnet" | "calibration",
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -70,7 +74,14 @@ vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({
 }));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
 vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { chain: { blockExplorers: { default: { url: "https://example.com" } } } } }),
+  default: () => ({
+    constants: {
+      chain: { blockExplorers: { default: { url: "https://example.com" } }, slug: mocks.network },
+      faucets:
+        mocks.network === "calibration" ? [{ name: "Get FIL", url: "https://faucet.example.com/filecoin" }] : undefined,
+      label: mocks.network === "calibration" ? "Calibration" : "Mainnet",
+    },
+  }),
 }));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
@@ -99,9 +110,12 @@ vi.mock("./hooks", () => ({
     reset: vi.fn(),
   }),
   useFilecoinGasBalance: () => ({
+    isCorrectChain: mocks.isCorrectChain,
+    isSwitchingNetwork: mocks.isSwitchingNetwork,
     owner: mocks.filBalanceOwner,
+    refresh: mocks.refreshFilBalance,
     status: mocks.filBalanceStatus,
-    refetch: mocks.refetchFilBalance,
+    switchToFilecoin: mocks.switchToFilecoin,
   }),
   useAddServiceSubmit: (onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
@@ -130,9 +144,13 @@ beforeEach(() => {
   mocks.dialogOpen = false;
   mocks.filBalanceStatus = "funded";
   mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
+  mocks.isCorrectChain = true;
+  mocks.isSwitchingNetwork = false;
   mocks.isSquidOpen = false;
+  mocks.network = "mainnet";
   mocks.openSquid.mockReset();
-  mocks.refetchFilBalance.mockReset();
+  mocks.refreshFilBalance.mockReset().mockResolvedValue("funded");
+  mocks.switchToFilecoin.mockReset();
   mocks.isSubmitting = false;
   mocks.isExecuting = false;
   mocks.submit.mockReset();
@@ -143,7 +161,7 @@ beforeEach(() => {
 
 describe("AddServiceDialog", () => {
   it("blocks an empty FIL wallet and opens the Squid flow with its FIL option visible", () => {
-    mocks.filBalanceStatus = "empty";
+    mocks.filBalanceStatus = "insufficient";
     const { renderer, onOpenChange } = renderDialog();
 
     expect(primaryButton(renderer).props.disabled).toBe(true);
@@ -162,8 +180,64 @@ describe("AddServiceDialog", () => {
     if (status === "unavailable") {
       const retry = renderer.root.findAllByType("button").find((button) => button.children.includes("Retry"));
       act(() => retry?.props.onClick());
-      expect(mocks.refetchFilBalance).toHaveBeenCalledOnce();
+      expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
     }
+  });
+
+  it("uses the Calibration faucet instead of the mainnet-only Squid route", () => {
+    mocks.network = "calibration";
+    mocks.filBalanceStatus = "insufficient";
+    const { renderer } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    expect(
+      renderer.root.findAllByType("a").some((link) => link.props.href === "https://faucet.example.com/filecoin"),
+    ).toBe(true);
+    expect(mocks.openSquid).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on a source network and offers a switch back to Filecoin", () => {
+    mocks.isCorrectChain = false;
+    const { renderer } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    const switchBack = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Switch to Mainnet"));
+    act(() => switchBack?.props.onClick());
+    expect(mocks.switchToFilecoin).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes FIL after returning from Squid", () => {
+    mocks.isSquidOpen = true;
+    const { renderer } = renderDialog();
+    mocks.refreshFilBalance.mockClear();
+
+    mocks.isSquidOpen = false;
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks FIL immediately before submitting", async () => {
+    const { renderer } = renderDialog();
+    mocks.refreshFilBalance.mockResolvedValue("insufficient");
+
+    await act(() => primaryButton(renderer).props.onClick());
+
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("unblocks after an insufficient balance refreshes above the reserve", () => {
+    mocks.filBalanceStatus = "insufficient";
+    const { renderer } = renderDialog();
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+
+    mocks.filBalanceStatus = "funded";
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    expect(primaryButton(renderer).props.disabled).toBe(false);
   });
 
   it("keeps the form while Squid is open and restores it after cancellation", () => {
