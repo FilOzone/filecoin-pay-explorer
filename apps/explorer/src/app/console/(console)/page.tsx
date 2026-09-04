@@ -152,7 +152,7 @@ const UserConsole = () => {
 
   return (
     <div className='flex flex-col gap-15'>
-      {fundingLink && !depositLink && (
+      {fundingLink && !depositLink && (fundingLink.has("deposit") || fundingLink.has("operator")) && (
         <div
           role='alert'
           className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
