@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCardPurchase, waitForPurchasedUsdc } from "./useCardPurchase";
@@ -16,6 +17,7 @@ const chain = vi.hoisted(() => ({ readContract: vi.fn() }));
 const account = vi.hoisted(() => ({ address: "0x1111111111111111111111111111111111111111" }));
 const queries = vi.hoisted(() => ({ invalidateQueries: vi.fn() }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
+const harness = { contextKey: `${ADDRESS}:314` };
 
 vi.mock("@privy-io/react-auth", () => ({
   useFiatOnramp: () => ({ fund: privy.fund }),
@@ -35,7 +37,7 @@ vi.mock("sonner", () => ({ toast }));
 let latest!: ReturnType<typeof useCardPurchase>;
 const onPurchased = vi.fn();
 function Harness() {
-  latest = useCardPurchase({ address: ADDRESS, contextKey: `${ADDRESS}:314`, onPurchased });
+  latest = useCardPurchase({ address: ADDRESS, contextKey: harness.contextKey, onPurchased });
   return null;
 }
 
@@ -49,6 +51,8 @@ beforeEach(() => {
   queries.invalidateQueries.mockReset();
   toast.error.mockReset();
   toast.info.mockReset();
+  harness.contextKey = `${ADDRESS}:314`;
+  vi.useRealTimers();
   vi.unstubAllEnvs();
 });
 
@@ -99,6 +103,23 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
+  it("still opens card funding after the Strict Mode effect probe", async () => {
+    chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(25n);
+    privy.fund.mockResolvedValue({ status: "confirmed" });
+    await act(async () => {
+      create(
+        <StrictMode>
+          <Harness />
+        </StrictMode>,
+      );
+    });
+
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(onPurchased).toHaveBeenCalledWith(15n);
+  });
+
   it("logs in first and continues only after authentication completes", async () => {
     privy.authenticated = false;
     chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
@@ -116,6 +137,51 @@ describe("useCardPurchase", () => {
       await privy.onLoginComplete?.();
     });
     expect(onPurchased).toHaveBeenCalledWith(2n);
+  });
+
+  it("does not continue login after the initiating network context changes", async () => {
+    privy.authenticated = false;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    act(() => {
+      void latest.buyWithCard();
+    });
+    harness.contextKey = `${ADDRESS}:8453`;
+    await act(async () => {
+      renderer.update(<Harness />);
+    });
+    await act(async () => {
+      await privy.onLoginComplete?.();
+    });
+
+    expect(privy.fund).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Wallet changed during login", expect.anything());
+  });
+
+  it("rechecks a delayed purchase without opening a second checkout", async () => {
+    vi.useFakeTimers();
+    chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    await act(async () => {
+      const purchase = latest.buyWithCard();
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(latest.label).toBe("Check for purchased USDC");
+
+    chain.readContract.mockResolvedValue(25n);
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
   it("does not resume a stale destination after the wallet changes", async () => {

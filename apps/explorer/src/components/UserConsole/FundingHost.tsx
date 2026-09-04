@@ -76,6 +76,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
                 isBusy={card.isBusy}
                 onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
                 onSelect={chooseMethod}
+                onStartNewCardPurchase={card.startAnotherPurchase}
                 open={!chainChanged && launch.isAddFundsOpen}
                 squidAvailable
               />
