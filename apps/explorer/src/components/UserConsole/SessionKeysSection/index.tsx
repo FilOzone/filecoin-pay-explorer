@@ -13,6 +13,7 @@ import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
+import type { AuthorizeParamError } from "@/utils/authorizeParam";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
 import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
@@ -25,6 +26,8 @@ interface SessionKeysSectionProps {
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
   prefillNetwork?: Network | null;
+  /** Set when the link carried an `authorize` value that could not be used. */
+  prefillError?: AuthorizeParamError | null;
 }
 
 type ConnectedProps = SessionKeysSectionProps & { account: Hex };
@@ -70,7 +73,20 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
   return <ConnectedSessionKeys account={account} {...rest} />;
 };
 
-const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes, prefillNetwork }: ConnectedProps) => {
+const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
+  "bad-checksum": "The address in this link is misspelled, so nothing was added. Ask for a new link.",
+  "not-an-address": "This link does not contain a valid address, so nothing was added. Ask for a new link.",
+  "no-network": "This link does not say which network it is for, so nothing was added. Ask for a new link.",
+};
+
+const ConnectedSessionKeys = ({
+  network,
+  account,
+  prefillAddress,
+  prefillScopes,
+  prefillNetwork,
+  prefillError,
+}: ConnectedProps) => {
   const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsPending, markConfirmed, registry } =
     useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
@@ -105,7 +121,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
 
   // URL request (?authorize=) guards
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
-  const isNetworkMismatch = prefillAddress != null && prefillNetwork != null && prefillNetwork !== network;
+  const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
@@ -195,6 +211,15 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
             </Button>
           )}
         </Notice>
+      )}
+      {prefillError && (
+        <div
+          role='alert'
+          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
+        >
+          <p className='font-semibold'>This link could not be used</p>
+          <p className='text-xs mt-1'>{PREFILL_ERROR_COPY[prefillError]}</p>
+        </div>
       )}
       {isSelfAuthRequest && (
         <Notice tone='warn' className='p-4'>

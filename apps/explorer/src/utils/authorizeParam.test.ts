@@ -1,56 +1,51 @@
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
 import { describe, it } from "vitest";
-import { parseAuthorizeParam, parseNetworkParam, parseScopesParam, presetScopeStates } from "./authorizeParam";
+import {
+  parseAuthorizeLink,
+  parseAuthorizeParam,
+  parseNetworkParam,
+  parseScopesParam,
+  presetScopeStates,
+} from "./authorizeParam";
 
 const LOWERCASE = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 const CHECKSUMMED = getAddress(LOWERCASE); // 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 
 describe("parseAuthorizeParam", () => {
   it("accepts a valid checksummed address unchanged", () => {
-    assert.equal(parseAuthorizeParam(CHECKSUMMED), CHECKSUMMED);
+    assert.deepEqual(parseAuthorizeParam(CHECKSUMMED), { address: CHECKSUMMED });
   });
 
   it("checksums an all-lowercase hex address", () => {
-    assert.equal(parseAuthorizeParam(LOWERCASE), CHECKSUMMED);
+    assert.deepEqual(parseAuthorizeParam(LOWERCASE), { address: CHECKSUMMED });
   });
 
-  it("rejects a mixed-case address with a wrong checksum", () => {
-    assert.equal(parseAuthorizeParam("0xF39FD6e51aad88F6F4ce6aB8827279cffFb92266"), null);
+  it("reports an all-uppercase hex address as a bad checksum, as viem does", () => {
+    assert.deepEqual(parseAuthorizeParam(`0x${LOWERCASE.slice(2).toUpperCase()}`), { error: "bad-checksum" });
   });
 
-  it("rejects junk text", () => {
-    assert.equal(parseAuthorizeParam("not-an-address"), null);
+  it("reports a mixed-case address with a wrong checksum", () => {
+    assert.deepEqual(parseAuthorizeParam("0xF39FD6e51aad88F6F4ce6aB8827279cffFb92266"), { error: "bad-checksum" });
   });
 
-  it("rejects a script tag", () => {
-    assert.equal(parseAuthorizeParam("<script>alert(1)</script>"), null);
+  it("reports junk text, script tags, ENS names, and short hex as not an address", () => {
+    for (const input of ["not-an-address", "<script>alert(1)</script>", "vitalik.eth", "0x1234"]) {
+      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" }, input);
+    }
   });
 
-  it("rejects an ENS name", () => {
-    assert.equal(parseAuthorizeParam("vitalik.eth"), null);
-  });
-
-  it("rejects short hex", () => {
-    assert.equal(parseAuthorizeParam("0x1234"), null);
-  });
-
-  it("rejects the empty string", () => {
+  it("returns null for the empty string, whitespace, null, and undefined", () => {
     assert.equal(parseAuthorizeParam(""), null);
-  });
-
-  it("returns null for null", () => {
+    assert.equal(parseAuthorizeParam("   "), null);
     assert.equal(parseAuthorizeParam(null), null);
-  });
-
-  it("returns null for undefined", () => {
     assert.equal(parseAuthorizeParam(undefined), null);
   });
 
   it("never throws, even on hostile input", () => {
     for (const input of ["0x", "0xgg".padEnd(42, "g"), "javascript:alert(1)", "%3Cscript%3E", "0x0000"]) {
-      assert.doesNotThrow(() => parseAuthorizeParam(input));
-      assert.equal(parseAuthorizeParam(input), null);
+      assert.doesNotThrow(() => parseAuthorizeParam(input), input);
+      assert.deepEqual(parseAuthorizeParam(input), { error: "not-an-address" }, input);
     }
   });
 });
@@ -140,5 +135,27 @@ describe("parseNetworkParam", () => {
     assert.equal(parseNetworkParam(""), null);
     assert.equal(parseNetworkParam(null), null);
     assert.equal(parseNetworkParam(undefined), null);
+  });
+});
+
+describe("parseAuthorizeLink", () => {
+  const link = (query: string) => parseAuthorizeLink(new URLSearchParams(query));
+
+  it("returns every validated field for a complete link", () => {
+    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration`), {
+      address: CHECKSUMMED,
+      scopes: ["addPieces"],
+      network: "calibration",
+    });
+  });
+
+  it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {
+    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces`), { error: "no-network" });
+    assert.deepEqual(link(`authorize=${LOWERCASE}&network=calibraiton`), { error: "no-network" });
+  });
+
+  it("reports the address error first, and nothing when there is no request", () => {
+    assert.deepEqual(link("authorize=0xnope&network=mainnet"), { error: "not-an-address" });
+    assert.equal(link("deposit=2"), null);
   });
 });

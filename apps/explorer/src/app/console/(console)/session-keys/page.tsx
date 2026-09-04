@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import SessionKeysSection from "@/components/UserConsole/SessionKeysSection";
 import type { Network } from "@/types";
-import { parseAuthorizeParam, parseNetworkParam, parseScopesParam } from "@/utils/authorizeParam";
+import { type AuthorizeParamError, parseAuthorizeLink } from "@/utils/authorizeParam";
 import { getNetworkFromChainId } from "@/utils/network";
 import type { ScopeId } from "@/utils/sessionKeys";
 
@@ -17,16 +17,18 @@ const SessionKeysPage = () => {
   const [prefillAddress, setPrefillAddress] = useState<`0x${string}` | null>(null);
   const [prefillScopes, setPrefillScopes] = useState<ScopeId[] | null>(null);
   const [prefillNetwork, setPrefillNetwork] = useState<Network | null>(null);
+  const [prefillError, setPrefillError] = useState<AuthorizeParamError | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("authorize") && !params.has("scopes")) return;
-    const requested = parseAuthorizeParam(params.get("authorize"));
-    setPrefillAddress(requested);
-    // Scopes only mean something as part of a valid authorization request.
-    if (requested) {
-      setPrefillScopes(parseScopesParam(params.get("scopes")));
-      // the section refuses to prefill while the wallet is connected to a different chain.
-      setPrefillNetwork(parseNetworkParam(params.get("network")));
+    const link = parseAuthorizeLink(params);
+    if (!link) return;
+    if ("error" in link) {
+      setPrefillError(link.error);
+    } else {
+      setPrefillAddress(link.address);
+      setPrefillScopes(link.scopes);
+      // The section refuses to prefill while the wallet is on a different chain.
+      setPrefillNetwork(link.network);
     }
     params.delete("authorize");
     params.delete("scopes");
@@ -42,6 +44,7 @@ const SessionKeysPage = () => {
       prefillAddress={prefillAddress}
       prefillScopes={prefillScopes}
       prefillNetwork={prefillNetwork}
+      prefillError={prefillError}
     />
   );
 };
