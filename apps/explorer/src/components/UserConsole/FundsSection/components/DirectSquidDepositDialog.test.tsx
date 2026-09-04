@@ -273,7 +273,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       );
     });
 
-    expect(renderer.root.findByType("input").props.value).toBe("12.5");
+    expect(amountInput(renderer).props.value).toBe("12.5");
     expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
   });
 
@@ -291,11 +291,11 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(render());
     });
     await act(async () => {
-      renderer.root.findByType("input").props.onChange({ target: { value: "10" } });
+      amountInput(renderer).props.onChange({ target: { value: "10" } });
       renderer.update(render());
     });
 
-    expect(renderer.root.findByType("input").props.value).toBe("10");
+    expect(amountInput(renderer).props.value).toBe("10");
   });
 
   it.each([
