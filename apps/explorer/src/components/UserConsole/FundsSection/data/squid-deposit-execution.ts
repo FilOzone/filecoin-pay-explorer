@@ -221,7 +221,7 @@ function assertFeeWithinReview(
   value: bigint,
 ) {
   if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
-  if (nativeBalance < feeSoFar + fee + value) throw new Error("Native balance no longer covers gas and route fees");
+  if (nativeBalance < fee + value) throw new Error("Native balance no longer covers gas and route fees");
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {

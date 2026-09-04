@@ -685,4 +685,49 @@ describe("executeSquidDeposit", () => {
     ).rejects.toThrow("allowance does not match the reviewed spend after approval");
     expect(unchangedAllowanceWallet.sendTransaction).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the remaining native balance after a paid approval", async () => {
+    const source = fakeSource({ totalFee: 100n });
+    vi.mocked(source.getBalance).mockResolvedValueOnce(250n).mockResolvedValue(150n);
+    const wallet = fakeWallet();
+    await expect(
+      executeSquidDeposit({
+        ...signingChecks,
+        maxNativeFee: 240n,
+        quote,
+        request,
+        destinationClient: fakeDestination([100n, 195n]),
+        sourceClient: source,
+        walletClient: wallet,
+        sleep: noSleep,
+        squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      }),
+    ).resolves.toMatchObject({ transactionHash: ROUTE_HASH });
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([360n, 359n])("checks remaining balance and cumulative fee cap %s after a reset", async (maxNativeFee) => {
+    const source = fakeSource({ allowanceSequence: [1n, 0n, request.sourceAmount], totalFee: 100n });
+    vi.mocked(source.getBalance).mockResolvedValueOnce(370n).mockResolvedValueOnce(270n).mockResolvedValue(170n);
+    const wallet = fakeWallet();
+    const execution = executeSquidDeposit({
+      ...signingChecks,
+      approvalResetRequired: true,
+      maxNativeFee,
+      quote,
+      request,
+      destinationClient: fakeDestination([100n, 195n]),
+      sourceClient: source,
+      walletClient: wallet,
+      sleep: noSleep,
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+    });
+    if (maxNativeFee === 360n) {
+      await expect(execution).resolves.toMatchObject({ transactionHash: ROUTE_HASH });
+      expect(wallet.sendTransaction).toHaveBeenCalledTimes(3);
+    } else {
+      await expect(execution).rejects.toThrow("Native gas exceeded the reviewed maximum");
+      expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
+    }
+  });
 });

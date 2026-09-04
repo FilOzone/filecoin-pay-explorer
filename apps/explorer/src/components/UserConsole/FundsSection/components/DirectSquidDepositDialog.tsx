@@ -246,6 +246,7 @@ export function DirectSquidDepositDialog({
     recipientFilQuery.data,
     recipientFilQuery.isFetching,
     recipientFilQuery.isError,
+    FIL_GAS_TOP_UP_AMOUNT,
   );
   const quoteQuery = useQuery({
     enabled:
