@@ -76,7 +76,6 @@ export class MetricsEntityManager {
       metric.oneTimePaymentAmount = ZERO_BIG_INT;
       metric.commissionPaid = ZERO_BIG_INT;
       metric.activeRailsCount = ZERO_BIG_INT;
-      metric.totalLocked = ZERO_BIG_INT;
     }
 
     return metric;

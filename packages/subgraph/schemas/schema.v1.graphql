@@ -253,7 +253,6 @@ type DailyTokenMetric @entity(immutable: false) {
 
   # Token utilization
   activeRailsCount: BigInt!
-  totalLocked: BigInt!
 }
 
 type DailyOperatorMetric @entity(immutable: false) {
