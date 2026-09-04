@@ -54,8 +54,9 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     previousChainId.current = chainId;
     setDepositOpen(false);
     launch.closeAddFunds();
-    launch.closeSquid();
-  }, [chainId, launch.closeAddFunds, launch.closeSquid]);
+  }, [chainId, launch.closeAddFunds]);
+
+  useEffect(() => launch.closeSquid(), [launch.closeSquid]);
 
   const handleDepositOpenChange = (open: boolean) => {
     setDepositOpen(open);
@@ -107,7 +108,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
                   setCardSource(undefined);
                 }
               }}
-              open={!chainChanged && launch.isSquidOpen}
+              open={launch.isSquidOpen}
             />
           </>
         );
