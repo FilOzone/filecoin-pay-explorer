@@ -96,7 +96,7 @@ export function useSessionKeys(network: Network, account: Hex) {
 
   const {
     data: reads,
-    isError: statusReadsFailed,
+    isPending: statusReadsPending,
     refetch: refetchStatuses,
   } = useReadContracts({
     contracts,
@@ -185,7 +185,8 @@ export function useSessionKeys(network: Network, account: Hex) {
     removeKey,
     syncFromChain,
     refetchStatuses,
-    statusReadsFailed,
+    /** True until the first batch of status reads has come back, failed entries included. */
+    statusReadsPending,
     markConfirmed,
     registry,
   };
