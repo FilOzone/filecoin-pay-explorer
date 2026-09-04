@@ -20,11 +20,27 @@ const FULL_TOKEN_BALANCE_CALL_TYPE = 1;
 // gas separately and these estimates did not change the quoted fee.
 const APPROVE_ESTIMATED_GAS = "15000000";
 const DEPOSIT_ESTIMATED_GAS = "60000000";
+const FIL_SWAP_ESTIMATED_GAS = "250000000";
+
+export const SUSHI_V3_SWAP_ROUTER_ADDRESS: Address = "0x0389879e0156033202C44BF784ac18fC02edeE4f";
+export const WFIL_ADDRESS: Address = "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A";
+export const WFIL_USDFC_POOL_FEE = 500;
+export const FIL_GAS_TOP_UP_AMOUNT = 250_000_000_000_000_000n;
+const FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT = 25n;
+const FIL_GAS_TOP_UP_MAX_SHARE_PERCENT = 10n;
+const FIL_GAS_TOP_UP_DEADLINE_SECONDS = 7n * 24n * 60n * 60n;
 
 export const squidDepositAbi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function deposit(address token, address to, uint256 amount)",
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
+]);
+
+export const sushiSwapRouterAbi = parseAbi([
+  "struct ExactInputSingleParams { address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96; }",
+  "function exactInputSingle(ExactInputSingleParams params) payable returns (uint256 amountOut)",
+  "function unwrapWETH9(uint256 amountMinimum, address recipient) payable",
+  "function multicall(bytes[] data) payable returns (bytes[] results)",
 ]);
 
 export interface SquidDepositTarget {
@@ -34,6 +50,12 @@ export interface SquidDepositTarget {
   recipient: Address;
 }
 
+export interface FilGasTopUp {
+  spendUsdfc: bigint;
+  minimumFil: bigint;
+  deadline: bigint;
+}
+
 export interface SquidDepositRouteRequest extends SquidDepositTarget {
   /** Wallet that pays the source token and signs on the source network. */
   owner: Address;
@@ -41,6 +63,7 @@ export interface SquidDepositRouteRequest extends SquidDepositTarget {
   sourceToken: Address;
   sourceAmount: bigint;
   slippage?: number;
+  filGasTopUp?: FilGasTopUp;
 }
 
 export interface SquidDepositCost {
@@ -71,6 +94,8 @@ export interface SquidDepositQuote {
   estimatedSeconds?: number;
   fees: SquidDepositCost[];
   gasCosts: SquidDepositCost[];
+  filecoinSwap?: { wfil: bigint; usdfc: bigint };
+  filGasTopUp?: FilGasTopUp;
   transaction?: SquidDepositTransaction;
 }
 
@@ -93,13 +118,84 @@ export interface SquidDepositRef {
   quoteId: string;
 }
 
-export function buildDepositPostHook({ payments, usdfc, recipient }: SquidDepositTarget) {
+function buildFilGasTopUpCalls({ usdfc, recipient }: SquidDepositTarget, topUp: FilGasTopUp) {
+  if (topUp.spendUsdfc <= 0n || topUp.minimumFil !== FIL_GAS_TOP_UP_AMOUNT || topUp.deadline <= 0n) {
+    throw new Error("Invalid FIL gas top-up");
+  }
+  const swap = encodeFunctionData({
+    abi: sushiSwapRouterAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: usdfc,
+        tokenOut: WFIL_ADDRESS,
+        fee: WFIL_USDFC_POOL_FEE,
+        recipient: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+        deadline: topUp.deadline,
+        amountIn: topUp.spendUsdfc,
+        amountOutMinimum: topUp.minimumFil,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  const unwrap = encodeFunctionData({
+    abi: sushiSwapRouterAbi,
+    functionName: "unwrapWETH9",
+    args: [topUp.minimumFil, recipient],
+  });
+  return [
+    {
+      chainType: "evm",
+      callType: 0,
+      target: usdfc,
+      value: "0",
+      callData: encodeFunctionData({
+        abi: squidDepositAbi,
+        functionName: "approve",
+        args: [SUSHI_V3_SWAP_ROUTER_ADDRESS, topUp.spendUsdfc],
+      }),
+      payload: { tokenAddress: usdfc, inputPos: 0 },
+      estimatedGas: APPROVE_ESTIMATED_GAS,
+    },
+    {
+      chainType: "evm",
+      callType: 0,
+      target: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+      value: "0",
+      callData: encodeFunctionData({ abi: sushiSwapRouterAbi, functionName: "multicall", args: [[swap, unwrap]] }),
+      payload: { tokenAddress: usdfc, inputPos: 0 },
+      estimatedGas: FIL_SWAP_ESTIMATED_GAS,
+    },
+  ];
+}
+
+export function planFilGasTopUp(
+  quote: Pick<SquidDepositQuote, "filecoinSwap" | "minimumDestinationAmount">,
+  now: () => number,
+): FilGasTopUp | undefined {
+  const swap = quote.filecoinSwap;
+  if (!swap || swap.wfil === 0n || swap.usdfc === 0n) return undefined;
+  const usdfcAtQuote = (FIL_GAS_TOP_UP_AMOUNT * swap.usdfc + swap.wfil - 1n) / swap.wfil;
+  const spendUsdfc = (usdfcAtQuote * (100n + FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT) + 99n) / 100n;
+  if (spendUsdfc * 100n > quote.minimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) return undefined;
+  return {
+    spendUsdfc,
+    minimumFil: FIL_GAS_TOP_UP_AMOUNT,
+    deadline: BigInt(Math.floor(now() / 1000)) + FIL_GAS_TOP_UP_DEADLINE_SECONDS,
+  };
+}
+
+export function buildDepositPostHook({ payments, usdfc, recipient }: SquidDepositTarget, filGasTopUp?: FilGasTopUp) {
+  const target = { payments, usdfc, recipient };
   return {
     chainType: "evm",
     provider: "Filecoin Pay",
-    description: "Deposit USDFC into Filecoin Pay",
+    description: filGasTopUp
+      ? "Add FIL for transaction fees and deposit USDFC into Filecoin Pay"
+      : "Deposit USDFC into Filecoin Pay",
     logoURI: "https://pay.filecoin.cloud/usdfc-logo.svg",
     calls: [
+      ...(filGasTopUp ? buildFilGasTopUpCalls(target, filGasTopUp) : []),
       {
         chainType: "evm",
         callType: FULL_TOKEN_BALANCE_CALL_TYPE,
@@ -221,6 +317,10 @@ export async function requestSquidDepositRoute(
 ): Promise<SquidDepositQuote> {
   if (request.sourceAmount <= 0n) throw new Error("Enter a source amount greater than zero");
   if (client.integratorId.trim() === "") throw new Error("Squid integrator ID is required");
+  const now = client.now ?? Date.now;
+  if (request.filGasTopUp && request.filGasTopUp.deadline <= BigInt(Math.floor(now() / 1000))) {
+    throw new Error("The FIL gas top-up quote expired. Review a new quote.");
+  }
   const slippage = request.slippage ?? DEFAULT_SQUID_SLIPPAGE;
   const fetcher = client.fetch ?? globalThis.fetch.bind(globalThis);
   const response = await fetcher(`${client.baseUrl ?? SQUID_API_BASE_URL}/route`, {
@@ -236,7 +336,7 @@ export async function requestSquidDepositRoute(
       toToken: request.usdfc,
       slippage,
       quoteOnly: options.quoteOnly,
-      postHook: buildDepositPostHook(request),
+      postHook: buildDepositPostHook(request, request.filGasTopUp),
     }),
   });
   if (!response.ok) {
@@ -244,7 +344,7 @@ export async function requestSquidDepositRoute(
     throw new Error(`Squid quote failed (${response.status})${message ? `: ${message}` : ""}`);
   }
   const payload = (await response.json()) as { route?: unknown };
-  return parseSquidDepositRoute(payload.route, { ...request, slippage }, options.quoteOnly, client.now ?? Date.now);
+  return parseSquidDepositRoute(payload.route, { ...request, slippage }, options.quoteOnly, now);
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -299,6 +399,28 @@ function parseCosts(value: unknown, label: string): SquidDepositCost[] {
   });
 }
 
+function findFilecoinSwap(actions: unknown[], usdfc: Address): { wfil: bigint; usdfc: bigint } | undefined {
+  for (const action of actions) {
+    if (
+      !isRecord(action) ||
+      action.type !== "swap" ||
+      action.toChain !== String(FILECOIN_CHAIN_ID) ||
+      !isRecord(action.fromToken) ||
+      !isRecord(action.toToken) ||
+      !sameAddress(action.fromToken.address, WFIL_ADDRESS) ||
+      !sameAddress(action.toToken.address, usdfc) ||
+      typeof action.fromAmount !== "string" ||
+      typeof action.toAmount !== "string" ||
+      !/^\d+$/.test(action.fromAmount) ||
+      !/^\d+$/.test(action.toAmount)
+    ) {
+      continue;
+    }
+    return { wfil: BigInt(action.fromAmount), usdfc: BigInt(action.toAmount) };
+  }
+  return undefined;
+}
+
 /**
  * Validates Squid's response against the request and the trusted router, and
  * requires the deposit hook to survive as the route's final step.
@@ -316,7 +438,7 @@ export function parseSquidDepositRoute(
     throw new Error("Invalid Squid route: missing quote ID");
   }
   const { params, estimate } = route;
-  const expectedPostHook = buildDepositPostHook(request);
+  const expectedPostHook = buildDepositPostHook(request, request.filGasTopUp);
   if (
     params.fromChain !== String(request.sourceChainId) ||
     params.toChain !== String(FILECOIN_CHAIN_ID) ||
@@ -342,12 +464,22 @@ export function parseSquidDepositRoute(
     throw new Error("Squid route is missing the Filecoin Pay deposit step");
   }
 
+  const rawDestinationAmount = parsePositiveAmount(estimate.toAmount, "destination amount");
+  const rawMinimumDestinationAmount = parsePositiveAmount(estimate.toAmountMin, "minimum destination amount");
+  const filecoinSwap = findFilecoinSwap(actions, request.usdfc);
+  const topUpSpend = request.filGasTopUp?.spendUsdfc ?? 0n;
+  const destinationAmount = rawDestinationAmount - topUpSpend;
+  const minimumDestinationAmount = rawMinimumDestinationAmount - topUpSpend;
+  if (destinationAmount <= 0n || minimumDestinationAmount <= 0n) {
+    throw new Error("Invalid Squid route: FIL top-up exceeds destination amount");
+  }
+
   const quote: SquidDepositQuote = {
     quoteId: route.quoteId,
     sourceChainId: request.sourceChainId,
     sourceAmount: request.sourceAmount,
-    destinationAmount: parsePositiveAmount(estimate.toAmount, "destination amount"),
-    minimumDestinationAmount: parsePositiveAmount(estimate.toAmountMin, "minimum destination amount"),
+    destinationAmount,
+    minimumDestinationAmount,
     ...(typeof estimate.fromAmountUSD === "string" ? { sourceAmountUsd: estimate.fromAmountUSD } : {}),
     ...(typeof estimate.toAmountUSD === "string" ? { destinationAmountUsd: estimate.toAmountUSD } : {}),
     ...(typeof estimate.aggregatePriceImpact === "string" ? { priceImpactPercent: estimate.aggregatePriceImpact } : {}),
@@ -356,6 +488,8 @@ export function parseSquidDepositRoute(
       : {}),
     fees: parseCosts(estimate.feeCosts, "fee costs"),
     gasCosts: parseCosts(estimate.gasCosts, "gas costs"),
+    ...(filecoinSwap ? { filecoinSwap } : {}),
+    ...(request.filGasTopUp ? { filGasTopUp: request.filGasTopUp } : {}),
   };
   if (quoteOnly) return quote;
 
