@@ -1,18 +1,15 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
 interface UseContractTransactionOptions {
   contractAddress: Hex;
   abi: Abi;
-  chainId?: number;
   explorerUrl?: string;
-  onSuccess?: (receipt: TransactionReceipt) => void;
-  onError?: (error: Error) => void;
 }
 
 interface ExecuteTransactionParams {
@@ -21,119 +18,40 @@ interface ExecuteTransactionParams {
   value?: bigint;
   metadata: TransactionMetadata;
   onSubmitOnChain?: () => void;
+  /** Submission failure only (wallet rejection); receipt-level failures go to `onReverted`. */
   onError?: (error?: Error) => void;
+  /** Fires when THIS transaction's receipt confirms — safe under concurrency. */
+  onConfirmed?: (receipt: TransactionReceipt) => void;
+  /** Fires when THIS transaction reverts or receipt-tracking fails. */
+  onReverted?: (error: Error) => void;
 }
 
+/**
+ * Submits contract writes and tracks EVERY submitted transaction to its
+ * receipt independently. Each `execute` call owns its toast and callbacks
+ * end to end — the previous implementation watched only the latest hash, so
+ * a second in-flight transaction silently orphaned the first one's toast and
+ * callbacks (its loading toast never resolved).
+ */
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
-  const { contractAddress, abi, explorerUrl, onSuccess, onError } = options;
+  const { contractAddress, abi, explorerUrl } = options;
 
-  // Latest callbacks without being effect deps: an inline callback changes
-  // identity every render, and the receipt effect must fire once per receipt.
-  const onSuccessRef = useRef(onSuccess);
-  const onErrorRef = useRef(onError);
-  useEffect(() => {
-    onSuccessRef.current = onSuccess;
-    onErrorRef.current = onError;
-  }, [onSuccess, onError]);
-  // The hash whose receipt has been reported, so a dependency change during
-  // the cleanup delay (explorerUrl after a network switch) cannot report twice.
-  const handledTxRef = useRef<Hex | undefined>(undefined);
-
-  const [transactions, setTransactions] = useState<
-    Map<Hex, { toastId: string | number; metadata: TransactionMetadata }>
-  >(new Map());
-  const [currentTxHash, setCurrentTxHash] = useState<Hex | undefined>();
-
+  const [inFlightCount, setInFlightCount] = useState(0);
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
+  const publicClient = usePublicClient();
 
-  const {
-    data: receipt,
-    isSuccess,
-    isError,
-    error,
-  } = useWaitForTransactionReceipt({
-    hash: currentTxHash,
-    query: {
-      enabled: !!currentTxHash,
-    },
-  });
-
-  useEffect(() => {
-    if (!currentTxHash || handledTxRef.current === currentTxHash) return;
-
-    const txData = transactions.get(currentTxHash);
-    if (!txData) return;
-
-    if (isSuccess && receipt) {
-      handledTxRef.current = currentTxHash;
-      const content = getToastContent(txData.metadata, "success");
-      const txHashShort = `${currentTxHash.slice(0, 6)}...${currentTxHash.slice(-4)}`;
-
-      toast.success(content.title, {
-        id: txData.toastId,
-        description: content.description,
-        action: explorerUrl
-          ? {
-              label: (
-                <span className='flex items-center gap-1'>
-                  {txHashShort}
-                  <ExternalLink className='h-3 w-3' />
-                </span>
-              ),
-              onClick: () => window.open(`${explorerUrl}/tx/${currentTxHash}`, "_blank"),
-            }
-          : undefined,
-      });
-
-      onSuccessRef.current?.(receipt);
-
-      setTimeout(() => {
-        setTransactions((prev) => {
-          const next = new Map(prev);
-          next.delete(currentTxHash);
-          return next;
-        });
-        setCurrentTxHash(undefined);
-      }, 5000);
-    } else if (isError && error) {
-      handledTxRef.current = currentTxHash;
-      const content = getToastContent(txData.metadata, "error");
-      const txHashShort = `${currentTxHash.slice(0, 6)}...${currentTxHash.slice(-4)}`;
-
-      console.error(`[Transaction Error] ${content.title}:`, {
-        error: error.message,
-        txHash: currentTxHash,
-        metadata: txData.metadata,
-        fullError: error,
-      });
-
-      toast.error(content.title, {
-        id: txData.toastId,
-        description: "Request failed. See console logs for more details.",
-        action: explorerUrl
-          ? {
-              label: (
-                <span className='flex items-center gap-1'>
-                  {txHashShort}
-                  <ExternalLink className='h-3 w-3' />
-                </span>
-              ),
-              onClick: () => window.open(`${explorerUrl}/tx/${currentTxHash}`, "_blank"),
-            }
-          : undefined,
-      });
-
-      onErrorRef.current?.(error as Error);
-      setTimeout(() => {
-        setTransactions((prev) => {
-          const next = new Map(prev);
-          next.delete(currentTxHash);
-          return next;
-        });
-        setCurrentTxHash(undefined);
-      }, 7000);
-    }
-  }, [currentTxHash, isSuccess, isError, receipt, error, transactions, explorerUrl]);
+  const explorerAction = (txHash: Hex) =>
+    explorerUrl
+      ? {
+          label: (
+            <span className='flex items-center gap-1'>
+              {`${txHash.slice(0, 6)}...${txHash.slice(-4)}`}
+              <ExternalLink className='h-3 w-3' />
+            </span>
+          ),
+          onClick: () => window.open(`${explorerUrl}/tx/${txHash}`, "_blank"),
+        }
+      : undefined;
 
   const execute = async ({
     functionName,
@@ -141,7 +59,9 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
     value,
     metadata,
     onSubmitOnChain,
-    onError,
+    onError: onSubmitError,
+    onConfirmed,
+    onReverted,
   }: ExecuteTransactionParams) => {
     try {
       const txHash = await writeContractAsync({
@@ -158,8 +78,40 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         description: content.description,
       });
 
-      setTransactions((prev) => new Map(prev).set(txHash, { toastId, metadata }));
-      setCurrentTxHash(txHash);
+      setInFlightCount((count) => count + 1);
+      // Deliberately not awaited: `execute` resolves at submission (callers
+      // rely on that), while this continuation follows the receipt.
+      void (async () => {
+        try {
+          if (!publicClient) throw new Error("No public client for receipt tracking");
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          if (receipt.status === "reverted") throw new Error(`Transaction ${txHash} reverted`);
+
+          const success = getToastContent(metadata, "success");
+          toast.success(success.title, {
+            id: toastId,
+            description: success.description,
+            action: explorerAction(txHash),
+          });
+          onConfirmed?.(receipt);
+        } catch (receiptError) {
+          const failure = getToastContent(metadata, "error");
+          console.error(`[Transaction Error] ${failure.title}:`, {
+            error: receiptError instanceof Error ? receiptError.message : String(receiptError),
+            txHash,
+            metadata,
+            fullError: receiptError,
+          });
+          toast.error(failure.title, {
+            id: toastId,
+            description: "Request failed. See console logs for more details.",
+            action: explorerAction(txHash),
+          });
+          onReverted?.(receiptError as Error);
+        } finally {
+          setInFlightCount((count) => count - 1);
+        }
+      })();
 
       return txHash;
     } catch (err) {
@@ -174,15 +126,13 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         duration: 4000,
       });
 
-      onError?.(err as Error);
+      onSubmitError?.(err as Error);
       throw err;
     }
   };
 
   return {
     execute,
-    isExecuting: isWritePending || (!!currentTxHash && !isSuccess && !isError),
-    currentTxHash,
-    hasPendingTransactions: transactions.size > 0,
+    isExecuting: isWritePending || inFlightCount > 0,
   };
 };

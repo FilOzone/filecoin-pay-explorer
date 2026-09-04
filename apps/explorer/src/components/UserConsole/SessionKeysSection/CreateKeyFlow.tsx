@@ -27,6 +27,7 @@ import {
   buildEnvSnippet,
   buildLoginArgs,
   EXPIRY_PRESETS,
+  isSameIdentity,
   normalizeKeyName,
   resolveExpiry,
   SCOPE_BY_ID,
@@ -93,31 +94,18 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
   const [expirySec, setExpirySec] = useState<bigint>(0n);
-  // Tracks the submitted login until its receipt settles. `uiActive` goes false
-  // when the dialog is closed mid-flight so late receipts don't mutate a fresh
-  // form; the row-removal on failure runs regardless (the row exists either way).
-  const inFlightRef = useRef<{ address: Hex; identity: SessionKeysIdentity; uiActive: boolean } | null>(null);
+  // The attempt the dialog is showing. Cleared on close, so a receipt from
+  // an earlier submission cannot touch a fresh form; the row callbacks run
+  // for every attempt regardless, since the row exists either way.
+  const shownAttemptRef = useRef<object | null>(null);
+  // The wallet the dialog is showing now; an attempt only drives the UI while that is still its own wallet.
+  const identityRef = useRef<SessionKeysIdentity>({ network, account });
+  identityRef.current = { network, account };
 
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
     abi: registry.abi,
     explorerUrl,
-    onSuccess: () => {
-      const flight = inFlightRef.current;
-      inFlightRef.current = null;
-      if (flight?.uiActive) {
-        setTxState("confirmed");
-        setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
-      }
-      if (flight) onConfirmed?.(flight.address);
-    },
-    onError: () => {
-      // receipt-level failure: authorization never happened — drop the optimistic row
-      const flight = inFlightRef.current;
-      inFlightRef.current = null;
-      if (flight) onFailed?.(flight.address, flight.identity);
-      if (flight?.uiActive) setTxState("failed");
-    },
   });
 
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
@@ -150,7 +138,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
     setExpirySec(expiry);
-    inFlightRef.current = { address: signerAddress, identity, uiActive: true };
+    const attempt = {};
+    shownAttemptRef.current = attempt;
+    const shown = () => shownAttemptRef.current === attempt && isSameIdentity(identityRef.current, identity);
     setTxState("pending");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway. The BYO path
@@ -161,6 +151,18 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         functionName: "login",
         args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
         metadata: { type: "createSessionKey", keyName: cleanName },
+        onConfirmed: () => {
+          if (shown()) {
+            setTxState("confirmed");
+            setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
+          }
+          onConfirmed?.(signerAddress);
+        },
+        onReverted: () => {
+          // receipt-level failure: authorization never happened — drop the optimistic row
+          onFailed?.(signerAddress, identity);
+          if (shown()) setTxState("failed");
+        },
       });
       onCreated(
         {
@@ -175,17 +177,18 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.
-      inFlightRef.current = null;
-      setGenerated(null);
-      setTxState("idle");
-      setStep("form");
+      if (shown()) {
+        shownAttemptRef.current = null;
+        setGenerated(null);
+        setTxState("idle");
+        setStep("form");
+      }
     }
   };
 
   // Shared by `reset` (dialog closing) and the open-transition effect below
-  // (dialog reopening). Never touches inFlightRef: a previous attempt's tx
-  // keeps resolving its optimistic row/toast independently of what the
-  // dialog currently shows.
+  // (dialog reopening). A previous attempt's tx keeps resolving its
+  // optimistic row and toast independently of what the dialog shows.
   const resetFormState = useCallback(() => {
     setStep("form");
     setTxState("idle");
@@ -200,7 +203,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   }, []);
 
   const reset = () => {
-    if (inFlightRef.current) inFlightRef.current.uiActive = false; // pending tx keeps confirming in the background
+    shownAttemptRef.current = null; // a pending tx keeps confirming in the background
     resetFormState();
   };
 
