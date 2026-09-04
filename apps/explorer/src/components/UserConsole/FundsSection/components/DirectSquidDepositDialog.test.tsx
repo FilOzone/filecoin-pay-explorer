@@ -233,6 +233,27 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
   });
 
+  it("does not reapply an equivalent purchase prefill after the user edits it", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = () => (
+      <DirectSquidDepositDialog
+        accountId={RECIPIENT.toLowerCase()}
+        initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+        onOpenChange={() => undefined}
+        open
+      />
+    );
+    await act(async () => {
+      renderer = create(render());
+    });
+    await act(async () => {
+      renderer.root.findByType("input").props.onChange({ target: { value: "10" } });
+      renderer.update(render());
+    });
+
+    expect(renderer.root.findByType("input").props.value).toBe("10");
+  });
+
   it.each([
     "destination account switch",
     "dialog unmount",

@@ -135,6 +135,10 @@ export function DirectSquidDepositDialog({
   }>({ open, recipient: connectedRecipient, chainId: sourceChainId });
 
   const recipient = connectedRecipient ? getAddress(connectedRecipient) : undefined;
+  const initialSourceAmount = initialSource?.amount;
+  const initialSourceChainId = initialSource?.chainId;
+  const initialSourceDecimals = initialSource?.decimals;
+  const initialSourceToken = initialSource?.token;
   const payingWallet =
     wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
     wallets.find((wallet) => wallet.address.toLowerCase() === recipient?.toLowerCase()) ??
@@ -271,12 +275,20 @@ export function DirectSquidDepositDialog({
   };
 
   useEffect(() => {
-    if (!open || !initialSource || pending) return;
-    setSourceChainId(initialSource.chainId);
-    setSourceTokenAddress(initialSource.token);
-    setAmount(formatUnits(initialSource.amount, initialSource.decimals));
+    if (
+      !open ||
+      initialSourceAmount === undefined ||
+      initialSourceChainId === undefined ||
+      initialSourceDecimals === undefined ||
+      !initialSourceToken ||
+      pending
+    )
+      return;
+    setSourceChainId(initialSourceChainId);
+    setSourceTokenAddress(initialSourceToken);
+    setAmount(formatUnits(initialSourceAmount, initialSourceDecimals));
     initializedSelectionScope.current = "";
-  }, [initialSource, open, pending]);
+  }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending]);
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
@@ -284,14 +296,14 @@ export function DirectSquidDepositDialog({
     if (initializedSelectionScope.current === scope) return;
     initializedSelectionScope.current = scope;
     const isPurchasedSource =
-      initialSource?.chainId === sourceChainId &&
-      initialSource.token.toLowerCase() === sourceTokenAddress.toLowerCase();
+      initialSourceChainId === sourceChainId && initialSourceToken?.toLowerCase() === sourceTokenAddress.toLowerCase();
     if (!isPurchasedSource && !tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
       setSourceTokenAddress(orderedTokens[0]?.token ?? "");
     }
   }, [
     inventoryBalancesQuery.isPending,
-    initialSource,
+    initialSourceChainId,
+    initialSourceToken,
     open,
     orderedTokens,
     owner,
