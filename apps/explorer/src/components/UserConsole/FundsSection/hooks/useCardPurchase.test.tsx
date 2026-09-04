@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCardPurchase, waitForPurchasedUsdc } from "./useCardPurchase";
 
 const ADDRESS = "0x1111111111111111111111111111111111111111" as const;
@@ -18,6 +18,12 @@ const account = vi.hoisted(() => ({ address: "0x11111111111111111111111111111111
 const queries = vi.hoisted(() => ({ invalidateQueries: vi.fn() }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
 const harness = { contextKey: `${ADDRESS}:314` };
+const stored = new Map<string, string>();
+const localStorage = {
+  getItem: (key: string) => stored.get(key) ?? null,
+  removeItem: (key: string) => stored.delete(key),
+  setItem: (key: string, value: string) => stored.set(key, value),
+};
 
 vi.mock("@privy-io/react-auth", () => ({
   useFiatOnramp: () => ({ fund: privy.fund }),
@@ -42,6 +48,8 @@ function Harness() {
 }
 
 beforeEach(() => {
+  stored.clear();
+  vi.stubGlobal("window", { localStorage });
   account.address = ADDRESS;
   chain.readContract.mockReset();
   onPurchased.mockReset();
@@ -55,6 +63,8 @@ beforeEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("waitForPurchasedUsdc", () => {
   it("reports a verified balance increase, context drift, and delayed settlement", async () => {
@@ -182,6 +192,33 @@ describe("useCardPurchase", () => {
 
     expect(privy.fund).toHaveBeenCalledOnce();
     expect(onPurchased).toHaveBeenCalledWith(15n);
+  });
+
+  it("restores a delayed purchase after remount and still blocks a second checkout", async () => {
+    vi.useFakeTimers();
+    chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+    await act(async () => {
+      const purchase = latest.buyWithCard();
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+    await act(async () => renderer.unmount());
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+    expect(latest.label).toBe("Check for purchased USDC");
+
+    chain.readContract.mockResolvedValue(25n);
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(onPurchased).toHaveBeenCalledWith(15n);
+    expect(stored.size).toBe(0);
   });
 
   it("does not resume a stale destination after the wallet changes", async () => {
