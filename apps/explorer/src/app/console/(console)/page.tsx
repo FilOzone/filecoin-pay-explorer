@@ -6,7 +6,7 @@ import {
   AlertsBanner,
   FundsSection,
   OperatorApprovalsSection,
-  RailsSection,
+  ServicesSection,
   TopUpDialogController,
 } from "@/components/UserConsole";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
@@ -25,7 +25,6 @@ type AccountSectionsProps = {
   isLoading: boolean;
   network: Network;
   onGuidedTopUp?: () => void;
-  userAddress: string;
   /**
    * Rendered below the funds overview rather than above the page: the prompt to
    * enable alerts lands better once the reader has seen the balances it protects.
@@ -35,15 +34,7 @@ type AccountSectionsProps = {
   alertsBanner: React.ReactNode;
 };
 
-const AccountSections = ({
-  account,
-  error,
-  isLoading,
-  network,
-  onGuidedTopUp,
-  userAddress,
-  alertsBanner,
-}: AccountSectionsProps) => {
+const AccountSections = ({ account, error, isLoading, network, onGuidedTopUp, alertsBanner }: AccountSectionsProps) => {
   if (isLoading) {
     return (
       <>
@@ -68,7 +59,7 @@ const AccountSections = ({
         <FundsSection account={account} network={network} onGuidedTopUp={onGuidedTopUp} />
         {alertsBanner}
       </div>
-      <RailsSection account={account} network={network} userAddress={userAddress} />
+      <ServicesSection accountId={account.id} network={network} />
       <OperatorApprovalsSection account={account} network={network} />
 
       {/* A failed background refetch still leaves the last good account on screen. */}
@@ -108,7 +99,6 @@ const UserConsole = () => {
         isLoading={accountQuery.isLoading}
         network={displayNetwork}
         onGuidedTopUp={onGuidedTopUp}
-        userAddress={address}
         alertsBanner={showAlertsBanner ? <AlertsBanner /> : null}
       />
     ) : null;
