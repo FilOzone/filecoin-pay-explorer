@@ -95,7 +95,25 @@ export function useSessionKeys(network: Network, account: Hex) {
     return () => window.clearInterval(id);
   }, []);
 
-  const keys = useMemo(() => deriveSessionKeys(records, reads, nowSec, Date.now()), [records, reads, nowSec]);
+  // Signers whose login receipt was seen, or that have read as active: for
+  // them an all-zero read is a real revoke, not a login still confirming.
+  const confirmedRef = useRef(new Set<string>());
+  const keys = useMemo(
+    () => deriveSessionKeys(records, reads, nowSec, Date.now(), confirmedRef.current),
+    [records, reads, nowSec],
+  );
+  useEffect(() => {
+    for (const key of keys) if (key.status === "active") confirmedRef.current.add(key.sessionKeyPublic.toLowerCase());
+  }, [keys]);
+
+  /** Called with the signer when its login receipt lands; lifts the fresh-key grace and re-reads. */
+  const markConfirmed = useCallback(
+    (sessionKeyPublic: Hex) => {
+      confirmedRef.current.add(sessionKeyPublic.toLowerCase());
+      refetchStatuses();
+    },
+    [refetchStatuses],
+  );
 
   // A signer the list already knows keeps its earlier scopes: whole-key revoke
   // sends every scope in the record, so the record must hold all of them.
@@ -135,6 +153,7 @@ export function useSessionKeys(network: Network, account: Hex) {
     addKey,
     removeKey,
     refetchStatuses,
+    markConfirmed,
     registry,
   };
 }

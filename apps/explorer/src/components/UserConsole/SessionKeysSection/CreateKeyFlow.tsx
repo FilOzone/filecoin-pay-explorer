@@ -42,8 +42,8 @@ interface CreateKeyFlowProps {
   explorerUrl?: string;
   /** `identity` is the wallet and network at submit time, so a late callback still lands in the right inventory. */
   onCreated: (record: SessionKeyRecord, identity: SessionKeysIdentity) => void;
-  /** Fires when the login tx is confirmed onchain (used to refresh chain-read statuses). */
-  onConfirmed?: () => void;
+  /** Fires with the signer when its login tx is confirmed onchain. */
+  onConfirmed?: (sessionKeyPublic: Hex) => void;
   /** Fires when a submitted login tx fails onchain — removes the optimistically added row. */
   onFailed?: (sessionKeyPublic: Hex, identity: SessionKeysIdentity) => void;
 }
@@ -100,7 +100,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       const flight = inFlightRef.current;
       inFlightRef.current = null;
       if (flight?.uiActive) setTxState("confirmed");
-      onConfirmed?.();
+      if (flight) onConfirmed?.(flight.address);
     },
     onError: () => {
       // receipt-level failure: authorization never happened — drop the optimistic row
