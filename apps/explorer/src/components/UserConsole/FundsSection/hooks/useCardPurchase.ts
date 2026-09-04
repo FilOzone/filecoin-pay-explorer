@@ -4,7 +4,7 @@ import { useFiatOnramp, useLogin, usePrivy } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { erc20Abi, getAddress } from "viem";
+import { erc20Abi, getAddress, isAddress } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { config } from "@/services/wagmi/config";
@@ -18,6 +18,49 @@ const BALANCE_INTERVAL_MS = 2_000;
 type WaitResult = { balance: bigint; status: "funded" } | { status: "changed" } | { status: "delayed" };
 type PurchaseContext = { before: bigint; contextKey: string; recipient: `0x${string}` };
 type LoginContext = Omit<PurchaseContext, "before">;
+type StorageLike = Pick<Storage, "getItem" | "removeItem" | "setItem">;
+
+const CARD_PURCHASE_STORAGE_PREFIX = "filecoin-pay:card-purchase:v1";
+
+function cardPurchaseStorageKey(recipient: string) {
+  return `${CARD_PURCHASE_STORAGE_PREFIX}:${recipient.toLowerCase()}`;
+}
+
+function cardPurchaseStorage(): StorageLike {
+  if (typeof window === "undefined") throw new Error("Card purchase recovery requires browser storage");
+  return window.localStorage;
+}
+
+function savePendingCardPurchase(pending: PurchaseContext) {
+  cardPurchaseStorage().setItem(
+    cardPurchaseStorageKey(pending.recipient),
+    JSON.stringify({ ...pending, before: pending.before.toString() }),
+  );
+}
+
+function loadPendingCardPurchase(recipient: string): PurchaseContext | null {
+  try {
+    const value = cardPurchaseStorage().getItem(cardPurchaseStorageKey(recipient));
+    if (!value) return null;
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      typeof parsed.before !== "string" ||
+      !/^\d+$/.test(parsed.before) ||
+      typeof parsed.contextKey !== "string" ||
+      typeof parsed.recipient !== "string" ||
+      !isAddress(parsed.recipient) ||
+      parsed.recipient.toLowerCase() !== recipient.toLowerCase()
+    )
+      return null;
+    return { before: BigInt(parsed.before), contextKey: parsed.contextKey, recipient: getAddress(parsed.recipient) };
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingCardPurchase(recipient: string) {
+  cardPurchaseStorage().removeItem(cardPurchaseStorageKey(recipient));
+}
 
 export async function waitForPurchasedUsdc({
   attempts = BALANCE_ATTEMPTS,
@@ -89,6 +132,13 @@ export function useCardPurchase({
     };
   }, []);
 
+  useEffect(() => {
+    const restored = loadPendingCardPurchase(address);
+    if (!restored || pendingPurchase.current) return;
+    pendingPurchase.current = restored;
+    setStatus("delayed");
+  }, [address]);
+
   const isCurrent = ({ contextKey: startedContext, recipient }: LoginContext) =>
     mounted.current &&
     latestContext.current === startedContext &&
@@ -113,11 +163,10 @@ export function useCardPurchase({
         }),
     });
     if (landed.status === "changed") {
-      pendingPurchase.current = null;
       if (mounted.current) {
-        setStatus("idle");
+        setStatus("delayed");
         toast.error("Wallet changed during card purchase", {
-          description: "Check the original wallet for purchased USDC, then start again from the current account.",
+          description: "Return to the original wallet to check for purchased USDC before starting again.",
         });
       }
       return;
@@ -131,6 +180,7 @@ export function useCardPurchase({
     }
 
     pendingPurchase.current = null;
+    clearPendingCardPurchase(pending.recipient);
     void queryClient.invalidateQueries({
       queryKey: ["squid", "source-token-balances", pending.recipient, CARD_CHAIN_ID],
     });
@@ -154,21 +204,29 @@ export function useCardPurchase({
         if (mounted.current) setStatus("idle");
         return;
       }
+      const pending = { before, ...intent };
+      savePendingCardPurchase(pending);
+      pendingPurchase.current = pending;
       const result = await fund({
         source: {},
         destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
         environment: onrampEnvironment(),
       });
       if (!isCurrent(intent)) {
-        setStatus("idle");
+        setStatus("delayed");
         toast.error("Wallet changed during card purchase", {
-          description: "Check the original wallet for purchased USDC, then start again from the current account.",
+          description: "Return to the original wallet to check for purchased USDC before starting again.",
         });
         return;
       }
-      pendingPurchase.current = { before, ...intent };
       await checkPendingPurchase(result.status === "submitted");
     } catch (error) {
+      pendingPurchase.current = null;
+      try {
+        clearPendingCardPurchase(intent.recipient);
+      } catch {
+        // The original error already explains why card funding could not start safely.
+      }
       if (!isFundingExit(error)) {
         toast.error("Card purchase failed", {
           description: error instanceof Error ? error.message : "Privy card funding is unavailable.",
@@ -202,16 +260,7 @@ export function useCardPurchase({
 
   const buyWithCard = () => {
     if (status === "opening" || status === "waiting") return;
-    if (status === "delayed") return checkPendingPurchase();
-    if (authenticated) return purchase();
-    continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
-    setStatus("opening");
-    login();
-  };
-
-  const startAnotherPurchase = () => {
-    if (status !== "delayed") return;
-    pendingPurchase.current = null;
+    if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (authenticated) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
@@ -227,7 +276,6 @@ export function useCardPurchase({
         : authenticated
           ? "Buy USDC with card"
           : "Log in to buy USDC with card",
-    startAnotherPurchase: status === "delayed" ? startAnotherPurchase : undefined,
     statusMessage:
       status === "opening"
         ? "Opening card purchase…"
