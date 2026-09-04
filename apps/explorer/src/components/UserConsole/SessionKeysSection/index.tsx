@@ -35,7 +35,8 @@ const STATUS_LABELS: Record<SessionKeyWithStatus["status"], string> = {
   unknown: "…",
 };
 
-const REGISTRY_EXPLORER_URL: Record<Network, (address: string) => string> = {
+/** Filfox shows the verified source; the configured explorer (Blockscout) is the one the rest of the console links to. */
+const FILFOX_ADDRESS_URL: Record<Network, (address: string) => string> = {
   mainnet: (address) => `https://filfox.info/en/address/${address}?t=0`,
   calibration: (address) => `https://calibration.filfox.info/en/address/${address}?t=3`,
 };
@@ -64,6 +65,11 @@ const SessionKeysSection = ({ network, account }: SessionKeysSectionProps) => {
 const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
   const { keys, addKey, removeKey, refetchStatuses, markConfirmed, registry } = useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
+  const registryLinks = [
+    { label: "Registry on Filfox (verified)", href: FILFOX_ADDRESS_URL[network](registry.address) },
+    ...(explorerUrl ? [{ label: "Registry on Blockscout", href: `${explorerUrl}/address/${registry.address}` }] : []),
+    { label: "Source code", href: SOURCE_CODE_URL },
+  ];
   const [createOpen, setCreateOpen] = useState(false);
   // The target remembers the identity it was chosen under: a revoke is sent
   // by the connected wallet, so after a wallet or network switch the dialog
@@ -97,22 +103,17 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
             other services.
           </p>
           <p className='text-xs mt-1.5 flex gap-4'>
-            <a
-              href={REGISTRY_EXPLORER_URL[network](registry.address)}
-              target='_blank'
-              rel='noreferrer'
-              className='text-blue-600 dark:text-blue-400 inline-flex items-center gap-1'
-            >
-              Registry contract (verified) <ArrowSquareOutIcon size={12} />
-            </a>
-            <a
-              href={SOURCE_CODE_URL}
-              target='_blank'
-              rel='noreferrer'
-              className='text-blue-600 dark:text-blue-400 inline-flex items-center gap-1'
-            >
-              Source code <ArrowSquareOutIcon size={12} />
-            </a>
+            {registryLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                target='_blank'
+                rel='noreferrer'
+                className='text-blue-600 dark:text-blue-400 inline-flex items-center gap-1'
+              >
+                {link.label} <ArrowSquareOutIcon size={12} />
+              </a>
+            ))}
           </p>
         </div>
         <div className='flex gap-2 shrink-0 flex-wrap'>

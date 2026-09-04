@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
+import { Notice } from "@/components/shared/Notice";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
@@ -223,23 +224,24 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const txBanner =
     txState === "pending" ? (
-      <div className='rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-900 p-3 text-sm text-blue-900 dark:text-blue-200 flex items-center gap-2'>
+      <Notice tone='info' className='flex items-center gap-2'>
         <Loader2 className='h-4 w-4 animate-spin shrink-0' />
         <span>
           <b>Waiting for confirmation…</b> keep this window open. Save your session key below in the meantime.
         </span>
-      </div>
+      </Notice>
     ) : txState === "failed" ? (
-      <div className='rounded-lg border border-red-200 bg-red-50 dark:bg-red-950 dark:border-red-900 p-3 text-sm text-red-900 dark:text-red-200'>
+      <Notice tone='error'>
         <b>Authorization failed.</b> The transaction did not go through, so this key was never registered. Discard it
         and try again.
-      </div>
+      </Notice>
     ) : (
-      <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-3 text-sm text-green-900 dark:text-green-200'>
+      <Notice tone='ok'>
         ✓ <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
         {scopeLabels}
-      </div>
+      </Notice>
     );
+  const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -349,18 +351,17 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
             {txBanner}
 
-            <div className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 flex flex-col gap-3'>
-              <p className='text-sm font-semibold text-amber-900 dark:text-amber-200'>
-                ⚠ Copy your session key now — it won't be shown again.
-              </p>
+            <Notice
+              tone='warn'
+              title={"⚠ Copy your session key now — it won't be shown again."}
+              className='p-4 flex flex-col gap-3'
+            >
               <div className='relative'>
                 <code className='block rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 pr-10 text-xs break-all whitespace-pre-wrap'>
-                  {generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : ""}
+                  {snippet}
                 </code>
                 <CopyButton
-                  value={
-                    generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : ""
-                  }
+                  value={snippet}
                   tooltipText='Copy session key env snippet'
                   successMessage='Session key copied — it will not be shown again'
                   className='absolute top-2 right-2 bg-white/80 dark:bg-zinc-900/80 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -381,7 +382,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 password. Save the snippet as a file and point filecoin-pin at it with --credentials-file, or export the
                 variables in your app's environment. It is shown only once.
               </p>
-            </div>
+            </Notice>
 
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={closeDialog}>

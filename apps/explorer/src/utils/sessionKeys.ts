@@ -228,11 +228,8 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
     if (!Array.isArray(r.scopes)) continue;
     const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && Object.hasOwn(SCOPE_BY_ID, s));
     if (scopes.length === 0) continue;
-    // Rebuilds records field-by-field: fields not listed here are DROPPED on
-    // every load, so a new SessionKeyRecord field must be added here too.
+    // Rebuilt field by field: a field not listed here is dropped on every load.
     out.push({
-      // Re-normalized on read: a record written before a stricter rule, or
-      // edited by hand, still comes out clean.
       name: normalizeKeyName(typeof r.name === "string" ? r.name : ""),
       sessionKeyPublic: r.sessionKeyPublic as `0x${string}`,
       scopes,
