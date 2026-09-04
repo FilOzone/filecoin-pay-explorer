@@ -6,22 +6,32 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo, useSta
 type FundingLaunch = {
   depositToken: UserToken | null;
   isAddFundsOpen: boolean;
+  isSquidOpen: boolean;
   openAddFunds: (depositToken?: UserToken | null) => void;
   closeAddFunds: () => void;
+  openSquid: () => void;
+  closeSquid: () => void;
 };
 const FundingLaunchContext = createContext<FundingLaunch | null>(null);
 
 export function FundingLaunchProvider({ children }: { children: ReactNode }) {
   const [isAddFundsOpen, setAddFundsOpen] = useState(false);
+  const [isSquidOpen, setSquidOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
   const openAddFunds = useCallback((nextToken?: UserToken | null) => {
     setDepositToken(nextToken ?? null);
+    setSquidOpen(false);
     setAddFundsOpen(true);
   }, []);
   const closeAddFunds = useCallback(() => setAddFundsOpen(false), []);
+  const openSquid = useCallback(() => {
+    setAddFundsOpen(false);
+    setSquidOpen(true);
+  }, []);
+  const closeSquid = useCallback(() => setSquidOpen(false), []);
   const value = useMemo(
-    () => ({ closeAddFunds, depositToken, isAddFundsOpen, openAddFunds }),
-    [closeAddFunds, depositToken, isAddFundsOpen, openAddFunds],
+    () => ({ closeAddFunds, closeSquid, depositToken, isAddFundsOpen, isSquidOpen, openAddFunds, openSquid }),
+    [closeAddFunds, closeSquid, depositToken, isAddFundsOpen, isSquidOpen, openAddFunds, openSquid],
   );
   return <FundingLaunchContext.Provider value={value}>{children}</FundingLaunchContext.Provider>;
 }
