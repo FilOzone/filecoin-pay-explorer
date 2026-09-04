@@ -5,7 +5,11 @@ import { FundingLaunchProvider, useFundingLaunch } from "./FundingLaunchContext"
 function Consumer() {
   const launch = useFundingLaunch();
   return (
-    <div data-open={launch.isAddFundsOpen} data-token={launch.depositToken?.id ?? ""}>
+    <div
+      data-open={launch.isAddFundsOpen}
+      data-squid-open={launch.isSquidOpen}
+      data-token={launch.depositToken?.id ?? ""}
+    >
       <button onClick={() => launch.openAddFunds({ id: "token-1" } as never)} type='button'>
         Open
       </button>
@@ -14,6 +18,12 @@ function Consumer() {
       </button>
       <button onClick={() => launch.openAddFunds()} type='button'>
         Reopen
+      </button>
+      <button onClick={launch.openSquid} type='button'>
+        Open Squid
+      </button>
+      <button onClick={launch.closeSquid} type='button'>
+        Close Squid
       </button>
     </div>
   );
@@ -37,5 +47,9 @@ describe("FundingLaunchProvider", () => {
     expect(renderer.root.findByProps({ "data-open": false }).props["data-token"]).toBe("token-1");
     act(() => buttons[2].props.onClick());
     expect(renderer.root.findByProps({ "data-open": true }).props["data-token"]).toBe("");
+    act(() => buttons[3].props.onClick());
+    expect(renderer.root.findByProps({ "data-squid-open": true })).toBeTruthy();
+    act(() => buttons[4].props.onClick());
+    expect(renderer.root.findByProps({ "data-squid-open": false })).toBeTruthy();
   });
 });
