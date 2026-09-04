@@ -7,11 +7,23 @@ const OPERATOR = "0x2222222222222222222222222222222222222222";
 
 const mocks = vi.hoisted(() => ({
   dialogOpenChange: undefined as ((open: boolean) => void) | undefined,
+  dialogOpen: false,
   dialogContentProps: undefined as Record<string, unknown> | undefined,
   onSubmitOnChain: undefined as (() => void) | undefined,
   isSubmitting: false,
   isExecuting: false,
   submit: vi.fn(),
+  filBalanceStatus: "funded" as "loading" | "unavailable" | "insufficient" | "funded",
+  filBalanceOwner: "0xABCDEF0000000000000000000000000000000001",
+  refreshFilBalance: vi.fn(),
+  chainId: 314 as number | undefined,
+  isCorrectChain: true,
+  isSwitchingNetwork: false,
+  switchToFilecoin: vi.fn(),
+  isSquidOpen: false,
+  openSquid: vi.fn(),
+  network: "mainnet" as "mainnet" | "calibration",
+  targetChainId: 314,
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -25,8 +37,17 @@ vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
   Input: (props: React.ComponentProps<"input">) => <input {...props} />,
 }));
 vi.mock("@filecoin-pay/ui/components/dialog", () => ({
-  Dialog: ({ children, onOpenChange }: { children: React.ReactNode; onOpenChange: (open: boolean) => void }) => {
+  Dialog: ({
+    children,
+    onOpenChange,
+    open,
+  }: {
+    children: React.ReactNode;
+    onOpenChange: (open: boolean) => void;
+    open: boolean;
+  }) => {
     mocks.dialogOpenChange = onOpenChange;
+    mocks.dialogOpen = open;
     return children;
   },
   DialogContent: ({ children, ...props }: { children: React.ReactNode }) => {
@@ -50,9 +71,19 @@ vi.mock("@filecoin-pay/ui/components/select", () => ({
   SelectValue: () => null,
 }));
 vi.mock("@/components/shared/CopyButton", () => ({ default: () => null }));
+vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({
+  useFundingLaunch: () => ({ isSquidOpen: mocks.isSquidOpen, openSquid: mocks.openSquid }),
+}));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
 vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { chain: { blockExplorers: { default: { url: "https://example.com" } } } } }),
+  default: () => ({
+    constants: {
+      chain: { blockExplorers: { default: { url: "https://example.com" } }, slug: mocks.network },
+      faucets:
+        mocks.network === "calibration" ? [{ name: "Get FIL", url: "https://faucet.example.com/filecoin" }] : undefined,
+      label: mocks.network === "calibration" ? "Calibration" : "Mainnet",
+    },
+  }),
 }));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
@@ -80,6 +111,16 @@ vi.mock("./hooks", () => ({
     isLoadingBalance: false,
     reset: vi.fn(),
   }),
+  useFilecoinGasBalance: () => ({
+    chainId: mocks.chainId,
+    isCorrectChain: mocks.isCorrectChain,
+    isSwitchingNetwork: mocks.isSwitchingNetwork,
+    owner: mocks.filBalanceOwner,
+    refresh: mocks.refreshFilBalance,
+    status: mocks.filBalanceStatus,
+    switchToFilecoin: mocks.switchToFilecoin,
+    targetChainId: mocks.targetChainId,
+  }),
   useAddServiceSubmit: (onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
     return { submit: mocks.submit, isSubmitting: mocks.isSubmitting, isExecuting: mocks.isExecuting };
@@ -95,10 +136,27 @@ function renderDialog(onOpenChange = vi.fn()) {
 }
 
 function primaryButton(renderer: ReturnType<typeof create>) {
-  return renderer.root.findByProps({ "data-variant": "primary" });
+  return renderer.root.find(
+    (node) =>
+      node.type === "button" &&
+      node.props["data-variant"] === "primary" &&
+      node.children.some((child) => typeof child === "string" && child.includes("Add Service")),
+  );
 }
 
 beforeEach(() => {
+  mocks.dialogOpen = false;
+  mocks.filBalanceStatus = "funded";
+  mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
+  mocks.chainId = 314;
+  mocks.isCorrectChain = true;
+  mocks.isSwitchingNetwork = false;
+  mocks.isSquidOpen = false;
+  mocks.network = "mainnet";
+  mocks.targetChainId = 314;
+  mocks.openSquid.mockReset();
+  mocks.refreshFilBalance.mockReset().mockResolvedValue("funded");
+  mocks.switchToFilecoin.mockReset();
   mocks.isSubmitting = false;
   mocks.isExecuting = false;
   mocks.submit.mockReset();
@@ -108,6 +166,182 @@ beforeEach(() => {
 });
 
 describe("AddServiceDialog", () => {
+  it("blocks an empty FIL wallet and opens the Squid flow with its FIL option visible", () => {
+    mocks.filBalanceStatus = "insufficient";
+    const { renderer, onOpenChange } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    const addFil = renderer.root.findAllByType("button").find((button) => button.children.includes("Add FIL"));
+    act(() => addFil?.props.onClick());
+
+    expect(mocks.openSquid).toHaveBeenCalledOnce();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it.each(["loading", "unavailable"] as const)("fails closed while the FIL balance is %s", (status) => {
+    mocks.filBalanceStatus = status;
+    const { renderer } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    if (status === "unavailable") {
+      const retry = renderer.root.findAllByType("button").find((button) => button.children.includes("Retry"));
+      act(() => retry?.props.onClick());
+      expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("uses the Calibration faucet instead of the mainnet-only Squid route", () => {
+    mocks.network = "calibration";
+    mocks.filBalanceStatus = "insufficient";
+    const { renderer } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    expect(
+      renderer.root.findAllByType("a").some((link) => link.props.href === "https://faucet.example.com/filecoin"),
+    ).toBe(true);
+    expect(mocks.openSquid).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on a source network and offers a switch back to Filecoin", () => {
+    mocks.isCorrectChain = false;
+    const { renderer } = renderDialog();
+
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+    const switchBack = renderer.root
+      .findAllByType("button")
+      .find((button) => button.children.includes("Switch to Mainnet"));
+    act(() => switchBack?.props.onClick());
+    expect(mocks.switchToFilecoin).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes FIL after returning from Squid", () => {
+    mocks.isSquidOpen = true;
+    const { renderer } = renderDialog();
+    mocks.refreshFilBalance.mockClear();
+
+    mocks.isSquidOpen = false;
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+  });
+
+  it("rechecks FIL immediately before submitting", async () => {
+    const { renderer } = renderDialog();
+    mocks.refreshFilBalance.mockResolvedValue("insufficient");
+
+    await act(() => primaryButton(renderer).props.onClick());
+
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("unblocks after an insufficient balance refreshes above the reserve", () => {
+    mocks.filBalanceStatus = "insufficient";
+    const { renderer } = renderDialog();
+    expect(primaryButton(renderer).props.disabled).toBe(true);
+
+    mocks.filBalanceStatus = "funded";
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    expect(primaryButton(renderer).props.disabled).toBe(false);
+  });
+
+  it("allows only one submission while the fresh FIL check is pending", async () => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+    const submitButton = primaryButton(renderer);
+
+    act(() => {
+      submitButton.props.onClick();
+      submitButton.props.onClick();
+    });
+    expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
+    expect(mocks.submit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).toHaveBeenCalledOnce();
+  });
+
+  it("stops submission when the account changes during the fresh FIL check", async () => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+
+    act(() => primaryButton(renderer).props.onClick());
+    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["314 → 314159", [314159]],
+    ["314 → 314159 → 314", [314159, 314]],
+  ] as const)("stops submission across supported chain transition %s", async (_label, chainIds) => {
+    let resolveRefresh!: (status: "funded") => void;
+    mocks.refreshFilBalance.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    const { renderer } = renderDialog();
+
+    act(() => primaryButton(renderer).props.onClick());
+    for (const chainId of chainIds) {
+      mocks.chainId = chainId;
+      mocks.targetChainId = chainId;
+      act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    }
+
+    await act(async () => {
+      resolveRefresh("funded");
+      await Promise.resolve();
+    });
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the form while Squid is open and restores it after cancellation", () => {
+    const { renderer } = renderDialog();
+    act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
+
+    mocks.isSquidOpen = true;
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    expect(mocks.dialogOpen).toBe(false);
+
+    mocks.isSquidOpen = false;
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    expect(mocks.dialogOpen).toBe(true);
+    expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("7");
+  });
+
+  it("clears the old owner's form after an account switch", () => {
+    const { renderer } = renderDialog();
+    act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
+
+    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
+    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+
+    expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("");
+  });
+
   it("blocks every user close while busy but still closes after onchain submission", () => {
     mocks.isSubmitting = true;
     const { renderer, onOpenChange } = renderDialog();

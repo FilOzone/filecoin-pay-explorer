@@ -379,7 +379,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   it.each([
     [0n, false, true],
-    [1n, false, false],
+    [1n, false, true],
+    [100_000_000_000_000_000n, false, true],
+    [250_000_000_000_000_000n, false, false],
     [0n, true, true],
   ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked) => {
     query.recipientFil = balance;
@@ -404,7 +406,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
 
-    query.recipientFil = 1n;
+    query.recipientFil = 250_000_000_000_000_000n;
     query.recipientFilIsFetching = false;
     await act(async () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);

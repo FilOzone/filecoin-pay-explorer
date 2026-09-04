@@ -18,14 +18,22 @@ import {
   SelectValue,
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
+import { FIL_GAS_TOP_UP_AMOUNT } from "@/components/UserConsole/FundsSection/data/squid-deposit-route";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
-import { CUSTOM_OPTION, useAddServiceSubmit, useServiceSelection, useTokenSelection } from "./hooks";
+import {
+  CUSTOM_OPTION,
+  useAddServiceSubmit,
+  useFilecoinGasBalance,
+  useServiceSelection,
+  useTokenSelection,
+} from "./hooks";
 
 interface AddServiceDialogProps {
   open: boolean;
@@ -77,8 +85,32 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
 const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange }) => {
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
+  const [isCheckingGas, setIsCheckingGas] = useState(false);
+  const gasCheckInFlight = useRef(false);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
-  const isBusy = isSubmitting || isExecuting;
+  const isBusy = isCheckingGas || isSubmitting || isExecuting;
+  const gasBalance = useFilecoinGasBalance(open);
+  const funding = useFundingLaunch();
+  const formOwner = useRef(gasBalance.owner);
+  const currentGasContext = useRef({
+    chainId: gasBalance.chainId,
+    owner: gasBalance.owner,
+    targetChainId: gasBalance.targetChainId,
+    generation: 0,
+  });
+  if (
+    currentGasContext.current.chainId !== gasBalance.chainId ||
+    currentGasContext.current.owner !== gasBalance.owner ||
+    currentGasContext.current.targetChainId !== gasBalance.targetChainId
+  ) {
+    currentGasContext.current = {
+      chainId: gasBalance.chainId,
+      owner: gasBalance.owner,
+      targetChainId: gasBalance.targetChainId,
+      generation: currentGasContext.current.generation + 1,
+    };
+  }
+  const previousSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -90,10 +122,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
+  const filFaucet = constants.faucets?.find((faucet) => faucet.name.toLowerCase().includes("fil"));
+  const requiredFil = formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; open is the only real dependency
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
   useEffect(() => {
-    if (!open) {
+    const ownerChanged = formOwner.current !== gasBalance.owner;
+    formOwner.current = gasBalance.owner;
+    if (!open || ownerChanged) {
       serviceSelection.reset();
       tokenSelection.reset();
       setDepositAmount("");
@@ -102,7 +138,12 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
       setLockupAllowance("");
       setRateAllowance("");
     }
-  }, [open]);
+  }, [open, gasBalance.owner]);
+
+  useEffect(() => {
+    if (previousSquidOpen.current && !funding.isSquidOpen) void gasBalance.refresh();
+    previousSquidOpen.current = funding.isSquidOpen;
+  }, [funding.isSquidOpen, gasBalance.refresh]);
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
@@ -154,27 +195,53 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
     !isDepositing || (balance !== undefined && parsedDeposit !== null && parsedDeposit <= balance);
-  const canSubmit = isOperatorValid && !!token && isDepositValid && hasSufficientBalance && areLimitsValid && !isBusy;
+  const canSubmit =
+    isOperatorValid &&
+    !!token &&
+    isDepositValid &&
+    hasSufficientBalance &&
+    areLimitsValid &&
+    gasBalance.status === "funded" &&
+    gasBalance.isCorrectChain &&
+    formOwner.current === gasBalance.owner &&
+    !isBusy;
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && isBusy) return;
     onOpenChange(nextOpen);
   };
 
-  const handleSubmit = () => {
-    if (!operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    void submit({
-      operatorAddress,
-      token,
-      parsedDeposit,
-      depositAmountLabel: depositAmount,
-      lockupInWei,
-      rateInWei,
-    });
+  const handleSubmit = async () => {
+    if (gasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
+    const submittingOwner = gasBalance.owner;
+    const contextGeneration = currentGasContext.current.generation;
+    gasCheckInFlight.current = true;
+    setIsCheckingGas(true);
+    try {
+      const refreshedStatus = await gasBalance.refresh();
+      if (
+        refreshedStatus !== "funded" ||
+        currentGasContext.current.generation !== contextGeneration ||
+        currentGasContext.current.owner !== submittingOwner ||
+        currentGasContext.current.chainId !== currentGasContext.current.targetChainId
+      )
+        return;
+      await submit({
+        operatorAddress,
+        token,
+        parsedDeposit,
+        depositAmountLabel: depositAmount,
+        lockupInWei,
+        rateInWei,
+      });
+    } finally {
+      gasCheckInFlight.current = false;
+      setIsCheckingGas(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+    <Dialog open={open && !funding.isSquidOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'
         showCloseButton={!isBusy}
@@ -468,6 +535,59 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
             )}
           </div>
 
+          {!gasBalance.isCorrectChain ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Switch back to {constants.label} before adding this service.
+              </span>
+              <Button
+                disabled={gasBalance.isSwitchingNetwork}
+                onClick={gasBalance.switchToFilecoin}
+                size='compact'
+                type='button'
+                variant='primary'
+              >
+                {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${constants.label}`}
+              </Button>
+            </div>
+          ) : gasBalance.status === "loading" ? (
+            <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
+            </p>
+          ) : gasBalance.status === "unavailable" ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Your FIL balance could not be loaded. Retry before adding the service.
+              </span>
+              <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
+                Retry
+              </Button>
+            </div>
+          ) : gasBalance.status === "insufficient" ? (
+            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+              <span className='inline-flex items-start gap-2'>
+                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+                Add at least {requiredFil} FIL for transaction fees before adding this service.
+              </span>
+              {constants.chain.slug === "mainnet" ? (
+                <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
+                  Add FIL
+                </Button>
+              ) : filFaucet ? (
+                <a
+                  className='font-medium text-primary hover:underline'
+                  href={filFaucet.url}
+                  rel='noreferrer'
+                  target='_blank'
+                >
+                  Get testnet FIL
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className='text-xs text-muted-foreground'>
             The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any time.
           </p>
@@ -477,7 +597,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
           <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
-          <Button variant='primary' onClick={handleSubmit} disabled={!canSubmit} size='compact'>
+          <Button variant='primary' onClick={() => void handleSubmit()} disabled={!canSubmit} size='compact'>
             {isBusy ? (
               <span className='flex items-center gap-2'>
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />

@@ -21,7 +21,6 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
-  const [isSquidOpen, setSquidOpen] = useState(false);
   const isMainnet = chainId === undefined || chainId === mainnet.id;
   const isCalibration = chainId === calibration.id;
   const network = isCalibration ? "calibration" : "mainnet";
@@ -38,6 +37,8 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     launch.closeAddFunds();
   }, [chainId, launch.closeAddFunds]);
 
+  useEffect(() => launch.closeSquid(), [launch.closeSquid]);
+
   const handleDepositOpenChange = (open: boolean) => {
     setDepositOpen(open);
     if (!open) launch.closeAddFunds();
@@ -48,7 +49,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       {() => {
         const chooseMethod = (method: AddFundsMethod) => {
           launch.closeAddFunds();
-          if (method === "squid") setSquidOpen(true);
+          if (method === "squid") launch.openSquid();
           else setDepositOpen(true);
         };
 
@@ -73,8 +74,8 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
             ) : null}
             <DirectSquidDepositDialog
               accountId={address.toLowerCase()}
-              onOpenChange={setSquidOpen}
-              open={isSquidOpen}
+              onOpenChange={(open) => (open ? launch.openSquid() : launch.closeSquid())}
+              open={launch.isSquidOpen}
             />
           </>
         );

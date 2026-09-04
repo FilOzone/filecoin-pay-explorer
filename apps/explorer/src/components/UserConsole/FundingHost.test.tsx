@@ -12,6 +12,7 @@ const dialogs = vi.hoisted(() => ({
   openTopUp: vi.fn(),
   onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
   onSelect: undefined as ((method: "deposit" | "squid") => void) | undefined,
+  onSquidOpenChange: undefined as ((open: boolean) => void) | undefined,
   squidOpen: false,
 }));
 
@@ -68,18 +69,20 @@ vi.mock("./DepositDialog", () => ({
   ),
 }));
 vi.mock("./FundsSection/components/DirectSquidDepositDialog", () => ({
-  DirectSquidDepositDialog: ({ open }: { open: boolean }) => {
+  DirectSquidDepositDialog: ({ onOpenChange, open }: { onOpenChange: (open: boolean) => void; open: boolean }) => {
     dialogs.squidOpen = open;
+    dialogs.onSquidOpenChange = onOpenChange;
     return <div data-squid-open={open} />;
   },
 }));
 
 function Launcher() {
-  const { openAddFunds } = useFundingLaunch();
+  const { openAddFunds, openSquid } = useFundingLaunch();
   return (
     <>
       <button data-open onClick={() => openAddFunds()} type='button' />
       <button data-open-seeded onClick={() => openAddFunds({ id: "token-1" } as never)} type='button' />
+      <button data-open-squid onClick={openSquid} type='button' />
     </>
   );
 }
@@ -117,6 +120,7 @@ beforeEach(() => {
   dialogs.accountId = "";
   dialogs.openTopUp.mockClear();
   dialogs.squidOpen = false;
+  dialogs.onSquidOpenChange = undefined;
 });
 
 describe("FundingHost", () => {
@@ -138,6 +142,35 @@ describe("FundingHost", () => {
     act(() => dialogs.onSelect?.("squid"));
     expect(dialogs.squidOpen).toBe(true);
     expect(dialogs.openTopUp).not.toHaveBeenCalled();
+  });
+
+  it("opens Squid directly and closes it on cancellation", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-squid": true }).props.onClick());
+    expect(dialogs.squidOpen).toBe(true);
+
+    act(() => dialogs.onSquidOpenChange?.(false));
+    expect(dialogs.squidOpen).toBe(false);
+  });
+
+  it("keeps Squid open across its intentional source-chain switch", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-squid": true }).props.onClick());
+
+    wallet.chainId = 8453;
+    await rerenderHost(renderer);
+
+    expect(dialogs.squidOpen).toBe(true);
+  });
+
+  it("closes Squid when the connected account changes", async () => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open-squid": true }).props.onClick());
+
+    wallet.address = "0xABCDEF0000000000000000000000000000000002";
+    await rerenderHost(renderer);
+
+    expect(dialogs.squidOpen).toBe(false);
   });
 
   it("opens direct deposit without a one-choice picker on Calibration", async () => {
