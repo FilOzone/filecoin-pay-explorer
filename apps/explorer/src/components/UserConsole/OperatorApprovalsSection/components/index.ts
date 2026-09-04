@@ -1,4 +1,2 @@
-export { default as ApprovalsEmptyState } from "./ApprovalsEmptyState";
-export { default as ApprovalsErrorState } from "./ApprovalsErrorState";
-export { default as ApprovalsLoadingState } from "./ApprovalsLoadingState";
+export { ApprovalsEmptyState, ApprovalsErrorState, ApprovalsLoadingState } from "./ApprovalsStates";
 export { default as ApprovalsTable } from "./ApprovalsTable";

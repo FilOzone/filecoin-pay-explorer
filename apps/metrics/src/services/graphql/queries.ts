@@ -14,8 +14,6 @@ export const GET_PAYMENTS_METRICS = gql`
       totalActiveRails
       totalTerminatedRails
       totalFinalizedRails
-      uniquePayers
-      uniquePayees
     }
   }
 `;
@@ -33,10 +31,6 @@ export const GET_DAILY_METRICS = gql`
       railsTerminated
       railsFinalized
       activeRailsCount
-      uniquePayers
-      uniquePayees
-      uniqueOperators
-      uniqueAccounts
     }
   }
 `;
@@ -54,10 +48,6 @@ export const GET_WEEKLY_METRICS = gql`
       railsTerminated
       railsFinalized
       activeRailsCount
-      uniquePayers
-      uniquePayees
-      uniqueOperators
-      uniqueAccounts
     }
   }
 `;
@@ -99,8 +89,6 @@ export const GET_DAILY_TOKEN_METRICS = gql`
       settledAmount
       commissionPaid
       activeRailsCount
-      uniqueHolders
-      totalLocked
     }
   }
 `;
@@ -148,7 +136,6 @@ export const GET_DAILY_OPERATOR_METRICS = gql`
       date
       railsCreated
       settlementsProcessed
-      uniqueClients
       totalApprovals
     }
   }

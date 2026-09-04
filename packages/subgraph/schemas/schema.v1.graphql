@@ -73,8 +73,6 @@ type OperatorToken @entity(immutable: false) {
   id: Bytes! # operator address,token address
   commissionEarned: BigInt!
   volume: BigInt!
-  lockupAllowance: BigInt!
-  rateAllowance: BigInt!
   lockupUsage: BigInt!
   rateUsage: BigInt!
   settledAmount: BigInt!
@@ -130,6 +128,8 @@ type Rail @entity(immutable: false) {
   totalRateChanges: BigInt!
 
   createdAt: BigInt!
+  createdAtEpoch: BigInt!
+  currentRatePeriod: RailRatePeriod!
 
   payer: Account!
   payee: Account!
@@ -139,6 +139,17 @@ type Rail @entity(immutable: false) {
   oneTimePayments: [OneTimePayment!]! @derivedFrom(field: "rail")
   settlements: [Settlement!]! @derivedFrom(field: "rail")
   rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
+}
+
+type RailRatePeriod @entity(immutable: false) {
+  id: Bytes! # transaction hash + log index of the event that opened the period
+  rail: Rail!
+  payer: Account!
+  operator: Operator!
+  token: Token!
+  rate: BigInt!
+  startEpoch: BigInt! # exclusive: rate applies starting at startEpoch + 1
+  untilEpoch: BigInt # inclusive; null while the period is open
 }
 
 type RateChangeQueue @entity(immutable: false) {
@@ -167,6 +178,8 @@ type Settlement @entity(immutable: true) {
 type OneTimePayment @entity(immutable: true) {
   id: Bytes! # txHash + logIndex
   rail: Rail!
+  payer: Account! # rail.payer
+  operator: Operator! # rail.operator
   token: Token! # rail.token
   totalAmount: BigInt! # totalAmount = netPayeeAmount + operatorCommission + networkFee
   networkFee: BigInt! # networkFee = 0.5% of totalAmount
@@ -191,10 +204,6 @@ type PaymentsMetric @entity(immutable: false) {
   totalActiveRails: BigInt!
   totalTerminatedRails: BigInt!
   totalFinalizedRails: BigInt!
-
-  # Unique payers and payees
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
 }
 
 # Time-based metrics for analytics and graphs
@@ -212,12 +221,6 @@ type DailyMetric @entity(immutable: false) {
   railsTerminated: BigInt!
   railsFinalized: BigInt!
   activeRailsCount: BigInt!
-
-  # User metrics
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
-  uniqueOperators: BigInt!
-  uniqueAccounts: BigInt!
 }
 
 type WeeklyMetric @entity(immutable: false) {
@@ -233,12 +236,6 @@ type WeeklyMetric @entity(immutable: false) {
   railsTerminated: BigInt!
   railsFinalized: BigInt!
   activeRailsCount: BigInt!
-
-  # User metrics
-  uniquePayers: BigInt!
-  uniquePayees: BigInt!
-  uniqueOperators: BigInt!
-  uniqueAccounts: BigInt!
 }
 
 type DailyTokenMetric @entity(immutable: false) {
@@ -256,8 +253,6 @@ type DailyTokenMetric @entity(immutable: false) {
 
   # Token utilization
   activeRailsCount: BigInt!
-  uniqueHolders: BigInt!
-  totalLocked: BigInt!
 }
 
 type DailyOperatorMetric @entity(immutable: false) {
@@ -268,9 +263,6 @@ type DailyOperatorMetric @entity(immutable: false) {
   # Rail management
   railsCreated: BigInt!
   settlementsProcessed: BigInt!
-
-  # Client metrics
-  uniqueClients: BigInt!
   totalApprovals: BigInt!
 }
 
