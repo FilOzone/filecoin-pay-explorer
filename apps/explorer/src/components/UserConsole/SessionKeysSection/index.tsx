@@ -108,7 +108,6 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork != null && prefillNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
-  const linkPrefill = createSource === "link" ? cliPrefill : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
     ? keys.find((k) => k.sessionKeyPublic.toLowerCase() === cliPrefill.toLowerCase())
@@ -122,6 +121,10 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
             : null,
       }
     : null;
+  // A link for a key this list holds waits for that key's live reads: opening
+  // before they resolve would offer a fresh expiry for a key that may be active.
+  const prefillPending = existingForPrefill?.status === "unknown";
+  const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -181,8 +184,8 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
               )}
             </p>
           </div>
-          <Button variant='primary' size='compact' onClick={() => openCreate("link")}>
-            Review &amp; authorize
+          <Button variant='primary' size='compact' disabled={prefillPending} onClick={() => openCreate("link")}>
+            {prefillPending ? "Checking key status…" : "Review & authorize"}
           </Button>
         </div>
       )}

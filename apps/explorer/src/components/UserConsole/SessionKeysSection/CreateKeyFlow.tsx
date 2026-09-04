@@ -112,8 +112,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const identityRef = useRef<SessionKeysIdentity>({ network, account });
   identityRef.current = { network, account };
 
+  // A link that names scopes locks the rest off (reduce-only consent); a link
+  // that names none leaves every scope selectable, like a manual create.
   const requestPresets = useMemo(
-    () => (prefillAddress ? presetScopeStates(prefillScopes ?? []) : null),
+    () => (prefillAddress && prefillScopes?.length ? presetScopeStates(prefillScopes) : null),
     [prefillAddress, prefillScopes],
   );
   const isExistingKey = prefillAddress != null && existingKey != null;
@@ -169,12 +171,23 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     // never lose the key of an authorization that lands anyway. The BYO path
     // has no secret, so it stays on the form until the login confirms.
     if (key) setStep("reveal");
+    // A new signer is listed at submission, so the row is there while the
+    // secret is on screen, and removed if the login reverts. A key the list
+    // already holds gets its new scopes only once the login confirms: a
+    // revert then changes nothing, and the live key is never dropped.
+    let txHash: Hex | undefined;
+    const commitRow = () =>
+      onCreated(
+        { name: cleanName, sessionKeyPublic: signerAddress, scopes: selectedScopes, createdAt: Date.now(), txHash },
+        identity,
+      );
     try {
-      const txHash = await execute({
+      txHash = await execute({
         functionName: "login",
         args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
         metadata: { type: isExistingKey ? "authorizeSessionKey" : "createSessionKey", keyName: cleanName },
         onConfirmed: () => {
+          if (isExistingKey) commitRow();
           if (shown()) {
             setTxState("confirmed");
             setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
@@ -182,21 +195,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
           onConfirmed?.(signerAddress);
         },
         onReverted: () => {
-          // receipt-level failure: authorization never happened — drop the optimistic row
-          onFailed?.(signerAddress, identity);
+          if (!isExistingKey) onFailed?.(signerAddress, identity);
           if (shown()) setTxState("failed");
         },
       });
-      onCreated(
-        {
-          name: cleanName,
-          sessionKeyPublic: signerAddress,
-          scopes: selectedScopes,
-          createdAt: Date.now(),
-          txHash,
-        },
-        identity,
-      );
+      if (!isExistingKey) commitRow();
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.
@@ -385,17 +388,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     </label>
                   );
                 })}
-                {requestPresets ? (
-                  prefillScopes == null || prefillScopes.length === 0 ? (
+                {requestPresets && prefillScopes ? (
+                  prefillScopes.some((id) => !checkedScopes[id]) && (
                     <p className='text-xs text-amber-700 dark:text-amber-400'>
-                      This link didn't request any scopes — every scope is unchecked.
+                      Granting fewer scopes than requested — some operations may fail.
                     </p>
-                  ) : (
-                    prefillScopes.some((id) => !checkedScopes[id]) && (
-                      <p className='text-xs text-amber-700 dark:text-amber-400'>
-                        Granting fewer scopes than requested — some operations may fail.
-                      </p>
-                    )
                   )
                 ) : (
                   <p className='text-xs text-zinc-500'>
