@@ -21,18 +21,18 @@ import { useAccountDetails } from "@/hooks/useAccountDetails";
 import { useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import type { Network } from "@/types";
-import { type DepositPrefill, parseDepositPrefill, resolveOperator } from "@/utils/depositParam";
+import { type DepositLink, parseDepositLink, resolveOperator } from "@/utils/depositParam";
 import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
 
 // The lockup period filecoin-pin also leaves to the SDK default: 30 days of epochs.
 const DEFAULT_MAX_LOCKUP_PERIOD = String(TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS * TIME_CONSTANTS.EPOCHS_PER_DAY);
 
-/** Turns the link's values into dialog fields for the wallet's network. */
-function toDialogPrefill(link: DepositPrefill, network: Network): DepositAndApprovePrefill {
+/** Turns the link's values into dialog fields; the link names the network the wallet is on. */
+function toDialogPrefill(link: DepositLink): DepositAndApprovePrefill {
   return {
-    token: getChain(network).contracts.usdfc.address,
-    amount: link.amount ?? undefined,
-    operator: link.operator ? resolveOperator(link.operator, network) : undefined,
+    token: getChain(link.network).contracts.usdfc.address,
+    amount: link.amount,
+    operator: resolveOperator(link.operator, link.network),
     unlimitedAllowances: true,
     maxLockupPeriod: DEFAULT_MAX_LOCKUP_PERIOD,
   };
@@ -136,12 +136,17 @@ const UserConsole = () => {
 
   const showTopUpTrigger = !accountQuery.isLoading && !accountQuery.error && !accountQuery.data;
 
-  const fundingLink = useConsumedSearchParams(["deposit", "operator"]);
-  const depositLink = useMemo(() => (fundingLink ? parseDepositPrefill(fundingLink) : null), [fundingLink]);
+  const fundingLink = useConsumedSearchParams(["deposit", "operator", "network"]);
+  const depositLink = useMemo(() => (fundingLink ? parseDepositLink(fundingLink) : null), [fundingLink]);
   const [dialogDismissed, setDialogDismissed] = useState(false);
+  // A link for another network prefills nothing: approving it here would fund the wrong chain's operator.
+  const isLinkNetworkMismatch = depositLink !== null && isFilecoinChain && depositLink.network !== walletNetwork;
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const depositPrefill = useMemo(
-    () => (depositLink && !dialogDismissed && isFilecoinChain ? toDialogPrefill(depositLink, walletNetwork) : null),
+    () =>
+      depositLink && !dialogDismissed && isFilecoinChain && depositLink.network === walletNetwork
+        ? toDialogPrefill(depositLink)
+        : null,
     [depositLink, dialogDismissed, isFilecoinChain, walletNetwork],
   );
 
@@ -154,6 +159,21 @@ const UserConsole = () => {
         >
           <p className='font-semibold'>This funding link could not be read</p>
           <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
+        </div>
+      )}
+      {isLinkNetworkMismatch && (
+        <div
+          role='alert'
+          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
+        >
+          <p className='font-semibold'>
+            This funding link is for <span className='capitalize'>{depositLink?.network}</span>, but your wallet is
+            connected to <span className='capitalize'>{walletNetwork}</span>.
+          </p>
+          <p className='text-xs mt-1'>
+            Nothing was filled in. Switch your wallet to <span className='capitalize'>{depositLink?.network}</span> and
+            open the link again.
+          </p>
         </div>
       )}
       {depositPrefill && (

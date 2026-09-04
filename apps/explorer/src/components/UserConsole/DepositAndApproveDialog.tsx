@@ -233,7 +233,9 @@ const DepositAndApproveDialog: React.FC<DepositAndApproveDialogProps> = ({ open,
 
   const isOperatorValid = !!operatorAddress;
   const isTokenValid = !!validatedTokenAddress && !!tokenDetails && !isLoadingTokenDetails;
-  const canSubmit = isOperatorValid && isTokenValid && maxLockupPeriod && !isSubmitting && !isExecuting;
+  const isAmountValid = Number(tokenAmount) > 0;
+  const canSubmit =
+    isOperatorValid && isTokenValid && isAmountValid && maxLockupPeriod && !isSubmitting && !isExecuting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

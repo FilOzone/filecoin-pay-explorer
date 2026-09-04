@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
-import { parseDepositParam, parseDepositPrefill, parseOperatorParam, resolveOperator } from "./depositParam";
+import { parseDepositLink, parseDepositParam, parseOperatorParam, resolveOperator } from "./depositParam";
 
 describe("parseDepositParam", () => {
   it("accepts whole and fractional amounts as typed", () => {
@@ -40,25 +40,24 @@ describe("parseOperatorParam", () => {
   });
 });
 
-describe("parseDepositPrefill", () => {
-  it("reads both params from a CLI funding link", () => {
-    assert.deepEqual(parseDepositPrefill(new URLSearchParams("deposit=2&operator=fwss")), {
+describe("parseDepositLink", () => {
+  const link = (query: string) => parseDepositLink(new URLSearchParams(query));
+
+  it("reads a complete CLI funding link", () => {
+    assert.deepEqual(link("deposit=2&operator=fwss&network=calibration"), {
       amount: "2",
       operator: "fwss",
+      network: "calibration",
     });
   });
 
-  it("keeps whichever param is usable on its own", () => {
-    assert.deepEqual(parseDepositPrefill(new URLSearchParams("deposit=2")), { amount: "2", operator: null });
-    assert.deepEqual(parseDepositPrefill(new URLSearchParams("operator=fwss&deposit=junk")), {
-      amount: null,
-      operator: "fwss",
-    });
-  });
-
-  it("returns null when nothing usable is present", () => {
-    assert.equal(parseDepositPrefill(new URLSearchParams("")), null);
-    assert.equal(parseDepositPrefill(new URLSearchParams("deposit=-1&operator=nope")), null);
+  it("refuses a link missing or misspelling any of the three, so nothing partial is prefilled", () => {
+    assert.equal(link("operator=fwss&network=calibration"), null);
+    assert.equal(link("deposit=junk&operator=fwss&network=calibration"), null);
+    assert.equal(link("deposit=2&network=calibration"), null);
+    assert.equal(link("deposit=2&operator=fwss"), null);
+    assert.equal(link("deposit=2&operator=fwss&network=calibraiton"), null);
+    assert.equal(link(""), null);
   });
 });
 
