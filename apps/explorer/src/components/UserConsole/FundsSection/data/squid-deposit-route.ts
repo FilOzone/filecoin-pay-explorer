@@ -473,6 +473,9 @@ export function parseSquidDepositRoute(
   if (destinationAmount <= 0n || minimumDestinationAmount <= 0n) {
     throw new Error("Invalid Squid route: FIL top-up exceeds destination amount");
   }
+  if (topUpSpend * 100n > rawMinimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) {
+    throw new Error("Invalid Squid route: FIL top-up exceeds safety limit");
+  }
 
   const quote: SquidDepositQuote = {
     quoteId: route.quoteId,

@@ -310,6 +310,20 @@ describe("parseSquidDepositRoute", () => {
     ).toThrow("FIL top-up exceeds destination amount");
   });
 
+  it("rechecks the FIL top-up safety limit against every returned route", () => {
+    expect(() =>
+      parseSquidDepositRoute(
+        fakeRoute({
+          params: { postHook: buildDepositPostHook(request, topUp) },
+          estimate: { toAmount: "6000000000000000000", toAmountMin: "6000000000000000000" },
+        }),
+        { ...request, filGasTopUp: topUp },
+        true,
+        now,
+      ),
+    ).toThrow("FIL top-up exceeds safety limit");
+  });
+
   it("parses an executable route against the trusted router", () => {
     const quote = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);
 

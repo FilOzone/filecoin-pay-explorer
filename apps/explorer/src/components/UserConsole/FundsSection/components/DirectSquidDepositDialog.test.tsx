@@ -31,6 +31,7 @@ const query = vi.hoisted(() => ({
   nativeBalance: 10n ** 18n,
   recipientFil: 0n,
   recipientFilIsError: false,
+  recipientFilIsFetching: false,
   filGasTopUp: {
     deadline: 1_700_604_800n,
     minimumFil: 250_000_000_000_000_000n,
@@ -105,6 +106,7 @@ vi.mock("@tanstack/react-query", () => ({
       return {
         data: query.recipientFil,
         isError: query.recipientFilIsError,
+        isFetching: query.recipientFilIsFetching,
         isPending: false,
       };
     }
@@ -218,6 +220,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.nativeBalance = 10n ** 18n;
     query.recipientFil = 0n;
     query.recipientFilIsError = false;
+    query.recipientFilIsFetching = false;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
     wallet.switchChain.mockClear();
@@ -385,6 +388,23 @@ describe("DirectSquidDepositDialog safety integration", () => {
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain("Add 0.25 FIL for transaction fees");
     expect(text).toContain("Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions.");
+  });
+
+  it("waits for a fresh destination balance before defaulting from cached data", async () => {
+    query.recipientFil = 0n;
+    query.recipientFilIsFetching = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    query.recipientFil = 1n;
+    query.recipientFilIsFetching = false;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
   });
 
   it("preserves the reviewed FIL plan through executable route construction", async () => {

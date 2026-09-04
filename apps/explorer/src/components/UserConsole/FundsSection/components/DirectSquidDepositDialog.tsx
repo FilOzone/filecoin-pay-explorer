@@ -235,6 +235,7 @@ export function DirectSquidDepositDialog({
     },
     queryKey: ["direct-squid-destination-fil", recipient],
     refetchInterval: 30_000,
+    refetchOnMount: "always",
     retry: 1,
   });
   const quoteQuery = useQuery({
@@ -245,7 +246,7 @@ export function DirectSquidDepositDialog({
       !!payingWallet &&
       !!sourceToken &&
       parsedAmount !== null &&
-      !recipientFilQuery.isPending &&
+      !recipientFilQuery.isFetching &&
       !balancesQuery.isError &&
       (balancesQuery.data?.token ?? 0n) >= parsedAmount,
     queryFn: async () => {
@@ -294,11 +295,11 @@ export function DirectSquidDepositDialog({
       initializedFilGasScope.current = "";
       return;
     }
-    if (!recipient || recipientFilQuery.isPending) return;
+    if (!recipient || recipientFilQuery.isFetching) return;
     if (initializedFilGasScope.current === recipient) return;
     initializedFilGasScope.current = recipient;
-    setIncludeFilGas(recipientFilQuery.isError || recipientFilQuery.data === 0n);
-  }, [open, recipient, recipientFilQuery.data, recipientFilQuery.isError, recipientFilQuery.isPending]);
+    setIncludeFilGas(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
+  }, [open, recipient, recipientFilQuery.data, recipientFilQuery.isError, recipientFilQuery.isFetching]);
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
