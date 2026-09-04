@@ -36,6 +36,7 @@ import {
   createRailSettledEvent,
   createRailTerminatedEvent,
   createWithdrawRecordedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertAccountState,
@@ -85,6 +86,7 @@ describe("Payments", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("should handle deposit recorded properly", () => {

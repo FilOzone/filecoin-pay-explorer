@@ -269,11 +269,14 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
     failRatePeriodInvariant("[handleRailTerminated] Current rate period not found", rail, event, null);
     return;
   }
+  const terminationCap = event.params.endEpoch.gt(currentRatePeriod.startEpoch)
+    ? event.params.endEpoch
+    : currentRatePeriod.startEpoch;
   const existingUntilEpoch = currentRatePeriod.untilEpoch;
   if (existingUntilEpoch !== null) {
-    if (existingUntilEpoch.notEqual(event.params.endEpoch)) {
+    if (existingUntilEpoch.notEqual(terminationCap)) {
       failRatePeriodInvariant(
-        "[handleRailTerminated] Rate period cap does not match endEpoch",
+        "[handleRailTerminated] Rate period cap does not match the expected termination cap",
         rail,
         event,
         currentRatePeriod,
@@ -281,7 +284,7 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
       return;
     }
   }
-  currentRatePeriod.untilEpoch = event.params.endEpoch;
+  currentRatePeriod.untilEpoch = terminationCap;
   currentRatePeriod.save();
 
   if (previousRailState == "ACTIVE") {

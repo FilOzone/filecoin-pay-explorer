@@ -18,6 +18,7 @@ import {
   createRailRateModifiedEvent,
   createRailSettledEvent,
   createRailTerminatedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertAccountOperatorState,
@@ -67,6 +68,7 @@ describe("RailRatePeriod projection", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("creates the initial zero-rate period before the rail is saved", () => {
@@ -319,6 +321,19 @@ describe("RailRatePeriod projection", () => {
     assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "0", "1", "1");
   });
 
+  test("clamps a termination before the current period start to an empty period", () => {
+    const railId = GraphBN.fromI32(18);
+    const creation = createRailAt(railId, 100, 1);
+    const termination = createRailTerminatedEvent(railId, TEST_ADDRESSES.OPERATOR, GraphBN.fromI32(50));
+    setEventPosition(termination, 110, 2);
+
+    handleRailTerminated(termination);
+
+    assertRailRatePeriodState(getEventId(creation), railId, ZERO_BIG_INT, GraphBN.fromI32(100), "100");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "endEpoch", "50");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "state", "TERMINATED");
+  });
+
   test("finalization after settlement leaves the capped timeline unchanged", () => {
     const railId = GraphBN.fromI32(7);
     createRailAt(railId, 10, 1);
@@ -401,6 +416,40 @@ describe("RailRatePeriod projection", () => {
       const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, TEST_AMOUNTS.PAYMENT_RATE_LOW);
       setEventPosition(activation, 20, 2);
       handleRailRateModified(activation);
+    },
+    true,
+  );
+
+  test(
+    "fails termination when the current rate period is missing",
+    () => {
+      const railId = GraphBN.fromI32(19);
+      createRailAt(railId, 10, 1);
+      const rail = Rail.load(getRailEntityId(railId));
+      assert.assertNotNull(rail);
+      rail!.currentRatePeriod = Bytes.fromHexString("0xdead");
+      rail!.save();
+
+      const termination = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, GraphBN.fromI32(30));
+      setEventPosition(termination, 20, 2);
+      handleRailTerminated(termination);
+    },
+    true,
+  );
+
+  test(
+    "fails termination when the current rate period has a different cap",
+    () => {
+      const railId = GraphBN.fromI32(20);
+      const creation = createRailAt(railId, 10, 1);
+      const period = RailRatePeriod.load(getEventId(creation));
+      assert.assertNotNull(period);
+      period!.untilEpoch = GraphBN.fromI32(40);
+      period!.save();
+
+      const termination = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, GraphBN.fromI32(30));
+      setEventPosition(termination, 20, 2);
+      handleRailTerminated(termination);
     },
     true,
   );

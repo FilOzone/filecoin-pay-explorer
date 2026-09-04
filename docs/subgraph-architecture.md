@@ -206,7 +206,7 @@ Periods use the interval `(startEpoch, untilEpoch]`. A rate change in block B cl
 
 Before a real change, the mapping requires the current period to exist, match `oldRate`, and start no later than the event block. A violation aborts indexing instead of continuing with a corrupt timeline.
 
-Termination caps the current period at the emitted inclusive `endEpoch`. A later permitted decrease before that epoch splits the period at the change block and copies the cap to the replacement. `RailSettled` and `RailFinalized` leave this timeline unchanged.
+Termination normally caps the current period at the emitted inclusive `endEpoch`. An underfunded account can emit an `endEpoch` before a newly created zero-rate period starts; in that case, the period is capped at its own `startEpoch` to represent an empty interval while `Rail.endEpoch` retains the emitted value. A later permitted decrease before the termination epoch splits the period at the change block and copies the cap to the replacement. `RailSettled` and `RailFinalized` leave this timeline unchanged.
 
 The payer, operator, and token foreign keys are copied onto every period. This supports top-level, cursor-paged spend queries without loading rails and their nested histories.
 

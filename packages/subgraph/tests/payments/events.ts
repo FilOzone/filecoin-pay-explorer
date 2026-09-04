@@ -18,6 +18,10 @@ import {
 
 let nextLogIndex = 1;
 
+export function resetEventLogIndex(): void {
+  nextLogIndex = 1;
+}
+
 function newEvent(): ethereum.Event {
   const event = newMockEvent();
   event.logIndex = GraphBN.fromI32(nextLogIndex);
