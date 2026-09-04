@@ -4,20 +4,35 @@ const STORAGE_PREFIX = "filecoin-pay:squid-acquisition:v1";
 
 type AcquisitionStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
-export type SquidAcquisition = {
+type SquidAcquisitionBase = {
   acquisitionId?: string;
-  depositTransactionHash?: Hash;
-  deliveredAmount?: bigint;
   destinationBalanceBefore?: bigint;
   destinationAmount: bigint;
-  executionStage?: SquidAcquisitionExecutionStage;
   owner: Address;
   sourceChainId: number;
-  status: "acquired" | "depositing" | "processing";
   transactionHashes: Hash[];
 };
 
 export type SquidAcquisitionExecutionStage = "preparing" | "swap-broadcast" | "swap-requested";
+export type ProcessingSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: never;
+  depositTransactionHash?: never;
+  executionStage: SquidAcquisitionExecutionStage;
+  status: "processing";
+};
+export type AcquiredSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: bigint;
+  depositTransactionHash?: never;
+  executionStage?: SquidAcquisitionExecutionStage;
+  status: "acquired";
+};
+export type DepositingSquidAcquisition = SquidAcquisitionBase & {
+  deliveredAmount?: bigint;
+  depositTransactionHash?: Hash;
+  executionStage?: SquidAcquisitionExecutionStage;
+  status: "depositing";
+};
+export type SquidAcquisition = AcquiredSquidAcquisition | DepositingSquidAcquisition | ProcessingSquidAcquisition;
 
 export function getSquidAcquisitionStorageKey(owner: Address) {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
@@ -27,7 +42,7 @@ export function hasSavedSquidAcquisition(storage: AcquisitionStorage, owner: Add
   return storage.getItem(getSquidAcquisitionStorageKey(owner)) !== null;
 }
 
-function save(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+function save<T extends SquidAcquisition>(storage: AcquisitionStorage, acquisition: T) {
   storage.setItem(
     getSquidAcquisitionStorageKey(acquisition.owner),
     JSON.stringify({
@@ -115,7 +130,7 @@ export function loadSquidAcquisition(storage: AcquisitionStorage, expectedOwner:
       sourceChainId: acquisition.sourceChainId,
       status: acquisition.status,
       transactionHashes: acquisition.transactionHashes as Hash[],
-    };
+    } as SquidAcquisition;
   } catch {
     return null;
   }
@@ -143,7 +158,7 @@ export function beginSquidAcquisition(
   });
 }
 
-export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function markSquidSwapRequested(storage: AcquisitionStorage, acquisition: ProcessingSquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing" || !hasSameSquidAcquisitionSnapshot(current, acquisition)) {
     throw new Error("Saved Squid acquisition changed");
@@ -164,7 +179,7 @@ export function getDeliveredSquidAmount(acquisition: SquidAcquisition, currentDe
 
 export function markSquidAcquiredFromBalance(
   storage: AcquisitionStorage,
-  acquisition: SquidAcquisition,
+  acquisition: ProcessingSquidAcquisition,
   currentDestinationBalance: bigint,
 ) {
   const deliveredAmount = getDeliveredSquidAmount(acquisition, currentDestinationBalance);
@@ -172,7 +187,7 @@ export function markSquidAcquiredFromBalance(
   return markSquidAcquired(storage, acquisition, deliveredAmount);
 }
 
-export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash: Hash) {
+export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: ProcessingSquidAcquisition, hash: Hash) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "processing") throw new Error("Squid acquisition is no longer processing");
   if (current.executionStage === "swap-broadcast" && current.transactionHashes.includes(hash)) return current;
@@ -190,7 +205,7 @@ export function markSquidBroadcast(storage: AcquisitionStorage, acquisition: Squ
 
 export function markSquidAcquired(
   storage: AcquisitionStorage,
-  acquisition: SquidAcquisition,
+  acquisition: ProcessingSquidAcquisition,
   deliveredAmount?: bigint,
 ) {
   const current = requireCurrent(storage, acquisition);
@@ -208,7 +223,11 @@ export function markSquidAcquired(
   return save(storage, { ...current, deliveredAmount, status: "acquired" });
 }
 
-export function markSquidDepositPending(storage: AcquisitionStorage, acquisition: SquidAcquisition, hash?: Hash) {
+export function markSquidDepositPending(
+  storage: AcquisitionStorage,
+  acquisition: AcquiredSquidAcquisition | DepositingSquidAcquisition,
+  hash?: Hash,
+) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== acquisition.status) throw new Error("Saved Squid acquisition changed");
   if (current.status !== "acquired" && current.status !== "depositing") {
@@ -224,7 +243,7 @@ export function markSquidDepositPending(storage: AcquisitionStorage, acquisition
   });
 }
 
-export function resetSquidDeposit(storage: AcquisitionStorage, acquisition: SquidAcquisition) {
+export function resetSquidDeposit(storage: AcquisitionStorage, acquisition: DepositingSquidAcquisition) {
   const current = requireCurrent(storage, acquisition);
   if (current.status !== "depositing" || !isSameState(current, acquisition)) {
     throw new Error("Squid deposit is not the expected pending transaction");

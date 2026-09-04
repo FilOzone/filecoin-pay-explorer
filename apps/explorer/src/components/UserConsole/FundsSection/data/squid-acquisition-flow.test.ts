@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadSquidAcquisition } from "./squid-acquisition";
+import { loadSquidAcquisition, markSquidAcquired, type ProcessingSquidAcquisition } from "./squid-acquisition";
 import { runSquidAcquisition } from "./squid-acquisition-flow";
 
 const owner = "0x1111111111111111111111111111111111111111" as const;
@@ -220,6 +220,28 @@ describe("runSquidAcquisition", () => {
       error: expect.objectContaining({ message: "storage unavailable" }),
       status: "blocked",
     });
+  });
+
+  it("returns a concurrently completed acquisition instead of blocking it", async () => {
+    const storage = createStorage();
+    let started!: ProcessingSquidAcquisition;
+
+    const outcome = await runSquidAcquisition({
+      execute: async () => {
+        markSquidAcquired(storage, started, 10n);
+        throw new Error("stale execution failure");
+      },
+      minimumDestinationAmount: 10n,
+      onStarted: (acquisition) => {
+        started = acquisition;
+      },
+      owner,
+      readDestinationBalance: vi.fn().mockResolvedValue(100n),
+      sourceChainId: 42161,
+      storage,
+    });
+
+    expect(outcome).toEqual({ acquisition: expect.objectContaining({ status: "acquired" }), status: "acquired" });
   });
 
   it("clears the marker and returns failed when the start callback throws before execution", async () => {
