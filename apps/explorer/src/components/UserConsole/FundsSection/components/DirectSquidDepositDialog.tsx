@@ -27,6 +27,7 @@ import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
 import { useTopUpActivity } from "../../TopUpActivityContext";
+import { filecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import {
   getSourceTokenBalance,
@@ -236,6 +237,11 @@ export function DirectSquidDepositDialog({
     refetchOnMount: "always",
     retry: 1,
   });
+  const recipientFilStatus = filecoinGasBalanceStatus(
+    recipientFilQuery.data,
+    recipientFilQuery.isFetching,
+    recipientFilQuery.isError,
+  );
   const quoteQuery = useQuery({
     enabled:
       open &&
@@ -293,17 +299,10 @@ export function DirectSquidDepositDialog({
       setFilGasDefaultRecipient("");
       return;
     }
-    if (!recipient || recipientFilQuery.isFetching || filGasDefaultRecipient === recipient) return;
+    if (!recipient || recipientFilStatus === "loading" || filGasDefaultRecipient === recipient) return;
     setFilGasDefaultRecipient(recipient);
-    setFilGasTopUpEnabled(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
-  }, [
-    filGasDefaultRecipient,
-    open,
-    recipient,
-    recipientFilQuery.data,
-    recipientFilQuery.isError,
-    recipientFilQuery.isFetching,
-  ]);
+    setFilGasTopUpEnabled(recipientFilStatus !== "funded");
+  }, [filGasDefaultRecipient, open, recipient, recipientFilStatus]);
 
   useEffect(() => {
     if (!open) {
