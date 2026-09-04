@@ -5,9 +5,10 @@ import { SectionContent } from "@filecoin-foundation/ui-filecoin/SectionContent"
 import type { RailState } from "@filecoin-pay/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isAddress } from "viem";
+import { ListEmptyInitial, ListEmptyNoResults, ListErrorState } from "@/components/shared";
 import type { RailsFilter } from "@/hooks/useInfiniteRails";
 import useInfiniteRails from "@/hooks/useInfiniteRails";
-import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsSearchBar, RailsTable } from "./components";
+import { RailsSearchBar, RailsTable } from "./components";
 import type { SearchByOption } from "./components/RailsSearchBar";
 
 const isPositiveInteger = (value: string) => /^[1-9]\d*$/.test(value);
@@ -191,12 +192,18 @@ const Rails = () => {
 
           {isLoading && <LoadingStateCard message='Loading Rails...' />}
 
-          {isError && <RailsErrorState error={error} onRetry={refetch} />}
+          {isError && <ListErrorState entityLabel='rails' error={error} onRetry={refetch} />}
 
-          {!isError && !isLoading && allRails.length === 0 && !hasActiveFilters && <RailsEmptyInitial />}
+          {!isError && !isLoading && allRails.length === 0 && !hasActiveFilters && (
+            <ListEmptyInitial entityLabel='rails' />
+          )}
 
           {!isError && !isLoading && allRails.length === 0 && hasActiveFilters && (
-            <RailsEmptyNoResults onClear={handleClearFilters} />
+            <ListEmptyNoResults
+              description={"Try adjusting your search filters to find what you're looking for."}
+              clearLabel='Clear Filters'
+              onClear={handleClearFilters}
+            />
           )}
 
           {!isError && !isLoading && allRails.length > 0 && (
