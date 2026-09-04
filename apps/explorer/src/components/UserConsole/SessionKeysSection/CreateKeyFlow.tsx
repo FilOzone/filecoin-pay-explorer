@@ -114,8 +114,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   identityRef.current = { network, account };
 
   const isExistingKey = prefillAddress != null && existingKey != null;
-  // A known key with no live expiry is being renewed, not extended.
-  const isRenewal = isExistingKey && existingKey.expirySec == null;
+  // A known key with no live expiry and lapsed scopes is being renewed, not
+  // extended; one whose scopes were all revoked has nothing to renew.
+  const isRenewal = isExistingKey && existingKey.expirySec == null && existingKey.scopes.length > 0;
   // A renewal also requests the scopes the key held, so ticking only the new
   // one cannot leave the old ones expired by accident. Joined into a string so
   // the memo below does not rebuild on every render.
