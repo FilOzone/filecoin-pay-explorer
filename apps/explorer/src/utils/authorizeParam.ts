@@ -16,7 +16,7 @@ import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
  * shape whose mixed-case letters do not match EIP-55; all-lowercase input
  * never hits it.
  */
-export type AuthorizeParamError = "bad-checksum" | "not-an-address";
+export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network";
 
 /** null means the param was absent or blank, so there is no request to show at all. */
 export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
@@ -68,10 +68,32 @@ export function presetScopeStates(requested: ScopeId[]): Record<ScopeId, Request
  * operation ran on. The page refuses to prefill when this names a network
  * other than the wallet's — without it, a calibration remediation link
  * approved by a mainnet-connected wallet silently grants scopes on mainnet.
- * Unknown values collapse to null (no network claim, wallet chain wins).
+ * Missing or unknown values collapse to null, and a link without a usable
+ * network is refused: the CLI always sends one, so its absence means a
+ * malformed link, not a request the wallet's chain may satisfy.
  */
 export function parseNetworkParam(value: string | null | undefined): "mainnet" | "calibration" | null {
   if (typeof value !== "string") return null;
   const network = value.trim().toLowerCase();
   return network === "mainnet" || network === "calibration" ? network : null;
+}
+
+export interface AuthorizeLink {
+  address: `0x${string}`;
+  scopes: ScopeId[] | null;
+  network: "mainnet" | "calibration";
+}
+
+/**
+ * The whole pairing request from a page's search params: null when there is
+ * none, an error when any part is unusable, otherwise every field validated.
+ */
+export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
+  if (!params.has("authorize") && !params.has("scopes")) return null;
+  const requested = parseAuthorizeParam(params.get("authorize"));
+  if (!requested) return null;
+  if ("error" in requested) return requested;
+  const network = parseNetworkParam(params.get("network"));
+  if (!network) return { error: "no-network" };
+  return { address: requested.address, scopes: parseScopesParam(params.get("scopes")), network };
 }

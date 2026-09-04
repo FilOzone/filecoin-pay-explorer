@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
 import { describe, it } from "vitest";
-import { parseAuthorizeParam, parseNetworkParam, parseScopesParam, presetScopeStates } from "./authorizeParam";
+import {
+  parseAuthorizeLink,
+  parseAuthorizeParam,
+  parseNetworkParam,
+  parseScopesParam,
+  presetScopeStates,
+} from "./authorizeParam";
 
 const LOWERCASE = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 const CHECKSUMMED = getAddress(LOWERCASE); // 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -129,5 +135,27 @@ describe("parseNetworkParam", () => {
     assert.equal(parseNetworkParam(""), null);
     assert.equal(parseNetworkParam(null), null);
     assert.equal(parseNetworkParam(undefined), null);
+  });
+});
+
+describe("parseAuthorizeLink", () => {
+  const link = (query: string) => parseAuthorizeLink(new URLSearchParams(query));
+
+  it("returns every validated field for a complete link", () => {
+    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration`), {
+      address: CHECKSUMMED,
+      scopes: ["addPieces"],
+      network: "calibration",
+    });
+  });
+
+  it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {
+    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces`), { error: "no-network" });
+    assert.deepEqual(link(`authorize=${LOWERCASE}&network=calibraiton`), { error: "no-network" });
+  });
+
+  it("reports the address error first, and nothing when there is no request", () => {
+    assert.deepEqual(link("authorize=0xnope&network=mainnet"), { error: "not-an-address" });
+    assert.equal(link("deposit=2"), null);
   });
 });
