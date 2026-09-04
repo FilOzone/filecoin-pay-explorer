@@ -7,8 +7,10 @@ const STORAGE_PREFIX = "filecoin-pay:squid-deposit:v1";
 /** Fired on `window` when a pending deposit is saved or cleared in this tab; `storage` events cover other tabs. */
 export const PENDING_SQUID_DEPOSIT_EVENT = "filecoin-pay:squid-deposit-changed";
 
-/** A broadcast Squid deposit route whose Filecoin Pay credit is still pending. */
-export interface PendingSquidDeposit extends SquidDepositRef {
+/** A requested or broadcast Squid deposit route that must block another spend. */
+export interface PendingSquidDeposit extends Omit<SquidDepositRef, "transactionHash"> {
+  executionStage: "swap-requested" | "swap-broadcast";
+  transactionHash?: Hash;
   recipient: Address;
   owner: Address;
   sourceToken: Address;
@@ -23,6 +25,10 @@ export interface PendingSquidDeposit extends SquidDepositRef {
 
 export function getPendingSquidDepositKey(owner: Address): string {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
+}
+
+export function hasPendingSquidDeposit(storage: StorageLike, owner: Address): boolean {
+  return storage.getItem(getPendingSquidDepositKey(owner)) !== null;
 }
 
 export function savePendingSquidDeposit(storage: StorageLike, pending: PendingSquidDeposit): PendingSquidDeposit {
@@ -61,8 +67,11 @@ export function loadPendingSquidDeposit(
       !Number.isSafeInteger(parsed.sourceChainId) ||
       typeof parsed.quoteId !== "string" ||
       parsed.quoteId === "" ||
-      typeof parsed.transactionHash !== "string" ||
-      !isHash(parsed.transactionHash) ||
+      (parsed.executionStage !== undefined &&
+        parsed.executionStage !== "swap-requested" &&
+        parsed.executionStage !== "swap-broadcast") ||
+      (parsed.transactionHash !== undefined &&
+        (typeof parsed.transactionHash !== "string" || !isHash(parsed.transactionHash))) ||
       !isDigits(parsed.sourceAmount) ||
       !isDigits(parsed.minimumDestinationAmount) ||
       !isDigits(parsed.fundsBefore) ||
@@ -72,13 +81,21 @@ export function loadPendingSquidDeposit(
     ) {
       return null;
     }
+    const executionStage = parsed.executionStage ?? "swap-broadcast";
+    if (
+      (executionStage === "swap-requested" && parsed.transactionHash !== undefined) ||
+      (executionStage === "swap-broadcast" && parsed.transactionHash === undefined)
+    ) {
+      return null;
+    }
     return {
       recipient: parsed.recipient,
       owner: parsed.owner,
       sourceToken: parsed.sourceToken,
       sourceChainId: parsed.sourceChainId,
       quoteId: parsed.quoteId,
-      transactionHash: parsed.transactionHash as Hash,
+      executionStage,
+      ...(parsed.transactionHash === undefined ? {} : { transactionHash: parsed.transactionHash as Hash }),
       sourceAmount: BigInt(parsed.sourceAmount),
       minimumDestinationAmount: BigInt(parsed.minimumDestinationAmount),
       fundsBefore: BigInt(parsed.fundsBefore),
@@ -96,7 +113,7 @@ export function clearPendingSquidDeposit(storage: StorageLike, owner: Address): 
   announcePendingSquidDepositChange();
 }
 
-/** Calls `onChange` whenever this recipient's pending deposit may have changed, in this tab or another. */
+/** Calls `onChange` whenever this owner's pending deposit may have changed, in this tab or another. */
 export function subscribeToPendingSquidDeposit(owner: Address, onChange: () => void): () => void {
   if (typeof window === "undefined" || typeof window.addEventListener !== "function") return () => undefined;
   const key = getPendingSquidDepositKey(owner);
