@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Activity, BarChart3, Calendar, Flame, Users } from "lucide-react";
+import { Activity, BarChart3, Calendar, Flame } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -64,7 +64,6 @@ export const TrendChart: React.FC = () => {
       settlements: Number(metric.totalRailSettlements || 0),
       finalized: Number(metric.railsFinalized || 0),
       terminated: Number(metric.railsTerminated || 0),
-      uniqueUsers: Number(metric.uniqueAccounts || 0),
     }))
     .reverse();
 
@@ -137,7 +136,7 @@ export const TrendChart: React.FC = () => {
         </div>
       </div>
 
-      <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 gap-6'>
         {/* Network Revenue Trend */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
@@ -167,33 +166,6 @@ export const TrendChart: React.FC = () => {
                   name='Network Revenue'
                 />
               </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Rail Settlements */}
-        <div className='space-y-4'>
-          <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
-            <Users className='w-4 h-4 text-blue-400' />
-            New Users
-          </h4>
-
-          <div className='h-64'>
-            <ResponsiveContainer width='100%' height='100%'>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
-                <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type='monotone'
-                  dataKey='uniqueUsers'
-                  stroke='#3B82F6'
-                  strokeWidth={2}
-                  dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
-                  name='Unique Users'
-                />
-              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>

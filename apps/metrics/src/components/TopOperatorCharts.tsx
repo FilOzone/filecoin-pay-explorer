@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Activity, BarChart3, Crown, Users } from "lucide-react";
+import { Activity, BarChart3, Crown } from "lucide-react";
 import type React from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useOperatorMetrics, useTopOperatorTokens } from "../hooks/useMetrics";
@@ -53,7 +53,6 @@ export const TopOperatorCharts: React.FC = () => {
       const operatorIndex = topOperators.findIndex((op) => op.operator.id === metric.operator.id);
       const operatorKey = `Operator ${operatorIndex + 1}`;
 
-      existingEntry[`${operatorKey}_unique-clients`] = Number(metric.uniqueClients);
       existingEntry[`${operatorKey}_rails-created`] = Number(metric.railsCreated);
       existingEntry[`${operatorKey}_settlements-processed`] = Number(metric.settlementsProcessed);
 
@@ -109,7 +108,7 @@ export const TopOperatorCharts: React.FC = () => {
       </div>
 
       {/* Charts Grid */}
-      <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 gap-6'>
         {/* Rails Created */}
         <div className='space-y-4'>
           <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
@@ -135,33 +134,6 @@ export const TopOperatorCharts: React.FC = () => {
                   />
                 ))}
               </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Unique Users */}
-        <div className='space-y-4'>
-          <h4 className='text-lg font-semibold text-white flex items-center gap-2'>
-            <Users className='w-4 h-4 text-green-400' />
-            Unique Users
-          </h4>
-          <div className='h-64'>
-            <ResponsiveContainer width='100%' height='100%'>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray='3 3' stroke='#374151' />
-                <XAxis dataKey='date' stroke='#9CA3AF' fontSize={12} />
-                <YAxis stroke='#9CA3AF' tickFormatter={(value) => YAxisTickFormatter(value, false)} fontSize={12} />
-                <Tooltip content={<CustomTooltip />} />
-                {topOperators.slice(0, 4).map((operator, index) => (
-                  <Bar
-                    key={operator.id}
-                    dataKey={`Operator ${index + 1}_unique-clients`}
-                    fill={operatorColors[index]}
-                    name={`Operator ${index + 1} Unique Users`}
-                    radius={[2, 2, 0, 0]}
-                  />
-                ))}
-              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
