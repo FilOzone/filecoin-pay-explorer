@@ -85,8 +85,10 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
 const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange }) => {
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
+  const [isCheckingGas, setIsCheckingGas] = useState(false);
+  const gasCheckInFlight = useRef(false);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
-  const isBusy = isSubmitting || isExecuting;
+  const isBusy = isCheckingGas || isSubmitting || isExecuting;
   const gasBalance = useFilecoinGasBalance(open);
   const funding = useFundingLaunch();
   const previousOwner = useRef(gasBalance.owner);
@@ -191,16 +193,23 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   };
 
   const handleSubmit = async () => {
-    if (!operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    if (!gasBalance.isCorrectChain || (await gasBalance.refresh()) !== "funded") return;
-    await submit({
-      operatorAddress,
-      token,
-      parsedDeposit,
-      depositAmountLabel: depositAmount,
-      lockupInWei,
-      rateInWei,
-    });
+    if (gasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
+    gasCheckInFlight.current = true;
+    setIsCheckingGas(true);
+    try {
+      if (!gasBalance.isCorrectChain || (await gasBalance.refresh()) !== "funded") return;
+      await submit({
+        operatorAddress,
+        token,
+        parsedDeposit,
+        depositAmountLabel: depositAmount,
+        lockupInWei,
+        rateInWei,
+      });
+    } finally {
+      gasCheckInFlight.current = false;
+      setIsCheckingGas(false);
+    }
   };
 
   return (
