@@ -16,6 +16,7 @@ import {
   createRailCreatedEvent,
   createRailRateModifiedEvent,
   createRailTerminatedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertAccountOperatorState,
@@ -71,6 +72,7 @@ describe("AccountOperator projection", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("groups payer rails by operator without indexing the payee", () => {
