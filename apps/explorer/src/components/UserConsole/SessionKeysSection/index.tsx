@@ -70,10 +70,8 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
 };
 
 const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes, prefillNetwork }: ConnectedProps) => {
-  const { keys, addKey, removeKey, syncFromChain, refetchStatuses, markConfirmed, registry } = useSessionKeys(
-    network,
-    account,
-  );
+  const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsFailed, markConfirmed, registry } =
+    useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
   const registryLinks = [
     { label: "Registry on Filfox (verified)", href: FILFOX_ADDRESS_URL[network](registry.address) },
@@ -184,9 +182,15 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
               )}
             </p>
           </div>
-          <Button variant='primary' size='compact' disabled={prefillPending} onClick={() => openCreate("link")}>
-            {prefillPending ? "Checking key status…" : "Review & authorize"}
-          </Button>
+          {prefillPending && statusReadsFailed ? (
+            <Button variant='primary' size='compact' onClick={() => refetchStatuses()}>
+              Could not read this key's status. Retry
+            </Button>
+          ) : (
+            <Button variant='primary' size='compact' disabled={prefillPending} onClick={() => openCreate("link")}>
+              {prefillPending ? "Checking key status…" : "Review & authorize"}
+            </Button>
+          )}
         </div>
       )}
       {isSelfAuthRequest && (

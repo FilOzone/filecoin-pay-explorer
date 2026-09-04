@@ -94,7 +94,11 @@ export function useSessionKeys(network: Network, account: Hex) {
     [records, registry, account],
   );
 
-  const { data: reads, refetch: refetchStatuses } = useReadContracts({
+  const {
+    data: reads,
+    isError: statusReadsFailed,
+    refetch: refetchStatuses,
+  } = useReadContracts({
     contracts,
     query: { enabled: records.length > 0, refetchInterval: 30_000 },
   });
@@ -158,9 +162,9 @@ export function useSessionKeys(network: Network, account: Hex) {
   );
 
   /**
-   * Imports session-key history from the registry's onchain event log. Only
-   * ever adds signers this browser doesn't already know about — an existing
-   * local record always wins over the synced version of the same address.
+   * Imports session-key history from the registry's onchain event log: adds
+   * signers this browser does not know, and fills in scopes, name, and
+   * revocation time on ones it does. A local name is never overwritten.
    */
   const syncFromChain = useCallback(async (): Promise<SyncFromChainResult> => {
     // Captured before the fetch: the events belong to this wallet even if it switches meanwhile.
@@ -181,6 +185,7 @@ export function useSessionKeys(network: Network, account: Hex) {
     removeKey,
     syncFromChain,
     refetchStatuses,
+    statusReadsFailed,
     markConfirmed,
     registry,
   };
