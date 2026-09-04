@@ -5,6 +5,7 @@ import {
   assertExecutableQuoteWithinReview,
   buildDepositPostHook,
   captureReviewedSquidDepositCaps,
+  getDepositNetworkFeeMaximum,
   getDepositRequiredNativeBalance,
   getSourceNativeCosts,
   getUsdfcPerUsdc,
@@ -155,13 +156,16 @@ describe("rate helpers", () => {
     expect(getUsdfcPerUsdc({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBe(0);
   });
 
-  it("sums source-network native costs and adds headroom for the approval and swap gas", () => {
+  it("sums source-network native costs and the reviewed network-fee maximum", () => {
     const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
     expect(getSourceNativeCosts(quote, 8453)).toEqual({ fees: 5_971_701_479_908n, gas: 3_596_394_000_000n });
     expect(getSourceNativeCosts(quote, 1)).toEqual({ fees: 0n, gas: 0n });
-    expect(
-      getDepositRequiredNativeBalance({ fees: quote.fees, gasCosts: quote.gasCosts }, 8453, 1_000_000_000_000n),
-    ).toBe(5_971_701_479_908n + 4_596_394_000_000n + 2_298_197_000_000n);
+    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, 0n);
+    expect(maximumNetworkFee).toBe(8_631_345_600_000n);
+    expect(getDepositRequiredNativeBalance(quote, 8453, maximumNetworkFee)).toBe(
+      5_971_701_479_908n + 8_631_345_600_000n,
+    );
+    expect(getDepositNetworkFeeMaximum(quote, 1, request.sourceAmount)).toBe(0n);
   });
 });
 
@@ -266,6 +270,7 @@ describe("parseSquidDepositRoute", () => {
       "trusted target or spender checks",
     ],
     ["an expired route", fakeRoute({ quoteOnly: false, transaction: { expiry: "1" } }), false, "expired route"],
+    ["a zero minimum destination", fakeRoute({ estimate: { toAmountMin: "0" } }), true, "minimum destination amount"],
     ["a missing gas limit", fakeRoute({ quoteOnly: false, transaction: { gasLimit: null } }), false, "gas limit"],
     [
       "a missing transaction",
