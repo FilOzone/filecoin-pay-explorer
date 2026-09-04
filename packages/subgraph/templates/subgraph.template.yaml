@@ -27,6 +27,7 @@ dataSources:
         - UserToken
         - Token
         - Account
+        - AccountOperator
         - Operator
         - Payments
       abis:
