@@ -22,6 +22,7 @@ import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { download } from "@/utils/download";
+import { formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   buildLoginArgs,
@@ -236,7 +237,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     );
   };
 
-  const expiryDate = expirySec > 0n ? new Date(Number(expirySec) * 1000) : null;
+  const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
   const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
   const txBanner =
@@ -254,8 +255,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       </Notice>
     ) : (
       <Notice tone='ok'>
-        ✓ <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
-        {scopeLabels}
+        ✓ <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
       </Notice>
     );
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
@@ -465,8 +465,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             <DialogHeader>
               <DialogTitle>Session key registered</DialogTitle>
               <DialogDescription>
-                <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
-                {scopeLabels}
+                <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
               </DialogDescription>
             </DialogHeader>
             <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
