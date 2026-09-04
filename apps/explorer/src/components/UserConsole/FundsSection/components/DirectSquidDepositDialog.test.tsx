@@ -17,7 +17,7 @@ const state = vi.hoisted(() => ({
   requestRoute: vi.fn(),
 }));
 const wallet = vi.hoisted(() => ({
-  address: "0x1111111111111111111111111111111111111111" as const,
+  address: "0x1111111111111111111111111111111111111111" as string,
   getEthereumProvider: vi.fn(async () => ({
     request: vi.fn(async () => ["0x1111111111111111111111111111111111111111"]),
   })),
@@ -191,6 +191,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     listeners = {};
     storage = memoryStorage();
     state.liveRecipient = RECIPIENT;
+    connectedWallets.current = [wallet];
     state.execute.mockReset();
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
     query.allowance = 100_000_000n;
@@ -220,6 +221,44 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("prefills the verified purchased source token and amount", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT.toLowerCase()}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+          onOpenChange={() => undefined}
+          open
+        />,
+      );
+    });
+
+    expect(renderer.root.findByType("input").props.value).toBe("12.5");
+    expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
+  });
+
+  it("does not reapply an equivalent purchase prefill after the user edits it", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = () => (
+      <DirectSquidDepositDialog
+        accountId={RECIPIENT.toLowerCase()}
+        initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+        onOpenChange={() => undefined}
+        open
+      />
+    );
+    await act(async () => {
+      renderer = create(render());
+    });
+    await act(async () => {
+      renderer.root.findByType("input").props.onChange({ target: { value: "10" } });
+      renderer.update(render());
+    });
+
+    expect(renderer.root.findByType("input").props.value).toBe("10");
   });
 
   it.each([
@@ -387,5 +426,48 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open={false} />);
     });
     expect(topUp.setActive).toHaveBeenCalledWith(false);
+  });
+
+  it("selects the card-funded recipient instead of the previous paying wallet", async () => {
+    connectedWallets.current = [wallet, { ...wallet, address: RECIPIENT }];
+    let renderer!: ReactTestRenderer;
+    const render = (open: boolean, purchase = false) => (
+      <DirectSquidDepositDialog
+        accountId={RECIPIENT.toLowerCase()}
+        open={open}
+        onOpenChange={() => undefined}
+        initialSource={purchase ? { amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC } : undefined}
+      />
+    );
+    await act(async () => {
+      renderer = create(render(true));
+    });
+    await act(async () => {
+      renderer.root.findByProps({ id: "direct-squid-wallet" }).props.onChange({ target: { value: OWNER } });
+    });
+    await act(async () => {
+      renderer.update(render(false));
+    });
+    await act(async () => {
+      renderer.update(render(true, true));
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-wallet" }).props.value).toBe(RECIPIENT);
+    expect(renderer.root.findByType("input").props.value).toBe("12.5");
+  });
+
+  it("does not fall back to another wallet if the card-funded recipient is unavailable", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT}
+          open
+          onOpenChange={() => undefined}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+        />,
+      );
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-wallet" }).props.value).toBe("");
+    expect(button(renderer, "Review")?.props.disabled).toBe(true);
   });
 });
