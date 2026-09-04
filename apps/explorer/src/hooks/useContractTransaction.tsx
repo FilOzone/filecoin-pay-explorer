@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
@@ -9,10 +9,7 @@ import { getToastContent } from "@/utils/toast";
 interface UseContractTransactionOptions {
   contractAddress: Hex;
   abi: Abi;
-  chainId?: number;
   explorerUrl?: string;
-  onSuccess?: (receipt: TransactionReceipt) => void;
-  onError?: (error: Error) => void;
 }
 
 interface ExecuteTransactionParams {
@@ -38,10 +35,6 @@ interface ExecuteTransactionParams {
  */
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
   const { contractAddress, abi, explorerUrl } = options;
-  // Read at receipt time, not submit time: a callback captured when the
-  // transaction was sent would see the caller's state as it was then.
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
 
   const [inFlightCount, setInFlightCount] = useState(0);
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
@@ -100,7 +93,6 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
             description: success.description,
             action: explorerAction(txHash),
           });
-          optionsRef.current.onSuccess?.(receipt);
           onConfirmed?.(receipt);
         } catch (receiptError) {
           const failure = getToastContent(metadata, "error");
@@ -115,7 +107,6 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
             description: "Request failed. See console logs for more details.",
             action: explorerAction(txHash),
           });
-          optionsRef.current.onError?.(receiptError as Error);
           onReverted?.(receiptError as Error);
         } finally {
           setInFlightCount((count) => count - 1);
