@@ -468,7 +468,45 @@ export const GET_ACCOUNT_TOKEN = gql`
   }
 `;
 
+const RAIL_ROW_FIELDS = `
+  fragment RailRowFields on Rail {
+    id
+    railId
+    state
+    paymentRate
+    totalSettledAmount
+    totalOneTimePaymentAmount
+    lockupPeriod
+    settledUpto
+    endEpoch
+    # If the latest positive-rate segment is settled, every older segment is settled too.
+    rateChangeQueue(first: 1, where: { rate_gt: 0 }, orderBy: untilEpoch, orderDirection: desc) {
+      rate
+      untilEpoch
+    }
+    createdAt
+    payer {
+      id
+      address
+    }
+    payee {
+      id
+      address
+    }
+    operator {
+      id
+      address
+    }
+    token {
+      id
+      symbol
+      decimals
+    }
+  }
+`;
+
 export const GET_ACCOUNT_RAILS = gql`
+  ${RAIL_ROW_FIELDS}
   query GetAccountRails($accountId: Bytes!, $first: Int!, $skip: Int!) {
     rails(
       where: { or: [{ payer: $accountId }, { payee: $accountId }] }
@@ -477,38 +515,7 @@ export const GET_ACCOUNT_RAILS = gql`
       orderBy: createdAt
       orderDirection: desc
     ) {
-      id
-      railId
-      state
-      paymentRate
-      totalSettledAmount
-      totalOneTimePaymentAmount
-      lockupPeriod
-      settledUpto
-      endEpoch
-      # If the latest positive-rate segment is settled, every older segment is settled too.
-      rateChangeQueue(first: 1, where: { rate_gt: 0 }, orderBy: untilEpoch, orderDirection: desc) {
-        rate
-        untilEpoch
-      }
-      createdAt
-      payer {
-        id
-        address
-      }
-      payee {
-        id
-        address
-      }
-      operator {
-        id
-        address
-      }
-      token {
-        id
-        symbol
-        decimals
-      }
+      ...RailRowFields
     }
   }
 `;
@@ -539,6 +546,86 @@ export const GET_ACCOUNT_APPROVALS = gql`
         symbol
         decimals
       }
+    }
+  }
+`;
+
+const ACCOUNT_OPERATOR_FIELDS = `
+  fragment AccountOperatorFields on AccountOperator {
+    id
+    totalRails
+    totalActiveRails
+    totalApprovals
+    totalActiveApprovals
+    operator {
+      id
+      address
+    }
+  }
+`;
+
+/**
+ * One page of a payer's service relationships.
+ *
+ * The filter keeps relationships that still mean something to the payer: any
+ * rail ever created, or a live token approval. It drops rows left behind by a
+ * revoked approval that never produced a rail.
+ *
+ * `AccountOperator.id` is the payer address concatenated with the operator
+ * address, so ordering by `id` within one payer is operator-address order and
+ * `id_gt` is a stable cursor. The payer address alone sorts before every id it
+ * prefixes, which makes it the natural opening cursor. The cursor is repeated
+ * inside each `or` branch because a top-level field beside `or` is not reliably
+ * applied to both branches.
+ */
+export const GET_ACCOUNT_OPERATORS = gql`
+  ${ACCOUNT_OPERATOR_FIELDS}
+  query GetAccountOperators($accountId: Bytes!, $cursor: Bytes!, $first: Int!) {
+    accountOperators(
+      where: {
+        or: [
+          { account: $accountId, id_gt: $cursor, totalRails_gt: 0 }
+          { account: $accountId, id_gt: $cursor, totalActiveApprovals_gt: 0 }
+        ]
+      }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      ...AccountOperatorFields
+    }
+  }
+`;
+
+/**
+ * One payer/operator relationship, looked up by its composite id. Returns null
+ * when the connected payer has no relationship with the operator, which is what
+ * the service detail route treats as not found.
+ */
+export const GET_ACCOUNT_OPERATOR = gql`
+  ${ACCOUNT_OPERATOR_FIELDS}
+  query GetAccountOperator($id: ID!) {
+    accountOperator(id: $id) {
+      ...AccountOperatorFields
+    }
+  }
+`;
+
+/**
+ * Rails for one payer/operator pair. Payer-side only: the console shows the
+ * connected account as the payer, never the payee.
+ */
+export const GET_ACCOUNT_OPERATOR_RAILS = gql`
+  ${RAIL_ROW_FIELDS}
+  query GetAccountOperatorRails($accountId: Bytes!, $operatorId: Bytes!, $first: Int!, $skip: Int!) {
+    rails(
+      where: { payer: $accountId, operator: $operatorId }
+      first: $first
+      skip: $skip
+      orderBy: createdAt
+      orderDirection: desc
+    ) {
+      ...RailRowFields
     }
   }
 `;
