@@ -1,0 +1,186 @@
+"use client";
+
+import { useFiatOnramp, useLogin, usePrivy } from "@privy-io/react-auth";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { erc20Abi, getAddress } from "viem";
+import { usePublicClient } from "wagmi";
+import { getAccount } from "wagmi/actions";
+import { config } from "@/services/wagmi/config";
+
+export const CARD_CHAIN_ID = 8453;
+export const CARD_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+export const CARD_USDC_DECIMALS = 6;
+const BALANCE_ATTEMPTS = 30;
+const BALANCE_INTERVAL_MS = 2_000;
+
+type WaitResult = { balance: bigint; status: "funded" } | { status: "changed" } | { status: "delayed" };
+
+export async function waitForPurchasedUsdc({
+  attempts = BALANCE_ATTEMPTS,
+  before,
+  isCurrent,
+  read,
+  wait = () => new Promise<void>((resolve) => setTimeout(resolve, BALANCE_INTERVAL_MS)),
+}: {
+  attempts?: number;
+  before: bigint;
+  isCurrent: () => boolean;
+  read: () => Promise<bigint>;
+  wait?: () => Promise<void>;
+}): Promise<WaitResult> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!isCurrent()) return { status: "changed" };
+    try {
+      const balance = await read();
+      if (balance > before) return isCurrent() ? { balance, status: "funded" } : { status: "changed" };
+    } catch {
+      // A transient RPC failure is indistinguishable from delayed settlement; retry within the same bounded window.
+    }
+    if (attempt + 1 < attempts) await wait();
+  }
+  return { status: isCurrent() ? "delayed" : "changed" };
+}
+
+function isFundingExit(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error && error.code === 4001) return true;
+  const message = (error instanceof Error ? error.message : typeof error === "string" ? error : "").trim();
+  return (
+    message === "" ||
+    /^user exited\b/i.test(message) ||
+    /\bcancell?ed$/i.test(message) ||
+    /^user rejected\b/i.test(message) ||
+    /_exited$/i.test(message)
+  );
+}
+
+function onrampEnvironment() {
+  return /^(1|true|yes|on)$/i.test(process.env.NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX?.trim() ?? "")
+    ? "sandbox"
+    : "production";
+}
+
+export function useCardPurchase({
+  address,
+  contextKey,
+  onPurchased,
+}: {
+  address: string;
+  contextKey: string;
+  onPurchased: (amount: bigint) => void;
+}) {
+  const { authenticated } = usePrivy();
+  const { fund } = useFiatOnramp();
+  const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "waiting">("idle");
+  const continueAfterLogin = useRef(false);
+  const mounted = useRef(true);
+  const latestContext = useRef(contextKey);
+  latestContext.current = contextKey;
+
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
+
+  const purchase = async () => {
+    if (!publicClient) return;
+    const recipient = getAddress(address);
+    const startedContext = contextKey;
+    const isCurrent = () =>
+      mounted.current &&
+      latestContext.current === startedContext &&
+      getAccount(config).address?.toLowerCase() === recipient.toLowerCase();
+    const read = () =>
+      publicClient.readContract({ abi: erc20Abi, address: CARD_USDC, args: [recipient], functionName: "balanceOf" });
+
+    setStatus("opening");
+    try {
+      const before = await read();
+      if (!isCurrent()) {
+        if (mounted.current) setStatus("idle");
+        return;
+      }
+      const result = await fund({
+        source: {},
+        destination: { address: recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
+        environment: onrampEnvironment(),
+      });
+      if (!isCurrent()) {
+        setStatus("idle");
+        toast.error("Wallet changed during card purchase", {
+          description: "Check the original wallet for purchased USDC, then start again from the current account.",
+        });
+        return;
+      }
+      setStatus("waiting");
+      const landed = await waitForPurchasedUsdc({ before, isCurrent, read });
+      if (landed.status === "changed") {
+        if (mounted.current) {
+          setStatus("idle");
+          toast.error("Wallet changed during card purchase", {
+            description: "Check the original wallet for purchased USDC, then start again from the current account.",
+          });
+        }
+        return;
+      }
+      if (landed.status === "delayed") {
+        setStatus("delayed");
+        toast.info(result.status === "submitted" ? "Card purchase submitted" : "Card purchase not yet visible", {
+          description: "Base USDC has not arrived yet. Keep this account connected and try again after it appears.",
+        });
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["squid", "source-token-balances", recipient, CARD_CHAIN_ID] });
+      void queryClient.invalidateQueries({ queryKey: ["direct-squid-deposit-balances", CARD_CHAIN_ID] });
+      setStatus("idle");
+      onPurchased(landed.balance - before);
+    } catch (error) {
+      if (!isFundingExit(error)) {
+        toast.error("Card purchase failed", {
+          description: error instanceof Error ? error.message : "Privy card funding is unavailable.",
+        });
+      }
+      if (mounted.current) setStatus("idle");
+    }
+  };
+
+  const { login } = useLogin({
+    onComplete: () => {
+      if (!continueAfterLogin.current) return;
+      continueAfterLogin.current = false;
+      void purchase();
+    },
+    onError: () => {
+      continueAfterLogin.current = false;
+      if (mounted.current) setStatus("idle");
+    },
+  });
+
+  const buyWithCard = () => {
+    if (status === "opening" || status === "waiting") return;
+    if (authenticated) return purchase();
+    continueAfterLogin.current = true;
+    setStatus("opening");
+    login();
+  };
+
+  return {
+    buyWithCard,
+    isBusy: status === "opening" || status === "waiting",
+    label: authenticated ? "Buy USDC with card" : "Log in to buy USDC with card",
+    statusMessage:
+      status === "opening"
+        ? "Opening card purchase…"
+        : status === "waiting"
+          ? "Waiting for Base USDC to arrive…"
+          : status === "delayed"
+            ? "Purchase submitted, but Base USDC has not arrived yet. Try again after it appears."
+            : null,
+  };
+}
