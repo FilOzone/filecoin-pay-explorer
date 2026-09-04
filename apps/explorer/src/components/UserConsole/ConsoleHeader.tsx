@@ -28,9 +28,7 @@ export const ConsoleHeader = ({ walletControls, navTrigger }: ConsoleHeaderProps
         {navTrigger ? <div className='order-2 shrink-0 md:order-3 lg:hidden'>{navTrigger}</div> : null}
 
         {walletControls ? (
-          <div className='order-3 flex w-full flex-col-reverse gap-2 md:order-2 md:w-auto md:flex-row md:items-center md:gap-3'>
-            {walletControls}
-          </div>
+          <div className='order-3 flex w-full items-center gap-2 md:order-2 md:w-auto md:gap-3'>{walletControls}</div>
         ) : null}
       </div>
     </Container>

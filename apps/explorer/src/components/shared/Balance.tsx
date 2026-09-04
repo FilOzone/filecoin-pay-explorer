@@ -67,18 +67,18 @@ const Balance = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline' className='w-full justify-start md:w-fit'>
-          <div className='flex items-center gap-3'>
+        <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
+          <div className='flex min-w-0 items-center gap-3'>
             <Wallet className='size-4 text-zinc-500' />
             {isLoading ? (
               "Loading..."
             ) : (
               <>
-                <span className='text-sm font-mono'>{address && formatAddress(address)}</span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='truncate text-sm font-mono'>{address && formatAddress(address)}</span>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
                 </span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
                 </span>
               </>

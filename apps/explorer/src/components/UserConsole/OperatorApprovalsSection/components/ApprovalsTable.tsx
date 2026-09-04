@@ -1,6 +1,7 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
 import { columns } from "../data/columnDefinitions";
 
 export type ApprovalsTableProps = {
@@ -15,7 +16,11 @@ function ApprovalsTable({ data }: ApprovalsTableProps) {
     enableSorting: false,
   });
 
-  return <TanstackTable table={table} />;
+  return (
+    <ResponsiveTable>
+      <TanstackTable table={table} />
+    </ResponsiveTable>
+  );
 }
 
 export default ApprovalsTable;
