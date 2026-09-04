@@ -212,7 +212,7 @@ function assertFeeWithinReview(
   value: bigint,
 ) {
   if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
-  if (nativeBalance < feeSoFar + fee + value) throw new Error("Native balance no longer covers gas and route fees");
+  if (nativeBalance < fee + value) throw new Error("Native balance no longer covers gas and route fees");
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {
@@ -385,7 +385,7 @@ export async function executeSquidDeposit({
   const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
   let totalNativeFee = 0n;
   {
-    const { allowance, nativeBalance } = await assertFreshSigningState({
+    let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
       getCurrentOwner,
       quote,
@@ -415,6 +415,7 @@ export async function executeSquidDeposit({
         if (approvalReceipt.status !== "success") {
           throw new SquidDepositError("The USDC approval transaction reverted", "reverted", approvalHash);
         }
+        if (amount === 0n) nativeBalance = await sourceClient.getBalance({ address: request.owner });
       }
     }
   }
