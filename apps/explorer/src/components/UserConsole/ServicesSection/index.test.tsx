@@ -12,12 +12,19 @@ const servicesQuery = vi.hoisted(() => ({
   fetchNextPage: vi.fn(),
 }));
 
-const observed = vi.hoisted(() => ({ accountId: "" }));
+const observed = vi.hoisted(() => ({ accountId: "", metadataAddresses: [] as string[] }));
+const onchain = vi.hoisted(() => ({ map: new Map<string, { name?: string; description?: string }>() }));
 
 vi.mock("@/hooks/useAccountServices", () => ({
   useAccountServices: (accountId: string) => {
     observed.accountId = accountId;
     return servicesQuery;
+  },
+}));
+vi.mock("@/hooks/useServiceMetadata", () => ({
+  useServiceMetadata: (addresses: string[]) => {
+    observed.metadataAddresses = addresses;
+    return { metadata: onchain.map, isLoading: false };
   },
 }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -51,6 +58,8 @@ describe("ServicesSection", () => {
     servicesQuery.isError = false;
     servicesQuery.hasNextPage = false;
     servicesQuery.isFetchingNextPage = false;
+    observed.metadataAddresses = [];
+    onchain.map = new Map();
   });
 
   it("names the service from its metadata and links Manage to the operator route", () => {
@@ -105,6 +114,27 @@ describe("ServicesSection", () => {
     render();
 
     expect(observed.accountId).toBe(ACCOUNT_ID);
+  });
+
+  it("reads contract metadata for every operator on screen in one batch", () => {
+    servicesQuery.data = {
+      pages: [{ services: [buildService(WARM_STORAGE)] }, { services: [buildService(UNKNOWN_OPERATOR)] }],
+    };
+
+    render();
+
+    expect(observed.metadataAddresses).toEqual([WARM_STORAGE, UNKNOWN_OPERATOR]);
+  });
+
+  it("names an unknown operator from its contract instead of its address", () => {
+    servicesQuery.data = { pages: [{ services: [buildService(UNKNOWN_OPERATOR)] }] };
+    onchain.map = new Map([[UNKNOWN_OPERATOR, { name: "Somebody's Storage", description: "From the contract." }]]);
+
+    const markup = render();
+
+    expect(markup).toContain("Somebody&#x27;s Storage");
+    expect(markup).toContain("From the contract.");
+    expect(markup).not.toContain("0x9999...9999");
   });
 
   it("shows the empty state when the payer has no service relationships", () => {

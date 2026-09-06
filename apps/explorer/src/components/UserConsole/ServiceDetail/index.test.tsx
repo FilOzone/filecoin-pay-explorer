@@ -9,6 +9,10 @@ const serviceQuery = vi.hoisted(() => ({
   isError: false,
 }));
 
+const onchain = vi.hoisted(() => ({
+  map: new Map<string, { name?: string; description?: string; homepage?: string }>(),
+}));
+
 const observed = vi.hoisted(() => ({
   lookup: { accountId: "", operatorAddress: "" },
   railsProps: {} as Record<string, unknown>,
@@ -19,6 +23,9 @@ vi.mock("@/hooks/useAccountServices", () => ({
     observed.lookup = { accountId, operatorAddress };
     return serviceQuery;
   },
+}));
+vi.mock("@/hooks/useServiceMetadata", () => ({
+  useServiceMetadata: () => ({ metadata: onchain.map, isLoading: false }),
 }));
 vi.mock("../RailsSection", () => ({
   RailsSection: (props: Record<string, unknown>) => {
@@ -60,6 +67,7 @@ describe("ServiceDetail", () => {
     serviceQuery.isLoading = false;
     serviceQuery.isError = false;
     observed.railsProps = {};
+    onchain.map = new Map();
   });
 
   it("renders the service name, description, and homepage", () => {
@@ -113,6 +121,24 @@ describe("ServiceDetail", () => {
 
     expect(observed.lookup.operatorAddress).toBe(WARM_STORAGE);
     expect(observed.railsProps.operatorAddress).toBe(WARM_STORAGE);
+  });
+
+  it("prefers the contract's description over the local copy", () => {
+    onchain.map = new Map([[WARM_STORAGE, { description: "Published onchain by the service." }]]);
+
+    const markup = render();
+
+    expect(markup).toContain("Published onchain by the service.");
+    expect(markup).not.toContain("Warm storage service for the Filecoin Onchain Cloud");
+  });
+
+  it("keeps the curated name even when the contract publishes its own", () => {
+    onchain.map = new Map([[WARM_STORAGE, { name: "Totally Legitimate Storage" }]]);
+
+    const markup = render();
+
+    expect(markup).toContain("Filecoin Warm Storage Service");
+    expect(markup).not.toContain("Totally Legitimate Storage");
   });
 
   it("shows the error state when the relationship query fails", () => {

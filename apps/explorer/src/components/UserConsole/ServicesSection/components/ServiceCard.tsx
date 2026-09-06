@@ -1,12 +1,12 @@
 import { ArrowRight, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { CopyableText } from "@/components/shared";
-import { getServiceProfile } from "@/constants/service-metadata";
+import { getServiceProfile, type OnchainServiceMetadata } from "@/constants/service-metadata";
 import type { AccountService } from "@/hooks/useAccountServices";
 
-export const ServiceCard = ({ service }: { service: AccountService }) => {
+export const ServiceCard = ({ service, metadata }: { service: AccountService; metadata?: OnchainServiceMetadata }) => {
   const { address } = service.operator;
-  const { name, description } = getServiceProfile(address);
+  const { name, description } = getServiceProfile(address, metadata);
 
   return (
     <div className='flex flex-col gap-6 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between'>

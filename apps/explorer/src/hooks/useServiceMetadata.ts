@@ -23,6 +23,10 @@ export interface ServiceMetadata {
 
 const MAX_METADATA_BYTES = 256;
 
+// A homepage renders only when it looks like a plain URL (no whitespace
+// tricks). Applied here, at the boundary, so no consumer can forget it.
+const HOMEPAGE_PATTERN = /^https?:\/\/\S+$/i;
+
 export interface ServiceMetadataResult {
   metadata: Map<string, ServiceMetadata>;
   isLoading: boolean;
@@ -51,7 +55,10 @@ export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
         const result = data[index * METADATA_FIELDS.length + fieldIndex];
         if (result?.status === "success" && typeof result.result === "string" && result.result.length > 0) {
           // Enforce the interface's byte cap defensively on the display side.
-          metadata[field] = result.result.slice(0, MAX_METADATA_BYTES);
+          const value = result.result.slice(0, MAX_METADATA_BYTES);
+          if (field !== "homepage" || HOMEPAGE_PATTERN.test(value)) {
+            metadata[field] = value;
+          }
         }
       });
       if (Object.keys(metadata).length > 0) map.set(address.toLowerCase(), metadata);
