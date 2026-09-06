@@ -1,5 +1,4 @@
 import type { Account, OperatorApproval, Rail, UserToken } from "@filecoin-pay/types";
-import { getMockAccount, MOCK_CONSOLE_SERVICES } from "@/mocks/console-services";
 import {
   GET_ACCOUNT_APPROVALS,
   GET_ACCOUNT_DETAILS,
@@ -41,24 +40,15 @@ interface AccountTokensOptions extends AccountDetailsOptions {
 
 const PAGE_SIZE = 10;
 
-export const useAccountDetails = (address: string, options?: AccountDetailsOptions) => {
-  const query = useGraphQLQuery<AccountDetailsResponse, Account | null>({
+export const useAccountDetails = (address: string, options?: AccountDetailsOptions) =>
+  useGraphQLQuery<AccountDetailsResponse, Account | null>({
     queryKey: ["account", address],
     query: GET_ACCOUNT_DETAILS,
     variables: { address },
     select: (data) => data.accounts[0] || null,
-    enabled: !MOCK_CONSOLE_SERVICES && !!address,
+    enabled: !!address,
     networkOverride: options?.networkOverride,
   });
-
-  // MOCK: see src/mocks/console-services.ts. Without this the console stops at
-  // its "account not indexed" state and never reaches the services section.
-  if (MOCK_CONSOLE_SERVICES && address) {
-    return { ...query, data: getMockAccount(address), error: null, isLoading: false, isError: false };
-  }
-
-  return query;
-};
 
 export const useAccountTokens = (accountId: string, page: number = 1, options?: AccountTokensOptions) => {
   const pageSize = options?.pageSize ?? PAGE_SIZE;
