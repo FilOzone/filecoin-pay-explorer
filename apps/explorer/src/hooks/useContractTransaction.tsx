@@ -2,9 +2,8 @@ import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useConfig, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { getAccount } from "wagmi/actions";
-import { config } from "@/services/wagmi/config";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
@@ -35,6 +34,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
   >(new Map());
   const [currentTxHash, setCurrentTxHash] = useState<Hex | undefined>();
 
+  const config = useConfig();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
 
   const {
