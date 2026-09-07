@@ -29,8 +29,8 @@ const PAYMENTS = "0x5555555555555555555555555555555555555555";
 const FAR_FUTURE = "4102444800";
 const topUp = {
   deadline: 1_700_604_800n,
-  minimumFil: 250_000_000_000_000_000n,
-  spendUsdfc: 625_000_000_000_000_000n,
+  minimumFil: 50_000_000_000_000_000n,
+  spendUsdfc: 125_000_000_000_000_000n,
 };
 
 const request = {
@@ -142,7 +142,7 @@ describe("buildDepositPostHook", () => {
     });
   });
 
-  it("swaps a fixed USDFC slice to at least 0.25 FIL before depositing the rest", () => {
+  it("swaps a fixed USDFC slice to at least 0.05 FIL before depositing the rest", () => {
     const hook = buildDepositPostHook({ payments: PAYMENTS, usdfc: USDFC, recipient: RECIPIENT }, topUp);
 
     expect(hook.calls.map((call) => [call.callType, call.target, call.payload.tokenAddress])).toEqual([
@@ -179,9 +179,9 @@ describe("buildDepositPostHook", () => {
     });
   });
 
-  it("rejects a top-up that does not guarantee the fixed 0.25 FIL", () => {
+  it("rejects a top-up that does not guarantee the fixed 0.05 FIL", () => {
     expect(() => buildDepositPostHook(request, { ...topUp, minimumFil: topUp.minimumFil - 1n })).toThrow(
-      "FIL gas top-up must guarantee exactly 0.25 FIL",
+      "FIL gas top-up must guarantee exactly 0.05 FIL",
     );
     expect(() => buildDepositPostHook(request, { ...topUp, spendUsdfc: 0n })).toThrow(
       "FIL gas top-up must spend a positive USDFC amount",
@@ -195,9 +195,9 @@ describe("buildDepositPostHook", () => {
 describe("planFilGasTopUp", () => {
   const filecoinSwap = { wfil: 1_000_000_000_000_000_000n, usdfc: 2_000_000_000_000_000_000n };
 
-  it("prices enough USDFC to guarantee 0.25 FIL with headroom", () => {
+  it("prices enough USDFC to guarantee 0.05 FIL with headroom", () => {
     expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 19n }, now)).toEqual(topUp);
-    expect(FIL_GAS_TOP_UP_AMOUNT).toBe(250_000_000_000_000_000n);
+    expect(FIL_GAS_TOP_UP_AMOUNT).toBe(50_000_000_000_000_000n);
   });
 
   it("fails closed when the swap cannot be priced or would exceed a tenth of the deposit", () => {
@@ -208,7 +208,7 @@ describe("planFilGasTopUp", () => {
     expect(
       planFilGasTopUp({ filecoinSwap: { wfil: 1n, usdfc: 0n }, minimumDestinationAmount: 10n ** 19n }, now),
     ).toBeUndefined();
-    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 6n * 10n ** 18n }, now)).toBeUndefined();
+    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 18n }, now)).toBeUndefined();
   });
 });
 
@@ -320,7 +320,7 @@ describe("parseSquidDepositRoute", () => {
       parseSquidDepositRoute(
         fakeRoute({
           params: { postHook: buildDepositPostHook(request, topUp) },
-          estimate: { toAmount: "6000000000000000000", toAmountMin: "6000000000000000000" },
+          estimate: { toAmount: "1000000000000000000", toAmountMin: "1000000000000000000" },
         }),
         { ...request, filGasTopUp: topUp },
         true,
