@@ -37,12 +37,12 @@ import { formatAddress } from "@/utils/formatter";
 import { useTopUpActivity } from "../../TopUpActivityContext";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import {
+  getSourceTokenBalance,
+  getSourceTokenBalancesQueryKey,
+  getSourceTokenCatalogIdentity,
   orderSourceTokensByBalance,
   readSourceTokenBalance,
   readSourceTokenBalances,
-  sourceTokenBalance,
-  sourceTokenBalancesQueryKey,
-  sourceTokenCatalogIdentity,
 } from "../data/source-token-balances";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import {
@@ -159,9 +159,7 @@ export function DirectSquidDepositDialog({
       if (!owner || !sourceClient) throw new Error("Source balances are unavailable");
       return readSourceTokenBalances(sourceClient, owner, tokens);
     },
-    queryKey: owner
-      ? sourceTokenBalancesQueryKey(owner, sourceChainId, tokens)
-      : ["squid", "source-token-balances", "", sourceChainId, sourceTokenCatalogIdentity(tokens)],
+    queryKey: getSourceTokenBalancesQueryKey(owner, sourceChainId, tokens),
     refetchInterval: 30_000,
     retry: 1,
   });
@@ -171,7 +169,7 @@ export function DirectSquidDepositDialog({
     [inventoryBalances, tokens],
   );
   const sourceToken = tokens.find((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase());
-  const sourceIsNative = sourceToken ? isNativeToken(sourceToken.token) : false;
+  const isSourceNative = sourceToken ? isNativeToken(sourceToken.token) : false;
   const duplicateSymbols = useMemo(() => {
     const counts = new Map<string, number>();
     for (const token of tokens)
@@ -181,13 +179,13 @@ export function DirectSquidDepositDialog({
   const tokenOptions = useMemo<readonly SearchableOption[]>(
     () =>
       orderedTokens.map((token) => {
-        const balance = sourceTokenBalance(inventoryBalances, token.token);
-        const duplicate = (duplicateSymbols.get(token.symbol.toLowerCase()) ?? 0) > 1;
+        const balance = getSourceTokenBalance(inventoryBalances, token.token);
+        const isDuplicate = (duplicateSymbols.get(token.symbol.toLowerCase()) ?? 0) > 1;
         return {
           aliases: [token.symbol, token.token],
           detail: balance == null ? "Balance unavailable" : `${formatUnits(balance, token.decimals)} ${token.symbol}`,
-          label: duplicate ? `${token.symbol} (${formatAddress(token.token)})` : token.symbol,
-          secondaryLabel: duplicate ? undefined : formatAddress(token.token),
+          label: isDuplicate ? `${token.symbol} (${formatAddress(token.token)})` : token.symbol,
+          secondaryLabel: isDuplicate ? undefined : formatAddress(token.token),
           value: token.token,
         };
       }),
@@ -209,9 +207,9 @@ export function DirectSquidDepositDialog({
       const owner = getAddress(payingWallet.address);
       const nativePromise = sourceClient.getBalance({ address: owner });
       const [token, native, allowance] = await Promise.all([
-        sourceIsNative ? nativePromise : readSourceTokenBalance(sourceClient, owner, sourceToken),
+        isSourceNative ? nativePromise : readSourceTokenBalance(sourceClient, owner, sourceToken),
         nativePromise,
-        sourceIsNative
+        isSourceNative
           ? Promise.resolve(0n)
           : sourceClient.readContract({
               abi: erc20Abi,
@@ -272,7 +270,7 @@ export function DirectSquidDepositDialog({
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
-    const scope = `${owner}:${sourceChainId}:${sourceTokenCatalogIdentity(tokens)}`;
+    const scope = `${owner}:${sourceChainId}:${getSourceTokenCatalogIdentity(tokens)}`;
     if (initializedSelectionScope.current === scope) return;
     initializedSelectionScope.current = scope;
     if (!tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
@@ -820,7 +818,7 @@ export function DirectSquidDepositDialog({
                   {walletErrorMessage(quoteQuery.error, "Squid could not quote this amount.")}
                 </p>
               ) : null}
-              {!sourceIsNative &&
+              {!isSourceNative &&
               parsedAmount !== null &&
               !balancesQuery.isError &&
               balancesQuery.data &&
@@ -833,7 +831,7 @@ export function DirectSquidDepositDialog({
               balancesQuery.data.native < requiredNative ? (
                 <p className='text-destructive'>
                   The paying wallet does not have enough {sourceChain?.nativeCurrency.symbol ?? "native token"} for{" "}
-                  {sourceIsNative ? "the payment and gas" : "source-network fees"}.
+                  {isSourceNative ? "the payment and gas" : "source-network fees"}.
                 </p>
               ) : null}
             </>
@@ -871,9 +869,9 @@ export function DirectSquidDepositDialog({
                 )
                   return;
                 setReviewed({
-                  approvalRequired: !sourceIsNative && balancesQuery.data.allowance !== parsedAmount,
+                  approvalRequired: !isSourceNative && balancesQuery.data.allowance !== parsedAmount,
                   approvalResetRequired:
-                    !sourceIsNative &&
+                    !isSourceNative &&
                     balancesQuery.data.allowance > 0n &&
                     balancesQuery.data.allowance !== parsedAmount,
                   amount,

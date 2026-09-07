@@ -133,13 +133,13 @@ async function assertFreshSigningState({
   requireAllowance: boolean;
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
-  const nativeSource = isNativeToken(request.sourceToken);
+  const isNativeSource = isNativeToken(request.sourceToken);
   const nativeBalancePromise = sourceClient.getBalance({ address: request.owner });
   const [providerOwner, walletChainId, rpcChainId, tokenBalance, nativeBalance, allowance] = await Promise.all([
     getCurrentOwner(),
     walletClient.getChainId(),
     sourceClient.getChainId(),
-    nativeSource
+    isNativeSource
       ? nativeBalancePromise
       : sourceClient.readContract({
           abi: erc20Abi,
@@ -148,7 +148,7 @@ async function assertFreshSigningState({
           functionName: "balanceOf",
         }),
     nativeBalancePromise,
-    nativeSource
+    isNativeSource
       ? Promise.resolve(request.sourceAmount)
       : sourceClient.readContract({
           abi: erc20Abi,
@@ -399,7 +399,7 @@ export async function executeSquidDeposit({
 
   const fundsBefore = await readFilecoinPayFunds(destinationClient, request);
   const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
-  const nativeSource = isNativeToken(request.sourceToken);
+  const isNativeSource = isNativeToken(request.sourceToken);
   let totalNativeFee = 0n;
   {
     let { allowance, nativeBalance } = await assertFreshSigningState({
@@ -456,7 +456,7 @@ export async function executeSquidDeposit({
     getCurrentOwner,
     quote,
     request,
-    requireAllowance: !nativeSource,
+    requireAllowance: !isNativeSource,
     sourceClient,
     walletClient,
   });

@@ -2,16 +2,20 @@ import { NATIVE_TOKEN_ADDRESS, type SourceToken } from "@filecoin-project/squid-
 import { type Address, erc20Abi, type PublicClient } from "viem";
 
 const BALANCE_BATCH_SIZE = 100;
-const key = (address: string) => address.toLowerCase();
+const normalizeAddress = (address: string) => address.toLowerCase();
 
 export type SourceTokenBalances = Readonly<Record<string, bigint | null>>;
 
-export function sourceTokenCatalogIdentity(tokens: readonly SourceToken[]) {
-  return [...new Set(tokens.map(({ token }) => key(token)))].sort().join(",");
+export function getSourceTokenCatalogIdentity(tokens: readonly SourceToken[]) {
+  return [...new Set(tokens.map(({ token }) => normalizeAddress(token)))].sort().join(",");
 }
 
-export function sourceTokenBalancesQueryKey(owner: Address, chainId: number, tokens: readonly SourceToken[]) {
-  return ["squid", "source-token-balances", owner, chainId, sourceTokenCatalogIdentity(tokens)] as const;
+export function getSourceTokenBalancesQueryKey(
+  owner: Address | undefined,
+  chainId: number,
+  tokens: readonly SourceToken[],
+) {
+  return ["squid", "source-token-balances", owner ?? "", chainId, getSourceTokenCatalogIdentity(tokens)] as const;
 }
 
 export function readSourceTokenBalance(
@@ -19,7 +23,8 @@ export function readSourceTokenBalance(
   owner: Address,
   token: SourceToken,
 ) {
-  if (key(token.token) === key(NATIVE_TOKEN_ADDRESS)) return client.getBalance({ address: owner });
+  if (normalizeAddress(token.token) === normalizeAddress(NATIVE_TOKEN_ADDRESS))
+    return client.getBalance({ address: owner });
   return client.readContract({
     abi: erc20Abi,
     address: token.token,
@@ -33,10 +38,16 @@ export async function readSourceTokenBalances(
   owner: Address,
   tokens: readonly SourceToken[],
 ): Promise<SourceTokenBalances> {
-  const uniqueTokens = [...new Map(tokens.map((token) => [key(token.token), token])).values()];
-  const nativeToken = uniqueTokens.find((token) => key(token.token) === key(NATIVE_TOKEN_ADDRESS));
-  const erc20Tokens = uniqueTokens.filter((token) => key(token.token) !== key(NATIVE_TOKEN_ADDRESS));
+  const uniqueTokens = [...new Map(tokens.map((token) => [normalizeAddress(token.token), token])).values()];
+  const nativeToken = uniqueTokens.find(
+    (token) => normalizeAddress(token.token) === normalizeAddress(NATIVE_TOKEN_ADDRESS),
+  );
+  const erc20Tokens = uniqueTokens.filter(
+    (token) => normalizeAddress(token.token) !== normalizeAddress(NATIVE_TOKEN_ADDRESS),
+  );
   const balances: Record<string, bigint | null> = {};
+  // A failed read stays unknown (null) rather than becoming a false zero; the
+  // selector shows it as "Balance unavailable" and ranks it last.
   const nativeBalance = nativeToken
     ? client.getBalance({ address: owner }).catch(() => null)
     : Promise.resolve<bigint | null>(null);
@@ -55,24 +66,25 @@ export async function readSourceTokenBalances(
       });
       batch.forEach((token, resultIndex) => {
         const result = results[resultIndex];
-        balances[key(token.token)] =
+        balances[normalizeAddress(token.token)] =
           result?.status === "success" && typeof result.result === "bigint" ? result.result : null;
       });
     } catch {
+      // Same rule for a failed batch: unknown, never zero.
       batch.forEach((token) => {
-        balances[key(token.token)] = null;
+        balances[normalizeAddress(token.token)] = null;
       });
     }
   }
 
-  if (nativeToken) balances[key(nativeToken.token)] = await nativeBalance;
+  if (nativeToken) balances[normalizeAddress(nativeToken.token)] = await nativeBalance;
   return balances;
 }
 
 /** Funded, then zero, then unknown. Plain USDC leads within each group; other ties keep catalog order. */
 export function orderSourceTokensByBalance(tokens: readonly SourceToken[], balances: SourceTokenBalances) {
   const rank = (token: SourceToken) => {
-    const balance = balances[key(token.token)];
+    const balance = balances[normalizeAddress(token.token)];
     return balance == null ? 0 : balance === 0n ? 1 : 2;
   };
   return [...tokens].sort((left, right) => {
@@ -82,6 +94,6 @@ export function orderSourceTokensByBalance(tokens: readonly SourceToken[], balan
   });
 }
 
-export function sourceTokenBalance(balances: SourceTokenBalances | undefined, token: string) {
-  return balances?.[key(token)];
+export function getSourceTokenBalance(balances: SourceTokenBalances | undefined, token: string) {
+  return balances?.[normalizeAddress(token)];
 }
