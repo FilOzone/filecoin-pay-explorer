@@ -36,8 +36,12 @@ export function resolveSearchableOption(options: readonly SearchableOption[], qu
 type SearchableSelectProps = {
   "aria-describedby"?: string;
   disabled?: boolean;
+  /** Shown when no option matches the query. */
+  emptyMessage: string;
   id: string;
   invalidMessage: string;
+  /** Accessible name of the option list. */
+  listLabel: string;
   onValueChange: (value: string) => void;
   options: readonly SearchableOption[];
   placeholder: string;
@@ -47,8 +51,10 @@ type SearchableSelectProps = {
 export function SearchableSelect({
   "aria-describedby": ariaDescribedBy,
   disabled,
+  emptyMessage,
   id,
   invalidMessage,
+  listLabel,
   onValueChange,
   options,
   placeholder,
@@ -137,13 +143,15 @@ export function SearchableSelect({
       <PopoverContent
         align='start'
         className='max-h-72 w-[var(--radix-popover-trigger-width)] overflow-y-auto p-1'
+        // Focus stays in the input so typing keeps filtering; the popover must not steal it.
         onOpenAutoFocus={(event) => event.preventDefault()}
+        // The list is portalled, so without this the dialog behind it would scroll instead.
         onWheelCapture={(event) => event.stopPropagation()}
         sideOffset={4}
       >
-        <div aria-label='Source tokens' id={listId} role='listbox'>
+        <div aria-label={listLabel} id={listId} role='listbox'>
           {filteredOptions.length === 0 ? (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>No matching tokens.</p>
+            <p className='px-3 py-2 text-sm text-muted-foreground'>{emptyMessage}</p>
           ) : (
             filteredOptions.map((option, index) => (
               <button
