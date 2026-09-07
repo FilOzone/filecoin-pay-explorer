@@ -107,6 +107,17 @@ const Balance = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className='w-64' align='start'>
+        {/* The trigger hides these figures below `sm` to fit the phone header, so the menu carries them instead. */}
+        <DropdownMenuLabel className='text-zinc-600 py-2 sm:hidden'>Balances</DropdownMenuLabel>
+        <div className='flex flex-col gap-1 px-2 pb-2 text-sm text-zinc-950 sm:hidden'>
+          <span className='flex items-center gap-1.5'>
+            <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
+          </span>
+          <span className='flex items-center gap-1.5'>
+            <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
+          </span>
+        </div>
+        <DropdownMenuSeparator className='sm:hidden' />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}
