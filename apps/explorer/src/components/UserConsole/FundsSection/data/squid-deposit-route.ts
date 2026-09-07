@@ -3,7 +3,7 @@ import {
   SQUID_ROUTER_ADDRESS,
   type SquidClientOptions,
 } from "@filecoin-project/squid-evm-funding";
-import { type Address, encodeFunctionData, type Hash, type Hex, parseAbi } from "viem";
+import { type Address, encodeFunctionData, formatEther, type Hash, type Hex, parseAbi } from "viem";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
 export const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
@@ -30,6 +30,12 @@ const FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT = 25n;
 const FIL_GAS_TOP_UP_MAX_SHARE_PERCENT = 10n;
 const FIL_GAS_TOP_UP_DEADLINE_SECONDS = 7n * 24n * 60n * 60n;
 
+const ceilDiv = (numerator: bigint, denominator: bigint) => (numerator + denominator - 1n) / denominator;
+const nowSeconds = (now: () => number) => BigInt(Math.floor(now() / 1000));
+/** The top-up may not eat more than a tenth of what the deposit is guaranteed to receive. */
+const exceedsTopUpShare = (spendUsdfc: bigint, minimumDestinationAmount: bigint) =>
+  spendUsdfc * 100n > minimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT;
+
 export const squidDepositAbi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function deposit(address token, address to, uint256 amount)",
@@ -54,6 +60,12 @@ export interface FilGasTopUp {
   spendUsdfc: bigint;
   minimumFil: bigint;
   deadline: bigint;
+}
+
+/** WFIL sold for USDFC inside Squid's Filecoin leg, as quoted. */
+export interface FilecoinSwapLeg {
+  wfil: bigint;
+  usdfc: bigint;
 }
 
 export interface SquidDepositRouteRequest extends SquidDepositTarget {
@@ -92,7 +104,7 @@ export interface SquidDepositQuote {
   destinationAmountUsd?: string;
   fees: SquidDepositCost[];
   gasCosts: SquidDepositCost[];
-  filecoinSwap?: { wfil: bigint; usdfc: bigint };
+  filecoinSwap?: FilecoinSwapLeg;
   filGasTopUp?: FilGasTopUp;
   transaction?: SquidDepositTransaction;
 }
@@ -117,9 +129,11 @@ export interface SquidDepositRef {
 }
 
 function buildFilGasTopUpCalls({ usdfc, recipient }: SquidDepositTarget, topUp: FilGasTopUp) {
-  if (topUp.spendUsdfc <= 0n || topUp.minimumFil !== FIL_GAS_TOP_UP_AMOUNT || topUp.deadline <= 0n) {
-    throw new Error("Invalid FIL gas top-up");
+  if (topUp.spendUsdfc <= 0n) throw new Error("FIL gas top-up must spend a positive USDFC amount");
+  if (topUp.minimumFil !== FIL_GAS_TOP_UP_AMOUNT) {
+    throw new Error(`FIL gas top-up must guarantee exactly ${formatEther(FIL_GAS_TOP_UP_AMOUNT)} FIL`);
   }
+  if (topUp.deadline <= 0n) throw new Error("FIL gas top-up deadline must be in the future");
   const swap = encodeFunctionData({
     abi: sushiSwapRouterAbi,
     functionName: "exactInputSingle",
@@ -173,13 +187,13 @@ export function planFilGasTopUp(
 ): FilGasTopUp | undefined {
   const swap = quote.filecoinSwap;
   if (!swap || swap.wfil === 0n || swap.usdfc === 0n) return undefined;
-  const usdfcAtQuote = (FIL_GAS_TOP_UP_AMOUNT * swap.usdfc + swap.wfil - 1n) / swap.wfil;
-  const spendUsdfc = (usdfcAtQuote * (100n + FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT) + 99n) / 100n;
-  if (spendUsdfc * 100n > quote.minimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) return undefined;
+  const usdfcAtQuote = ceilDiv(FIL_GAS_TOP_UP_AMOUNT * swap.usdfc, swap.wfil);
+  const spendUsdfc = ceilDiv(usdfcAtQuote * (100n + FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT), 100n);
+  if (exceedsTopUpShare(spendUsdfc, quote.minimumDestinationAmount)) return undefined;
   return {
     spendUsdfc,
     minimumFil: FIL_GAS_TOP_UP_AMOUNT,
-    deadline: BigInt(Math.floor(now() / 1000)) + FIL_GAS_TOP_UP_DEADLINE_SECONDS,
+    deadline: nowSeconds(now) + FIL_GAS_TOP_UP_DEADLINE_SECONDS,
   };
 }
 
@@ -316,7 +330,7 @@ export async function requestSquidDepositRoute(
   if (request.sourceAmount <= 0n) throw new Error("Enter a source amount greater than zero");
   if (client.integratorId.trim() === "") throw new Error("Squid integrator ID is required");
   const now = client.now ?? Date.now;
-  if (request.filGasTopUp && request.filGasTopUp.deadline <= BigInt(Math.floor(now() / 1000))) {
+  if (request.filGasTopUp && request.filGasTopUp.deadline <= nowSeconds(now)) {
     throw new Error("The FIL gas top-up quote expired. Review a new quote.");
   }
   const slippage = request.slippage ?? DEFAULT_SQUID_SLIPPAGE;
@@ -397,7 +411,7 @@ function parseCosts(value: unknown, label: string): SquidDepositCost[] {
   });
 }
 
-function findFilecoinSwap(actions: unknown[], usdfc: Address): { wfil: bigint; usdfc: bigint } | undefined {
+function findFilecoinSwap(actions: unknown[], usdfc: Address): FilecoinSwapLeg | undefined {
   for (const action of actions) {
     if (
       !isRecord(action) ||
@@ -471,7 +485,7 @@ export function parseSquidDepositRoute(
   if (destinationAmount <= 0n || minimumDestinationAmount <= 0n) {
     throw new Error("Invalid Squid route: FIL top-up exceeds destination amount");
   }
-  if (topUpSpend * 100n > rawMinimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) {
+  if (exceedsTopUpShare(topUpSpend, rawMinimumDestinationAmount)) {
     throw new Error("Invalid Squid route: FIL top-up exceeds safety limit");
   }
 
