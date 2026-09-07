@@ -18,19 +18,40 @@ export function getSourceTokenBalancesQueryKey(
   return ["squid", "source-token-balances", owner ?? "", chainId, getSourceTokenCatalogIdentity(tokens)] as const;
 }
 
-export function readSourceTokenBalance(
-  client: Pick<PublicClient, "getBalance" | "readContract">,
+export interface SourceTokenState {
+  /** Router allowance; always 0 for the native token, which needs none. */
+  allowance: bigint;
+  native: bigint;
+  token: bigint;
+}
+
+/**
+ * Balance, native balance and router allowance of one source token in one
+ * batched round trip: the two ERC-20 reads share a multicall, and the native
+ * read runs alongside it.
+ */
+export async function readSourceTokenState(
+  client: Pick<PublicClient, "getBalance" | "multicall">,
   owner: Address,
-  token: SourceToken,
-) {
-  if (normalizeAddress(token.token) === normalizeAddress(NATIVE_TOKEN_ADDRESS))
-    return client.getBalance({ address: owner });
-  return client.readContract({
-    abi: erc20Abi,
-    address: token.token,
-    args: [owner],
-    functionName: "balanceOf",
-  });
+  tokenAddress: Address,
+  spender: Address,
+): Promise<SourceTokenState> {
+  const nativePromise = client.getBalance({ address: owner });
+  if (normalizeAddress(tokenAddress) === normalizeAddress(NATIVE_TOKEN_ADDRESS)) {
+    const native = await nativePromise;
+    return { allowance: 0n, native, token: native };
+  }
+  const [[token, allowance], native] = await Promise.all([
+    client.multicall({
+      allowFailure: false,
+      contracts: [
+        { abi: erc20Abi, address: tokenAddress, args: [owner], functionName: "balanceOf" as const },
+        { abi: erc20Abi, address: tokenAddress, args: [owner, spender], functionName: "allowance" as const },
+      ],
+    }),
+    nativePromise,
+  ]);
+  return { allowance, native, token };
 }
 
 export async function readSourceTokenBalances(

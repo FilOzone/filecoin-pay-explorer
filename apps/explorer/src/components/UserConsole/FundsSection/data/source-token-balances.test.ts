@@ -4,8 +4,8 @@ import {
   getSourceTokenBalance,
   getSourceTokenBalancesQueryKey,
   orderSourceTokensByBalance,
-  readSourceTokenBalance,
   readSourceTokenBalances,
+  readSourceTokenState,
 } from "./source-token-balances";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -17,12 +17,34 @@ const token = (index: number, symbol = `T${index}`): SourceToken => ({
 });
 
 describe("source token balances", () => {
-  it("reads native balances directly and ERC-20 balances through the contract", async () => {
-    const client = { getBalance: vi.fn(async () => 7n), readContract: vi.fn(async () => 8n) };
-    const native = { ...token(1, "ETH"), token: NATIVE_TOKEN_ADDRESS };
-    await expect(readSourceTokenBalance(client as never, OWNER, native)).resolves.toBe(7n);
-    await expect(readSourceTokenBalance(client as never, OWNER, token(2))).resolves.toBe(8n);
-    expect(client.readContract).toHaveBeenCalledOnce();
+  it("reads an ERC-20 balance and allowance in one multicall beside the native balance", async () => {
+    const multicall = vi.fn<(args: { allowFailure: boolean; contracts: unknown[] }) => Promise<bigint[]>>(async () => [
+      8n,
+      3n,
+    ]);
+    const client = { getBalance: vi.fn(async () => 7n), multicall };
+    const spender = "0x9999999999999999999999999999999999999999";
+
+    await expect(readSourceTokenState(client as never, OWNER, token(2).token, spender)).resolves.toEqual({
+      allowance: 3n,
+      native: 7n,
+      token: 8n,
+    });
+    expect(multicall).toHaveBeenCalledOnce();
+    expect(multicall.mock.calls[0][0]).toMatchObject({
+      allowFailure: false,
+      contracts: [
+        { address: token(2).token, args: [OWNER], functionName: "balanceOf" },
+        { address: token(2).token, args: [OWNER, spender], functionName: "allowance" },
+      ],
+    });
+
+    await expect(readSourceTokenState(client as never, OWNER, NATIVE_TOKEN_ADDRESS, spender)).resolves.toEqual({
+      allowance: 0n,
+      native: 7n,
+      token: 7n,
+    });
+    expect(multicall).toHaveBeenCalledOnce();
   });
 
   it("deduplicates addresses, batches ERC-20 calls at 100, and keeps failures unknown", async () => {
