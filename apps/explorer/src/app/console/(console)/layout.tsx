@@ -59,10 +59,10 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
+            <FundingHost />
           </div>
         </Container>
       </div>
-      <FundingHost />
     </div>
   );
 };
