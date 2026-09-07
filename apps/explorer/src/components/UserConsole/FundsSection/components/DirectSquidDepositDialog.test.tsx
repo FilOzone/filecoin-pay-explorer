@@ -419,10 +419,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
   });
 
   it.each([
-    [0n, false, true],
-    [1n, false, false],
-    [0n, true, true],
-  ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked) => {
+    [0n, false, true, "Your wallet has no FIL."],
+    [1n, false, false, "You already have FIL for fees."],
+    [0n, true, true, "Your wallet has no FIL."],
+  ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked, hint) => {
     query.recipientFil = balance;
     query.recipientFilIsError = isError;
     let renderer!: ReactTestRenderer;
@@ -433,8 +433,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
     const option = renderer.root.findByProps({ id: "direct-squid-fil-gas" });
     expect(option.props.checked).toBe(checked);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("Add 0.25 FIL for transaction fees");
-    expect(text).toContain("Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions.");
+    expect(text).toContain("Include 0.25 FIL for transaction fees");
+    expect(text).toContain(hint);
+    expect(text).toContain("The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.");
+    expect(text.includes("+ 0.25 FIL for network fees")).toBe(checked);
   });
 
   it("waits for a fresh destination balance before defaulting from cached data", async () => {
