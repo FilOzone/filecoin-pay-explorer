@@ -95,6 +95,9 @@ type ReviewedDeposit = {
   sourceSymbol: string;
 };
 
+/** A verified source balance, such as a card purchase, that pre-fills the form. */
+export type SquidDepositInitialSource = { amount: bigint; chainId: number; decimals: number; token: string };
+
 function describeWalletConfirmations(reviewed: {
   approvalRequired: boolean;
   approvalResetRequired: boolean;
@@ -113,7 +116,7 @@ export function DirectSquidDepositDialog({
   open,
 }: {
   accountId: string;
-  initialSource?: { amount: bigint; chainId: number; decimals: number; token: string };
+  initialSource?: SquidDepositInitialSource;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {

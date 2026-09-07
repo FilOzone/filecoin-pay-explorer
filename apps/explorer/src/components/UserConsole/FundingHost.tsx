@@ -8,7 +8,10 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
-import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
+import {
+  DirectSquidDepositDialog,
+  type SquidDepositInitialSource,
+} from "./FundsSection/components/DirectSquidDepositDialog";
 import { CARD_CHAIN_ID, CARD_USDC, CARD_USDC_DECIMALS, useCardPurchase } from "./FundsSection/hooks/useCardPurchase";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
 
@@ -22,7 +25,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [isSquidOpen, setSquidOpen] = useState(false);
-  const [cardSourceAmount, setCardSourceAmount] = useState<bigint>();
+  const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
   const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
   const network = getNetworkFromChainId(chainId);
@@ -43,7 +46,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     address,
     contextKey: `${address}:${chainId ?? "unknown"}`,
     onPurchased: (amount) => {
-      setCardSourceAmount(amount);
+      setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
       launch.closeAddFunds();
       setSquidOpen(true);
     },
@@ -102,14 +105,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
             {depositDialog}
             <DirectSquidDepositDialog
               accountId={address.toLowerCase()}
-              initialSource={
-                cardSourceAmount
-                  ? { amount: cardSourceAmount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC }
-                  : undefined
-              }
+              initialSource={cardSource}
               onOpenChange={(open) => {
                 setSquidOpen(open);
-                if (!open) setCardSourceAmount(undefined);
+                if (!open) setCardSource(undefined);
               }}
               open={isSquidOpen}
             />
