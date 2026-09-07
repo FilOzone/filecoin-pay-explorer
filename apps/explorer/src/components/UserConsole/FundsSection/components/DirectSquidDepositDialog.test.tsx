@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryStorage } from "@/test-utils/memory-storage";
 import { type ExecuteSquidDepositInput, SquidDepositError } from "../data/squid-deposit-execution";
 import { getPendingSquidDepositKey, type PendingSquidDeposit } from "../data/squid-deposit-tracker";
 import { DirectSquidDepositDialog } from "./DirectSquidDepositDialog";
@@ -113,15 +114,6 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
-function memoryStorage() {
-  const values = new Map<string, string>();
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    removeItem: (key: string) => void values.delete(key),
-    setItem: (key: string, value: string) => void values.set(key, value),
-  };
-}
-
 function button(renderer: ReactTestRenderer, label: string) {
   return renderer.root
     .findAllByType("button")
@@ -143,11 +135,11 @@ async function reachExecution(renderer: ReactTestRenderer) {
 
 describe("DirectSquidDepositDialog safety integration", () => {
   let listeners: Record<string, ((event: { key?: string | null }) => void)[]>;
-  let storage: ReturnType<typeof memoryStorage>;
+  let storage: ReturnType<typeof createMemoryStorage>;
 
   beforeEach(() => {
     listeners = {};
-    storage = memoryStorage();
+    storage = createMemoryStorage();
     state.liveRecipient = RECIPIENT;
     state.execute.mockReset();
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
