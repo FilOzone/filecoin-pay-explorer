@@ -263,7 +263,7 @@ The rate helpers mutate loaded entities without saving them directly. `handleRai
 
 This coupling is easy to misread, but the current handler does persist both cases.
 
-`OperatorToken` is different: it aggregates an operator across clients for one token. Settlement, commission, volume, and usage fields are aggregated. Its allowance fields are currently overwritten with the latest client's approval event, so they are neither per-client values nor correct operator-wide totals.
+`OperatorToken` aggregates an operator across clients for one token. Settlement, commission, volume, and usage fields are aggregated. Allowances stay on `OperatorApproval`: they are payer-specific permissions and do not have a transaction-authoritative operator-wide meaning.
 
 ## How the Explorer consumes the subgraph
 
@@ -331,12 +331,11 @@ The Explorer does not query `_meta.block.number` or `hasIndexingErrors`, so it c
 
 These items describe verified gaps in the current code rather than normal eventual consistency:
 
-1. Define aggregate semantics for `OperatorToken.lockupAllowance` and `rateAllowance`; the latest client event currently overwrites both.
-2. Track payer and payee uniqueness independently; the current metrics infer both roles from the shared `Account.totalRails` counter.
-3. Fix zero-rate settlement discovery without changing the rail's `ACTIVE` lifecycle state.
-4. Replace the Authorized Services approval rows with the payer-scoped `AccountOperator` service list, using the relationship filter and cursor ordering described above.
-5. Read current contract approval values before constructing an Increase Approval transaction.
-6. Define and apply one receipt-to-indexer freshness pattern across console mutations.
+1. Track payer and payee uniqueness independently; the current metrics infer both roles from the shared `Account.totalRails` counter.
+2. Fix zero-rate settlement discovery without changing the rail's `ACTIVE` lifecycle state.
+3. Replace the Authorized Services approval rows with the payer-scoped `AccountOperator` service list, using the relationship filter and cursor ordering described above.
+4. Read current contract approval values before constructing an Increase Approval transaction.
+5. Define and apply one receipt-to-indexer freshness pattern across console mutations.
 
 ## Verification and maintenance
 
