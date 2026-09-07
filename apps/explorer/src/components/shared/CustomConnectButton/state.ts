@@ -1,6 +1,12 @@
 export type WalletEntryState = "loading" | "login" | "preparing" | "connected";
 export type WalletExitAction = "logout" | "disconnect" | "manual-disconnect";
 
+export const WALLET_EXIT_LABEL: Record<WalletExitAction, string> = {
+  logout: "Log out",
+  disconnect: "Disconnect",
+  "manual-disconnect": "Disconnect in wallet",
+};
+
 export const getWalletEntryState = ({
   ready,
   walletsReady,
@@ -36,15 +42,14 @@ export const exitWalletSession = async ({
   pauseSelection?: () => void;
   resumeSelection?: () => void;
 }) => {
-  if (authenticated) {
-    pauseSelection?.();
-    try {
-      return await logout();
-    } catch (error) {
-      resumeSelection?.();
-      throw error;
-    }
+  // Pause before leaving so neither a logout nor a reload silently reselects the wallet.
+  pauseSelection?.();
+  try {
+    if (authenticated) return await logout();
+    if (!disconnect) throw new Error("Connected wallet was not found");
+    disconnect();
+  } catch (error) {
+    resumeSelection?.();
+    throw error;
   }
-  if (!disconnect) throw new Error("Connected wallet was not found");
-  disconnect();
 };

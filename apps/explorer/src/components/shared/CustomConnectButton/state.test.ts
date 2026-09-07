@@ -48,9 +48,26 @@ describe("getWalletExitAction", () => {
     expect(disconnect).not.toHaveBeenCalled();
 
     logout.mockClear();
-    await exitWalletSession({ authenticated: false, logout, disconnect });
+    pauseSelection.mockClear();
+    await exitWalletSession({ authenticated: false, logout, disconnect, pauseSelection });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
+    expect(pauseSelection).toHaveBeenCalledOnce();
+    expect(pauseSelection.mock.invocationCallOrder[0]).toBeLessThan(disconnect.mock.invocationCallOrder[0]);
+  });
+
+  it("restores wallet selection when a connect-only wallet cannot be disconnected", async () => {
+    const resumeSelection = vi.fn();
+
+    await expect(
+      exitWalletSession({
+        authenticated: false,
+        logout: async () => undefined,
+        pauseSelection: vi.fn(),
+        resumeSelection,
+      }),
+    ).rejects.toThrow("Connected wallet was not found");
+    expect(resumeSelection).toHaveBeenCalledOnce();
   });
 
   it("restores wallet selection when logout fails", async () => {
