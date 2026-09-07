@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
@@ -42,7 +43,8 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   });
   const card = useCardPurchase({
     address,
-    contextKey: `${address}:${chainId ?? "unknown"}`,
+    // A reconnecting wallet reports no chain id for a moment; that is not a network change.
+    contextKey: `${address}:${chainId ?? getChain(network).id}`,
     onPurchased: (amount) => {
       setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
       launch.closeAddFunds();
