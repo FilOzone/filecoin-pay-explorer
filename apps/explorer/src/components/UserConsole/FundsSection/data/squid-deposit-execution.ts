@@ -8,6 +8,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from "viem";
+import { readSourceTokenState } from "./source-token-balances";
 import {
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
@@ -46,7 +47,7 @@ export type SquidDepositWalletClient = Pick<
 
 export type SquidDepositSourceClient = Pick<
   PublicClient,
-  "getBalance" | "getChainId" | "readContract" | "waitForTransactionReceipt"
+  "getBalance" | "getChainId" | "multicall" | "readContract" | "waitForTransactionReceipt"
 > & {
   estimateTotalFee?: (request: {
     account: Address;
@@ -134,29 +135,20 @@ async function assertFreshSigningState({
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
   const isNativeSource = isNativeToken(request.sourceToken);
-  const nativeBalancePromise = sourceClient.getBalance({ address: request.owner });
-  const [providerOwner, walletChainId, rpcChainId, tokenBalance, nativeBalance, allowance] = await Promise.all([
+  const [providerOwner, walletChainId, rpcChainId, state] = await Promise.all([
     getCurrentOwner(),
     walletClient.getChainId(),
     sourceClient.getChainId(),
-    isNativeSource
-      ? nativeBalancePromise
-      : sourceClient.readContract({
-          abi: erc20Abi,
-          address: request.sourceToken,
-          args: [request.owner],
-          functionName: "balanceOf",
-        }),
-    nativeBalancePromise,
-    isNativeSource
-      ? Promise.resolve(request.sourceAmount)
-      : sourceClient.readContract({
-          abi: erc20Abi,
-          address: request.sourceToken,
-          args: [request.owner, quote.transaction.approvalSpender ?? quote.transaction.target],
-          functionName: "allowance",
-        }),
+    readSourceTokenState(
+      sourceClient,
+      request.owner,
+      request.sourceToken,
+      quote.transaction.approvalSpender ?? quote.transaction.target,
+    ),
   ]);
+  const { native: nativeBalance, token: tokenBalance } = state;
+  // A native payment needs no approval, so it counts as already allowed.
+  const allowance = isNativeSource ? request.sourceAmount : state.allowance;
   assertCurrentContext();
   assertSignerUnchanged(providerOwner, walletChainId, request, rpcChainId);
   if (tokenBalance < request.sourceAmount) throw new Error("Source-token balance no longer covers the reviewed spend");

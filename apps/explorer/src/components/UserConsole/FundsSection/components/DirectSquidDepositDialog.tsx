@@ -18,16 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  type Address,
-  createWalletClient,
-  custom,
-  erc20Abi,
-  formatUnits,
-  getAddress,
-  type Hash,
-  parseUnits,
-} from "viem";
+import { type Address, createWalletClient, custom, formatUnits, getAddress, type Hash, parseUnits } from "viem";
 import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
@@ -41,8 +32,8 @@ import {
   getSourceTokenBalancesQueryKey,
   getSourceTokenCatalogIdentity,
   orderSourceTokensByBalance,
-  readSourceTokenBalance,
   readSourceTokenBalances,
+  readSourceTokenState,
 } from "../data/source-token-balances";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 import {
@@ -202,23 +193,14 @@ export function DirectSquidDepositDialog({
   })();
   const balancesQuery = useQuery({
     enabled: open && !!payingWallet && !!sourceToken && !!sourceClient,
-    queryFn: async () => {
+    queryFn: () => {
       if (!payingWallet || !sourceToken || !sourceClient) throw new Error("Source balances are unavailable");
-      const owner = getAddress(payingWallet.address);
-      const nativePromise = sourceClient.getBalance({ address: owner });
-      const [token, native, allowance] = await Promise.all([
-        isSourceNative ? nativePromise : readSourceTokenBalance(sourceClient, owner, sourceToken),
-        nativePromise,
-        isSourceNative
-          ? Promise.resolve(0n)
-          : sourceClient.readContract({
-              abi: erc20Abi,
-              address: sourceToken.token,
-              args: [owner, SQUID_ROUTER_ADDRESS],
-              functionName: "allowance",
-            }),
-      ]);
-      return { allowance, native, token };
+      return readSourceTokenState(
+        sourceClient,
+        getAddress(payingWallet.address),
+        sourceToken.token,
+        SQUID_ROUTER_ADDRESS,
+      );
     },
     queryKey: ["direct-squid-deposit-balances", sourceChainId, sourceToken?.token, owner],
     refetchInterval: 15_000,

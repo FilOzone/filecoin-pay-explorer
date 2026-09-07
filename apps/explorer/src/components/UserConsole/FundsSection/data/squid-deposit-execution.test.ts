@@ -71,7 +71,7 @@ function fakeSource({
   totalFee?: bigint;
 } = {}) {
   let allowanceReads = 0;
-  return {
+  const source = {
     getBalance: vi.fn(async () => nativeBalance),
     getChainId: vi.fn(async () => 8453),
     estimateTotalFee: vi.fn(
@@ -84,8 +84,12 @@ function fakeSource({
       if (allowanceSequence?.length) return allowanceSequence.shift() as bigint;
       return approvalUpdatesAllowance && allowanceReads > 1 ? request.sourceAmount : allowance;
     }),
+    multicall: vi.fn(async ({ contracts }: { contracts: { functionName: string }[] }) =>
+      Promise.all(contracts.map((contract) => source.readContract(contract))),
+    ),
     waitForTransactionReceipt: vi.fn(async () => ({ status: receiptStatus })),
-  } as unknown as SquidDepositSourceClient;
+  };
+  return source as unknown as SquidDepositSourceClient;
 }
 
 function fakeWallet(hashes?: Hash[]) {
