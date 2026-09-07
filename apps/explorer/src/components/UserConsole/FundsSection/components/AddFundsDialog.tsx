@@ -7,7 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { ArrowRight, CreditCard, Repeat, Wallet } from "lucide-react";
+import { ArrowRight, CreditCard, type LucideIcon, Repeat, Wallet } from "lucide-react";
+import type { ReactNode } from "react";
 
 export type AddFundsMethod = "card" | "deposit" | "squid";
 
@@ -22,11 +23,68 @@ type AddFundsDialogProps = {
   squidDisabledReason?: string;
 };
 
+type MethodCardProps = {
+  description: ReactNode;
+  disabled?: boolean;
+  icon: LucideIcon;
+  isAvailable?: boolean;
+  label: string;
+  onSelect: () => void;
+  status?: string | null;
+  unavailableBadge?: string;
+};
+
 const cardBase = "group relative flex items-start gap-4 rounded-lg border p-4 text-left transition-colors";
 const enabledCard = `${cardBase} hover:border-primary hover:bg-muted/50`;
 const disabledCard = `${cardBase} border-dashed bg-muted/30`;
 const iconEnabled = "mt-0.5 rounded-md bg-primary/10 p-2 text-primary";
 const iconDisabled = "mt-0.5 rounded-md bg-muted p-2 text-muted-foreground";
+
+function MethodCard({
+  description,
+  disabled = false,
+  icon: Icon,
+  isAvailable = true,
+  label,
+  onSelect,
+  status,
+  unavailableBadge,
+}: MethodCardProps) {
+  return (
+    <div className={isAvailable ? enabledCard : disabledCard}>
+      {/* Stretched button keeps the whole card clickable without nesting
+          interactive elements inside a <button>. */}
+      <button
+        aria-label={label}
+        className={`absolute inset-0 rounded-lg ${isAvailable ? "cursor-pointer disabled:cursor-wait" : "cursor-not-allowed"}`}
+        disabled={disabled || !isAvailable}
+        onClick={onSelect}
+        type='button'
+      />
+      <span className={isAvailable ? iconEnabled : iconDisabled}>
+        <Icon className='h-5 w-5' />
+      </span>
+      <span className='flex-1'>
+        <span className='flex items-center justify-between font-medium'>
+          {label}
+          {isAvailable ? (
+            <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
+          ) : (
+            <span className='rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground'>
+              {unavailableBadge}
+            </span>
+          )}
+        </span>
+        <span className='mt-1 block text-sm text-muted-foreground'>{description}</span>
+        {status ? (
+          <span className='mt-1 block text-xs text-muted-foreground' role='status'>
+            {status}
+          </span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
 
 export function AddFundsDialog({
   cardLabel = "Buy USDC with card",
@@ -46,100 +104,48 @@ export function AddFundsDialog({
           <DialogDescription>Choose how you want to fund your Filecoin Pay account.</DialogDescription>
         </DialogHeader>
         <div className='grid gap-3'>
-          <div className={enabledCard}>
-            <button
-              aria-label={cardLabel}
-              className='absolute inset-0 cursor-pointer rounded-lg disabled:cursor-wait'
-              disabled={isBusy}
-              onClick={() => onSelect("card")}
-              type='button'
-            />
-            <span className={iconEnabled}>
-              <CreditCard className='h-5 w-5' />
-            </span>
-            <span className='flex-1'>
-              <span className='flex items-center justify-between font-medium'>
-                {cardLabel}
-                <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
-              </span>
-              <span className='mt-1 block text-sm text-muted-foreground'>
-                Buy USDC on Base, then swap and deposit it into Filecoin Pay.
-              </span>
-              {cardStatus ? (
-                <span className='mt-1 block text-xs text-muted-foreground' role='status'>
-                  {cardStatus}
-                </span>
-              ) : null}
-            </span>
-          </div>
-
-          <div className={enabledCard}>
-            {/* Stretched button keeps the whole card clickable without nesting
-                interactive elements inside a <button>. */}
-            <button
-              aria-label='Deposit token'
-              className='absolute inset-0 cursor-pointer rounded-lg'
-              disabled={isBusy}
-              onClick={() => onSelect("deposit")}
-              type='button'
-            />
-            <span className={iconEnabled}>
-              <Wallet className='h-5 w-5' />
-            </span>
-            <span className='flex-1'>
-              <span className='flex items-center justify-between font-medium'>
-                Deposit token
-                <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
-              </span>
-              <span className='mt-1 block text-sm text-muted-foreground'>
-                Already hold USDFC or another token on Filecoin? Deposit it directly.
-              </span>
-            </span>
-          </div>
-
-          <div className={squidAvailable ? enabledCard : disabledCard}>
-            <button
-              aria-label='Swap to USDFC'
-              className={`absolute inset-0 rounded-lg ${squidAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}
-              disabled={isBusy || !squidAvailable}
-              onClick={() => onSelect("squid")}
-              type='button'
-            />
-            <span className={squidAvailable ? iconEnabled : iconDisabled}>
-              <Repeat className='h-5 w-5' />
-            </span>
-            <span className='flex-1'>
-              <span className='flex items-center justify-between font-medium'>
-                Swap to USDFC
-                {squidAvailable ? (
-                  <ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5' />
-                ) : (
-                  <span className='rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground'>
-                    Testnet
-                  </span>
-                )}
-              </span>
-              <span className='mt-1 block text-sm text-muted-foreground'>
-                {squidAvailable ? (
-                  <>
-                    Pay USDC from another chain and deposit the resulting USDFC directly into Filecoin Pay via{" "}
-                    {/* `relative` lifts the link above the stretched button so it stays clickable. */}
-                    <a
-                      className='relative underline underline-offset-2'
-                      href='https://app.squidrouter.com/'
-                      rel='noopener noreferrer'
-                      target='_blank'
-                    >
-                      Squid
-                    </a>{" "}
-                    to top up.
-                  </>
-                ) : (
-                  (squidDisabledReason ?? "Available on Filecoin mainnet.")
-                )}
-              </span>
-            </span>
-          </div>
+          <MethodCard
+            description='Buy USDC on Base, then swap and deposit it into Filecoin Pay.'
+            disabled={isBusy}
+            icon={CreditCard}
+            label={cardLabel}
+            onSelect={() => onSelect("card")}
+            status={cardStatus}
+          />
+          <MethodCard
+            description='Already hold USDFC or another token on Filecoin? Deposit it directly.'
+            disabled={isBusy}
+            icon={Wallet}
+            label='Deposit token'
+            onSelect={() => onSelect("deposit")}
+          />
+          <MethodCard
+            description={
+              squidAvailable ? (
+                <>
+                  Pay USDC from another chain and deposit the resulting USDFC directly into Filecoin Pay via{" "}
+                  {/* `relative` lifts the link above the stretched button so it stays clickable. */}
+                  <a
+                    className='relative underline underline-offset-2'
+                    href='https://app.squidrouter.com/'
+                    rel='noopener noreferrer'
+                    target='_blank'
+                  >
+                    Squid
+                  </a>{" "}
+                  to top up.
+                </>
+              ) : (
+                (squidDisabledReason ?? "Available on Filecoin mainnet.")
+              )
+            }
+            disabled={isBusy}
+            icon={Repeat}
+            isAvailable={squidAvailable}
+            label='Swap to USDFC'
+            onSelect={() => onSelect("squid")}
+            unavailableBadge='Testnet'
+          />
         </div>
       </DialogContent>
     </Dialog>
