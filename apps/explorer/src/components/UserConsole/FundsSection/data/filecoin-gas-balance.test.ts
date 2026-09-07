@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { filecoinGasBalanceStatus } from "./filecoin-gas-balance";
+import { FIL_TRANSACTION_FEE_RESERVE, getFilecoinGasBalanceStatus } from "./filecoin-gas-balance";
 
-describe("filecoinGasBalanceStatus", () => {
+describe("getFilecoinGasBalanceStatus", () => {
   it("distinguishes sufficient, insufficient, loading, and unreadable balances", () => {
-    expect(filecoinGasBalanceStatus(1n, false, false)).toBe("funded");
-    expect(filecoinGasBalanceStatus(0n, false, false)).toBe("insufficient");
-    expect(filecoinGasBalanceStatus(24n, false, false, 25n)).toBe("insufficient");
-    expect(filecoinGasBalanceStatus(25n, false, false, 25n)).toBe("funded");
-    expect(filecoinGasBalanceStatus(25n, true, false, 25n)).toBe("loading");
-    expect(filecoinGasBalanceStatus(undefined, true, false)).toBe("loading");
-    expect(filecoinGasBalanceStatus(undefined, false, true)).toBe("unavailable");
-    expect(filecoinGasBalanceStatus(undefined, false, false)).toBe("unavailable");
+    const settled = { isError: false, isLoading: false };
+    expect(getFilecoinGasBalanceStatus({ ...settled, balance: FIL_TRANSACTION_FEE_RESERVE })).toBe("funded");
+    expect(getFilecoinGasBalanceStatus({ ...settled, balance: FIL_TRANSACTION_FEE_RESERVE - 1n })).toBe("insufficient");
+    expect(getFilecoinGasBalanceStatus({ ...settled, balance: 0n })).toBe("insufficient");
+    expect(getFilecoinGasBalanceStatus({ ...settled, balance: 24n, minimumBalance: 25n })).toBe("insufficient");
+    expect(getFilecoinGasBalanceStatus({ ...settled, balance: 25n, minimumBalance: 25n })).toBe("funded");
+    expect(getFilecoinGasBalanceStatus({ balance: 25n, isError: false, isLoading: true })).toBe("loading");
+    expect(getFilecoinGasBalanceStatus({ balance: undefined, isError: false, isLoading: true })).toBe("loading");
+    expect(getFilecoinGasBalanceStatus({ balance: undefined, isError: true, isLoading: false })).toBe("unavailable");
+    expect(getFilecoinGasBalanceStatus({ balance: undefined, isError: false, isLoading: false })).toBe("unavailable");
+  });
+
+  it("reserves the same amount the guided top-up delivers", () => {
+    expect(FIL_TRANSACTION_FEE_RESERVE).toBe(250_000_000_000_000_000n);
   });
 });
