@@ -1,22 +1,41 @@
 /**
- * One rail's spend history, in the shape the chart's maths needs it.
+ * One stretch of epochs during which a single rail charged one rate.
  *
- * Deliberately says nothing about GraphQL: `toRailSpendInput` is the only place
- * that knows the query's shape, so replacing the nested read with paged
- * top-level queries changes that one function and leaves the maths and
- * components alone.
+ * The subgraph's rate timeline is complete: it opens a period at rail creation
+ * and closes one on every rate change and on termination. So a period needs no
+ * context from its rail — nothing has to be reconstructed from the rail's
+ * current rate, creation time or end epoch.
  */
-export type RailSpendInput = {
-  /** Latest observed streaming rate, per epoch. A terminated rail may still be reduced before `endEpoch`. */
-  paymentRate: bigint;
-  /** `0n` while the rail is running; the last chargeable epoch once terminated. */
-  endEpoch: bigint;
-  /** Exclusive lower bound on accrual, like a segment's `startEpoch`. */
-  createdAtEpoch: bigint;
-  /** Historical rate segments, each spanning `(startEpoch, untilEpoch]`. Order is not significant. */
-  segments: Array<{ startEpoch: bigint; untilEpoch: bigint; rate: bigint }>;
-  /** One-time payments, gross, stamped with the unix second they were made. */
-  oneTimePayments: Array<{ amount: bigint; timestamp: bigint }>;
+export type RatePeriod = {
+  rate: bigint;
+  /** Exclusive: the rate applies from `startEpoch + 1`. */
+  startEpoch: bigint;
+  /** Inclusive. `null` while the period is open, so it runs to the indexed epoch. */
+  untilEpoch: bigint | null;
+  /** Lowercase, for grouping and for looking up a display name. */
+  operatorAddress: string;
+};
+
+export type OneTimePaymentEntry = {
+  /** Gross, as debited from the payer. */
+  amount: bigint;
+  /** Unix seconds. */
+  timestamp: bigint;
+  /** Lowercase, for grouping and for looking up a display name. */
+  operatorAddress: string;
+};
+
+/**
+ * The account's spend history for one token, in the shape the chart's maths needs.
+ *
+ * Deliberately says nothing about GraphQL: `toSpendHistory` is the only place
+ * that knows the query's shape, so a change to how the data is fetched touches
+ * that one function and leaves the maths and components alone.
+ *
+ */
+export type SpendHistory = {
+  periods: RatePeriod[];
+  oneTimePayments: OneTimePaymentEntry[];
 };
 
 /**
@@ -43,15 +62,28 @@ export type MonthWindow = {
   isPartial: boolean;
 };
 
+/** One service's share of a month, streaming and one-time combined. */
+export type OperatorSpend = {
+  /** Lowercase. */
+  address: string;
+  amount: bigint;
+};
+
 /** One bar: a month's scheduled maximum, split into the two segments that stack. */
 export type SpendSeriesRow = {
   label: string;
   fullLabel: string;
   isPartial: boolean;
-  /** Estimated ceiling, not a charge — see `accrueRailInWindow`. */
+  /** Scheduled ceiling, not a charge — see `accruePeriodInWindow`. */
   streaming: bigint;
   /** Gross one-time payments actually made in the month. */
   oneTime: bigint;
-  /** An estimated ceiling plus actual payments — an upper bound, never a settled total. */
+  /** A scheduled ceiling plus actual payments — an upper bound, never a settled total. */
   total: bigint;
+  /**
+   * Who the month went to, largest first, summing to `total`. Services are named
+   * where known and shown by address otherwise, so an unrecognised one is still
+   * distinguishable rather than lumped into an "other" bucket.
+   */
+  byOperator: OperatorSpend[];
 };

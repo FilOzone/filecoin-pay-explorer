@@ -1,9 +1,16 @@
 import { Card } from "@filecoin-pay/ui/components/card";
 import { AlertCircle } from "lucide-react";
-import { type CSSProperties, memo, useMemo } from "react";
+import { type CSSProperties, Fragment, memo, useMemo } from "react";
 import { Bar, BarChart, type BarShapeProps, CartesianGrid, Rectangle, Tooltip, XAxis, YAxis } from "recharts";
+import { knownAddresses } from "@/constants/known-addresses";
+import { formatAddress } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import type { SpendSeriesRow } from "../types";
+
+/**
+ * A service's name where the app knows one, its truncated address otherwise.
+ */
+const operatorLabel = (address: string): string => knownAddresses[address] ?? formatAddress(address);
 
 type SpendSeriesProps = {
   rows: SpendSeriesRow[];
@@ -25,44 +32,49 @@ type SpendChartDatum = SpendSeriesRow & {
 const AXIS_TICK_FORMAT = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 
 /**
- * Hatch tiles marking a month that has not finished yet.
+ * The two stacked series: hatch id for the unfinished month, and the class that
+ * paints the solid one.
  *
- * Ids are module constants because only one spend chart is ever mounted at a
- * time. A second instance on the same page would collide and both would take
- * whichever `<defs>` rendered last; give them a `useId` suffix if that day comes.
+ * Pattern ids are module constants because only one spend chart is ever mounted
+ * at a time. A second instance on the same page would collide and both would
+ * take whichever `<defs>` rendered last; give them a `useId` suffix if that day
+ * comes.
+ *
+ * Colours are applied as classes, never as a `fill="var(--…)"` attribute.
  */
-const HATCH_PATTERN_ID = {
-  streaming: "spend-hatch-streaming",
-  oneTime: "spend-hatch-one-time",
+const SERIES = {
+  streaming: { patternId: "spend-hatch-streaming", fillClass: "fill-spend-streaming" },
+  oneTime: { patternId: "spend-hatch-one-time", fillClass: "fill-spend-one-time" },
 } as const;
 
-/**
- * Diagonal stripes of the series colour over the recessive partial ground.
- *
- * Two rects, not a stroked line: a stroke centres on the tile edge and seams.
- */
-const HatchPattern = ({ id, stripe }: { id: string; stripe: string }) => (
+const HatchPattern = ({ id, stripeClass }: { id: string; stripeClass: string }) => (
   <pattern id={id} width='8' height='8' patternUnits='userSpaceOnUse' patternTransform='rotate(45)'>
-    <rect width='8' height='8' fill='var(--spend-partial-base)' />
-    <rect width='2' height='8' fill={stripe} />
+    <rect width='8' height='8' className='fill-spend-partial-base' />
+    <rect width='2' height='8' className={stripeClass} />
   </pattern>
 );
 
 /**
  * One `shape` per series: the hatch must take the series' colour, and a bar shape
  * cannot ask which series it belongs to. Built once, so bars never remount.
+ *
+ * The colour is closed over rather than read from `props.fill`, so it does not
+ * depend on recharts forwarding `fill` into the shape.
  */
-const makeSpendBarShape = (patternId: string) => {
+const makeSpendBarShape = ({ patternId, fillClass }: (typeof SERIES)[keyof typeof SERIES]) => {
   const SpendBarShape = (props: BarShapeProps) => {
     const datum = props.payload as SpendChartDatum | undefined;
-    if (!datum?.isPartial) return <Rectangle {...props} />;
-    return <Rectangle {...props} fill={`url(#${patternId})`} />;
+
+    // A partial month takes the hatch, which is a paint server referenced by id
+    // — a plain attribute with no token in it, so it needs no class.
+    if (datum?.isPartial) return <Rectangle {...props} fill={`url(#${patternId})`} />;
+    return <Rectangle {...props} className={`${props.className ?? ""} ${fillClass}`} />;
   };
   return SpendBarShape;
 };
 
-const StreamingBarShape = makeSpendBarShape(HATCH_PATTERN_ID.streaming);
-const OneTimeBarShape = makeSpendBarShape(HATCH_PATTERN_ID.oneTime);
+const StreamingBarShape = makeSpendBarShape(SERIES.streaming);
+const OneTimeBarShape = makeSpendBarShape(SERIES.oneTime);
 
 const toChartUnits = (amount: bigint, tokenDecimals: bigint | number): number =>
   Number(amount) / 10 ** Number(tokenDecimals);
@@ -77,10 +89,6 @@ type SpendTooltipProps = {
 const TOOLTIP_ENTER_CLASSNAME = "animate-in fade-in duration-300 ease-out";
 
 const SpendTooltip = ({ datum, tokenDecimals, tokenSymbol }: SpendTooltipProps) => (
-  // `role='status'` because recharts' accessibility layer is on by default, so
-  // arrow keys move between bars and swap this content. Recharts announces its
-  // own tooltip, but custom content is just a div — without a live region the
-  // values change silently for anyone navigating by keyboard.
   <Card role='status' className={`gap-2 rounded-lg border-border p-3 text-sm shadow-md ${TOOLTIP_ENTER_CLASSNAME}`}>
     <p className='font-medium text-foreground'>
       {datum.fullLabel}
@@ -96,6 +104,21 @@ const SpendTooltip = ({ datum, tokenDecimals, tokenSymbol }: SpendTooltipProps) 
         {formatTokenAmount(datum.total, tokenDecimals)} {tokenSymbol}
       </dd>
     </dl>
+    {/*
+      Which services the month went to. Separated by a rule rather than added as
+      more rows, because these split the same total a second way rather than
+      adding to it — the amounts above and below each sum to "Up to".
+    */}
+    {datum.byOperator.length > 0 ? (
+      <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-border pt-2'>
+        {datum.byOperator.map((operator) => (
+          <Fragment key={operator.address}>
+            <dt className='truncate text-muted-foreground'>{operatorLabel(operator.address)}</dt>
+            <dd className='text-right text-foreground'>{formatTokenAmount(operator.amount, tokenDecimals)}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    ) : null}
   </Card>
 );
 
@@ -110,7 +133,13 @@ type LegendSwatchProps = {
   style?: CSSProperties;
 };
 
-/** Screen-reader equivalent of the chart: the whole series at once, no pointer or colour needed. */
+/**
+ * Screen-reader equivalent of the chart: the whole series at once, no pointer or
+ * colour needed.
+ *
+ * The per-service split is a sentence in one cell rather than a column per
+ * service
+ */
 const SpendDataTable = ({ rows, tokenDecimals, tokenSymbol }: SpendSeriesProps) => (
   <table className='sr-only'>
     <caption>Maximum {tokenSymbol} scheduled per month, oldest first.</caption>
@@ -120,6 +149,7 @@ const SpendDataTable = ({ rows, tokenDecimals, tokenSymbol }: SpendSeriesProps) 
         <th scope='col'>Streaming (max)</th>
         <th scope='col'>One-time</th>
         <th scope='col'>Up to</th>
+        <th scope='col'>By service</th>
       </tr>
     </thead>
     <tbody>
@@ -132,6 +162,13 @@ const SpendDataTable = ({ rows, tokenDecimals, tokenSymbol }: SpendSeriesProps) 
           <td>{formatTokenAmount(row.streaming, tokenDecimals)}</td>
           <td>{formatTokenAmount(row.oneTime, tokenDecimals)}</td>
           <td>{formatTokenAmount(row.total, tokenDecimals)}</td>
+          <td>
+            {row.byOperator.length > 0
+              ? row.byOperator
+                  .map((entry) => `${operatorLabel(entry.address)} ${formatTokenAmount(entry.amount, tokenDecimals)}`)
+                  .join(", ")
+              : "None"}
+          </td>
         </tr>
       ))}
     </tbody>
@@ -161,35 +198,21 @@ const SpendBarChart = ({ rows, tokenDecimals, tokenSymbol, hasReachedHistoryLimi
   return (
     <Card className='gap-4 p-4'>
       <SpendDataTable rows={rows} tokenDecimals={tokenDecimals} tokenSymbol={tokenSymbol} />
-
-      {/*
-        Visible to assistive tech rather than hidden behind the table: recharts'
-        accessibility layer holds a focusable element, and hiding it would leave
-        that reachable by keyboard but invisible to a screen reader.
-      */}
       <figure
         aria-label={`Maximum ${tokenSymbol} scheduled per month for the last ${data.length} months`}
         className='h-64 w-full'
       >
-        {/*
-          `responsive`, not `ResponsiveContainer`: that wrapper starts at its
-          documented -1 x -1 `initialDimension`, so its first pass warns.
-        */}
         <BarChart
           responsive
           width='100%'
           height='100%'
           data={data}
           margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-          // `desc` is the only accessible-text prop recharts accepts here —
-          // `CartesianChartProps` does not extend SVG attributes, so `role` and
-          // `aria-label` would not type-check. The accessible name lives on the
-          // wrapper instead.
           desc={`Maximum ${tokenSymbol} scheduled per month, stacked. Same figures as the adjacent table.`}
         >
           <defs>
-            <HatchPattern id={HATCH_PATTERN_ID.streaming} stripe='var(--spend-streaming)' />
-            <HatchPattern id={HATCH_PATTERN_ID.oneTime} stripe='var(--spend-one-time)' />
+            <HatchPattern id={SERIES.streaming.patternId} stripeClass={SERIES.streaming.fillClass} />
+            <HatchPattern id={SERIES.oneTime.patternId} stripeClass={SERIES.oneTime.fillClass} />
           </defs>
           <CartesianGrid stroke='var(--border)' strokeDasharray='3 3' vertical={false} />
           <XAxis
@@ -219,20 +242,8 @@ const SpendBarChart = ({ rows, tokenDecimals, tokenSymbol, hasReachedHistoryLimi
             }}
           />
           {/* One `stackId` puts both series in a single bar per month. */}
-          <Bar
-            dataKey='streamingHeight'
-            stackId='cost'
-            fill='var(--spend-streaming)'
-            name='Streaming (max)'
-            shape={StreamingBarShape}
-          />
-          <Bar
-            dataKey='oneTimeHeight'
-            stackId='cost'
-            fill='var(--spend-one-time)'
-            name='One-time'
-            shape={OneTimeBarShape}
-          />
+          <Bar dataKey='streamingHeight' stackId='cost' name='Streaming (max)' shape={StreamingBarShape} />
+          <Bar dataKey='oneTimeHeight' stackId='cost' name='One-time' shape={OneTimeBarShape} />
         </BarChart>
       </figure>
 
@@ -242,7 +253,6 @@ const SpendBarChart = ({ rows, tokenDecimals, tokenSymbol, hasReachedHistoryLimi
         {hasPartialMonth ? <LegendSwatch style={PARTIAL_SWATCH_STYLE}>Current month, to date</LegendSwatch> : null}
       </div>
 
-      {/* Completeness, not semantics — kept off the muted tone so it is not read as more small print. */}
       {hasReachedHistoryLimit ? (
         <p className='flex items-start gap-2 text-sm text-foreground'>
           <AlertCircle aria-hidden='true' className='mt-0.5 size-4 shrink-0' />
@@ -251,9 +261,8 @@ const SpendBarChart = ({ rows, tokenDecimals, tokenSymbol, hasReachedHistoryLimi
       ) : null}
 
       <p className='text-sm text-muted-foreground'>
-        Streaming bars are an estimate: the most a rail can charge at its agreed rate, reconstructed from the rate
-        changes the subgraph records. Validated services, such as storage that must prove itself, settle for less when
-        proving is incomplete — sometimes for nothing. One-time payments are actual amounts.
+        Streaming payments show the maximum possible charge based on the agreed rate. Actual payments may be lower if
+        the service isn't fully delivered or verified. One-time payments show the actual amount paid.
       </p>
     </Card>
   );

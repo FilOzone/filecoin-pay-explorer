@@ -9,7 +9,7 @@ import { SpendChartEmptyState, SpendChartErrorState, SpendChartLayout, SpendChar
 import { buildMonthWindows } from "./utils/buildMonthWindows";
 import { buildSpendSeries } from "./utils/buildSpendSeries";
 import { timestampToEpoch } from "./utils/epoch";
-import { hasReachedSpendHistoryLimit, toRailSpendInput } from "./utils/toRailSpendInput";
+import { hasReachedSpendHistoryLimit, toSpendHistory } from "./utils/toSpendHistory";
 
 // Keeps recharts out of the initial console bundle. `ssr: false` because the
 // chart measures its own container, which has no size on the server.
@@ -31,10 +31,6 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
   const { token } = userToken;
   const { genesisTimestamp } = getChain(network);
 
-  const { data, isLoading, isError } = useAccountSpendHistory(accountId, token.id, { networkOverride: network });
-
-  const rails = useMemo(() => (data ? toRailSpendInput(data, genesisTimestamp) : null), [data, genesisTimestamp]);
-
   // The first instant of the current local month is all the windows need, and
   // collapsing the 30-second tick to it keeps them stable until month rollover.
   const now = new Date(Number(currentTimestamp) * 1_000);
@@ -45,6 +41,18 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
     [monthAnchor, genesisTimestamp],
   );
 
+  // Windows are built before the fetch because their lower bound is what scopes
+  // it. Both are primitives, so the query key only changes at month rollover.
+  const { data, isLoading, isError } = useAccountSpendHistory(
+    accountId,
+    token.id,
+    windows[0].startEpoch,
+    windows[0].startTimestamp,
+    { networkOverride: network },
+  );
+
+  const history = useMemo(() => (data ? toSpendHistory(data) : null), [data]);
+
   // Months come from the browser, because "last month" means the viewer's last
   // month. Accrual is capped at the block this response was read at, so it never
   // bills epochs whose rate changes and terminations are not indexed yet. The
@@ -54,9 +62,9 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
     : timestampToEpoch(currentTimestamp, genesisTimestamp);
 
   const rows = useMemo(() => {
-    if (!rails || rails.length === 0) return null;
-    return buildSpendSeries(rails, windows, indexedEpoch);
-  }, [rails, windows, indexedEpoch]);
+    if (!history || (history.periods.length === 0 && history.oneTimePayments.length === 0)) return null;
+    return buildSpendSeries(history, windows, indexedEpoch);
+  }, [history, windows, indexedEpoch]);
 
   if (isLoading) {
     return <SpendChartLoadingState tokenSymbol={token.symbol} />;

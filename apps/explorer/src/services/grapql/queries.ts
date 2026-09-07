@@ -582,9 +582,15 @@ export const GET_STATS_DASHBOARD = gql`
  * and joining records across the selected rails. Nested records are newest
  * first so a capped response favours the six-month window being drawn.
  */
-export const GET_ACCOUNT_SPEND_HISTORY = gql`
-  query GetAccountSpendHistory($accountId: Bytes!, $tokenId: Bytes!, $first: Int!, $nested: Int!) {
-    # The epoch the rails below were read at. Accrual stops here rather than at a
+export const GET_ACCOUNT_RATE_PERIODS = gql`
+  query GetAccountRatePeriods(
+    $accountId: Bytes!
+    $tokenId: Bytes!
+    $windowStartEpoch: BigInt!
+    $first: Int!
+    $cursor: Bytes!
+  ) {
+    # The epoch this page was read at. Accrual stops here rather than at a
     # clock-derived "now", so the ceiling can never run ahead of the rate history
     # it is integrating.
     _meta {
@@ -592,18 +598,60 @@ export const GET_ACCOUNT_SPEND_HISTORY = gql`
         number
       }
     }
-    rails(where: { payer: $accountId, token: $tokenId }, first: $first, orderBy: createdAt) {
-      paymentRate
-      endEpoch
-      createdAt
-      rateChangeQueue(first: $nested, orderBy: untilEpoch, orderDirection: desc) {
-        startEpoch
-        untilEpoch
-        rate
+    # The rate timeline, not the settlement work queue. Every period a rail
+    # charged at is recorded, including the zero-rate stretch before activation,
+    # so nothing has to be reconstructed. An open period has a null untilEpoch.
+    #
+    # Two branches because a comparison filter never matches null: the first
+    # keeps periods still running, the second those that ended inside the charted
+    # range. Without this the newest page of a busy account covers hours, and
+    # every month before it renders as zero.
+    #
+    # Ordered by id, not startEpoch, because id is the pagination cursor and has
+    # to be unique — many periods share a start epoch.
+    railRatePeriods(
+      where: {
+        or: [
+          { payer: $accountId, token: $tokenId, untilEpoch: null, id_gt: $cursor }
+          { payer: $accountId, token: $tokenId, untilEpoch_gte: $windowStartEpoch, id_gt: $cursor }
+        ]
       }
-      oneTimePayments(first: $nested, orderBy: createdAt, orderDirection: desc) {
-        totalAmount
-        createdAt
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      id
+      rate
+      startEpoch
+      untilEpoch
+      operator {
+        address
+      }
+    }
+  }
+`;
+
+export const GET_ACCOUNT_ONE_TIME_PAYMENTS = gql`
+  query GetAccountOneTimePayments(
+    $accountId: Bytes!
+    $tokenId: Bytes!
+    $windowStartTimestamp: BigInt!
+    $first: Int!
+    $cursor: Bytes!
+  ) {
+    # A payment is a point in time, so a single lower bound is enough — no null
+    # case to fold in, unlike the rate periods above.
+    oneTimePayments(
+      where: { payer: $accountId, token: $tokenId, createdAt_gte: $windowStartTimestamp, id_gt: $cursor }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      id
+      totalAmount
+      createdAt
+      operator {
+        address
       }
     }
   }

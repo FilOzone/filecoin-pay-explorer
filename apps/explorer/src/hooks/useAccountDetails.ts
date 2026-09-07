@@ -1,14 +1,17 @@
 import type { Account, OperatorApproval, Rail, UserToken } from "@filecoin-pay/types";
+import { useQuery } from "@tanstack/react-query";
 import {
   GET_ACCOUNT_APPROVALS,
   GET_ACCOUNT_DETAILS,
+  GET_ACCOUNT_ONE_TIME_PAYMENTS,
   GET_ACCOUNT_RAILS,
-  GET_ACCOUNT_SPEND_HISTORY,
+  GET_ACCOUNT_RATE_PERIODS,
   GET_ACCOUNT_TOKEN,
   GET_ACCOUNT_TOKENS,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
-import { useGraphQLQuery } from "./useGraphQLQuery";
+import { useGraphQLClient, useGraphQLQuery } from "./useGraphQLQuery";
+import useNetwork from "./useNetwork";
 
 interface AccountDetailsResponse {
   accounts: Account[];
@@ -26,24 +29,36 @@ interface AccountApprovalsResponse {
   operatorApprovals: OperatorApproval[];
 }
 
-/** Raw shape of `GET_ACCOUNT_SPEND_HISTORY`; only `toRailSpendInput` reads it. */
-export interface SpendHistoryRailResponse {
-  paymentRate: string;
-  endEpoch: string;
-  /** Unix seconds. The subgraph stores no creation epoch, so it is derived from genesis. */
+/** Raw shape of the spend-history queries; only `toSpendHistory` reads it. */
+export interface SpendHistoryRatePeriodResponse {
+  id: string;
+  rate: string;
+  startEpoch: string;
+  /** Null while the period is open — the rail is still charging at this rate. */
+  untilEpoch: string | null;
+  operator: { address: string };
+}
+
+export interface SpendHistoryOneTimePaymentResponse {
+  id: string;
+  totalAmount: string;
+  /** Unix seconds. */
   createdAt: string;
-  rateChangeQueue: Array<{ startEpoch: string; untilEpoch: string; rate: string }>;
-  oneTimePayments: Array<{ totalAmount: string; createdAt: string }>;
+  operator: { address: string };
 }
 
 export interface AccountSpendHistoryResponse {
   /**
-   * The epoch this response was read at — `block.number` is the Filecoin epoch,
-   * so it compares directly with `endEpoch` and segment bounds. Null while a
-   * deployment is still starting up.
+   * The epoch the history was read at — `block.number` is the Filecoin epoch, so
+   * it compares directly with period bounds. Taken from the first page, which is
+   * the earliest block every page is known to cover. Null while a deployment is
+   * still starting up.
    */
   _meta: { block: { number: number } } | null;
-  rails: SpendHistoryRailResponse[];
+  railRatePeriods: SpendHistoryRatePeriodResponse[];
+  oneTimePayments: SpendHistoryOneTimePaymentResponse[];
+  /** A page cap was hit, so the history may be missing records. */
+  reachedPageLimit: boolean;
 }
 
 interface AccountDetailsOptions {
@@ -120,28 +135,134 @@ export const useAccountRails = (accountId: string, page: number = 1, options?: A
     networkOverride: options?.networkOverride,
   });
 
+/** graph-node's per-request maximum. */
+const SPEND_HISTORY_PAGE_SIZE = 1_000;
+
 /**
- * Caps on this spend-history read. The entities can be paged through top-level
- * queries, but this first version deliberately makes one bounded request. A
- * response that fills either cap may be incomplete —
- * `hasReachedSpendHistoryLimit` compares against these so the chart can say so.
+ * Pages to walk before giving up on a collection.
+ *
+ * A real account needs one or two: the busiest non-bot payer on calibration has
+ * around 1,500 rate periods in six months. Bots run to tens of thousands, and
+ * nothing useful is drawn from those, so the walk stops and the chart says the
+ * months may be incomplete rather than issuing requests indefinitely.
  */
-export const SPEND_HISTORY_RAIL_LIMIT = 500;
-export const SPEND_HISTORY_NESTED_LIMIT = 1_000;
+const SPEND_HISTORY_MAX_PAGES = 10;
 
-/** Every figure is frozen at fetch time, and 30 minutes is the accepted staleness for the current month. */
-const SPEND_HISTORY_REFETCH_MS = 30 * 60 * 1_000;
+/**
+ * The whole history is read once and held, because it is heavy and it barely
+ * moves: months that have ended never change, and the current month drifts by
+ * roughly 0.1% over half a day. Accrual stops at the block the first page was
+ * read at, so a stale read is internally consistent rather than partly updated.
+ *
+ * A one-time payment is a step change rather than a drift, so it can be up to
+ * this long before appearing. Refetch on window focus still covers someone
+ * returning to the tab.
+ */
+const SPEND_HISTORY_STALE_MS = 12 * 60 * 60 * 1_000;
 
-export const useAccountSpendHistory = (accountId: string, tokenId: string, options?: AccountDetailsOptions) =>
-  useGraphQLQuery<AccountSpendHistoryResponse>({
-    queryKey: ["account", accountId, "spend-history", tokenId],
-    query: GET_ACCOUNT_SPEND_HISTORY,
-    variables: { accountId, tokenId, first: SPEND_HISTORY_RAIL_LIMIT, nested: SPEND_HISTORY_NESTED_LIMIT },
+/**
+ * Walks a cursor-paged collection until it is exhausted or `maxPages` is hit.
+ *
+ * Cursors on `id` rather than `skip`, which graph-node caps at 5,000. Mirrors
+ * `getApprovedOperatorClients`, including the guard against a cursor that fails
+ * to advance — that would otherwise spin forever.
+ */
+export async function fetchAllPages<T extends { id: string }>(
+  fetchPage: (cursor: string) => Promise<T[]>,
+  maxPages: number = SPEND_HISTORY_MAX_PAGES,
+): Promise<{ items: T[]; reachedPageLimit: boolean }> {
+  const items: T[] = [];
+  let cursor = "0x";
+
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await fetchPage(cursor);
+    items.push(...rows);
+    if (rows.length < SPEND_HISTORY_PAGE_SIZE) return { items, reachedPageLimit: false };
+
+    const nextCursor = rows[rows.length - 1].id;
+    if (!nextCursor || nextCursor === cursor) throw new Error("Spend history pagination did not advance");
+    cursor = nextCursor;
+  }
+
+  return { items, reachedPageLimit: true };
+}
+
+/**
+ * Every rate period and one-time payment touching the charted months.
+ *
+ * `windowStartEpoch` and `windowStartTimestamp` bound the read to the range the
+ * chart draws. Without them the newest page of an active account covers hours,
+ * and every earlier month renders as zero — the data is there, just not the part
+ * that was asked for.
+ */
+export const useAccountSpendHistory = (
+  accountId: string,
+  tokenId: string,
+  windowStartEpoch: bigint,
+  windowStartTimestamp: bigint,
+  options?: AccountDetailsOptions,
+) => {
+  const { network: contextNetwork } = useNetwork();
+  const network = options?.networkOverride ?? contextNetwork;
+  const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
+
+  return useQuery<AccountSpendHistoryResponse>({
+    queryKey: [
+      "account",
+      accountId,
+      "spend-history",
+      tokenId,
+      windowStartEpoch.toString(),
+      windowStartTimestamp.toString(),
+      network,
+    ],
+    queryFn: async () => {
+      let meta: AccountSpendHistoryResponse["_meta"] = null;
+
+      const periods = await fetchAllPages<SpendHistoryRatePeriodResponse>(async (cursor) => {
+        const page = await executeQuery<{
+          _meta: AccountSpendHistoryResponse["_meta"];
+          railRatePeriods: SpendHistoryRatePeriodResponse[];
+        }>(GET_ACCOUNT_RATE_PERIODS, {
+          accountId,
+          tokenId,
+          windowStartEpoch: windowStartEpoch.toString(),
+          first: SPEND_HISTORY_PAGE_SIZE,
+          cursor,
+        });
+
+        // The chain advances between pages, so the earliest block seen is the
+        // only one every page is known to cover.
+        meta ??= page._meta;
+        return page.railRatePeriods;
+      });
+
+      const payments = await fetchAllPages<SpendHistoryOneTimePaymentResponse>(async (cursor) => {
+        const page = await executeQuery<{ oneTimePayments: SpendHistoryOneTimePaymentResponse[] }>(
+          GET_ACCOUNT_ONE_TIME_PAYMENTS,
+          {
+            accountId,
+            tokenId,
+            windowStartTimestamp: windowStartTimestamp.toString(),
+            first: SPEND_HISTORY_PAGE_SIZE,
+            cursor,
+          },
+        );
+        return page.oneTimePayments;
+      });
+
+      return {
+        _meta: meta,
+        railRatePeriods: periods.items,
+        oneTimePayments: payments.items,
+        reachedPageLimit: periods.reachedPageLimit || payments.reachedPageLimit,
+      };
+    },
     enabled: !!accountId && !!tokenId,
-    networkOverride: options?.networkOverride,
-    staleTime: SPEND_HISTORY_REFETCH_MS,
-    refetchInterval: SPEND_HISTORY_REFETCH_MS,
+    staleTime: SPEND_HISTORY_STALE_MS,
+    gcTime: SPEND_HISTORY_STALE_MS,
   });
+};
 
 export const useAccountApprovals = (accountId: string, page: number = 1, options?: AccountDetailsOptions) =>
   useGraphQLQuery<AccountApprovalsResponse, { operatorApprovals: OperatorApproval[]; hasMore: boolean }>({
