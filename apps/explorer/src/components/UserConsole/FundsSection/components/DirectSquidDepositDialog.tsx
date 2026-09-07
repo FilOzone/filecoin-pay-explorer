@@ -755,7 +755,9 @@ export function DirectSquidDepositDialog({
                 <SearchableSelect
                   id='direct-squid-token'
                   disabled={isBusy || tokensQuery.isPending}
+                  emptyMessage='No matching tokens.'
                   invalidMessage='Choose a supported source token.'
+                  listLabel='Source tokens'
                   onValueChange={(value) => {
                     setSourceTokenAddress(value);
                     setReviewed(null);

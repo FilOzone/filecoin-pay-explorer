@@ -34,8 +34,10 @@ function Harness() {
       </button>
       <output>{value}</output>
       <SearchableSelect
+        emptyMessage='No matching tokens.'
         id='token'
         invalidMessage='Choose a token.'
+        listLabel='Tokens'
         onValueChange={setValue}
         options={reversed ? [...options].reverse() : options}
         placeholder='Search tokens'
