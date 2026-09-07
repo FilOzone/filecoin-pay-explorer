@@ -39,8 +39,8 @@ const query = vi.hoisted(() => ({
   quoteEnabled: undefined as boolean | undefined,
   filGasTopUp: {
     deadline: 1_700_604_800n,
-    minimumFil: 250_000_000_000_000_000n,
-    spendUsdfc: 625_000_000_000_000_000n,
+    minimumFil: 50_000_000_000_000_000n,
+    spendUsdfc: 125_000_000_000_000_000n,
   },
   quote: {
     destinationAmount: 93n,
@@ -463,10 +463,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
     const option = renderer.root.findByProps({ id: "direct-squid-fil-gas" });
     expect(option.props.checked).toBe(checked);
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("Include 0.25 FIL for transaction fees");
+    expect(text).toContain("Include 0.05 FIL for transaction fees");
     expect(text).toContain(hint);
     expect(text).toContain("The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.");
-    expect(text.includes("+ 0.25 FIL for network fees")).toBe(checked);
+    expect(text.includes("+ 0.05 FIL for network fees")).toBe(checked);
   });
 
   it("waits for a fresh destination balance before defaulting from cached data", async () => {
@@ -511,7 +511,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       { quoteOnly: false },
     );
     const topUpLabel = renderer.root.findAllByType("span").find((node) => node.children.join("") === "Wallet top-up:");
-    expect(topUpLabel?.parent?.children.slice(1).join("")).toContain("0.25 FIL");
+    expect(topUpLabel?.parent?.children.slice(1).join("")).toContain("0.05 FIL");
   });
 
   it("lets the user opt out of the FIL top-up", async () => {
