@@ -16,11 +16,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), loading: vi.fn() } }));
 vi.mock("wagmi", () => ({
+  useConfig: () => ({}),
   useWaitForTransactionReceipt: () => ({ isSuccess: false, isError: false }),
   useWriteContract: () => ({ writeContractAsync: mocks.writeContractAsync, isPending: false }),
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => mocks.account }));
-vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 
 function renderHook() {
   let result!: ReturnType<typeof useContractTransaction>;
