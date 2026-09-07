@@ -12,8 +12,6 @@ const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKE
 export const FILECOIN_CHAIN_ID = 314;
 export const SQUID_API_BASE_URL = "https://v2.api.squidrouter.com/v2";
 export const DEFAULT_SQUID_SLIPPAGE = 1;
-// Below this many USDFC per USDC the quote is flagged so the haircut is visible.
-export const UNFAVORABLE_RATE_THRESHOLD = 0.97;
 
 // Squid multicall call type that overwrites the argument at `payload.inputPos`
 // with the full token balance the multicall holds when the hook runs, so the
@@ -70,8 +68,6 @@ export interface SquidDepositQuote {
   minimumDestinationAmount: bigint;
   sourceAmountUsd?: string;
   destinationAmountUsd?: string;
-  priceImpactPercent?: string;
-  estimatedSeconds?: number;
   fees: SquidDepositCost[];
   gasCosts: SquidDepositCost[];
   transaction?: SquidDepositTransaction;
@@ -134,20 +130,6 @@ export function selectUsdcTokens(tokens: readonly SourceToken[]): SourceToken[] 
   return tokens
     .filter((token) => isUsdcLikeSymbol(token.symbol) && !isNativeToken(token.token))
     .sort((a, b) => Number(b.symbol.toUpperCase() === "USDC") - Number(a.symbol.toUpperCase() === "USDC"));
-}
-
-export function getUsdfcPerUsdc(
-  quote: Pick<SquidDepositQuote, "sourceAmount" | "destinationAmount">,
-  sourceDecimals: number,
-): number {
-  if (quote.sourceAmount === 0n) return 0;
-  const usdc = Number(quote.sourceAmount) / 10 ** sourceDecimals;
-  const usdfc = Number(quote.destinationAmount) / 1e18;
-  return usdfc / usdc;
-}
-
-export function isUnfavorableRate(rate: number): boolean {
-  return rate < UNFAVORABLE_RATE_THRESHOLD;
 }
 
 /** Native-token gas and route fees the paying wallet owes on the source network. */
@@ -366,10 +348,6 @@ export function parseSquidDepositRoute(
     minimumDestinationAmount: parsePositiveAmount(estimate.toAmountMin, "minimum destination amount"),
     ...(typeof estimate.fromAmountUSD === "string" ? { sourceAmountUsd: estimate.fromAmountUSD } : {}),
     ...(typeof estimate.toAmountUSD === "string" ? { destinationAmountUsd: estimate.toAmountUSD } : {}),
-    ...(typeof estimate.aggregatePriceImpact === "string" ? { priceImpactPercent: estimate.aggregatePriceImpact } : {}),
-    ...(typeof estimate.estimatedRouteDuration === "number"
-      ? { estimatedSeconds: estimate.estimatedRouteDuration }
-      : {}),
     fees: parseCosts(estimate.feeCosts, "fee costs"),
     gasCosts: parseCosts(estimate.gasCosts, "gas costs"),
   };
