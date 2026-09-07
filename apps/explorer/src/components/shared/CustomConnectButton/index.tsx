@@ -1,11 +1,14 @@
 "use client";
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { useConnectWallet, useLogin, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { useConnection } from "wagmi";
 import { consoleWalletSelector } from "@/components/UserConsole/console-wallet";
-import { exitWalletSession, getWalletEntryState } from "./state";
+import { getWalletEntryState } from "./state";
+import { useWalletExit } from "./useWalletExit";
+
+const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
 
 const CustomConnectButton = () => {
   const { ready, authenticated, error } = usePrivy();
@@ -17,7 +20,7 @@ const CustomConnectButton = () => {
   const { connectWallet } = useConnectWallet({
     onError: (error) => toast.error("Unable to connect wallet", { description: error }),
   });
-  const { logout } = useLogout();
+  const { exit } = useWalletExit();
   const state = getWalletEntryState({ ready, walletsReady, authenticated, isConnected });
 
   if (error)
@@ -35,12 +38,9 @@ const CustomConnectButton = () => {
         <button
           type='button'
           onClick={() =>
-            void exitWalletSession({
-              authenticated,
-              logout,
-              pauseSelection: consoleWalletSelector.pause,
-              resumeSelection: consoleWalletSelector.resume,
-            }).catch((error) => toast.error("Unable to log out", { description: error.message }))
+            void exit().catch((error: unknown) =>
+              toast.error("Unable to log out", { description: describeError(error) }),
+            )
           }
           className='text-sm underline underline-offset-2 opacity-70 hover:opacity-100'
         >

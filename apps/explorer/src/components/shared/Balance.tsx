@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
-import { useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useWallets } from "@privy-io/react-auth";
 import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,20 +16,18 @@ import { type Address, erc20Abi, formatEther } from "viem";
 import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
-import { exitWalletSession, getWalletExitAction } from "@/components/shared/CustomConnectButton/state";
-import { consoleWalletSelector } from "@/components/UserConsole/console-wallet";
+import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
+import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
   const { constants } = useSynapse();
   const { address } = useAccount();
-  const { authenticated } = usePrivy();
-  const { logout } = useLogout();
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
-  const exitAction = getWalletExitAction(authenticated, activeWallet?.connectorType);
+  const { action: exitAction, exit } = useWalletExit(activeWallet);
   const [copied, setCopied] = useState(false);
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
@@ -74,18 +72,9 @@ const Balance = () => {
 
   const exitWallet = async () => {
     try {
-      if (exitAction === "manual-disconnect") {
-        toast.info("Disconnect this site from your wallet extension");
-        return;
-      }
-
-      await exitWalletSession({
-        authenticated,
-        logout,
-        disconnect: activeWallet ? () => activeWallet.disconnect() : undefined,
-        pauseSelection: consoleWalletSelector.pause,
-        resumeSelection: consoleWalletSelector.resume,
-      });
+      await exit();
+      // Browser extensions cannot be disconnected programmatically; the site stays authorised until revoked there.
+      if (exitAction === "manual-disconnect") toast.info("Also disconnect this site from your wallet extension");
     } catch (error) {
       toast.error(exitAction === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
         description: error instanceof Error ? error.message : undefined,
@@ -128,13 +117,7 @@ const Balance = () => {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => void exitWallet()} className='cursor-pointer py-2'>
           <LogOut />
-          <span className='text-base text-zinc-950'>
-            {exitAction === "logout"
-              ? "Log out"
-              : exitAction === "manual-disconnect"
-                ? "Disconnect in wallet"
-                : "Disconnect"}
-          </span>
+          <span className='text-base text-zinc-950'>{WALLET_EXIT_LABEL[exitAction]}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Tools</DropdownMenuLabel>
