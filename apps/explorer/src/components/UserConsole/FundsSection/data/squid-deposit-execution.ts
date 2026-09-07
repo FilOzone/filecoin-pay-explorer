@@ -101,6 +101,20 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
   onBroadcast?: (broadcast: { transactionHash: Hash; fundsBefore: bigint }) => void;
 }
 
+function assertSignerUnchanged(
+  providerOwner: Address | undefined,
+  walletChainId: number,
+  request: Pick<SquidDepositRouteRequest, "owner" | "sourceChainId">,
+  rpcChainId = request.sourceChainId,
+): void {
+  if (!providerOwner || providerOwner.toLowerCase() !== request.owner.toLowerCase()) {
+    throw new Error("Wallet account changed before signing");
+  }
+  if (walletChainId !== request.sourceChainId || rpcChainId !== request.sourceChainId) {
+    throw new Error("Source network changed before signing");
+  }
+}
+
 async function assertFreshSigningState({
   assertCurrentContext,
   getCurrentOwner,
@@ -135,12 +149,7 @@ async function assertFreshSigningState({
     }),
   ]);
   assertCurrentContext();
-  if (!providerOwner || providerOwner.toLowerCase() !== request.owner.toLowerCase()) {
-    throw new Error("Wallet account changed before signing");
-  }
-  if (walletChainId !== request.sourceChainId || rpcChainId !== request.sourceChainId) {
-    throw new Error("Source network changed before signing");
-  }
+  assertSignerUnchanged(providerOwner, walletChainId, request, rpcChainId);
   if (tokenBalance < request.sourceAmount) throw new Error("USDC balance no longer covers the reviewed spend");
   if (requireAllowance && allowance !== request.sourceAmount)
     throw new Error("USDC allowance does not match the reviewed spend after approval");
@@ -156,10 +165,7 @@ async function assertCurrentWallet({
   assertCurrentContext();
   const [providerOwner, walletChainId] = await Promise.all([getCurrentOwner(), walletClient.getChainId()]);
   assertCurrentContext();
-  if (!providerOwner || providerOwner.toLowerCase() !== request.owner.toLowerCase()) {
-    throw new Error("Wallet account changed before signing");
-  }
-  if (walletChainId !== request.sourceChainId) throw new Error("Source network changed before signing");
+  assertSignerUnchanged(providerOwner, walletChainId, request);
 }
 
 async function prepareTransaction(
