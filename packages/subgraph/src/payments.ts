@@ -1,4 +1,4 @@
-import { Address, Bytes, DataSourceContext, dataSource, log } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, DataSourceContext, dataSource, ethereum, log } from "@graphprotocol/graph-ts";
 import {
   AccountLockupSettled as AccountLockupSettledEvent,
   DepositRecorded as DepositRecordedEvent,
@@ -12,7 +12,15 @@ import {
   RailTerminated as RailTerminatedEvent,
   WithdrawRecorded as WithdrawRecordedEvent,
 } from "../generated/Payments/Payments";
-import { FeeAuctionPurchase, OperatorApproval, Rail, Settlement, Token, UserToken } from "../generated/schema";
+import {
+  FeeAuctionPurchase,
+  OperatorApproval,
+  Rail,
+  RailRatePeriod,
+  Settlement,
+  Token,
+  UserToken,
+} from "../generated/schema";
 import { TokenTemplate } from "../generated/templates";
 import { Transfer as TransferEvent } from "../generated/templates/TokenTemplate/erc20";
 import {
@@ -24,6 +32,7 @@ import {
   createOrLoadOperatorToken,
   createOrLoadUserToken,
   createRail,
+  createRailRatePeriod,
   createRateChangeQueue,
   epochsRateChangeApplicable,
   getLockupLastSettledUntilTimestamp,
@@ -38,6 +47,29 @@ import {
 } from "./utils/helpers";
 import { getIdFromTxHashAndLogIndex, getRailEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
+
+function failRatePeriodInvariant(
+  reason: string,
+  rail: Rail,
+  event: ethereum.Event,
+  ratePeriod: RailRatePeriod | null,
+  oldRate: BigInt | null = null,
+  newRate: BigInt | null = null,
+): void {
+  let context = `railId=${rail.railId.toString()} state=${rail.state} block=${event.block.number.toString()} txHash=${event.transaction.hash.toHexString()} logIndex=${event.logIndex.toString()} railEndEpoch=${rail.endEpoch.toString()}`;
+
+  if (ratePeriod !== null) {
+    const untilEpoch = ratePeriod.untilEpoch;
+    context += ` periodId=${ratePeriod.id.toHexString()} periodRate=${ratePeriod.rate.toString()} periodStartEpoch=${ratePeriod.startEpoch.toString()} periodUntilEpoch=${untilEpoch !== null ? untilEpoch.toString() : "null"}`;
+  } else {
+    context += ` periodId=${rail.currentRatePeriod.toHexString()} period=<missing>`;
+  }
+
+  if (oldRate !== null) context += ` oldRate=${oldRate.toString()}`;
+  if (newRate !== null) context += ` newRate=${newRate.toString()}`;
+
+  assert(false, `${reason} ${context}`);
+}
 
 export function handleAccountLockupSettled(event: AccountLockupSettledEvent): void {
   const tokenAddress = event.params.token;
@@ -181,6 +213,7 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   operator.totalRails = operator.totalRails.plus(ONE_BIG_INT);
   accountOperator.totalRails = accountOperator.totalRails.plus(ONE_BIG_INT);
 
+  const initialRatePeriodId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
   const rail = createRail(
     railId,
     payerAddress,
@@ -192,7 +225,10 @@ export function handleRailCreated(event: RailCreatedEvent): void {
     commissionRateBps,
     serviceFeeRecipient,
     event.block.timestamp,
+    initialRatePeriodId,
   );
+  createRailRatePeriod(initialRatePeriodId, rail, ZERO_BIG_INT, event.block.number);
+  rail.save();
 
   payerAccount.save();
   payeeAccount.save();
@@ -227,6 +263,29 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
   const previousRailState = rail.state;
   rail.state = "TERMINATED";
   rail.endEpoch = event.params.endEpoch;
+
+  const currentRatePeriod = RailRatePeriod.load(rail.currentRatePeriod);
+  if (!currentRatePeriod) {
+    failRatePeriodInvariant("[handleRailTerminated] Current rate period not found", rail, event, null);
+    return;
+  }
+  const terminationCap = event.params.endEpoch.gt(currentRatePeriod.startEpoch)
+    ? event.params.endEpoch
+    : currentRatePeriod.startEpoch;
+  const existingUntilEpoch = currentRatePeriod.untilEpoch;
+  if (existingUntilEpoch !== null) {
+    if (existingUntilEpoch.notEqual(terminationCap)) {
+      failRatePeriodInvariant(
+        "[handleRailTerminated] Rate period cap does not match the expected termination cap",
+        rail,
+        event,
+        currentRatePeriod,
+      );
+      return;
+    }
+  }
+  currentRatePeriod.untilEpoch = terminationCap;
+  currentRatePeriod.save();
 
   if (previousRailState == "ACTIVE") {
     const accountOperator = createOrLoadAccountOperator(rail.payer, rail.operator).accountOperator;
@@ -329,6 +388,118 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   if (!rail) {
     log.warning("[handleRailPaymentRateModified] Rail not found for railId: {}", [railId.toString()]);
     return;
+  }
+
+  if (oldRate.notEqual(newRate)) {
+    const currentRatePeriod = RailRatePeriod.load(rail.currentRatePeriod);
+    if (!currentRatePeriod) {
+      failRatePeriodInvariant(
+        "[handleRailRateModified] Current rate period not found",
+        rail,
+        event,
+        null,
+        oldRate,
+        newRate,
+      );
+      return;
+    }
+    if (currentRatePeriod.rate.notEqual(oldRate)) {
+      failRatePeriodInvariant(
+        "[handleRailRateModified] Current rate period does not match oldRate",
+        rail,
+        event,
+        currentRatePeriod,
+        oldRate,
+        newRate,
+      );
+      return;
+    }
+    if (currentRatePeriod.startEpoch.gt(event.block.number)) {
+      failRatePeriodInvariant(
+        "[handleRailRateModified] Current rate period starts after the event block",
+        rail,
+        event,
+        currentRatePeriod,
+        oldRate,
+        newRate,
+      );
+      return;
+    }
+
+    const existingUntilEpoch = currentRatePeriod.untilEpoch;
+    if (rail.state == "TERMINATED") {
+      if (existingUntilEpoch === null) {
+        failRatePeriodInvariant(
+          "[handleRailRateModified] Terminated rail has an uncapped rate period",
+          rail,
+          event,
+          currentRatePeriod,
+          oldRate,
+          newRate,
+        );
+        return;
+      }
+      if (existingUntilEpoch.notEqual(rail.endEpoch)) {
+        failRatePeriodInvariant(
+          "[handleRailRateModified] Terminated rail rate period cap does not match rail endEpoch",
+          rail,
+          event,
+          currentRatePeriod,
+          oldRate,
+          newRate,
+        );
+        return;
+      }
+      if (event.block.number.ge(existingUntilEpoch)) {
+        failRatePeriodInvariant(
+          "[handleRailRateModified] Rate change is not before the terminated rail endEpoch",
+          rail,
+          event,
+          currentRatePeriod,
+          oldRate,
+          newRate,
+        );
+        return;
+      }
+    } else if (rail.state == "FINALIZED") {
+      failRatePeriodInvariant(
+        "[handleRailRateModified] Finalized rail cannot have a real rate change",
+        rail,
+        event,
+        currentRatePeriod,
+        oldRate,
+        newRate,
+      );
+      return;
+    } else if (existingUntilEpoch !== null) {
+      failRatePeriodInvariant(
+        "[handleRailRateModified] Active rail has a capped current rate period",
+        rail,
+        event,
+        currentRatePeriod,
+        oldRate,
+        newRate,
+      );
+      return;
+    }
+
+    if (currentRatePeriod.startEpoch.equals(event.block.number)) {
+      currentRatePeriod.rate = newRate;
+      currentRatePeriod.save();
+    } else {
+      currentRatePeriod.untilEpoch = event.block.number;
+      currentRatePeriod.save();
+
+      const newRatePeriodId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+      const newRatePeriod = createRailRatePeriod(
+        newRatePeriodId,
+        rail,
+        newRate,
+        event.block.number,
+        existingUntilEpoch,
+      );
+      rail.currentRatePeriod = newRatePeriod.id;
+    }
   }
 
   // Only transition from ZERORATE to ACTIVE, not from TERMINATED or FINALIZED
@@ -658,7 +829,7 @@ export function handleRailOneTimePaymentProcessed(event: RailOneTimePaymentProce
   rail.save();
 
   // create one time payment entity
-  createOneTimePayment(event, rail.id, rail.token, totalAmount, networkFee, operatorCommission, netPayeeAmount);
+  createOneTimePayment(event, rail, totalAmount, networkFee, operatorCommission, netPayeeAmount);
 
   const payerToken = UserToken.load(rail.payer.concat(rail.token));
   const payeeToken = createOrLoadUserToken(Address.fromBytes(rail.payee), Address.fromBytes(rail.token)).userToken;

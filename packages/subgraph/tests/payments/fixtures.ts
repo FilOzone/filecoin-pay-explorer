@@ -1,6 +1,6 @@
-import { Address, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { Address, Bytes, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { assert } from "matchstick-as";
-
+import { RailRatePeriod } from "../../generated/schema";
 import { handleDepositRecorded, handleOperatorApprovalUpdated, handleRailCreated } from "../../src/payments";
 import { ONE_BIG_INT } from "../../src/utils/constants";
 import {
@@ -260,6 +260,30 @@ export function assertRailRateParams(railId: GraphBN, state: string, paymentRate
   assert.fieldEquals("Rail", railEntityId, "state", state);
   assert.fieldEquals("Rail", railEntityId, "paymentRate", paymentRate.toString());
   assert.fieldEquals("Rail", railEntityId, "settledUpto", settledUpto);
+}
+
+export function assertRailRatePeriodState(
+  id: Bytes,
+  railId: GraphBN,
+  rate: GraphBN,
+  startEpoch: GraphBN,
+  untilEpoch: string,
+): void {
+  const entityId = id.toHexString();
+  assert.fieldEquals("RailRatePeriod", entityId, "rail", getRailEntityId(railId).toHexString());
+  assert.fieldEquals("RailRatePeriod", entityId, "payer", TEST_ADDRESSES.ACCOUNT.toHexString());
+  assert.fieldEquals("RailRatePeriod", entityId, "operator", TEST_ADDRESSES.OPERATOR.toHexString());
+  assert.fieldEquals("RailRatePeriod", entityId, "token", TEST_ADDRESSES.TOKEN.toHexString());
+  assert.fieldEquals("RailRatePeriod", entityId, "rate", rate.toString());
+  assert.fieldEquals("RailRatePeriod", entityId, "startEpoch", startEpoch.toString());
+
+  if (untilEpoch.length > 0) {
+    assert.fieldEquals("RailRatePeriod", entityId, "untilEpoch", untilEpoch);
+  } else {
+    const ratePeriod = RailRatePeriod.load(id);
+    assert.assertNotNull(ratePeriod);
+    assert.assertTrue(ratePeriod!.untilEpoch === null);
+  }
 }
 
 export function assertRailLockupParams(railId: GraphBN, lockupPeriod: GraphBN, lockupFixed: GraphBN): void {

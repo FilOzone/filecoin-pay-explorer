@@ -17,6 +17,7 @@ import {
   createRailRateModifiedEvent,
   createRailSettledEvent,
   createRailTerminatedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertTokenTotalLockup,
@@ -37,6 +38,7 @@ describe("Token Lockup Tracking", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("should track token lockup correctly through complete rail lifecycle", () => {

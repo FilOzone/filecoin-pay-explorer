@@ -64,12 +64,12 @@ The static `Payments` source starts at the configured deployment block and index
 | `WithdrawRecorded` | Reduces `UserToken.funds` and token-wide funds; updates deposit/withdrawal volume |
 | `AccountLockupSettled` | Replaces the account-token lockup checkpoint with values emitted by the contract |
 | `OperatorApprovalUpdated` | Creates or updates `OperatorApproval`; creates related entities and updates the payer/operator approval counters |
-| `RailCreated` | Creates `Rail`; creates participant accounts and updates protocol-wide and payer/operator rail counters |
-| `RailRateModified` | Updates current rail rate, historical closed-rate intervals, rate usage, streaming lockup, and the first payer/operator activation |
+| `RailCreated` | Creates `Rail` and its initial zero-rate `RailRatePeriod`; creates participant accounts and updates protocol-wide and payer/operator rail counters |
+| `RailRateModified` | Updates current rail rate, the analytics rate timeline, settlement queue history, rate usage, streaming lockup, and the first payer/operator activation |
 | `RailLockupModified` | Updates fixed/period lockup and corresponding approval, operator-token, and token lockup totals |
-| `RailTerminated` | Marks the rail terminated, removes its active rate from lockup totals, and decrements the payer/operator active-rail count when applicable |
+| `RailTerminated` | Marks the rail terminated, caps its current rate period at `endEpoch`, removes its active rate from lockup totals, and decrements the payer/operator active-rail count when applicable |
 | `RailSettled` | Creates `Settlement`; moves payer, payee, and fee-recipient balances; updates rail, token, and operator totals |
-| `RailOneTimePaymentProcessed` | Creates `OneTimePayment`; moves balances; consumes fixed lockup and approval allowance |
+| `RailOneTimePaymentProcessed` | Creates a payer/operator-denormalized `OneTimePayment`; moves balances; consumes fixed lockup and approval allowance |
 | `RailFinalized` | Marks the rail finalized and releases its remaining indexed lockup usage |
 
 Most handlers also update protocol, daily, weekly, token, or operator metrics through `MetricsCollectionOrchestrator`.
@@ -104,8 +104,14 @@ erDiagram
   OPERATOR ||--o{ OPERATOR_TOKEN : aggregates
   TOKEN ||--o{ OPERATOR_TOKEN : scopes
   RAIL ||--o{ RATE_CHANGE_QUEUE : records
+  RAIL ||--o{ RAIL_RATE_PERIOD : schedules
+  ACCOUNT ||--o{ RAIL_RATE_PERIOD : pays
+  OPERATOR ||--o{ RAIL_RATE_PERIOD : operates
+  TOKEN ||--o{ RAIL_RATE_PERIOD : denominates
   RAIL ||--o{ SETTLEMENT : produces
   RAIL ||--o{ ONE_TIME_PAYMENT : produces
+  ACCOUNT ||--o{ ONE_TIME_PAYMENT : pays
+  OPERATOR ||--o{ ONE_TIME_PAYMENT : operates
   TOKEN ||--o{ SETTLEMENT : denominates
   TOKEN ||--o{ ONE_TIME_PAYMENT : denominates
   TOKEN ||--o{ FEE_AUCTION_PURCHASE : auctions
@@ -125,13 +131,14 @@ These entities are mutable projections. Their IDs make each row represent a stab
 | `OperatorApproval` | client + operator + token | Current approval and usage for one client/operator/token tuple |
 | `OperatorToken` | operator + token | Token-denominated totals aggregated across an operator's clients |
 | `Rail` | byte representation of rail ID | Current rail configuration, lifecycle state, participants, and cumulative totals |
+| `RailRatePeriod` | opening event transaction hash + log index | Event-derived scheduled-rate interval, denormalized for payer, operator, and token queries |
 | `RateChangeQueue` | rail ID + interval start epoch | A persistent closed prior-rate interval used to reconstruct settlement lockup reduction |
 
 Relationships such as `Account.userTokens` and `Rail.settlements` use `@derivedFrom`. The child stores the foreign key; the parent collection is resolved at query time.
 
 ### Immutable event records
 
-`Settlement`, `OneTimePayment`, and `FeeAuctionPurchase` are immutable. Their IDs combine transaction hash and log index, so several relevant events in one transaction remain distinct.
+`Settlement`, `OneTimePayment`, and `FeeAuctionPurchase` are immutable. Their IDs combine transaction hash and log index, so several relevant events in one transaction remain distinct. `OneTimePayment` stores the rail's payer, operator, and token so account spend can be paged and filtered without nested rail collections.
 
 These rows retain transaction-level history while mutable entities hold current state and cumulative totals.
 
@@ -189,7 +196,23 @@ Termination stores `endEpoch` and removes the rail's rate from active lockup rat
 
 ## Historical rate intervals
 
-The contract's rate queue is settlement bookkeeping that can dequeue processed rates. The subgraph's `RateChangeQueue` is a persistent historical projection: created rows are not deleted after settlement.
+The subgraph keeps two rate projections because settlement accounting and analytics have different completeness rules.
+
+### Scheduled-rate timeline
+
+`RailRatePeriod` is the event-derived analytics timeline. Every rail starts with a zero-rate period whose ID comes from the `RailCreated` transaction hash and log index. `Rail.createdAtEpoch` stores the creation block, and `Rail.currentRatePeriod` points to the period that owns the current rate.
+
+Periods use the interval `(startEpoch, untilEpoch]`. A rate change in block B closes the prior period at B and starts the replacement at B, so the old rate applies through B and the new rate applies from B + 1. When creation and activation or several changes occur in one block, the mapping updates that block's existing period instead of creating empty intervals. A no-op event where `oldRate == newRate` does not touch the timeline.
+
+Before a real change, the mapping requires the current period to exist, match `oldRate`, and start no later than the event block. A violation aborts indexing instead of continuing with a corrupt timeline.
+
+Termination normally caps the current period at the emitted inclusive `endEpoch`. An underfunded account can emit an `endEpoch` before a newly created zero-rate period starts; in that case, the period is capped at its own `startEpoch` to represent an empty interval while `Rail.endEpoch` retains the emitted value. A later permitted decrease before the termination epoch splits the period at the change block and copies the cap to the replacement. `RailSettled` and `RailFinalized` leave this timeline unchanged.
+
+The payer, operator, and token foreign keys are copied onto every period. This supports top-level, cursor-paged spend queries without loading rails and their nested histories.
+
+### Settlement rate queue
+
+The contract's rate queue is settlement bookkeeping that can dequeue processed rates. The subgraph's `RateChangeQueue` is a persistent projection of that accounting model: created rows are not deleted after settlement.
 
 Each row describes a closed prior-rate interval:
 
@@ -197,7 +220,7 @@ Each row describes a closed prior-rate interval:
 (startEpoch, untilEpoch] at rate
 ```
 
-The new current rate is stored on `Rail.paymentRate`, not in the queue.
+The new current rate is stored on `Rail.paymentRate`, not in the queue. Unlike `RailRatePeriod`, the queue intentionally omits transitions that settlement accounting does not need.
 
 ```mermaid
 flowchart TD
