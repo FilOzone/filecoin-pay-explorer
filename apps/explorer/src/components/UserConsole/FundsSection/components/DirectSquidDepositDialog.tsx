@@ -140,6 +140,9 @@ export function DirectSquidDepositDialog({
   const initialSourceChainId = initialSource?.chainId;
   const initialSourceDecimals = initialSource?.decimals;
   const initialSourceToken = initialSource?.token;
+  // The prefill is applied once per verified source, so later renders (a pending
+  // marker clearing, for instance) cannot overwrite what the user typed since.
+  const appliedInitialSource = useRef("");
   const payingWallet =
     wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
     wallets.find((wallet) => wallet.address.toLowerCase() === recipient?.toLowerCase()) ??
@@ -300,8 +303,11 @@ export function DirectSquidDepositDialog({
   ]);
 
   useEffect(() => {
+    if (!open) {
+      appliedInitialSource.current = "";
+      return;
+    }
     if (
-      !open ||
       initialSourceAmount === undefined ||
       initialSourceChainId === undefined ||
       initialSourceDecimals === undefined ||
@@ -309,6 +315,9 @@ export function DirectSquidDepositDialog({
       pending
     )
       return;
+    const sourceKey = `${initialSourceChainId}:${initialSourceToken.toLowerCase()}:${initialSourceAmount}`;
+    if (appliedInitialSource.current === sourceKey) return;
+    appliedInitialSource.current = sourceKey;
     setSourceChainId(initialSourceChainId);
     setSourceTokenAddress(initialSourceToken);
     setAmount(formatUnits(initialSourceAmount, initialSourceDecimals));
