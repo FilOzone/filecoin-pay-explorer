@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Checkbox } from "@filecoin-foundation/ui-filecoin/Checkbox";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import {
   Dialog,
@@ -836,15 +837,15 @@ export function DirectSquidDepositDialog({
                 ) : null}
               </div>
               <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
-                <input
+                <Checkbox
+                  aria-labelledby='direct-squid-fil-gas-label'
                   checked={isFilGasTopUpEnabled}
-                  className='mt-0.5 h-4 w-4 accent-primary'
+                  disabled={isBusy}
                   id='direct-squid-fil-gas'
-                  onChange={(event) => {
-                    setFilGasTopUpEnabled(event.target.checked);
+                  onChange={(checked) => {
+                    setFilGasTopUpEnabled(checked);
                     setReviewed(null);
                   }}
-                  type='checkbox'
                 />
                 <div className='grid gap-1'>
                   <Label htmlFor='direct-squid-fil-gas' id='direct-squid-fil-gas-label'>
