@@ -31,6 +31,7 @@ const topUp = vi.hoisted(() => ({ setActive: vi.fn() }));
 const query = vi.hoisted(() => ({
   allowance: 100_000_000n,
   balanceIsError: false,
+  inventory: {} as Record<string, bigint | null>,
   nativeBalance: 10n ** 18n,
   quote: {
     destinationAmount: 93n,
@@ -70,7 +71,7 @@ const query = vi.hoisted(() => ({
       symbol: "USDT",
       token: "0x5555555555555555555555555555555555555555" as const,
     },
-  ],
+  ] as { chainId: number; decimals: number; name: string; symbol: string; token: `0x${string}` }[],
 }));
 connectedWallets.current.push(wallet);
 
@@ -91,7 +92,7 @@ vi.mock("@tanstack/react-query", () => ({
       return { data: query.tokens, isError: false, isPending: false, refetch: vi.fn() };
     }
     if (queryKey[0] === "squid" && queryKey[1] === "source-token-balances") {
-      return { data: { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n }, isPending: false };
+      return { data: query.inventory, isPending: false };
     }
     if (queryKey[0] === "direct-squid-deposit-balances") {
       return {
@@ -194,6 +195,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
     query.allowance = 100_000_000n;
     query.balanceIsError = false;
+    query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
     query.nativeBalance = 10n ** 18n;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
@@ -312,6 +314,46 @@ describe("DirectSquidDepositDialog safety integration", () => {
       quoteOnly: false,
     });
     expect(state.execute.mock.calls[0][0].request.sourceToken).toBe(USDT);
+  });
+
+  it("labels duplicate symbols with their address", async () => {
+    const original = query.tokens;
+    query.tokens = [...original, { ...original[0], token: OTHER }];
+    try {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      const labels = renderer.root.findAllByType("option").map((option) => option.children.join(""));
+      expect(labels).toEqual(["USDC (0x4444...4444)", "USDT", "USDC (0x3333...3333)"]);
+    } finally {
+      query.tokens = original;
+    }
+  });
+
+  it("keeps the selected token when a balance refresh reorders the list", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    const select = () => renderer.root.findByProps({ "aria-label": "Source token" });
+    expect(select().props.value).toBe(USDC);
+    expect(
+      select()
+        .findAllByType("option")
+        .map((option) => option.props.value),
+    ).toEqual([USDC, USDT]);
+
+    query.inventory = { [USDC.toLowerCase()]: 0n, [USDT.toLowerCase()]: 300_000_000n };
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(
+      select()
+        .findAllByType("option")
+        .map((option) => option.props.value),
+    ).toEqual([USDT, USDC]);
+    expect(select().props.value).toBe(USDC);
   });
 
   it("does not display or review retained balances after a refresh error", async () => {
