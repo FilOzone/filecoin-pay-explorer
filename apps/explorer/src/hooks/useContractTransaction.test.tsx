@@ -21,6 +21,7 @@ const wagmi = vi.hoisted(() => ({
 }));
 
 vi.mock("wagmi", () => ({
+  useConfig: () => ({}),
   useWriteContract: () => ({ writeContractAsync: wagmi.writeContractAsync, isPending: false }),
   usePublicClient: () => ({
     waitForTransactionReceipt: ({ hash }: { hash: string }) =>
@@ -28,7 +29,6 @@ vi.mock("wagmi", () => ({
   }),
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => wagmi.account }));
-vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 
 type Hook = ReturnType<typeof useContractTransaction>;
 type Options = Parameters<typeof useContractTransaction>[0];

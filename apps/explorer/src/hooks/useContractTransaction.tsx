@@ -2,9 +2,8 @@ import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
-import { usePublicClient, useWriteContract } from "wagmi";
+import { useConfig, usePublicClient, useWriteContract } from "wagmi";
 import { getAccount } from "wagmi/actions";
-import { config } from "@/services/wagmi/config";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
@@ -41,6 +40,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
   const { account, contractAddress, abi, chainId, explorerUrl } = options;
 
   const [inFlightCount, setInFlightCount] = useState(0);
+  const config = useConfig();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
   const publicClient = usePublicClient();
 
