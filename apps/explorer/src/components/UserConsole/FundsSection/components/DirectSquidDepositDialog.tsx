@@ -27,7 +27,7 @@ import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
 import { useTopUpActivity } from "../../TopUpActivityContext";
-import { filecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
+import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import {
   getSourceTokenBalance,
@@ -237,11 +237,12 @@ export function DirectSquidDepositDialog({
     refetchOnMount: "always",
     retry: 1,
   });
-  const recipientFilStatus = filecoinGasBalanceStatus(
-    recipientFilQuery.data,
-    recipientFilQuery.isFetching,
-    recipientFilQuery.isError,
-  );
+  // Defaults the top-up on for any wallet below the fee reserve, matching the Add Service guard.
+  const recipientFilStatus = getFilecoinGasBalanceStatus({
+    balance: recipientFilQuery.data,
+    isError: recipientFilQuery.isError,
+    isLoading: recipientFilQuery.isFetching,
+  });
   const quoteQuery = useQuery({
     enabled:
       open &&
@@ -635,7 +636,7 @@ export function DirectSquidDepositDialog({
     requiredNative !== null &&
     balancesQuery.data.native >= requiredNative;
   const isBusy = stage !== null;
-  const hasRecipientFil = !recipientFilQuery.isError && recipientFilQuery.data != null && recipientFilQuery.data > 0n;
+  const hasRecipientFil = recipientFilStatus === "funded";
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
   const reviewedSourceChain = reviewed
     ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === reviewed.context.sourceChainId)
@@ -904,7 +905,7 @@ export function DirectSquidDepositDialog({
                   <p className='text-xs text-muted-foreground'>
                     {hasRecipientFil
                       ? "You already have FIL for fees. "
-                      : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
+                      : "Your wallet does not have enough FIL for fees. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
                     The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.
                   </p>
                   {quote?.filGasTopUp ? (

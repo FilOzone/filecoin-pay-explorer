@@ -23,7 +23,7 @@ import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
 import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
-import { FIL_GAS_TOP_UP_AMOUNT } from "@/components/UserConsole/FundsSection/data/squid-deposit-route";
+import { FIL_TRANSACTION_FEE_RESERVE } from "@/components/UserConsole/FundsSection/data/filecoin-gas-balance";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -123,7 +123,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
   const filFaucet = constants.faucets?.find((faucet) => faucet.name.toLowerCase().includes("fil"));
-  const requiredFil = formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18);
+  const requiredFil = formatUnits(FIL_TRANSACTION_FEE_RESERVE, 18);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
   useEffect(() => {

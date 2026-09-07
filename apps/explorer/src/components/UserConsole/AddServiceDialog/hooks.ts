@@ -17,8 +17,7 @@ import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
-import { filecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
-import { FIL_GAS_TOP_UP_AMOUNT } from "../FundsSection/data/squid-deposit-route";
+import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -237,15 +236,14 @@ export function useFilecoinGasBalance(open: boolean) {
     chainId: constants.chain.id,
     query: { enabled: !!owner && open, refetchInterval: open ? 15_000 : false, refetchOnMount: "always" },
   });
-  const status = filecoinGasBalanceStatus(
-    query.data?.value,
-    query.isFetching && query.data === undefined,
-    query.isError,
-    FIL_GAS_TOP_UP_AMOUNT,
-  );
+  const status = getFilecoinGasBalanceStatus({
+    balance: query.data?.value,
+    isError: query.isError,
+    isLoading: query.isFetching && query.data === undefined,
+  });
   const refresh = async () => {
     const result = await query.refetch();
-    return filecoinGasBalanceStatus(result.data?.value, false, result.isError, FIL_GAS_TOP_UP_AMOUNT);
+    return getFilecoinGasBalanceStatus({ balance: result.data?.value, isError: result.isError, isLoading: false });
   };
   return {
     chainId,
