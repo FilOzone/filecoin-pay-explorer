@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -599,61 +600,70 @@ export function DirectSquidDepositDialog({
             <>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-wallet'>Paying wallet</Label>
-                <select
-                  id='direct-squid-wallet'
-                  className='h-10 rounded-md border bg-background px-3'
+                <Select
                   disabled={busy}
-                  value={payingWallet?.address ?? ""}
-                  onChange={(event) => {
-                    setPayingAddress(event.target.value);
+                  onValueChange={(value) => {
+                    setPayingAddress(value);
                     setReviewed(null);
                   }}
+                  value={payingWallet?.address ?? ""}
                 >
-                  {wallets.map((wallet) => (
-                    <option key={wallet.address} value={wallet.address}>
-                      {formatAddress(wallet.address)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id='direct-squid-wallet' className='w-full'>
+                    <SelectValue placeholder='Select a wallet' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {wallets.map((wallet) => (
+                      <SelectItem key={wallet.address} value={wallet.address}>
+                        {formatAddress(wallet.address)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-chain'>Source network</Label>
-                <select
-                  id='direct-squid-chain'
-                  className='h-10 rounded-md border bg-background px-3'
+                <Select
                   disabled={busy}
-                  value={sourceChainId}
-                  onChange={(event) => {
-                    setSourceChainId(Number(event.target.value));
+                  onValueChange={(value) => {
+                    setSourceChainId(Number(value));
                     setSourceTokenAddress("");
                     setReviewed(null);
                   }}
+                  value={String(sourceChainId)}
                 >
-                  {SQUID_SOURCE_CHAINS.filter((chain) => chain.id !== mainnet.id).map((chain) => (
-                    <option key={chain.id} value={chain.id}>
-                      {chain.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id='direct-squid-chain' className='w-full'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SQUID_SOURCE_CHAINS.filter((chain) => chain.id !== mainnet.id).map((chain) => (
+                      <SelectItem key={chain.id} value={String(chain.id)}>
+                        {chain.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-token'>USDC token</Label>
-                <select
-                  id='direct-squid-token'
-                  className='h-10 rounded-md border bg-background px-3'
+                <Select
                   disabled={busy || tokensQuery.isPending}
-                  value={sourceToken?.token ?? ""}
-                  onChange={(event) => {
-                    setSourceTokenAddress(event.target.value);
+                  onValueChange={(value) => {
+                    setSourceTokenAddress(value);
                     setReviewed(null);
                   }}
+                  value={sourceToken?.token ?? ""}
                 >
-                  {(tokensQuery.data ?? []).map((token) => (
-                    <option key={token.token} value={token.token}>
-                      {token.symbol} ({formatAddress(token.token)})
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id='direct-squid-token' className='w-full'>
+                    <SelectValue placeholder='Select a token' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(tokensQuery.data ?? []).map((token) => (
+                      <SelectItem key={token.token} value={token.token}>
+                        {token.symbol} ({formatAddress(token.token)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-amount'>Amount (USDC)</Label>
