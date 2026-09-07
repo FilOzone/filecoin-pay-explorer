@@ -5,7 +5,7 @@ import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/reac
 import { toast } from "sonner";
 import { useConnection } from "wagmi";
 import { consoleWalletSelector } from "@/components/UserConsole/console-wallet";
-import { getWalletEntryState } from "./state";
+import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
@@ -15,10 +15,16 @@ const CustomConnectButton = () => {
   const { ready: walletsReady } = useWallets();
   const { isConnected } = useConnection();
   const { login } = useLogin({
-    onError: (error) => toast.error("Unable to log in", { description: error }),
+    onError: (code) => {
+      if (isUserCancelledFlow(code)) return;
+      toast.error("Unable to log in", { description: code });
+    },
   });
   const { connectWallet } = useConnectWallet({
-    onError: (error) => toast.error("Unable to connect wallet", { description: error }),
+    onError: (code) => {
+      if (isUserCancelledFlow(code)) return;
+      toast.error("Unable to connect wallet", { description: code });
+    },
   });
   const { exit } = useWalletExit();
   const state = getWalletEntryState({ ready, walletsReady, authenticated, isConnected });

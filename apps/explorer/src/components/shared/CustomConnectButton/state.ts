@@ -7,6 +7,11 @@ export const WALLET_EXIT_LABEL: Record<WalletExitAction, string> = {
   "manual-disconnect": "Disconnect in wallet",
 };
 
+// Privy reports a closed login or connect modal through onError; it is not a failure.
+const USER_CANCELLED_FLOW_CODES = new Set(["exited_auth_flow", "exited_link_flow"]);
+
+export const isUserCancelledFlow = (errorCode: string): boolean => USER_CANCELLED_FLOW_CODES.has(errorCode);
+
 export const getWalletEntryState = ({
   ready,
   walletsReady,

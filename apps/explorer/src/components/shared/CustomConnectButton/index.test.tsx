@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { act, create } from "react-test-renderer";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomConnectButton from ".";
 
@@ -9,14 +10,20 @@ const mocks = vi.hoisted(() => ({
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
   resume: vi.fn(),
   walletsReady: false,
+  loginOnError: undefined as ((code: string) => void) | undefined,
 }));
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   Button: ({ children }: { children: React.ReactNode }) => <button type='button'>{children}</button>,
 }));
 vi.mock("@privy-io/react-auth", () => ({
   useConnectWallet: () => ({ connectWallet: vi.fn() }),
-  useLogin: () => ({ login: vi.fn() }),
+  useLogin: ({ onError }: { onError: (code: string) => void }) => {
+    mocks.loginOnError = onError;
+    return { login: vi.fn() };
+  },
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => mocks.privy,
   useWallets: () => ({ ready: mocks.walletsReady }),
@@ -58,5 +65,19 @@ describe("CustomConnectButton", () => {
     expect(mocks.logout).toHaveBeenCalledOnce();
     expect(mocks.pause.mock.invocationCallOrder[0]).toBeLessThan(mocks.logout.mock.invocationCallOrder[0]);
     expect(mocks.resume).not.toHaveBeenCalled();
+  });
+});
+
+describe("CustomConnectButton login errors", () => {
+  it("ignores a closed login modal but reports real login failures", () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    renderToStaticMarkup(<CustomConnectButton />);
+
+    mocks.loginOnError?.("exited_auth_flow");
+    expect(toast.error).not.toHaveBeenCalled();
+
+    mocks.loginOnError?.("invalid_credentials");
+    expect(toast.error).toHaveBeenCalledWith("Unable to log in", { description: "invalid_credentials" });
   });
 });
