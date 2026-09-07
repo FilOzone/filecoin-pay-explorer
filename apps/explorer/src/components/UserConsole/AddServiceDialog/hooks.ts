@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { erc20Abi, type Hex, isAddress, zeroAddress } from "viem";
 import {
@@ -228,8 +228,7 @@ export function useTokenSelection(open: boolean): TokenSelection {
 
 export function useFilecoinGasBalance(open: boolean) {
   const { constants } = useSynapse();
-  const { address: owner } = useAccount();
-  const { chainId } = useConnection();
+  const { address: owner, chainId } = useConnection();
   const { isPending: isSwitchingNetwork, switchChain } = useSwitchChain();
   const query = useBalance({
     address: owner,
@@ -241,10 +240,11 @@ export function useFilecoinGasBalance(open: boolean) {
     isError: query.isError,
     isLoading: query.isFetching && query.data === undefined,
   });
-  const refresh = async () => {
-    const result = await query.refetch();
+  const { refetch } = query;
+  const refresh = useCallback(async () => {
+    const result = await refetch();
     return getFilecoinGasBalanceStatus({ balance: result.data?.value, isError: result.isError, isLoading: false });
-  };
+  }, [refetch]);
   return {
     chainId,
     isCorrectChain: chainId === constants.chain.id,
