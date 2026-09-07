@@ -4,7 +4,7 @@ import { useFiatOnramp, useLogin, usePrivy } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { erc20Abi, getAddress, isAddress } from "viem";
+import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { config } from "@/services/wagmi/config";
@@ -23,25 +23,25 @@ type StorageLike = Pick<Storage, "getItem" | "removeItem" | "setItem">;
 
 const CARD_PURCHASE_STORAGE_PREFIX = "filecoin-pay:card-purchase:v1";
 
-function cardPurchaseStorageKey(recipient: string) {
+function getCardPurchaseStorageKey(recipient: string) {
   return `${CARD_PURCHASE_STORAGE_PREFIX}:${recipient.toLowerCase()}`;
 }
 
-function cardPurchaseStorage(): StorageLike {
+function getCardPurchaseStorage(): StorageLike {
   if (typeof window === "undefined") throw new Error("Card purchase recovery requires browser storage");
   return window.localStorage;
 }
 
 function savePendingCardPurchase(pending: PurchaseContext) {
-  cardPurchaseStorage().setItem(
-    cardPurchaseStorageKey(pending.recipient),
+  getCardPurchaseStorage().setItem(
+    getCardPurchaseStorageKey(pending.recipient),
     JSON.stringify({ ...pending, before: pending.before.toString() }),
   );
 }
 
 function loadPendingCardPurchase(recipient: string): PurchaseContext | null {
   try {
-    const value = cardPurchaseStorage().getItem(cardPurchaseStorageKey(recipient));
+    const value = getCardPurchaseStorage().getItem(getCardPurchaseStorageKey(recipient));
     if (!value) return null;
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (
@@ -60,7 +60,7 @@ function loadPendingCardPurchase(recipient: string): PurchaseContext | null {
 }
 
 function clearPendingCardPurchase(recipient: string) {
-  cardPurchaseStorage().removeItem(cardPurchaseStorageKey(recipient));
+  getCardPurchaseStorage().removeItem(getCardPurchaseStorageKey(recipient));
 }
 
 export async function waitForPurchasedUsdc({
@@ -89,6 +89,16 @@ export async function waitForPurchasedUsdc({
   return { status: isCurrent() ? "delayed" : "changed" };
 }
 
+function readUsdcBalance(client: Pick<PublicClient, "readContract">, recipient: `0x${string}`) {
+  return client.readContract({ abi: erc20Abi, address: CARD_USDC, args: [recipient], functionName: "balanceOf" });
+}
+
+function reportWalletChanged() {
+  toast.error("Wallet changed during card purchase", {
+    description: "Return to the original wallet to check for purchased USDC before starting again.",
+  });
+}
+
 function isFundingExit(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error && error.code === 4001) return true;
   const message = (error instanceof Error ? error.message : typeof error === "string" ? error : "").trim();
@@ -100,7 +110,7 @@ function isFundingExit(error: unknown) {
   );
 }
 
-function onrampEnvironment() {
+function getOnrampEnvironment() {
   return /^(1|true|yes|on)$/i.test(process.env.NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX?.trim() ?? "")
     ? "sandbox"
     : "production";
@@ -122,14 +132,14 @@ export function useCardPurchase({
   const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "waiting">("idle");
   const continueAfterLogin = useRef<LoginContext | null>(null);
   const pendingPurchase = useRef<PurchaseContext | null>(null);
-  const mounted = useRef(true);
+  const isMounted = useRef(true);
   const latestContext = useRef(contextKey);
   latestContext.current = contextKey;
 
   useEffect(() => {
-    mounted.current = true;
+    isMounted.current = true;
     return () => {
-      mounted.current = false;
+      isMounted.current = false;
     };
   }, []);
 
@@ -141,12 +151,9 @@ export function useCardPurchase({
   }, [address]);
 
   const isCurrent = ({ contextKey: startedContext, recipient }: LoginContext) =>
-    mounted.current &&
+    isMounted.current &&
     latestContext.current === startedContext &&
     getAccount(config).address?.toLowerCase() === recipient.toLowerCase();
-  const read = (recipient: `0x${string}`) =>
-    publicClient?.readContract({ abi: erc20Abi, address: CARD_USDC, args: [recipient], functionName: "balanceOf" });
-
   const checkPendingPurchase = async (submitted = false) => {
     const pending = pendingPurchase.current;
     if (!pending || !publicClient) return;
@@ -155,20 +162,12 @@ export function useCardPurchase({
     const landed = await waitForPurchasedUsdc({
       before: pending.before,
       isCurrent: current,
-      read: () =>
-        publicClient.readContract({
-          abi: erc20Abi,
-          address: CARD_USDC,
-          args: [pending.recipient],
-          functionName: "balanceOf",
-        }),
+      read: () => readUsdcBalance(publicClient, pending.recipient),
     });
     if (landed.status === "changed") {
-      if (mounted.current) {
+      if (isMounted.current) {
         setStatus("delayed");
-        toast.error("Wallet changed during card purchase", {
-          description: "Return to the original wallet to check for purchased USDC before starting again.",
-        });
+        reportWalletChanged();
       }
       return;
     }
@@ -198,21 +197,21 @@ export function useCardPurchase({
     setStatus("opening");
     try {
       if (!isCurrent(intent)) {
-        if (mounted.current) setStatus("idle");
+        if (isMounted.current) setStatus("idle");
         return;
       }
       const pending = await withSquidAcquisitionLock(globalThis.navigator?.locks, intent.recipient, async () => {
         const existing = loadPendingCardPurchase(intent.recipient);
         if (existing) return existing;
-        const before = await read(intent.recipient);
-        if (before === undefined || !isCurrent(intent)) return null;
+        const before = await readUsdcBalance(publicClient, intent.recipient);
+        if (!isCurrent(intent)) return null;
         const next = { before, ...intent };
         savePendingCardPurchase(next);
         claimed = true;
         return next;
       });
       if (!pending) {
-        if (mounted.current) setStatus("idle");
+        if (isMounted.current) setStatus("idle");
         return;
       }
       pendingPurchase.current = pending;
@@ -223,13 +222,11 @@ export function useCardPurchase({
       const result = await fund({
         source: {},
         destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
-        environment: onrampEnvironment(),
+        environment: getOnrampEnvironment(),
       });
       if (!isCurrent(intent)) {
         setStatus("delayed");
-        toast.error("Wallet changed during card purchase", {
-          description: "Return to the original wallet to check for purchased USDC before starting again.",
-        });
+        reportWalletChanged();
         return;
       }
       await checkPendingPurchase(result.status === "submitted");
@@ -247,7 +244,7 @@ export function useCardPurchase({
           description: error instanceof Error ? error.message : "Privy card funding is unavailable.",
         });
       }
-      if (mounted.current) setStatus("idle");
+      if (isMounted.current) setStatus("idle");
     }
   };
 
@@ -257,7 +254,7 @@ export function useCardPurchase({
       continueAfterLogin.current = null;
       if (!intent) return;
       if (!isCurrent(intent)) {
-        if (mounted.current) {
+        if (isMounted.current) {
           setStatus("idle");
           toast.error("Wallet changed during login", {
             description: "Return to Add funds from the account you want to fund.",
@@ -269,7 +266,7 @@ export function useCardPurchase({
     },
     onError: () => {
       continueAfterLogin.current = null;
-      if (mounted.current) setStatus("idle");
+      if (isMounted.current) setStatus("idle");
     },
   });
 
