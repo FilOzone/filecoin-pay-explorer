@@ -99,6 +99,10 @@ function reportWalletChanged() {
   });
 }
 
+function reportBaseClientUnavailable() {
+  toast.error("Card purchase unavailable", { description: "The Base network client is not configured." });
+}
+
 function isFundingExit(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error && error.code === 4001) return true;
   const message = (error instanceof Error ? error.message : typeof error === "string" ? error : "").trim();
@@ -156,7 +160,8 @@ export function useCardPurchase({
     getAccount(config).address?.toLowerCase() === recipient.toLowerCase();
   const checkPendingPurchase = async (submitted = false) => {
     const pending = pendingPurchase.current;
-    if (!pending || !publicClient) return;
+    if (!pending) return;
+    if (!publicClient) return reportBaseClientUnavailable();
     const current = () => isCurrent(pending);
     setStatus("waiting");
     const landed = await waitForPurchasedUsdc({
@@ -190,7 +195,7 @@ export function useCardPurchase({
   };
 
   const purchase = async (requested?: LoginContext) => {
-    if (!publicClient) return;
+    if (!publicClient) return reportBaseClientUnavailable();
     const intent = requested ?? { contextKey, recipient: getAddress(address) };
     let claimed = false;
 
