@@ -8,15 +8,18 @@ export type SquidDepositContextSnapshot = {
   sourceAmount: bigint;
 };
 
+/** What the dialog currently shows, compared against the reviewed snapshot before every signature. */
+export type SquidDepositLiveContext = {
+  open: boolean;
+  recipient?: string;
+  owner?: string;
+  chainId: number;
+  token?: string;
+  amount?: bigint;
+};
+
 export function assertSquidDepositContext(
-  current: {
-    open: boolean;
-    recipient?: string;
-    owner?: string;
-    chainId: number;
-    token?: string;
-    amount?: bigint;
-  },
+  current: SquidDepositLiveContext,
   reviewed: SquidDepositContextSnapshot,
   liveRecipient: Address | undefined,
   mounted: boolean,
