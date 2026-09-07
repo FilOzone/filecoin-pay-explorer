@@ -81,7 +81,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
       return;
     }
 
-    if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (parsedAmount === null || parsedAmount <= 0n) {
       console.log("Invalid amount");
       return;
     }
@@ -102,12 +102,9 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
     }
 
     try {
-      const amountInWei = parseUnits(amount, token.decimals);
-
-      // Execute transaction with rich metadata
       await execute({
         functionName: "withdrawTo",
-        args: [token.address, userAddress, amountInWei],
+        args: [token.address, userAddress, parsedAmount],
         metadata: {
           type: "withdraw",
           amount,
@@ -147,7 +144,18 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
 
   const lockupRate = accountInfo ? (accountInfo as AccountInfo)[3] : 0n;
 
-  const canWithdraw = accountInfo && parseUnits(amount, currentToken.decimals) <= (accountInfo as AccountInfo)[2];
+  // viem rejects an empty or malformed amount, and <input type=number> accepts
+  // values it rejects (such as 1e5), so parse once and treat failures as "no amount".
+  const parsedAmount = (() => {
+    if (!amount.trim()) return null;
+    try {
+      return parseUnits(amount.trim(), currentToken.decimals);
+    } catch {
+      return null;
+    }
+  })();
+  const hasAvailableFunds = !!accountInfo && (parsedAmount === null || parsedAmount <= (accountInfo as AccountInfo)[2]);
+  const canWithdraw = hasAvailableFunds && parsedAmount !== null && parsedAmount > 0n;
   const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
 
   return (
@@ -241,7 +249,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
                 </p>
               )}
               <p className='text-xs text-red-500'>
-                {canWithdraw ? "" : "Insufficient Available funds in contract account"}
+                {hasAvailableFunds ? "" : "Insufficient Available funds in contract account"}
               </p>
             </div>
           )}
