@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { exitWalletSession, getWalletEntryState, getWalletExitAction } from "./state";
+import { exitWalletSession, getWalletEntryState, getWalletExitAction, isUserCancelledFlow } from "./state";
 
 describe("getWalletEntryState", () => {
   it("waits for Privy before presenting login actions", () => {
@@ -85,5 +85,13 @@ describe("getWalletExitAction", () => {
       }),
     ).rejects.toThrow(error);
     expect(resumeSelection).toHaveBeenCalledOnce();
+  });
+});
+
+describe("isUserCancelledFlow", () => {
+  it("treats a closed Privy modal as a cancellation rather than a failure", () => {
+    expect(isUserCancelledFlow("exited_auth_flow")).toBe(true);
+    expect(isUserCancelledFlow("exited_link_flow")).toBe(true);
+    expect(isUserCancelledFlow("invalid_credentials")).toBe(false);
   });
 });
