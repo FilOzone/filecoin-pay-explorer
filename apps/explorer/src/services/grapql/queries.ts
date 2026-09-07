@@ -72,6 +72,10 @@ export const GET_RECENT_OPERATORS = gql`
     }
   }
 `;
+/**
+ * Active approvals used to discover recognized services across all accounts.
+ * Cursoring by ordered ID provides deterministic pagination without `skip`.
+ */
 export const GET_APPROVED_OPERATOR_CLIENTS = gql`
   query GetApprovedOperatorClients($first: Int = 1000, $cursor: Bytes! = "0x") {
     operatorApprovals(first: $first, orderBy: id, orderDirection: asc, where: { isApproved: true, id_gt: $cursor }) {
@@ -81,6 +85,26 @@ export const GET_APPROVED_OPERATOR_CLIENTS = gql`
       }
       operator {
         address
+      }
+    }
+  }
+`;
+
+/**
+ * Checks one approval while polling Add Service indexing. The indexed block
+ * prevents an older matching approval from completing the current flow.
+ */
+export const GET_ACCOUNT_OPERATOR_TOKEN_APPROVAL = gql`
+  query GetAccountOperatorTokenApproval($accountId: Bytes!, $operatorId: Bytes!, $tokenId: Bytes!) {
+    operatorApprovals(
+      first: 1
+      where: { client: $accountId, operator: $operatorId, token: $tokenId, isApproved: true }
+    ) {
+      id
+    }
+    _meta {
+      block {
+        number
       }
     }
   }

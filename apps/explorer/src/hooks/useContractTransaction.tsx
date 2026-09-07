@@ -25,7 +25,7 @@ interface ExecuteTransactionParams {
 }
 
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
-  const { contractAddress, abi, explorerUrl, onSuccess, onError } = options;
+  const { contractAddress, abi, chainId, explorerUrl, onSuccess, onError } = options;
 
   const [transactions, setTransactions] = useState<
     Map<Hex, { toastId: string | number; metadata: TransactionMetadata }>
@@ -40,6 +40,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
     isError,
     error,
   } = useWaitForTransactionReceipt({
+    chainId,
     hash: currentTxHash,
     query: {
       enabled: !!currentTxHash,
@@ -136,6 +137,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         functionName,
         args,
         value,
+        chainId,
       });
 
       onSubmitOnChain?.();

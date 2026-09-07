@@ -14,6 +14,12 @@ export function getNetworkFromChainId(chainId: number | undefined): Network {
   return chain?.slug || DEFAULT_NETWORK;
 }
 
+export function getChainIdFromNetwork(network: Network): number {
+  const chain = supportedChains.find((c) => c.slug === network);
+  if (!chain) throw new Error(`No supported chain for network "${network}"`);
+  return chain.id;
+}
+
 function parseEligibleNetwork(): Network {
   const raw = (process.env.NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS ?? "mainnet").trim();
   return supportedChains.some((c) => c.slug === raw) ? (raw as Network) : "mainnet";
