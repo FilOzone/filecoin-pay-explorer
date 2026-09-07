@@ -54,6 +54,7 @@ import {
   isNativeToken,
   planFilGasTopUp,
   requestSquidDepositRoute,
+  type SquidClient,
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
 } from "../data/squid-deposit-route";
@@ -112,7 +113,7 @@ export function DirectSquidDepositDialog({
   const [sourceChainId, setSourceChainId] = useState(DEFAULT_SOURCE_CHAIN);
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [includeFilGas, setIncludeFilGas] = useState(true);
+  const [isFilGasTopUpEnabled, setFilGasTopUpEnabled] = useState(true);
   const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositStage | "preparing" | null>(null);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
@@ -137,7 +138,7 @@ export function DirectSquidDepositDialog({
   const sourceChain = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChainId);
   const sourceClient = usePublicClient({ chainId: sourceChainId });
   const destinationClient = usePublicClient({ chainId: mainnet.id });
-  const squid = useMemo(
+  const squid = useMemo<SquidClient>(
     () => ({
       fetch: squidFetch,
       integratorId:
@@ -242,8 +243,8 @@ export function DirectSquidDepositDialog({
         sourceToken: sourceToken.token,
       };
       const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
-      if (!includeFilGas) return quote;
-      const filGasTopUp = planFilGasTopUp(quote, Date.now);
+      if (!isFilGasTopUpEnabled) return quote;
+      const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
       if (!filGasTopUp) {
         throw new Error(
           "Squid could not safely add 0.25 FIL for this amount. Increase the amount or turn off the FIL option.",
@@ -258,7 +259,7 @@ export function DirectSquidDepositDialog({
       sourceChainId,
       sourceToken?.token,
       parsedAmount?.toString(),
-      includeFilGas,
+      isFilGasTopUpEnabled,
     ],
     retry: false,
   });
@@ -280,7 +281,7 @@ export function DirectSquidDepositDialog({
     if (!recipient || recipientFilQuery.isFetching) return;
     if (initializedFilGasScope.current === recipient) return;
     initializedFilGasScope.current = recipient;
-    setIncludeFilGas(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
+    setFilGasTopUpEnabled(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
   }, [open, recipient, recipientFilQuery.data, recipientFilQuery.isError, recipientFilQuery.isFetching]);
 
   useEffect(() => {
@@ -835,11 +836,11 @@ export function DirectSquidDepositDialog({
               </div>
               <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
                 <input
-                  checked={includeFilGas}
+                  checked={isFilGasTopUpEnabled}
                   className='mt-0.5 h-4 w-4 accent-primary'
                   id='direct-squid-fil-gas'
                   onChange={(event) => {
-                    setIncludeFilGas(event.target.checked);
+                    setFilGasTopUpEnabled(event.target.checked);
                     setReviewed(null);
                   }}
                   type='checkbox'
