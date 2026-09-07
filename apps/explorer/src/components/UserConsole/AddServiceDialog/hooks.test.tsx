@@ -1,7 +1,7 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getPermitDomainSeparator } from "@/utils/permit";
-import { CUSTOM_OPTION, useAddServiceSubmit, useTokenSelection } from "./hooks";
+import { CUSTOM_OPTION, useAddServiceSubmit, useFilecoinGasBalance, useTokenSelection } from "./hooks";
 
 const TOKEN = "0x1111111111111111111111111111111111111111" as const;
 const OWNER = "0x2222222222222222222222222222222222222222" as const;
@@ -10,6 +10,9 @@ const OPERATOR = "0x4444444444444444444444444444444444444444" as const;
 const CHAIN_ID = 314159;
 
 const mocks = vi.hoisted(() => ({
+  balance: { data: undefined as { value: bigint } | undefined, isError: false, isFetching: false, refetch: vi.fn() },
+  connection: { address: "0x2222222222222222222222222222222222222222", chainId: 314159 as number | undefined },
+  switchChain: vi.fn(),
   execute: vi.fn(),
   getPermitSignature: vi.fn(),
   readContracts: [] as Array<{ status: "success"; result: unknown }>,
@@ -19,6 +22,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: OWNER }),
+  useBalance: () => mocks.balance,
+  useConnection: () => mocks.connection,
+  useSwitchChain: () => ({ isPending: false, switchChain: mocks.switchChain }),
   usePublicClient: () => ({ readContract: vi.fn() }),
   useReadContract: () => ({ data: 1000n, isLoading: false }),
   useReadContracts: () => ({ data: mocks.readContracts, isLoading: false, isError: false }),
@@ -51,6 +57,58 @@ beforeEach(() => {
   });
   mocks.isExecuting = false;
   mocks.readContracts = [];
+  mocks.balance = { data: undefined, isError: false, isFetching: false, refetch: vi.fn() };
+  mocks.connection = { address: OWNER, chainId: CHAIN_ID };
+  mocks.switchChain.mockReset();
+});
+
+describe("useFilecoinGasBalance", () => {
+  function renderGasBalance() {
+    let result!: ReturnType<typeof useFilecoinGasBalance>;
+    function Harness() {
+      result = useFilecoinGasBalance(true);
+      return null;
+    }
+    act(() => {
+      create(<Harness />);
+    });
+    return () => result;
+  }
+
+  it("reports loading only until a balance exists, then compares it with the fee reserve", () => {
+    mocks.balance = { data: undefined, isError: false, isFetching: true, refetch: vi.fn() };
+    expect(renderGasBalance()().status).toBe("loading");
+
+    mocks.balance = { data: { value: 1n }, isError: false, isFetching: true, refetch: vi.fn() };
+    expect(renderGasBalance()().status).toBe("insufficient");
+
+    mocks.balance = { data: { value: 250_000_000_000_000_000n }, isError: false, isFetching: false, refetch: vi.fn() };
+    const current = renderGasBalance()();
+    expect(current).toMatchObject({
+      chainId: CHAIN_ID,
+      isCorrectChain: true,
+      owner: OWNER,
+      status: "funded",
+      targetChainId: CHAIN_ID,
+    });
+  });
+
+  it("flags a wallet on another chain and switches back on request", () => {
+    mocks.connection = { address: OWNER, chainId: 8453 };
+    const current = renderGasBalance()();
+    expect(current.isCorrectChain).toBe(false);
+    current.switchToFilecoin();
+    expect(mocks.switchChain).toHaveBeenCalledWith({ chainId: CHAIN_ID });
+  });
+
+  it("refreshes from a fresh read rather than the cached status", async () => {
+    const refetch = vi.fn(async () => ({ data: { value: 0n }, isError: false }));
+    mocks.balance = { data: { value: 250_000_000_000_000_000n }, isError: false, isFetching: false, refetch };
+    const current = renderGasBalance()();
+    expect(current.status).toBe("funded");
+    await expect(current.refresh()).resolves.toBe("insufficient");
+    expect(refetch).toHaveBeenCalledOnce();
+  });
 });
 
 describe("useTokenSelection", () => {
