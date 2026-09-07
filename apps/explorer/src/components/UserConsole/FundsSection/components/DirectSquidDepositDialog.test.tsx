@@ -143,6 +143,11 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     </button>
   ),
 }));
+vi.mock("@filecoin-foundation/ui-filecoin/Checkbox", () => ({
+  Checkbox: ({ checked, id, onChange }: { checked: boolean; id: string; onChange: (checked: boolean) => void }) => (
+    <input checked={checked} id={id} onChange={(event) => onChange(event.target.checked)} type='checkbox' />
+  ),
+}));
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
   Input: ({ onChange, ...props }: { onChange: (value: string) => void; value: string }) => (
     <input {...props} onChange={(event) => onChange(event.target.value)} />
@@ -478,7 +483,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
     await act(async () => {
-      renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.onChange({ target: { checked: false } });
+      renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.onChange(false);
     });
     await reachExecution(renderer);
 
