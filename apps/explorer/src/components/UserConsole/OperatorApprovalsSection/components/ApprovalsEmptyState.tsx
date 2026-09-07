@@ -11,8 +11,8 @@ function ApprovalsEmptyState({ onApprove }: ApprovalsEmptyStateProps) {
     <ApprovalSectionLayout handleOpenApprove={onApprove}>
       <EmptyStateCard
         titleTag='h2'
-        title='No authorized services'
-        description="You haven't authorized any services yet. Approve a service to let them manage payments on your behalf."
+        title='No services yet'
+        description='Add a service and set up a payment method.'
         icon={Shield}
       />
     </ApprovalSectionLayout>

@@ -14,7 +14,7 @@ const columnHelper = createColumnHelper<OperatorApproval & { onIncrease: (approv
 export const columns = [
   columnHelper.display({
     id: "operator",
-    header: "Operator",
+    header: "Service",
     cell: (info) => {
       const approval = info.row.original;
       return (
@@ -22,7 +22,7 @@ export const columns = [
           // to={`/operator/${approval.operator.address}`}
           value={approval.operator.address}
           monospace={true}
-          label='Operator address'
+          label='Service address'
           truncate={true}
           truncateLength={10}
         />
@@ -30,7 +30,7 @@ export const columns = [
     },
   }),
   columnHelper.accessor("token.symbol", {
-    header: "Token",
+    header: "Payment token",
     cell: (info) => {
       const symbol = info.getValue();
       return (
@@ -49,7 +49,7 @@ export const columns = [
   }),
   columnHelper.display({
     id: "allowances",
-    header: "Allowances",
+    header: "Spending limits",
     cell: (info) => {
       const approval = info.row.original;
       return (
