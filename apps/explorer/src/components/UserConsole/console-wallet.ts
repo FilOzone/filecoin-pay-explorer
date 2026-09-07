@@ -12,11 +12,12 @@ export function isPrivyEmbeddedWallet(wallet: Pick<ConnectedWallet, "walletClien
 
 export function createConsoleWalletSelector({ storage }: { storage?: () => StorageLike } = {}) {
   let lastAddress: string | undefined;
-  let paused: boolean | undefined;
+  let pauseState: boolean | undefined;
   const readStored = () => {
     try {
       return storage?.().getItem(CONSOLE_WALLET_KEY) ?? undefined;
     } catch {
+      // Storage is optional; without it the selector falls back to the login wallet or the first wallet.
       return undefined;
     }
   };
@@ -30,17 +31,17 @@ export function createConsoleWalletSelector({ storage }: { storage?: () => Stora
     }
   };
   const isPaused = () => {
-    if (paused === undefined) {
+    if (pauseState === undefined) {
       try {
-        paused = storage?.().getItem(CONSOLE_WALLET_PAUSED_KEY) === "1";
+        pauseState = storage?.().getItem(CONSOLE_WALLET_PAUSED_KEY) === "1";
       } catch {
-        paused = false;
+        pauseState = false;
       }
     }
-    return paused;
+    return pauseState;
   };
   const setPaused = (value: boolean) => {
-    paused = value;
+    pauseState = value;
     if (value) lastAddress = undefined;
     try {
       storage?.().setItem(CONSOLE_WALLET_PAUSED_KEY, value ? "1" : "0");
@@ -56,12 +57,12 @@ export function createConsoleWalletSelector({ storage }: { storage?: () => Stora
     user: Pick<User, "wallet"> | null;
   }): T | undefined => {
     if (!user && isPaused()) return undefined;
-    const byAddress = (address: string | undefined) =>
+    const findByAddress = (address: string | undefined) =>
       address ? wallets.find((wallet) => wallet.address.toLowerCase() === address.toLowerCase()) : undefined;
     const selected =
       wallets.find(isPrivyEmbeddedWallet) ??
-      byAddress(user?.wallet?.address) ??
-      byAddress(lastAddress ?? readStored()) ??
+      findByAddress(user?.wallet?.address) ??
+      findByAddress(lastAddress ?? readStored()) ??
       wallets[0];
     remember(selected?.address);
     return selected;

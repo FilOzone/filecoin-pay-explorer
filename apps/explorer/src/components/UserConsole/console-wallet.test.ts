@@ -5,6 +5,14 @@ const embedded = { address: "0x1111111111111111111111111111111111111111", wallet
 const metamask = { address: "0x2222222222222222222222222222222222222222", walletClientType: "metamask" };
 const coinbase = { address: "0x3333333333333333333333333333333333333333", walletClientType: "coinbase_wallet" };
 
+const createMemoryStorage = () => {
+  const items = new Map<string, string>();
+  return () => ({
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+  });
+};
+
 describe("createConsoleWalletSelector", () => {
   it("keeps the selected Filecoin account when another wallet connects", () => {
     const select = createConsoleWalletSelector();
@@ -18,21 +26,13 @@ describe("createConsoleWalletSelector", () => {
     const user = { wallet: { address: metamask.address.toUpperCase() } } as never;
     expect(select({ wallets: [coinbase, metamask], user })).toBe(metamask);
 
-    const items = new Map<string, string>();
-    const storage = () => ({
-      getItem: (key: string) => items.get(key) ?? null,
-      setItem: (key: string, value: string) => void items.set(key, value),
-    });
+    const storage = createMemoryStorage();
     expect(createConsoleWalletSelector({ storage })({ wallets: [metamask], user: null })).toBe(metamask);
     expect(createConsoleWalletSelector({ storage })({ wallets: [coinbase, metamask], user: null })).toBe(metamask);
   });
 
   it("does not restore a logged-out wallet until the user explicitly reconnects", () => {
-    const items = new Map<string, string>();
-    const storage = () => ({
-      getItem: (key: string) => items.get(key) ?? null,
-      setItem: (key: string, value: string) => void items.set(key, value),
-    });
+    const storage = createMemoryStorage();
     const select = createConsoleWalletSelector({ storage });
     expect(select({ wallets: [metamask], user: null })).toBe(metamask);
 
