@@ -117,7 +117,10 @@ describe("useCardPurchase", () => {
       environment: "production",
       source: {},
     });
-    expect(queries.invalidateQueries).toHaveBeenCalled();
+    expect(queries.invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ["squid", "source-token-balances", ADDRESS, 8453] }],
+      [{ queryKey: ["direct-squid-deposit-balances", 8453] }],
+    ]);
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
@@ -176,7 +179,9 @@ describe("useCardPurchase", () => {
     });
 
     expect(privy.fund).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Wallet changed during login", expect.anything());
+    expect(toast.error).toHaveBeenCalledWith("Wallet changed during login", {
+      description: "Return to Add funds from the account you want to fund.",
+    });
   });
 
   it("rechecks a delayed purchase without opening a second checkout", async () => {
@@ -259,7 +264,9 @@ describe("useCardPurchase", () => {
     await act(async () => latest.buyWithCard());
 
     expect(onPurchased).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Wallet changed during card purchase", expect.anything());
+    expect(toast.error).toHaveBeenCalledWith("Wallet changed during card purchase", {
+      description: "Return to the original wallet to check for purchased USDC before starting again.",
+    });
   });
 
   it("keeps cancellation recoverable and reports provider failures", async () => {
