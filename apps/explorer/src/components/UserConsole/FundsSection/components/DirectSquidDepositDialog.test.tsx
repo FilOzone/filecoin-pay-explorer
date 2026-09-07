@@ -36,6 +36,7 @@ const query = vi.hoisted(() => ({
   recipientFil: 0n,
   recipientFilIsError: false,
   recipientFilIsFetching: false,
+  quoteEnabled: undefined as boolean | undefined,
   filGasTopUp: {
     deadline: 1_700_604_800n,
     minimumFil: 250_000_000_000_000_000n,
@@ -95,7 +96,7 @@ vi.mock("../../TopUpActivityContext", () => ({
 }));
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
-  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+  useQuery: ({ enabled, queryKey }: { enabled?: boolean; queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "squid-payment-tokens") {
       return { data: query.tokens, isError: false, isPending: false, refetch: vi.fn() };
     }
@@ -118,6 +119,7 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     if (queryKey[0] === "direct-squid-deposit-quote") {
+      query.quoteEnabled = enabled;
       return {
         data: queryKey.at(-1) ? { ...query.quote, filGasTopUp: query.filGasTopUp } : query.quote,
         error: null,
@@ -452,6 +454,11 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
 
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    expect(query.quoteEnabled).toBe(false);
+
     query.recipientFil = 1n;
     query.recipientFilIsFetching = false;
     await act(async () => {
@@ -459,6 +466,13 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
 
     expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
+    expect(query.quoteEnabled).toBe(true);
+
+    query.recipientFilIsFetching = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(query.quoteEnabled).toBe(true);
   });
 
   it("preserves the reviewed FIL plan through executable route construction", async () => {

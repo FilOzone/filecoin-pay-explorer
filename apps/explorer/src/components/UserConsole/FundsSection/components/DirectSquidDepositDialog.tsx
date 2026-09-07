@@ -116,6 +116,8 @@ export function DirectSquidDepositDialog({
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isFilGasTopUpEnabled, setFilGasTopUpEnabled] = useState(true);
+  // Recipient whose fresh FIL balance already set the checkbox default; quotes wait for it.
+  const [filGasDefaultRecipient, setFilGasDefaultRecipient] = useState("");
   const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositStage | "preparing" | null>(null);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
@@ -124,7 +126,6 @@ export function DirectSquidDepositDialog({
   const isSubmitting = useRef(false);
   const isMounted = useRef(true);
   const initializedSelectionScope = useRef("");
-  const initializedFilGasScope = useRef("");
   const hasSwitchedToSource = useRef(false);
   const latestContext = useRef<SquidDepositLiveContext>({
     open,
@@ -231,7 +232,7 @@ export function DirectSquidDepositDialog({
       !!payingWallet &&
       !!sourceToken &&
       parsedAmount !== null &&
-      !recipientFilQuery.isFetching &&
+      filGasDefaultRecipient === recipient &&
       !balancesQuery.isError &&
       (balancesQuery.data?.token ?? 0n) >= parsedAmount,
     queryFn: async () => {
@@ -277,14 +278,20 @@ export function DirectSquidDepositDialog({
 
   useEffect(() => {
     if (!open) {
-      initializedFilGasScope.current = "";
+      setFilGasDefaultRecipient("");
       return;
     }
-    if (!recipient || recipientFilQuery.isFetching) return;
-    if (initializedFilGasScope.current === recipient) return;
-    initializedFilGasScope.current = recipient;
+    if (!recipient || recipientFilQuery.isFetching || filGasDefaultRecipient === recipient) return;
+    setFilGasDefaultRecipient(recipient);
     setFilGasTopUpEnabled(recipientFilQuery.isError || recipientFilQuery.data == null || recipientFilQuery.data === 0n);
-  }, [open, recipient, recipientFilQuery.data, recipientFilQuery.isError, recipientFilQuery.isFetching]);
+  }, [
+    filGasDefaultRecipient,
+    open,
+    recipient,
+    recipientFilQuery.data,
+    recipientFilQuery.isError,
+    recipientFilQuery.isFetching,
+  ]);
 
   useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
