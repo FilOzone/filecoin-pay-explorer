@@ -1,11 +1,11 @@
 import { NATIVE_TOKEN_ADDRESS, type SourceToken } from "@filecoin-project/squid-evm-funding";
 import { describe, expect, it, vi } from "vitest";
 import {
+  getSourceTokenBalance,
+  getSourceTokenBalancesQueryKey,
   orderSourceTokensByBalance,
   readSourceTokenBalance,
   readSourceTokenBalances,
-  sourceTokenBalance,
-  sourceTokenBalancesQueryKey,
 } from "./source-token-balances";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -42,10 +42,14 @@ describe("source token balances", () => {
       native,
     ]);
     expect(multicall.mock.calls.map(([request]) => request.contracts.length)).toEqual([100, 1]);
-    expect(sourceTokenBalance(balances, tokens[0].token)).toBe(1n);
-    expect(sourceTokenBalance(balances, tokens[2].token)).toBeNull();
-    expect(sourceTokenBalance(balances, tokens[100].token)).toBeNull();
-    expect(sourceTokenBalance(balances, native.token)).toBe(500n);
+    expect(balances).toEqual({
+      ...Object.fromEntries(
+        tokens.slice(0, 100).map((entry, index) => [entry.token, index === 2 ? null : BigInt(index + 1)]),
+      ),
+      [tokens[100].token]: null,
+      [native.token.toLowerCase()]: 500n,
+    });
+    expect(getSourceTokenBalance(balances, tokens[2].token.toUpperCase())).toBeNull();
   });
 
   it("orders funded before zero before unknown, with USDC first inside a group and stable remaining ties", () => {
@@ -69,8 +73,8 @@ describe("source token balances", () => {
   it("keys a scan by owner, chain, and address-stable catalog identity", () => {
     const first = token(1);
     const second = token(2);
-    expect(sourceTokenBalancesQueryKey(OWNER, 8453, [second, first, first])).toEqual(
-      sourceTokenBalancesQueryKey(OWNER, 8453, [first, second]),
+    expect(getSourceTokenBalancesQueryKey(OWNER, 8453, [second, first, first])).toEqual(
+      getSourceTokenBalancesQueryKey(OWNER, 8453, [first, second]),
     );
   });
 });
