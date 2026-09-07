@@ -2,6 +2,7 @@ import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingHost } from "./FundingHost";
 import { FundingLaunchProvider, useFundingLaunch } from "./FundingLaunchContext";
+import type { SquidDepositInitialSource } from "./FundsSection/components/DirectSquidDepositDialog";
 
 const wallet = vi.hoisted(() => ({
   address: "0xABCDEF0000000000000000000000000000000001" as string | undefined,
@@ -68,7 +69,7 @@ vi.mock("./FundsSection/components/DirectSquidDepositDialog", () => ({
     open,
   }: {
     accountId: string;
-    initialSource?: { amount: bigint; chainId: number; decimals: number; token: string };
+    initialSource?: SquidDepositInitialSource;
     open: boolean;
   }) => {
     dialogs.accountId = accountId;
