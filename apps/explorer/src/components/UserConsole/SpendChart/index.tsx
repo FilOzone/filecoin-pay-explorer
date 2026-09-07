@@ -8,7 +8,6 @@ import type { Network } from "@/types";
 import { SpendChartEmptyState, SpendChartErrorState, SpendChartLayout, SpendChartLoadingState } from "./components";
 import { buildMonthWindows } from "./utils/buildMonthWindows";
 import { buildSpendSeries } from "./utils/buildSpendSeries";
-import { timestampToEpoch } from "./utils/epoch";
 import { hasReachedSpendHistoryLimit, toSpendHistory } from "./utils/toSpendHistory";
 
 // Keeps recharts out of the initial console bundle. `ssr: false` because the
@@ -54,16 +53,19 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
   const history = useMemo(() => (data ? toSpendHistory(data) : null), [data]);
 
   // Months come from the browser, because "last month" means the viewer's last
-  // month. Accrual is capped at the block this response was read at, so it never
+  // month. Accrual is capped at the block the history was read at, so it never
   // bills epochs whose rate changes and terminations are not indexed yet. The
-  // clock is only a fallback until a fresh deployment reports `_meta`.
-  const indexedEpoch = data?._meta
-    ? BigInt(data._meta.block.number)
-    : timestampToEpoch(currentTimestamp, genesisTimestamp);
+  // loader guarantees this is present — it throws rather than letting the chart
+  // accrue past the data.
+  const indexedEpoch = data ? BigInt(data._meta?.block.number ?? 0) : 0n;
 
   const rows = useMemo(() => {
-    if (!history || (history.periods.length === 0 && history.oneTimePayments.length === 0)) return null;
-    return buildSpendSeries(history, windows, indexedEpoch);
+    if (!history) return null;
+
+    const series = buildSpendSeries(history, windows, indexedEpoch);
+
+    // Emptiness is a property of the totals, not of how many records came back
+    return series.some((row) => row.total > 0n) ? series : null;
   }, [history, windows, indexedEpoch]);
 
   if (isLoading) {

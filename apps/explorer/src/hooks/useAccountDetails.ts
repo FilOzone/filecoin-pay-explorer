@@ -8,6 +8,7 @@ import {
   GET_ACCOUNT_RATE_PERIODS,
   GET_ACCOUNT_TOKEN,
   GET_ACCOUNT_TOKENS,
+  GET_SUBGRAPH_BLOCK,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { useGraphQLClient, useGraphQLQuery } from "./useGraphQLQuery";
@@ -149,16 +150,25 @@ const SPEND_HISTORY_PAGE_SIZE = 1_000;
 const SPEND_HISTORY_MAX_PAGES = 10;
 
 /**
- * The whole history is read once and held, because it is heavy and it barely
- * moves: months that have ended never change, and the current month drifts by
- * roughly 0.1% over half a day. Accrual stops at the block the first page was
- * read at, so a stale read is internally consistent rather than partly updated.
+ * How long a read is held before it is replaced.
+ *
+ * The history is heavy and barely moves: months that have ended never change,
+ * and the current month drifts by roughly 0.1% over half a day. `refetchInterval`
+ * is what actually refreshes on this cadence — `staleTime` alone only marks the
+ * data eligible, and a tab left open and visible would otherwise sit frozen
+ * until it lost and regained focus.
  *
  * A one-time payment is a step change rather than a drift, so it can be up to
- * this long before appearing. Refetch on window focus still covers someone
- * returning to the tab.
+ * this long before appearing. Focus and reconnect still refresh sooner.
  */
-const SPEND_HISTORY_STALE_MS = 12 * 60 * 60 * 1_000;
+const SPEND_HISTORY_REFRESH_MS = 12 * 60 * 60 * 1_000;
+
+/**
+ * Deliberately much shorter than the refresh interval. This history is large,
+ * and it is cached per token — holding every token an account has looked at for
+ * half a day costs far more than re-reading one.
+ */
+const SPEND_HISTORY_GC_MS = 30 * 60 * 1_000;
 
 /**
  * Walks a cursor-paged collection until it is exhausted or `maxPages` is hit.
@@ -171,6 +181,10 @@ export async function fetchAllPages<T extends { id: string }>(
   fetchPage: (cursor: string) => Promise<T[]>,
   maxPages: number = SPEND_HISTORY_MAX_PAGES,
 ): Promise<{ items: T[]; reachedPageLimit: boolean }> {
+  // Ids are transaction hash plus log index, so they carry no order in time.
+  // Stopping at the cap therefore yields an arbitrary subset of the matching
+  // records, not the newest or the oldest — which is why the chart says the
+  // months may be incomplete rather than trying to describe what is missing.
   const items: T[] = [];
   let cursor = "0x";
 
@@ -216,51 +230,67 @@ export const useAccountSpendHistory = (
       windowStartTimestamp.toString(),
       network,
     ],
-    queryFn: async () => {
-      let meta: AccountSpendHistoryResponse["_meta"] = null;
+    queryFn: async ({ signal }) => {
+      // Read the block first and pin every page to it. Without a fixed snapshot
+      // the two walks see different states, and cursor paging can miss rows
+      // outright: ids are not ordered in time, so an entity written mid-walk can
+      // land below the cursor.
+      const { _meta } = await executeQuery<{ _meta: AccountSpendHistoryResponse["_meta"] }>(
+        GET_SUBGRAPH_BLOCK,
+        undefined,
+        signal,
+      );
 
-      const periods = await fetchAllPages<SpendHistoryRatePeriodResponse>(async (cursor) => {
-        const page = await executeQuery<{
-          _meta: AccountSpendHistoryResponse["_meta"];
-          railRatePeriods: SpendHistoryRatePeriodResponse[];
-        }>(GET_ACCOUNT_RATE_PERIODS, {
-          accountId,
-          tokenId,
-          windowStartEpoch: windowStartEpoch.toString(),
-          first: SPEND_HISTORY_PAGE_SIZE,
-          cursor,
-        });
+      // Only null while a deployment is starting up. Throwing lets Query retry,
+      // where falling back to the clock would let open periods accrue past the
+      // data that exists.
+      if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
+      const block = _meta.block.number;
 
-        // The chain advances between pages, so the earliest block seen is the
-        // only one every page is known to cover.
-        meta ??= page._meta;
-        return page.railRatePeriods;
-      });
-
-      const payments = await fetchAllPages<SpendHistoryOneTimePaymentResponse>(async (cursor) => {
-        const page = await executeQuery<{ oneTimePayments: SpendHistoryOneTimePaymentResponse[] }>(
-          GET_ACCOUNT_ONE_TIME_PAYMENTS,
-          {
-            accountId,
-            tokenId,
-            windowStartTimestamp: windowStartTimestamp.toString(),
-            first: SPEND_HISTORY_PAGE_SIZE,
-            cursor,
-          },
-        );
-        return page.oneTimePayments;
-      });
+      const [periods, payments] = await Promise.all([
+        fetchAllPages<SpendHistoryRatePeriodResponse>(async (cursor) => {
+          const page = await executeQuery<{ railRatePeriods: SpendHistoryRatePeriodResponse[] }>(
+            GET_ACCOUNT_RATE_PERIODS,
+            {
+              accountId,
+              tokenId,
+              windowStartEpoch: windowStartEpoch.toString(),
+              first: SPEND_HISTORY_PAGE_SIZE,
+              cursor,
+              block,
+            },
+            signal,
+          );
+          return page.railRatePeriods;
+        }),
+        fetchAllPages<SpendHistoryOneTimePaymentResponse>(async (cursor) => {
+          const page = await executeQuery<{ oneTimePayments: SpendHistoryOneTimePaymentResponse[] }>(
+            GET_ACCOUNT_ONE_TIME_PAYMENTS,
+            {
+              accountId,
+              tokenId,
+              windowStartTimestamp: windowStartTimestamp.toString(),
+              first: SPEND_HISTORY_PAGE_SIZE,
+              cursor,
+              block,
+            },
+            signal,
+          );
+          return page.oneTimePayments;
+        }),
+      ]);
 
       return {
-        _meta: meta,
+        _meta,
         railRatePeriods: periods.items,
         oneTimePayments: payments.items,
         reachedPageLimit: periods.reachedPageLimit || payments.reachedPageLimit,
       };
     },
     enabled: !!accountId && !!tokenId,
-    staleTime: SPEND_HISTORY_STALE_MS,
-    gcTime: SPEND_HISTORY_STALE_MS,
+    staleTime: SPEND_HISTORY_REFRESH_MS,
+    refetchInterval: SPEND_HISTORY_REFRESH_MS,
+    gcTime: SPEND_HISTORY_GC_MS,
   });
 };
 

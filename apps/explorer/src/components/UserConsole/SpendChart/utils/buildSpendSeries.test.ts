@@ -35,6 +35,24 @@ describe("buildSpendSeries", () => {
     expect(rows.map((row) => row.isPartial)).toEqual([false, true]);
   });
 
+  it("totals to zero for records that contribute to no month", () => {
+    // The caller reads emptiness off the totals, so a history that only carries
+    // non-contributing records — a zero-rate period, or one outside the range —
+    // has to come back as zeros rather than as arbitrary bars.
+    const windows = [makeWindow(1), makeWindow(2)];
+    const history = makeHistory({
+      periods: [
+        { rate: 0n, startEpoch: 0n, untilEpoch: null, operatorAddress: STORACHA },
+        { rate: 50n, startEpoch: 900n, untilEpoch: 950n, operatorAddress: FWSS },
+      ],
+    });
+
+    const rows = buildSpendSeries(history, windows, INDEXED_EPOCH);
+
+    expect(rows.every((row) => row.total === 0n)).toBe(true);
+    expect(rows.every((row) => row.byOperator.length === 0)).toBe(true);
+  });
+
   it("renders a month with no activity as a zero row rather than dropping it", () => {
     const windows = [makeWindow(1), makeWindow(2)];
     const history = makeHistory({
