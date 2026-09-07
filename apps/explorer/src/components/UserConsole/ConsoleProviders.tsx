@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@filecoin-foundation/ui-filecoin/Alert";
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -27,8 +28,11 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   if (!appId || !clientId) {
     return (
-      <div role='alert' className='m-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-900'>
-        Console wallet login is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID.
+      <div className='m-6'>
+        <Alert
+          title='Console wallet login is not configured'
+          description='Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID for this deployment.'
+        />
       </div>
     );
   }

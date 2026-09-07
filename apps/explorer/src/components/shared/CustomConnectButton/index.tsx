@@ -41,17 +41,18 @@ const CustomConnectButton = () => {
     return (
       <div className='flex flex-col items-center gap-2'>
         <p role='status'>Preparing wallet…</p>
-        <button
+        <Button
+          variant='ghost'
+          size='compact'
           type='button'
           onClick={() =>
             void exit().catch((error: unknown) =>
               toast.error("Unable to log out", { description: describeError(error) }),
             )
           }
-          className='text-sm underline underline-offset-2 opacity-70 hover:opacity-100'
         >
           Log out and try again
-        </button>
+        </Button>
       </div>
     );
 
@@ -68,16 +69,17 @@ const CustomConnectButton = () => {
       >
         Log in
       </Button>
-      <button
+      <Button
+        variant='ghost'
+        size='compact'
         type='button'
         onClick={() => {
           consoleWalletSelector.resume();
           connectWallet();
         }}
-        className='text-sm underline underline-offset-2 opacity-70 hover:opacity-100'
       >
         Just connect a wallet
-      </button>
+      </Button>
     </div>
   );
 };

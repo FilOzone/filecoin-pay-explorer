@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
-  Button: ({ children }: { children: React.ReactNode }) => <button type='button'>{children}</button>,
+  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+    <button type='button' onClick={onClick}>
+      {children}
+    </button>
+  ),
 }));
 vi.mock("@privy-io/react-auth", () => ({
   useConnectWallet: () => ({ connectWallet: vi.fn() }),
