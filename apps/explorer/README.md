@@ -20,7 +20,7 @@ This app requires the following environment variables:
 
 Squid route quotes use the public `filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862` integrator ID by default.
 
-The example values use the development Privy app. Its dashboard must enable email, Google, and external-wallet login, and allow the exact local or preview origin being tested. Production uses a separately provisioned Privy app (see issue #382); no Privy app secret is used by the browser.
+The example values use the development Privy app. Its dashboard must enable email, Google, and external-wallet login, and allow the exact local or preview origin being tested (including the port). Configure origins on the `dev` app client, because client settings override app-level settings, and do not add a broad `*.vercel.app` origin. Production uses a separately provisioned Privy app (see issue #382); no Privy app secret is used by the browser.
 
 **Setup:**
 
