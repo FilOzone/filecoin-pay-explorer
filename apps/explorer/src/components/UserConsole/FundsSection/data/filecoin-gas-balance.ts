@@ -1,13 +1,12 @@
-import { FIL_GAS_TOP_UP_AMOUNT } from "./squid-deposit-route";
-
 export type FilecoinGasBalanceStatus = "loading" | "unavailable" | "insufficient" | "funded";
 
 /**
  * FIL a wallet must hold before the console lets it pay Filecoin transaction
- * fees. It equals what the guided top-up delivers, so one top-up always clears
- * the guard.
+ * fees. Kept below what the top-up delivers (0.05 FIL), so one top-up always
+ * clears the guard and a wallet that already holds a little FIL is not asked
+ * to buy more.
  */
-export const FIL_TRANSACTION_FEE_RESERVE = FIL_GAS_TOP_UP_AMOUNT;
+export const FIL_TRANSACTION_FEE_RESERVE = 20_000_000_000_000_000n;
 
 export function getFilecoinGasBalanceStatus({
   balance,
