@@ -181,7 +181,13 @@ describe("buildDepositPostHook", () => {
 
   it("rejects a top-up that does not guarantee the fixed 0.25 FIL", () => {
     expect(() => buildDepositPostHook(request, { ...topUp, minimumFil: topUp.minimumFil - 1n })).toThrow(
-      "Invalid FIL gas top-up",
+      "FIL gas top-up must guarantee exactly 0.25 FIL",
+    );
+    expect(() => buildDepositPostHook(request, { ...topUp, spendUsdfc: 0n })).toThrow(
+      "FIL gas top-up must spend a positive USDFC amount",
+    );
+    expect(() => buildDepositPostHook(request, { ...topUp, deadline: 0n })).toThrow(
+      "FIL gas top-up deadline must be in the future",
     );
   });
 });
