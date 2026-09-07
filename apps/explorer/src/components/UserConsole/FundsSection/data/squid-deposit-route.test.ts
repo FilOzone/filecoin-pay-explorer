@@ -8,9 +8,7 @@ import {
   getDepositNetworkFeeMaximum,
   getDepositRequiredNativeBalance,
   getSourceNativeCosts,
-  getUsdfcPerUsdc,
   isExecutableQuote,
-  isUnfavorableRate,
   parseSquidDepositRoute,
   requestSquidDepositRoute,
   selectUsdcTokens,
@@ -147,15 +145,7 @@ describe("selectUsdcTokens", () => {
   });
 });
 
-describe("rate helpers", () => {
-  it("computes USDFC per USDC and flags a haircut below the threshold", () => {
-    const rate = getUsdfcPerUsdc({ sourceAmount: 100_000_000n, destinationAmount: 93_000_000_000_000_000_000n }, 6);
-    expect(rate).toBeCloseTo(0.93, 5);
-    expect(isUnfavorableRate(rate)).toBe(true);
-    expect(isUnfavorableRate(0.98)).toBe(false);
-    expect(getUsdfcPerUsdc({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBe(0);
-  });
-
+describe("source cost helpers", () => {
   it("sums source-network native costs and the reviewed network-fee maximum", () => {
     const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
     expect(getSourceNativeCosts(quote, 8453)).toEqual({ fees: 5_971_701_479_908n, gas: 3_596_394_000_000n });
@@ -182,8 +172,6 @@ describe("parseSquidDepositRoute", () => {
       minimumDestinationAmount: 92_000_000_000_000_000_000n,
       sourceAmountUsd: "99.97",
       destinationAmountUsd: "100.12",
-      priceImpactPercent: "0.03",
-      estimatedSeconds: 90,
       fees: [
         {
           name: "Gas receiver fee",
