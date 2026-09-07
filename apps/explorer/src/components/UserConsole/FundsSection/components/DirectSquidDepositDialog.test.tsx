@@ -242,6 +242,51 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
   });
 
+  it("executes once when Pay is clicked twice", async () => {
+    let finishExecution!: () => void;
+    state.execute.mockImplementationOnce(
+      () =>
+        new Promise<never>((_, reject) => {
+          finishExecution = () => reject(new Error("stopped"));
+        }),
+    );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    await act(async () => {
+      button(renderer, "Processing…")?.props.onClick();
+    });
+    expect(state.execute).toHaveBeenCalledOnce();
+    expect(button(renderer, "Processing…")?.props.disabled).toBe(true);
+
+    await act(async () => finishExecution());
+  });
+
+  it("keeps the route links visible when USDFC landed but the deposit step failed", async () => {
+    state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
+      input.onSwapAttempt?.(5n);
+      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      throw new SquidDepositError(
+        "USDFC reached your wallet but the Filecoin Pay deposit step failed.",
+        "hook-failed",
+        ROUTE_HASH,
+      );
+    });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain("deposit step failed"));
+
+    expect(storage.getItem(getPendingSquidDepositKey(OWNER))).not.toBeNull();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Squid route / add gas");
+    expect(button(renderer, "Dismiss")).toBeDefined();
+  });
+
   it("keeps NEEDS_GAS recoverable with the route link", async () => {
     state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
       input.onSwapAttempt?.(5n);
