@@ -7,7 +7,7 @@ const OPERATOR = "0x2222222222222222222222222222222222222222";
 
 const mocks = vi.hoisted(() => ({
   dialogOpenChange: undefined as ((open: boolean) => void) | undefined,
-  dialogOpen: false,
+  isDialogOpen: false,
   dialogContentProps: undefined as Record<string, unknown> | undefined,
   onSubmitOnChain: undefined as (() => void) | undefined,
   isSubmitting: false,
@@ -47,7 +47,7 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
     open: boolean;
   }) => {
     mocks.dialogOpenChange = onOpenChange;
-    mocks.dialogOpen = open;
+    mocks.isDialogOpen = open;
     return children;
   },
   DialogContent: ({ children, ...props }: { children: React.ReactNode }) => {
@@ -80,7 +80,9 @@ vi.mock("@/hooks/useSynapse", () => ({
     constants: {
       chain: { blockExplorers: { default: { url: "https://example.com" } }, slug: mocks.network },
       faucets:
-        mocks.network === "calibration" ? [{ name: "Get FIL", url: "https://faucet.example.com/filecoin" }] : undefined,
+        mocks.network === "calibration"
+          ? [{ asset: "FIL", name: "Get FIL", url: "https://faucet.example.com/filecoin" }]
+          : undefined,
       label: mocks.network === "calibration" ? "Calibration" : "Mainnet",
     },
   }),
@@ -145,7 +147,7 @@ function primaryButton(renderer: ReturnType<typeof create>) {
 }
 
 beforeEach(() => {
-  mocks.dialogOpen = false;
+  mocks.isDialogOpen = false;
   mocks.filBalanceStatus = "funded";
   mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
   mocks.chainId = 314;
@@ -166,7 +168,7 @@ beforeEach(() => {
 });
 
 describe("AddServiceDialog", () => {
-  it("blocks an empty FIL wallet and opens the Squid flow with its FIL option visible", () => {
+  it("blocks an under-funded FIL wallet and opens the shared Squid flow", () => {
     mocks.filBalanceStatus = "insufficient";
     const { renderer, onOpenChange } = renderDialog();
 
@@ -324,11 +326,11 @@ describe("AddServiceDialog", () => {
 
     mocks.isSquidOpen = true;
     act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
-    expect(mocks.dialogOpen).toBe(false);
+    expect(mocks.isDialogOpen).toBe(false);
 
     mocks.isSquidOpen = false;
     act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
-    expect(mocks.dialogOpen).toBe(true);
+    expect(mocks.isDialogOpen).toBe(true);
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("7");
   });
 
