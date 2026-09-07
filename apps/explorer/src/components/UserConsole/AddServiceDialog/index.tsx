@@ -1,5 +1,6 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
+import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   SelectValue,
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
@@ -82,11 +83,22 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
   </div>
 );
 
+/** Inline warning with the action that resolves it; used for every FIL fee precondition. */
+const GasNotice = ({ action, children }: { action: ReactNode; children: ReactNode }) => (
+  <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
+    <span className='inline-flex items-start gap-2'>
+      <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
+      {children}
+    </span>
+    {action}
+  </div>
+);
+
 const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange }) => {
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
   const [isCheckingGas, setIsCheckingGas] = useState(false);
-  const gasCheckInFlight = useRef(false);
+  const isGasCheckInFlight = useRef(false);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
   const isBusy = isCheckingGas || isSubmitting || isExecuting;
   const gasBalance = useFilecoinGasBalance(open);
@@ -110,7 +122,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
       generation: currentGasContext.current.generation + 1,
     };
   }
-  const previousSquidOpen = useRef(funding.isSquidOpen);
+  const wasSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
 
@@ -122,7 +134,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const { constants } = useSynapse();
   const explorerUrl = constants.chain.blockExplorers?.default.url;
-  const filFaucet = constants.faucets?.find((faucet) => faucet.name.toLowerCase().includes("fil"));
+  const filFaucet = constants.faucets?.find((faucet) => faucet.asset === "FIL");
   const requiredFil = formatUnits(FIL_TRANSACTION_FEE_RESERVE, 18);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the reset closures are recreated each render; visibility and owner are the real dependencies
@@ -141,8 +153,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   }, [open, gasBalance.owner]);
 
   useEffect(() => {
-    if (previousSquidOpen.current && !funding.isSquidOpen) void gasBalance.refresh();
-    previousSquidOpen.current = funding.isSquidOpen;
+    if (wasSquidOpen.current && !funding.isSquidOpen) void gasBalance.refresh();
+    wasSquidOpen.current = funding.isSquidOpen;
   }, [funding.isSquidOpen, gasBalance.refresh]);
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
@@ -212,20 +224,15 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
   };
 
   const handleSubmit = async () => {
-    if (gasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    const submittingOwner = gasBalance.owner;
+    if (isGasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
+    // The generation bumps on every owner or chain transition, including one that
+    // returns to the same value, so it alone tells whether the check is still current.
     const contextGeneration = currentGasContext.current.generation;
-    gasCheckInFlight.current = true;
+    isGasCheckInFlight.current = true;
     setIsCheckingGas(true);
     try {
       const refreshedStatus = await gasBalance.refresh();
-      if (
-        refreshedStatus !== "funded" ||
-        currentGasContext.current.generation !== contextGeneration ||
-        currentGasContext.current.owner !== submittingOwner ||
-        currentGasContext.current.chainId !== currentGasContext.current.targetChainId
-      )
-        return;
+      if (refreshedStatus !== "funded" || currentGasContext.current.generation !== contextGeneration) return;
       await submit({
         operatorAddress,
         token,
@@ -235,7 +242,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
         rateInWei,
       });
     } finally {
-      gasCheckInFlight.current = false;
+      isGasCheckInFlight.current = false;
       setIsCheckingGas(false);
     }
   };
@@ -536,56 +543,49 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
           </div>
 
           {!gasBalance.isCorrectChain ? (
-            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
-              <span className='inline-flex items-start gap-2'>
-                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
-                Switch back to {constants.label} before adding this service.
-              </span>
-              <Button
-                disabled={gasBalance.isSwitchingNetwork}
-                onClick={gasBalance.switchToFilecoin}
-                size='compact'
-                type='button'
-                variant='primary'
-              >
-                {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${constants.label}`}
-              </Button>
-            </div>
+            <GasNotice
+              action={
+                <Button
+                  disabled={gasBalance.isSwitchingNetwork}
+                  onClick={gasBalance.switchToFilecoin}
+                  size='compact'
+                  type='button'
+                  variant='primary'
+                >
+                  {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${constants.label}`}
+                </Button>
+              }
+            >
+              Switch back to {constants.label} before adding this service.
+            </GasNotice>
           ) : gasBalance.status === "loading" ? (
             <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
               <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
             </p>
           ) : gasBalance.status === "unavailable" ? (
-            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
-              <span className='inline-flex items-start gap-2'>
-                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
-                Your FIL balance could not be loaded. Retry before adding the service.
-              </span>
-              <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
-                Retry
-              </Button>
-            </div>
-          ) : gasBalance.status === "insufficient" ? (
-            <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
-              <span className='inline-flex items-start gap-2'>
-                <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
-                Add at least {requiredFil} FIL for transaction fees before adding this service.
-              </span>
-              {constants.chain.slug === "mainnet" ? (
-                <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
-                  Add FIL
+            <GasNotice
+              action={
+                <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
+                  Retry
                 </Button>
-              ) : filFaucet ? (
-                <a
-                  className='font-medium text-primary hover:underline'
-                  href={filFaucet.url}
-                  rel='noreferrer'
-                  target='_blank'
-                >
-                  Get testnet FIL
-                </a>
-              ) : null}
-            </div>
+              }
+            >
+              Your FIL balance could not be loaded. Retry before adding the service.
+            </GasNotice>
+          ) : gasBalance.status === "insufficient" ? (
+            <GasNotice
+              action={
+                constants.chain.slug === "mainnet" ? (
+                  <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
+                    Add FIL
+                  </Button>
+                ) : filFaucet ? (
+                  <ExternalTextLink href={filFaucet.url}>Get testnet FIL</ExternalTextLink>
+                ) : null
+              }
+            >
+              Add at least {requiredFil} FIL for transaction fees before adding this service.
+            </GasNotice>
           ) : null}
 
           <p className='text-xs text-muted-foreground'>
