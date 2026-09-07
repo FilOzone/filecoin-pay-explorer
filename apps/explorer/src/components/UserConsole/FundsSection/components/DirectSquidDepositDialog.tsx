@@ -310,7 +310,11 @@ export function DirectSquidDepositDialog({
     setStage(null);
     if (failure instanceof SquidDepositError) {
       setError(failure.message);
-      if (failure.reason !== "timeout" && failure.reason !== "needs-gas" && owner) clearSaved(owner);
+      // Keep the marker, and with it the explorer and Squid links, while the route can still be
+      // followed up: a stalled status, a route waiting for gas, or USDFC that landed in the wallet.
+      const isFollowUp =
+        failure.reason === "timeout" || failure.reason === "needs-gas" || failure.reason === "hook-failed";
+      if (!isFollowUp && owner) clearSaved(owner);
     } else {
       if (owner && isUserRejectedRequest(failure)) clearSaved(owner);
       setError(walletErrorMessage(failure, "The USDC deposit could not be completed."));
