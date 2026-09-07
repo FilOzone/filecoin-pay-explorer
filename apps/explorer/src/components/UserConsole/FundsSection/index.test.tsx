@@ -11,6 +11,7 @@ const OTHER_TOKEN = "0x4444444444444444444444444444444444444444";
 const tokenState = vi.hoisted(() => ({ userTokens: [] as UserToken[] }));
 
 vi.mock("@/hooks/useAccountDetails", () => ({
+  CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () => ({ data: { userTokens: tokenState.userTokens }, isError: false, isLoading: false }),
 }));
 vi.mock("@/hooks/useSynapse", () => ({

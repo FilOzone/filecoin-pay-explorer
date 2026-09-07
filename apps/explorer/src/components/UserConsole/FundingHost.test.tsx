@@ -16,6 +16,7 @@ const dialogs = vi.hoisted(() => ({
 
 vi.mock("wagmi", () => ({ useConnection: () => wallet }));
 vi.mock("@/hooks/useAccountDetails", () => ({
+  CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () => ({ data: { userTokens: [{ id: "token-1" }] } }),
 }));
 vi.mock("./FundsSection/TopUpDialogController", () => ({
