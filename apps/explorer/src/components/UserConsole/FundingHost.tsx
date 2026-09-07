@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
-import { calibration, mainnet } from "@/constants/chains";
-import { useAccountTokens } from "@/hooks/useAccountDetails";
+import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
+import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
-
-const TOKEN_PAGE_SIZE = 100;
 
 export function FundingHost() {
   const { address, chainId } = useConnection();
@@ -20,14 +18,20 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
-  const isMainnet = chainId === undefined || chainId === mainnet.id;
-  const isCalibration = chainId === calibration.id;
-  const network = isCalibration ? "calibration" : "mainnet";
+  // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
+  const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
+  const network = getNetworkFromChainId(chainId);
+  const isMainnet = isFilecoinChain && network === "mainnet";
+  const isCalibration = isFilecoinChain && network === "calibration";
+  // The effect below closes every dialog after a chain change, but that runs one
+  // render late. Comparing against the last committed chain id keeps the dialogs
+  // closed during that render so nothing reopens on the new network.
   const previousChainId = useRef(chainId);
   const chainChanged = previousChainId.current !== chainId;
-  const { data } = useAccountTokens(isMainnet || isCalibration ? address.toLowerCase() : "", 1, {
+  const { data } = useAccountTokens(address.toLowerCase(), 1, {
+    enabled: isFilecoinChain,
     networkOverride: network,
-    pageSize: TOKEN_PAGE_SIZE,
+    pageSize: CONSOLE_TOKEN_PAGE_SIZE,
   });
 
   useEffect(() => {
