@@ -76,6 +76,7 @@ import { squidFetch } from "../data/squid-quote";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
 
 const DEFAULT_SOURCE_CHAIN = 8453;
+const FIL_GAS_TOP_UP_LABEL = `${formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL`;
 const DEPOSIT_TARGET = {
   payments: mainnet.contracts.payments.address,
   usdfc: mainnet.contracts.usdfc.address,
@@ -244,7 +245,7 @@ export function DirectSquidDepositDialog({
       const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
       if (!filGasTopUp) {
         throw new Error(
-          "Squid could not safely add 0.25 FIL for this amount. Increase the amount or turn off the FIL option.",
+          `Squid could not safely add ${FIL_GAS_TOP_UP_LABEL} for this amount. Increase the amount or turn off the FIL option.`,
         );
       }
       return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
@@ -588,6 +589,7 @@ export function DirectSquidDepositDialog({
     requiredNative !== null &&
     balancesQuery.data.native >= requiredNative;
   const isBusy = stage !== null;
+  const hasRecipientFil = !recipientFilQuery.isError && recipientFilQuery.data != null && recipientFilQuery.data > 0n;
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
   const reviewedSourceChain = reviewed
     ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === reviewed.context.sourceChainId)
@@ -706,7 +708,7 @@ export function DirectSquidDepositDialog({
               {reviewed.quote.filGasTopUp ? (
                 <p>
                   <span className='text-muted-foreground'>Wallet top-up:</span> At least{" "}
-                  {formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL for transaction fees, using{" "}
+                  {formatUnits(reviewed.quote.filGasTopUp.minimumFil, 18)} FIL for transaction fees, using{" "}
                   {formatUnits(reviewed.quote.filGasTopUp.spendUsdfc, 18)} USDFC
                 </p>
               ) : null}
@@ -845,13 +847,18 @@ export function DirectSquidDepositDialog({
                   type='checkbox'
                 />
                 <div className='grid gap-1'>
-                  <Label htmlFor='direct-squid-fil-gas'>Add 0.25 FIL for transaction fees</Label>
+                  <Label htmlFor='direct-squid-fil-gas' id='direct-squid-fil-gas-label'>
+                    {`Include ${FIL_GAS_TOP_UP_LABEL} for transaction fees`}
+                  </Label>
                   <p className='text-xs text-muted-foreground'>
-                    Add FIL to your wallet so you can deposit USDFC and make other Filecoin transactions.
+                    {hasRecipientFil
+                      ? "You already have FIL for fees. "
+                      : "Your wallet has no FIL. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
+                    The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.
                   </p>
                   {quote?.filGasTopUp ? (
                     <p className='text-xs text-muted-foreground'>
-                      Uses {formatUnits(quote.filGasTopUp.spendUsdfc, 18)} USDFC from the amount received.
+                      {`+ ${formatUnits(quote.filGasTopUp.minimumFil, 18)} FIL for network fees, using ${formatUnits(quote.filGasTopUp.spendUsdfc, 18)} USDFC from the amount received.`}
                     </p>
                   ) : null}
                 </div>
@@ -945,7 +952,9 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!pending && reviewed ? (
             <Button disabled={isBusy} onClick={() => void confirm()} type='button' variant='primary'>
-              {isBusy ? "Processing…" : `Pay ${reviewed.amount} ${reviewed.sourceSymbol}`}
+              {isBusy
+                ? "Processing…"
+                : `Pay ${reviewed.amount} ${reviewed.sourceSymbol} for USDFC${reviewed.quote.filGasTopUp ? " + FIL" : ""}`}
             </Button>
           ) : null}
         </DialogFooter>
