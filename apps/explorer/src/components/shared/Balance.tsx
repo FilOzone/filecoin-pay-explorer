@@ -89,7 +89,7 @@ const Balance = () => {
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
           <div className='flex min-w-0 items-center gap-3'>
-            <Wallet className='size-4 text-zinc-500' />
+            <Wallet className='size-4 text-muted-foreground' />
             {isLoading ? (
               "Loading..."
             ) : (
