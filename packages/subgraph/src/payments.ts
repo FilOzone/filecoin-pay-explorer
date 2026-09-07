@@ -191,18 +191,15 @@ export function handleRailCreated(event: RailCreatedEvent): void {
 
   const payerAccountWithIsNew = createOrLoadAccountByAddress(payerAddress);
   const payerAccount = payerAccountWithIsNew.account;
-  const isNewPayer = payerAccount.totalRails.equals(ZERO_BIG_INT);
   const isNewPayerAccount = payerAccountWithIsNew.isNew;
   const payeeAccountWithIsNew = createOrLoadAccountByAddress(payeeAddress);
   const payeeAccount = payeeAccountWithIsNew.account;
-  const isNewPayee = payeeAccount.totalRails.equals(ZERO_BIG_INT);
   const isNewPayeeAccount = payeeAccountWithIsNew.isNew;
   // Create Service Fee Recipient account if it doesn't exist
   const isNewServiceFeeRecipientAccount = createOrLoadAccountByAddress(serviceFeeRecipient).isNew;
 
   const operatorWithIsNew = createOrLoadOperator(operatorAddress);
   const operator = operatorWithIsNew.operator;
-  const isNewOperator = operatorWithIsNew.isNew;
   const accountOperator = createOrLoadAccountOperator(payerAddress, operatorAddress).accountOperator;
 
   payerAccount.totalRails = payerAccount.totalRails.plus(ONE_BIG_INT);
@@ -239,9 +236,6 @@ export function handleRailCreated(event: RailCreatedEvent): void {
   MetricsCollectionOrchestrator.collectRailCreationMetrics(
     rail,
     newAccounts,
-    isNewPayer,
-    isNewPayee,
-    isNewOperator,
     event.block.timestamp,
     event.block.number,
   );

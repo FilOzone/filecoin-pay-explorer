@@ -14,8 +14,6 @@ export const GET_PAYMENTS_METRICS = gql`
       totalActiveRails
       totalTerminatedRails
       totalFinalizedRails
-      uniquePayers
-      uniquePayees
     }
   }
 `;
@@ -569,8 +567,6 @@ export const GET_STATS_DASHBOARD = gql`
       totalActiveRails
       totalTerminatedRails
       totalFinalizedRails
-      uniquePayers
-      uniquePayees
     }
   }
 `;
