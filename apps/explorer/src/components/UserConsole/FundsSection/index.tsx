@@ -2,7 +2,7 @@ import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
-import { useAccountTokens } from "@/hooks/useAccountDetails";
+import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
 import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
@@ -19,17 +19,6 @@ type FundsSectionProps = {
   account: Account;
   network: Network;
 };
-
-/**
- * Temporary bounded fetch, not an exhaustive one. The console shows one token at
- * a time but must be able to select any of them, and the subgraph orders by
- * balance descending, so the default page of ten would drop a zero-balance USDFC
- * off the end and silently default the overview to the wrong token. A wider
- * single page makes that unreachable in practice; an account holding more than
- * this many tokens still truncates. Replace with paging driven by
- * `account.totalTokens` when that becomes realistic.
- */
-const TOKEN_SELECTOR_PAGE_SIZE = 100;
 
 /**
  * Picks the token the overview opens on: USDFC matched by contract address, so a
@@ -59,10 +48,9 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
     return () => window.clearInterval(intervalId);
   }, []);
 
-  // Fetch up to 100 tokens for this account (single page, no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
     networkOverride: network,
-    pageSize: TOKEN_SELECTOR_PAGE_SIZE,
+    pageSize: CONSOLE_TOKEN_PAGE_SIZE,
   });
 
   const userTokens = data?.userTokens;
