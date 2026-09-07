@@ -56,6 +56,8 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     launch.closeAddFunds();
   }, [chainId, launch.closeAddFunds]);
 
+  // FundingDialogs remounts per address (see the key above), so a Squid dialog left open
+  // by the previous wallet must not carry over into the new one.
   useEffect(() => launch.closeSquid(), [launch.closeSquid]);
 
   const handleDepositOpenChange = (open: boolean) => {
