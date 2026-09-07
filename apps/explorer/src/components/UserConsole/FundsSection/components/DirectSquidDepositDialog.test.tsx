@@ -93,6 +93,13 @@ vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
     <input {...props} onChange={(event) => onChange(event.target.value)} />
   ),
 }));
+vi.mock("@filecoin-pay/ui/components/select", () => ({
+  Select: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectItem: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SelectValue: () => null,
+}));
 vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => children,
 }));
