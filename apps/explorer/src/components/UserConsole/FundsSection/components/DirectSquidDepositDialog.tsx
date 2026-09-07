@@ -61,6 +61,7 @@ import {
   claimSquidDepositSubmission,
   releaseSquidDepositSubmission,
   type SquidDepositContextSnapshot,
+  type SquidDepositLiveContext,
 } from "../data/squid-deposit-submit";
 import {
   clearPendingSquidDeposit,
@@ -112,17 +113,14 @@ export function DirectSquidDepositDialog({
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [pending, setPending] = useState<PendingSquidDeposit | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const submitting = useRef(false);
-  const mounted = useRef(true);
-  const switchedToSource = useRef(false);
-  const latestContext = useRef<{
-    open: boolean;
-    recipient?: string;
-    owner?: string;
-    chainId: number;
-    token?: string;
-    amount?: bigint;
-  }>({ open, recipient: connectedRecipient, chainId: sourceChainId });
+  const isSubmitting = useRef(false);
+  const isMounted = useRef(true);
+  const hasSwitchedToSource = useRef(false);
+  const latestContext = useRef<SquidDepositLiveContext>({
+    open,
+    recipient: connectedRecipient,
+    chainId: sourceChainId,
+  });
 
   const recipient = connectedRecipient ? getAddress(connectedRecipient) : undefined;
   const payingWallet =
@@ -223,9 +221,9 @@ export function DirectSquidDepositDialog({
   };
 
   useEffect(() => {
-    mounted.current = true;
+    isMounted.current = true;
     return () => {
-      mounted.current = false;
+      isMounted.current = false;
     };
   }, []);
 
@@ -244,6 +242,7 @@ export function DirectSquidDepositDialog({
           try {
             return loadPendingSquidDeposit(window.localStorage, getAddress(wallet.address), recipient);
           } catch {
+            // Unreadable storage means no marker to resume; the on-chain result stays authoritative.
             return null;
           }
         })
@@ -266,7 +265,7 @@ export function DirectSquidDepositDialog({
   }, [open, recipient, wallets]);
 
   const assertContext = (snapshot: SquidDepositContextSnapshot) =>
-    assertSquidDepositContext(latestContext.current, snapshot, getAccount(config).address, mounted.current);
+    assertSquidDepositContext(latestContext.current, snapshot, getAccount(config).address, isMounted.current);
 
   const clearSaved = (owner: Address) => {
     try {
@@ -278,14 +277,14 @@ export function DirectSquidDepositDialog({
   };
 
   const restoreFilecoin = async () => {
-    if (!switchedToSource.current) return true;
+    if (!hasSwitchedToSource.current) return true;
     if (!payingWallet) {
       setError("Reconnect the paying wallet to return to Filecoin mainnet.");
       return false;
     }
     try {
       await payingWallet.switchChain(mainnet.id);
-      switchedToSource.current = false;
+      hasSwitchedToSource.current = false;
       return true;
     } catch (failure) {
       setError(walletErrorMessage(failure, "Return to Filecoin mainnet before closing."));
@@ -294,7 +293,7 @@ export function DirectSquidDepositDialog({
   };
 
   const close = async () => {
-    if (submitting.current || !(await restoreFilecoin())) return;
+    if (isSubmitting.current || !(await restoreFilecoin())) return;
     onOpenChange(false);
   };
 
@@ -323,17 +322,17 @@ export function DirectSquidDepositDialog({
   };
 
   const resume = async () => {
-    if (!pending || !recipient || !destinationClient || !claimSquidDepositSubmission(submitting)) return;
+    if (!pending || !recipient || !destinationClient || !claimSquidDepositSubmission(isSubmitting)) return;
     const pendingHash = pending.transactionHash;
     if (!pendingHash) {
       setError("The wallet may have submitted this route. Check its activity before dismissing and trying again.");
-      releaseSquidDepositSubmission(submitting);
+      releaseSquidDepositSubmission(isSubmitting);
       return;
     }
     const walletStillConnected = wallets.some((wallet) => wallet.address.toLowerCase() === pending.owner.toLowerCase());
     if (!walletStillConnected || recipient.toLowerCase() !== pending.recipient.toLowerCase()) {
       setError("Reconnect the original paying wallet and Filecoin Pay account before resuming.");
-      releaseSquidDepositSubmission(submitting);
+      releaseSquidDepositSubmission(isSubmitting);
       return;
     }
     setError(null);
@@ -358,12 +357,12 @@ export function DirectSquidDepositDialog({
     } catch (failure) {
       fail(failure, pending.owner);
     } finally {
-      releaseSquidDepositSubmission(submitting);
+      releaseSquidDepositSubmission(isSubmitting);
     }
   };
 
   const confirm = async () => {
-    if (!claimSquidDepositSubmission(submitting)) return;
+    if (!claimSquidDepositSubmission(isSubmitting)) return;
     setError(null);
     try {
       if (!payingWallet || !sourceChain || !sourceClient || !destinationClient || !reviewed) {
@@ -384,7 +383,7 @@ export function DirectSquidDepositDialog({
         assertContext(snapshot);
         setStage("preparing");
         await payingWallet.switchChain(snapshot.sourceChainId);
-        switchedToSource.current = snapshot.sourceChainId !== mainnet.id;
+        hasSwitchedToSource.current = snapshot.sourceChainId !== mainnet.id;
         assertContext(snapshot);
         const provider = await payingWallet.getEthereumProvider();
         const walletClient = createWalletClient({
@@ -465,7 +464,7 @@ export function DirectSquidDepositDialog({
     } catch (failure) {
       fail(failure, reviewed?.context.owner ?? (payingWallet ? getAddress(payingWallet.address) : undefined));
     } finally {
-      releaseSquidDepositSubmission(submitting);
+      releaseSquidDepositSubmission(isSubmitting);
     }
   };
 
@@ -485,7 +484,7 @@ export function DirectSquidDepositDialog({
     balancesQuery.data.token >= parsedAmount &&
     requiredNative !== null &&
     balancesQuery.data.native >= requiredNative;
-  const busy = stage !== null;
+  const isBusy = stage !== null;
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
   const reviewedSourceChain = reviewed
     ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === reviewed.context.sourceChainId)
@@ -546,12 +545,12 @@ export function DirectSquidDepositDialog({
               ) : null}
               <div className='flex gap-2'>
                 {pending.transactionHash ? (
-                  <Button disabled={busy} onClick={() => void resume()} type='button' variant='primary'>
+                  <Button disabled={isBusy} onClick={() => void resume()} type='button' variant='primary'>
                     Check again
                   </Button>
                 ) : null}
                 <Button
-                  disabled={busy}
+                  disabled={isBusy}
                   onClick={() => {
                     if (
                       window.confirm("Stop tracking this deposit in this browser? The transaction cannot be cancelled.")
@@ -601,7 +600,7 @@ export function DirectSquidDepositDialog({
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-wallet'>Paying wallet</Label>
                 <Select
-                  disabled={busy}
+                  disabled={isBusy}
                   onValueChange={(value) => {
                     setPayingAddress(value);
                     setReviewed(null);
@@ -623,7 +622,7 @@ export function DirectSquidDepositDialog({
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-chain'>Source network</Label>
                 <Select
-                  disabled={busy}
+                  disabled={isBusy}
                   onValueChange={(value) => {
                     setSourceChainId(Number(value));
                     setSourceTokenAddress("");
@@ -646,7 +645,7 @@ export function DirectSquidDepositDialog({
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-token'>USDC token</Label>
                 <Select
-                  disabled={busy || tokensQuery.isPending}
+                  disabled={isBusy || tokensQuery.isPending}
                   onValueChange={(value) => {
                     setSourceTokenAddress(value);
                     setReviewed(null);
@@ -670,7 +669,7 @@ export function DirectSquidDepositDialog({
                 <Input
                   id='direct-squid-amount'
                   inputMode='decimal'
-                  disabled={busy}
+                  disabled={isBusy}
                   onChange={(value) => {
                     setAmount(value);
                     setReviewed(null);
@@ -715,7 +714,7 @@ export function DirectSquidDepositDialog({
 
         <DialogFooter>
           <Button
-            disabled={busy}
+            disabled={isBusy}
             onClick={() => (reviewed ? setReviewed(null) : void close())}
             type='button'
             variant='ghost'
@@ -759,8 +758,8 @@ export function DirectSquidDepositDialog({
             </Button>
           ) : null}
           {!pending && reviewed ? (
-            <Button disabled={busy} onClick={() => void confirm()} type='button' variant='primary'>
-              {busy ? "Processing…" : `Pay ${reviewed.amount} ${reviewed.sourceSymbol}`}
+            <Button disabled={isBusy} onClick={() => void confirm()} type='button' variant='primary'>
+              {isBusy ? "Processing…" : `Pay ${reviewed.amount} ${reviewed.sourceSymbol}`}
             </Button>
           ) : null}
         </DialogFooter>

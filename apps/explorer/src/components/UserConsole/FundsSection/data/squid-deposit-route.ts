@@ -145,13 +145,13 @@ export function getSourceNativeCosts(
   };
 }
 
-function costKey(cost: SquidDepositCost): string {
+function getCostKey(cost: SquidDepositCost): string {
   return `${cost.token.chainId}:${cost.token.address.toLowerCase()}`;
 }
 
-function costCaps(costs: readonly SquidDepositCost[]): Record<string, bigint> {
+function getCostCaps(costs: readonly SquidDepositCost[]): Record<string, bigint> {
   return costs.reduce<Record<string, bigint>>((caps, cost) => {
-    const key = costKey(cost);
+    const key = getCostKey(cost);
     caps[key] = (caps[key] ?? 0n) + cost.amount;
     return caps;
   }, {});
@@ -162,8 +162,8 @@ export function captureReviewedSquidDepositCaps(quote: SquidDepositQuote): Revie
     sourceAmount: quote.sourceAmount,
     minimumDestinationAmount: quote.minimumDestinationAmount,
     maxTransactionValue: getSourceNativeCosts(quote, quote.sourceChainId).fees,
-    fees: costCaps(quote.fees),
-    gasCosts: costCaps(quote.gasCosts),
+    fees: getCostCaps(quote.fees),
+    gasCosts: getCostCaps(quote.gasCosts),
   };
 }
 
@@ -179,8 +179,8 @@ export function assertExecutableQuoteWithinReview(
     throw new Error("The native route payment exceeded the reviewed maximum");
   }
   for (const [label, actual, maximum] of [
-    ["route fee", costCaps(quote.fees), reviewed.fees],
-    ["network gas", costCaps(quote.gasCosts), reviewed.gasCosts],
+    ["route fee", getCostCaps(quote.fees), reviewed.fees],
+    ["network gas", getCostCaps(quote.gasCosts), reviewed.gasCosts],
   ] as const) {
     for (const [key, amount] of Object.entries(actual)) {
       if (amount > (maximum[key] ?? 0n)) throw new Error(`The ${label} exceeded the reviewed maximum`);
