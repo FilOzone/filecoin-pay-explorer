@@ -1,5 +1,6 @@
 import type { Hash } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createMemoryStorage } from "@/test-utils/memory-storage";
 import {
   clearPendingSquidDeposit,
   getPendingSquidDepositKey,
@@ -28,21 +29,11 @@ const pending: PendingSquidDeposit = {
   startedAt: 1_700_000_000_000,
 };
 
-function memoryStorage() {
-  const items = new Map<string, string>();
-  return {
-    getItem: (key: string) => items.get(key) ?? null,
-    removeItem: (key: string) => void items.delete(key),
-    setItem: (key: string, value: string) => void items.set(key, value),
-    items,
-  };
-}
-
 describe("pending Squid deposit tracker", () => {
-  let storage: ReturnType<typeof memoryStorage>;
+  let storage: ReturnType<typeof createMemoryStorage>;
 
   beforeEach(() => {
-    storage = memoryStorage();
+    storage = createMemoryStorage();
   });
 
   afterEach(() => {
