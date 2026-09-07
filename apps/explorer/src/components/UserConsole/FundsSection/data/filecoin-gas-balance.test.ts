@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIL_TRANSACTION_FEE_RESERVE, getFilecoinGasBalanceStatus } from "./filecoin-gas-balance";
+import { FIL_GAS_TOP_UP_AMOUNT } from "./squid-deposit-route";
 
 describe("getFilecoinGasBalanceStatus", () => {
   it("distinguishes sufficient, insufficient, loading, and unreadable balances", () => {
@@ -15,7 +16,8 @@ describe("getFilecoinGasBalanceStatus", () => {
     expect(getFilecoinGasBalanceStatus({ balance: undefined, isError: false, isLoading: false })).toBe("unavailable");
   });
 
-  it("reserves the same amount the guided top-up delivers", () => {
-    expect(FIL_TRANSACTION_FEE_RESERVE).toBe(250_000_000_000_000_000n);
+  it("reserves 0.02 FIL, less than the 0.05 FIL a top-up delivers", () => {
+    expect(FIL_TRANSACTION_FEE_RESERVE).toBe(20_000_000_000_000_000n);
+    expect(FIL_TRANSACTION_FEE_RESERVE).toBeLessThan(FIL_GAS_TOP_UP_AMOUNT);
   });
 });
