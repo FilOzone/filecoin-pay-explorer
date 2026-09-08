@@ -322,12 +322,31 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       ✓ <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
     </Notice>
   );
-  function submitLabel(): string {
-    if (isRenewal) return "Renew key";
-    if (isExistingKey) return "Authorize scopes";
-    if (prefillAddress) return "Review & authorize";
-    return "Create session key";
+  // What the form is doing, in order of precedence: a renewal is an existing
+  // key too, and a link-supplied address is still a new key.
+  function createMode(): "renew" | "add" | "new" {
+    if (isRenewal) return "renew";
+    if (isExistingKey) return "add";
+    return "new";
   }
+  const formCopy = {
+    renew: {
+      title: "Renew session key",
+      description:
+        "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired.",
+      submit: "Renew key",
+    },
+    add: {
+      title: "Add scopes to session key",
+      description: "Newly selected scopes are added to this key.",
+      submit: "Authorize scopes",
+    },
+    new: {
+      title: "New session key",
+      description: "All selected scopes share the same expiry.",
+      submit: prefillAddress ? "Review & authorize" : "Create session key",
+    },
+  }[createMode()];
 
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
@@ -337,16 +356,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         {step === "form" && (
           <>
             <DialogHeader>
-              <DialogTitle>
-                {isRenewal ? "Renew session key" : isExistingKey ? "Add scopes to session key" : "New session key"}
-              </DialogTitle>
-              <DialogDescription>
-                {isRenewal
-                  ? "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired."
-                  : isExistingKey
-                    ? "Newly selected scopes are added to this key."
-                    : "All selected scopes share the same expiry."}
-              </DialogDescription>
+              <DialogTitle>{formCopy.title}</DialogTitle>
+              <DialogDescription>{formCopy.description}</DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
             {txState === "failed" && txBanner}
@@ -542,7 +553,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
                 ) : (
-                  submitLabel()
+                  formCopy.submit
                 )}
               </Button>
             </DialogFooter>
