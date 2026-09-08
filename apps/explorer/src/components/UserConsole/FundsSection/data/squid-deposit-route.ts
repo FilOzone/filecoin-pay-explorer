@@ -3,8 +3,17 @@ import {
   SQUID_ROUTER_ADDRESS,
   type SquidClientOptions,
 } from "@filecoin-project/squid-evm-funding";
-import { type Address, encodeFunctionData, formatEther, type Hash, type Hex, parseAbi } from "viem";
-import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
+import {
+  type Address,
+  encodeFunctionData,
+  erc20Abi,
+  formatEther,
+  type Hash,
+  type Hex,
+  type PublicClient,
+  parseAbi,
+} from "viem";
+import { isOpStackChain } from "./squid-execution";
 
 export const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
 
@@ -83,6 +92,8 @@ export interface SquidDepositCost {
   name: string;
   amount: bigint;
   amountUsd?: string;
+  /** Gas units Squid budgeted for the route transaction, when it reports them. */
+  gasLimit?: bigint;
   token: { address: Address; chainId: number; symbol: string; decimals: number };
 }
 
@@ -293,9 +304,8 @@ export function assertExecutableQuoteWithinReview(
 }
 
 /**
- * Native balance the wallet needs before executing: route fees plus gas for the
- * approval and the swap with 50% headroom, matching the funding package's
- * measured fee drift between quote and execution.
+ * Native balance the wallet needs before executing: route fees plus the
+ * reviewed network-gas maximum, plus the spend itself for a native source.
  */
 export function getDepositRequiredNativeBalance(
   quote: Pick<SquidDepositQuote, "fees" | "gasCosts" | "sourceAmount">,
@@ -310,17 +320,144 @@ export function getDepositRequiredNativeBalance(
   );
 }
 
-/** Mirrors the existing guided flow: one buffered route estimate per transaction the wallet may sign. */
-export function getDepositNetworkFeeMaximum(
-  quote: Pick<SquidDepositQuote, "gasCosts" | "sourceAmount">,
-  sourceChainId: number,
+export type SquidDepositTransactionKind = "reset" | "approve" | "route";
+
+export const SQUID_DEPOSIT_TRANSACTION_LABELS: Readonly<Record<SquidDepositTransactionKind, string>> = {
+  reset: "allowance reset",
+  approve: "approval",
+  route: "Squid transaction",
+};
+
+/** Source-network transactions the wallet will sign for the reviewed allowance. */
+export function getDepositTransactionKinds(
   sourceToken: Address,
+  sourceAmount: bigint,
   allowance: bigint,
-): bigint {
-  const routeFee = getSourceNativeCosts({ fees: [], gasCosts: quote.gasCosts }, sourceChainId).gas;
-  const transactionCount =
-    isNativeToken(sourceToken) || allowance === quote.sourceAmount ? 1n : allowance > 0n ? 3n : 2n;
-  return applyNetworkFeeExecutionBuffer(sourceChainId, routeFee) * transactionCount;
+): readonly SquidDepositTransactionKind[] {
+  if (isNativeToken(sourceToken) || allowance === sourceAmount) return ["route"];
+  return allowance > 0n ? ["reset", "approve", "route"] : ["approve", "route"];
+}
+
+export interface SquidDepositNetworkFeeBudget {
+  /** Cumulative source-network gas the user reviews; execution fails closed above it. */
+  maximum: bigint;
+  transactions: readonly { kind: SquidDepositTransactionKind; fee: bigint }[];
+}
+
+/** Fee for one transaction on an OP Stack chain, L1 data fee included. */
+export type EstimateTotalFee = (request: {
+  account: Address;
+  to: Address;
+  data: Hex;
+  value: bigint;
+  nonce?: number;
+  gas: bigint;
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+  gasPrice?: bigint;
+}) => Promise<bigint>;
+
+export type SquidDepositFeeClient = Pick<PublicClient, "estimateFeesPerGas" | "estimateGas" | "getGasPrice"> & {
+  estimateTotalFee?: EstimateTotalFee;
+};
+
+/** Base fee can climb several blocks between review and the last send; 50% covers the drift seen in practice. */
+export const NETWORK_FEE_REVIEW_HEADROOM_BPS = 15_000n;
+const BPS = 10_000n;
+/**
+ * An ERC-20 approval that sets a zero allowance to a non-zero one cannot be
+ * simulated while the old allowance still stands (USDT-style tokens revert),
+ * so it is budgeted at the upper end of what approvals cost.
+ */
+const ERC20_APPROVE_FALLBACK_GAS = 65_000n;
+
+const applyReviewHeadroom = (fee: bigint) => (fee * NETWORK_FEE_REVIEW_HEADROOM_BPS + BPS - 1n) / BPS;
+
+async function readLiveFeePerGas(client: SquidDepositFeeClient): Promise<bigint> {
+  try {
+    const { maxFeePerGas } = await client.estimateFeesPerGas();
+    if (maxFeePerGas !== undefined && maxFeePerGas > 0n) return maxFeePerGas;
+  } catch {
+    // Chains without EIP-1559 base fees fall through to the legacy price.
+  }
+  const gasPrice = await client.getGasPrice();
+  if (gasPrice <= 0n) throw new Error("Live network fee data is unavailable");
+  return gasPrice;
+}
+
+async function estimateApprovalFee(
+  client: SquidDepositFeeClient,
+  sourceChainId: number,
+  { owner, sourceToken, spender }: { owner: Address; sourceToken: Address; spender: Address },
+  amount: bigint,
+  feePerGas: bigint,
+  canSimulate: boolean,
+): Promise<bigint> {
+  const data = encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] });
+  const transaction = { account: owner, to: sourceToken, data, value: 0n };
+  let gas: bigint;
+  if (canSimulate) {
+    gas = await client.estimateGas(transaction);
+  } else {
+    gas = await client.estimateGas(transaction).catch(() => ERC20_APPROVE_FALLBACK_GAS);
+  }
+  if (isOpStackChain(sourceChainId) && client.estimateTotalFee) {
+    return client.estimateTotalFee({ ...transaction, gas, maxFeePerGas: feePerGas });
+  }
+  return gas * feePerGas;
+}
+
+/**
+ * Budgets every transaction the flow will send, priced with the network's
+ * current fee data: approvals are simulated, and the route takes the larger
+ * of Squid's estimate and its gas limit at today's fee. Each gets headroom so
+ * the execution cap survives fee drift; the total is what the user reviews.
+ */
+export async function estimateDepositNetworkFeeMaximum({
+  allowance,
+  client,
+  owner,
+  quote,
+  sourceAmount,
+  sourceChainId,
+  sourceToken,
+  spender,
+}: {
+  allowance: bigint;
+  client: SquidDepositFeeClient;
+  owner: Address;
+  quote: Pick<SquidDepositQuote, "gasCosts">;
+  sourceAmount: bigint;
+  sourceChainId: number;
+  sourceToken: Address;
+  spender: Address;
+}): Promise<SquidDepositNetworkFeeBudget> {
+  const kinds = getDepositTransactionKinds(sourceToken, sourceAmount, allowance);
+  const feePerGas = await readLiveFeePerGas(client);
+  const approval = { owner, sourceToken, spender };
+  const transactions = await Promise.all(
+    kinds.map(async (kind) => {
+      switch (kind) {
+        case "reset":
+          return { kind, fee: await estimateApprovalFee(client, sourceChainId, approval, 0n, feePerGas, true) };
+        case "approve":
+          return {
+            kind,
+            fee: await estimateApprovalFee(client, sourceChainId, approval, sourceAmount, feePerGas, allowance === 0n),
+          };
+        case "route": {
+          const sourceGas = quote.gasCosts.filter(
+            (cost) => cost.token.chainId === sourceChainId && isNativeToken(cost.token.address),
+          );
+          const quoted = sourceGas.reduce((total, cost) => total + cost.amount, 0n);
+          const live = sourceGas.reduce((total, cost) => total + (cost.gasLimit ?? 0n), 0n) * feePerGas;
+          return { kind, fee: live > quoted ? live : quoted };
+        }
+      }
+    }),
+  );
+  const buffered = transactions.map((transaction) => ({ ...transaction, fee: applyReviewHeadroom(transaction.fee) }));
+  return { maximum: buffered.reduce((total, { fee }) => total + fee, 0n), transactions: buffered };
 }
 
 export async function requestSquidDepositRoute(
@@ -398,10 +535,12 @@ function parseCosts(value: unknown, label: string): SquidDepositCost[] {
     const name = label === "fee costs" ? item.name : item.type;
     const decimals = Number(item.token.decimals);
     if (!Number.isSafeInteger(decimals)) throw new Error(`Invalid Squid route: ${label} ${index + 1} decimals`);
+    const gasLimit = typeof item.gasLimit === "string" && /^\d+$/.test(item.gasLimit) ? BigInt(item.gasLimit) : 0n;
     return {
       name: typeof name === "string" ? name : label,
       amount: parseAmount(item.amount, `${label} ${index + 1} amount`),
       ...(typeof item.amountUSD === "string" ? { amountUsd: item.amountUSD } : {}),
+      ...(gasLimit > 0n ? { gasLimit } : {}),
       token: {
         address: parseAddress(item.token.address, `${label} ${index + 1} token`),
         chainId: Number(item.token.chainId),

@@ -5,6 +5,7 @@ import {
   awaitSquidDepositSettlement,
   executeSquidDeposit,
   fetchSquidDepositStatus,
+  SquidDepositBudgetError,
   type SquidDepositDestinationClient,
   SquidDepositError,
   type SquidDepositSourceClient,
@@ -512,7 +513,7 @@ describe("executeSquidDeposit", () => {
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
   });
 
-  it("blocks native-gas drift beyond the reviewed maximum", async () => {
+  it("blocks native-gas drift beyond the reviewed maximum before anything is sent", async () => {
     const wallet = fakeWallet();
     await expect(
       executeSquidDeposit({
@@ -525,8 +526,65 @@ describe("executeSquidDeposit", () => {
         squid: { integratorId: "id" },
         walletClient: wallet,
       }),
-    ).rejects.toThrow("Native gas exceeded");
+    ).rejects.toMatchObject({
+      name: "SquidDepositBudgetError",
+      message: "Network gas rose above the reviewed maximum before the approval.",
+      breach: { completed: [], next: "approve", feeSoFar: 0n, nextFee: 72_000_000_000_000n, maxNativeFee: 1n },
+    });
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("reports a cap breach after the approvals executed so the route can be re-reviewed, not repeated", async () => {
+    const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH]);
+    // Base is an OP Stack chain, so each prepared fee carries the 20% execution buffer.
+    const resetFee = 72_000_000_000_000n;
+    const approveFee = 72_000_000_000_000n;
+    const routeFee = 719_278_800_000_000n;
+    const source = fakeSource({ allowanceSequence: [5n, 0n, request.sourceAmount] });
+
+    const failure = await executeSquidDeposit({
+      ...signingChecks,
+      approvalResetRequired: true,
+      destinationClient: fakeDestination([100n]),
+      maxNativeFee: resetFee + approveFee + routeFee - 1n,
+      quote,
+      request,
+      sourceClient: source,
+      squid: { integratorId: "id" },
+      walletClient: wallet,
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(SquidDepositBudgetError);
+    expect((failure as SquidDepositBudgetError).breach).toEqual({
+      completed: ["reset", "approve"],
+      next: "route",
+      feeSoFar: resetFee + approveFee,
+      nextFee: routeFee,
+      maxNativeFee: resetFee + approveFee + routeFee - 1n,
+    });
+    expect((failure as Error).message).toBe(
+      "Network gas rose above the reviewed maximum before the Squid transaction. The allowance reset and approval already went through and will not be repeated.",
+    );
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
+    expect(wallet.sendTransaction.mock.calls.map((call) => (call as [{ to: string }])[0].to)).toEqual([USDC, USDC]);
+
+    // The re-reviewed run sees the granted allowance and sends only the route.
+    const secondWallet = fakeWallet();
+    const fetch = vi.fn(async () => statusResponse("success"));
+    await executeSquidDeposit({
+      ...signingChecks,
+      approvalRequired: false,
+      destinationClient: fakeDestination([100n, 100n, 195n]),
+      maxNativeFee: routeFee,
+      quote,
+      request,
+      sleep: noSleep,
+      sourceClient: fakeSource({ allowance: request.sourceAmount }),
+      squid: { integratorId: "id", fetch },
+      walletClient: secondWallet,
+    });
+    expect(secondWallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(secondWallet.sendTransaction.mock.calls[0]?.[0]).toMatchObject({ to: SQUID_ROUTER_ADDRESS });
   });
 
   it("uses the buffered OP Stack total fee, including L1 fees, for the reviewed cap", async () => {
@@ -543,7 +601,10 @@ describe("executeSquidDeposit", () => {
         squid: { integratorId: "id" },
         walletClient: wallet,
       }),
-    ).rejects.toThrow("Native gas exceeded the reviewed maximum");
+    ).rejects.toMatchObject({
+      name: "SquidDepositBudgetError",
+      breach: { completed: [], next: "route", nextFee: 1_080_000_000_000_000n },
+    });
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
   });
 
