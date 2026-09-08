@@ -8,8 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
-import { useWallets } from "@privy-io/react-auth";
-import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
+import { useExportWallet, useWallets } from "@privy-io/react-auth";
+import { ArrowUpRightIcon, Check, Copy, KeyRound, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
@@ -18,6 +18,7 @@ import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
+import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -29,6 +30,9 @@ const Balance = () => {
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
   const { action: exitAction, exit } = useWalletExit(activeWallet);
+  const { exportWallet } = useExportWallet();
+  // Privy creates a separate embedded wallet per app for the same login, so the key is the only way to carry it elsewhere.
+  const canExportKey = activeWallet !== undefined && isPrivyEmbeddedWallet(activeWallet);
   const [copied, setCopied] = useState(false);
   const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
@@ -69,6 +73,17 @@ const Balance = () => {
       });
     } catch (error) {
       console.error("Failed to add token:", error);
+    }
+  };
+
+  const exportKey = async () => {
+    if (!activeWallet) return;
+    try {
+      await exportWallet({ address: activeWallet.address });
+    } catch (error) {
+      toast.error("Unable to export the wallet key", {
+        description: error instanceof Error ? error.message : undefined,
+      });
     }
   };
 
@@ -126,6 +141,12 @@ const Balance = () => {
           <span className='text-base text-zinc-950 font-mono'>{address && formatAddress(address)}</span>
           {copied && <Check className='text-green-500 ml-auto' />}
         </DropdownMenuItem>
+        {canExportKey ? (
+          <DropdownMenuItem onClick={() => void exportKey()} className='cursor-pointer py-2'>
+            <KeyRound />
+            <span className='text-base text-zinc-950'>Export key</span>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onClick={() => void exitWallet()} className='cursor-pointer py-2'>
           <LogOut />
           <span className='text-base text-zinc-950'>{WALLET_EXIT_LABEL[exitAction]}</span>
