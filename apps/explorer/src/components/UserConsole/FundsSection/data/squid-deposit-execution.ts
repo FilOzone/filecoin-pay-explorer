@@ -30,6 +30,13 @@ import {
 } from "./squid-deposit-route";
 
 export type SquidDepositStage = "approving" | "swap-requested" | "swap-broadcast" | "bridging" | "verifying";
+
+/** A route this close to its expiry is not sent: the wallet prompt and the broadcast take time too. */
+export const ROUTE_EXPIRY_MARGIN_SECONDS = 30;
+
+const isRouteExpiring = (quote: ExecutableSquidDepositQuote, marginSeconds: number) =>
+  quote.transaction.expiresAt !== undefined &&
+  quote.transaction.expiresAt <= Math.floor(Date.now() / 1000) + marginSeconds;
 export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed" | "needs-gas";
 export type SquidDepositFailure = "failed" | "hook-failed" | "needs-gas" | "reverted" | "timeout";
 
@@ -132,9 +139,14 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
   assertCurrentContext(): void;
   onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
   /** Persists a durable marker synchronously before asking the wallet to submit the route. */
-  onSwapAttempt?: (fundsBefore: bigint) => void;
+  onSwapAttempt?: (fundsBefore: bigint, quote: ExecutableSquidDepositQuote) => void;
   /** Fires once the route is broadcast, with what a resume needs to finish it. */
-  onBroadcast?: (broadcast: { transactionHash: Hash; fundsBefore: bigint }) => void;
+  onBroadcast?: (broadcast: { transactionHash: Hash; fundsBefore: bigint; quote: ExecutableSquidDepositQuote }) => void;
+  /**
+   * Fetches a fresh executable route, already checked against the reviewed caps. Called
+   * when the approvals took longer than the route's validity, so the swap is not lost.
+   */
+  refreshQuote?: () => Promise<ExecutableSquidDepositQuote>;
 }
 
 function assertSignerUnchanged(
@@ -451,6 +463,7 @@ export async function executeSquidDeposit({
   onSwapAttempt,
   onStage,
   quote,
+  refreshQuote,
   request,
   sourceClient,
   squid,
@@ -545,31 +558,41 @@ export async function executeSquidDeposit({
     walletClient,
   });
 
+  // Approvals on a slow network can outlast the route's validity; a fresh route within the
+  // reviewed caps keeps the swap going rather than failing after the approvals were paid for.
+  let routeQuote = quote;
+  if (isRouteExpiring(routeQuote, ROUTE_EXPIRY_MARGIN_SECONDS)) {
+    if (!refreshQuote) throw new Error("The Squid route expired. Refresh the quote.");
+    routeQuote = await refreshQuote();
+    if (routeQuote.sourceChainId !== request.sourceChainId || routeQuote.sourceAmount !== request.sourceAmount) {
+      throw new Error("The refreshed Squid route does not match the reviewed payment");
+    }
+    if (isRouteExpiring(routeQuote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
+    assertCurrentContext();
+  }
   const route = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
-    to: quote.transaction.target,
-    data: quote.transaction.data,
-    value: quote.transaction.value,
+    to: routeQuote.transaction.target,
+    data: routeQuote.transaction.data,
+    value: routeQuote.transaction.value,
   });
   assertFeeWithinReview(
     { completed, feeSoFar: totalNativeFee, remaining: ["route"] },
     route.fee,
     maxNativeFee,
     nativeBalance,
-    quote.transaction.value,
+    routeQuote.transaction.value,
   );
   await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
-  if (quote.transaction.expiresAt !== undefined && quote.transaction.expiresAt <= Math.floor(Date.now() / 1000)) {
-    throw new Error("The Squid route expired. Refresh the quote.");
-  }
+  if (isRouteExpiring(routeQuote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
   onStage?.("swap-requested");
-  onSwapAttempt?.(fundsBefore);
+  onSwapAttempt?.(fundsBefore, routeQuote);
   const transactionHash = await walletClient.sendTransaction({
     ...route.request,
     account: walletClient.account,
     chain: undefined,
   });
   onStage?.("swap-broadcast", transactionHash);
-  onBroadcast?.({ transactionHash, fundsBefore });
+  onBroadcast?.({ transactionHash, fundsBefore, quote: routeQuote });
   const receipt = await sourceClient.waitForTransactionReceipt({ hash: transactionHash });
   if (receipt.status !== "success") {
     throw new SquidDepositError("The Squid transaction reverted on the source network", "reverted", transactionHash);
@@ -579,9 +602,9 @@ export async function executeSquidDeposit({
     ...polling,
     destinationClient,
     fundsBefore,
-    minimumDestinationAmount: quote.minimumDestinationAmount,
+    minimumDestinationAmount: routeQuote.minimumDestinationAmount,
     onStage,
-    quoteId: quote.quoteId,
+    quoteId: routeQuote.quoteId,
     sourceChainId: request.sourceChainId,
     squid,
     target: request,
