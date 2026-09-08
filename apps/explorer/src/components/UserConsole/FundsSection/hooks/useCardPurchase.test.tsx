@@ -118,8 +118,8 @@ describe("useCardPurchase", () => {
       source: {},
     });
     expect(queries.invalidateQueries.mock.calls).toEqual([
-      [{ queryKey: ["squid", "source-token-balances", ADDRESS, 8453] }],
-      [{ queryKey: ["direct-squid-deposit-balances", 8453] }],
+      [{ queryKey: ["squid", "source-token-balances", ADDRESS, 8453], refetchType: "active" }],
+      [{ queryKey: ["direct-squid-deposit-balances", 8453], refetchType: "active" }],
     ]);
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
