@@ -4,6 +4,7 @@ import { useWalletExit } from "./useWalletExit";
 
 const mocks = vi.hoisted(() => ({
   authenticated: false,
+  disconnectConnection: vi.fn<() => Promise<void>>(),
   logout: vi.fn<() => Promise<void>>(),
   pause: vi.fn(),
   resume: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock("@privy-io/react-auth", () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
+vi.mock("wagmi", () => ({ useDisconnect: () => ({ disconnectAsync: mocks.disconnectConnection }) }));
 vi.mock("@/components/UserConsole/console-wallet", () => ({
   consoleWalletSelector: { pause: mocks.pause, resume: mocks.resume },
 }));
@@ -33,6 +35,7 @@ describe("useWalletExit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.authenticated = false;
+    mocks.disconnectConnection.mockResolvedValue(undefined);
     mocks.logout.mockResolvedValue(undefined);
   });
 
@@ -47,6 +50,7 @@ describe("useWalletExit", () => {
     expect(mocks.pause).toHaveBeenCalledOnce();
     expect(mocks.logout).toHaveBeenCalledOnce();
     expect(disconnect).not.toHaveBeenCalled();
+    expect(mocks.disconnectConnection).not.toHaveBeenCalled();
     expect(mocks.resume).not.toHaveBeenCalled();
   });
 
@@ -62,15 +66,25 @@ describe("useWalletExit", () => {
     expect(mocks.logout).not.toHaveBeenCalled();
   });
 
-  it("pauses selection for an injected wallet so a reload does not reconnect it", async () => {
+  it("logs an extension wallet out of the console and pauses selection so a reload does not reconnect it", async () => {
     const disconnect = vi.fn();
     const current = await renderHook({ connectorType: "injected", disconnect });
 
-    expect(current().action).toBe("manual-disconnect");
+    expect(current().action).toBe("logout");
     await act(() => current().exit());
 
     expect(mocks.pause).toHaveBeenCalledOnce();
     expect(disconnect).toHaveBeenCalledOnce();
+    // Privy leaves the extension in its list, so wagmi's connection has to be dropped here.
+    expect(mocks.disconnectConnection).toHaveBeenCalledOnce();
+  });
+
+  it("resumes selection when the connection cannot be dropped", async () => {
+    mocks.disconnectConnection.mockRejectedValue(new Error("disconnect failed"));
+    const current = await renderHook({ connectorType: "injected", disconnect: vi.fn() });
+
+    await expect(act(() => current().exit())).rejects.toThrow("disconnect failed");
+    expect(mocks.resume).toHaveBeenCalledOnce();
   });
 
   it("resumes selection when the exit fails", async () => {

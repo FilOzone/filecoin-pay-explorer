@@ -35,7 +35,10 @@ vi.mock("@privy-io/react-auth", () => ({
 vi.mock("@/components/UserConsole/console-wallet", () => ({
   consoleWalletSelector: { pause: mocks.pause, resume: mocks.resume },
 }));
-vi.mock("wagmi", () => ({ useConnection: () => ({ isConnected: false }) }));
+vi.mock("wagmi", () => ({
+  useConnection: () => ({ isConnected: false }),
+  useDisconnect: () => ({ disconnectAsync: vi.fn(async () => undefined) }),
+}));
 
 describe("CustomConnectButton", () => {
   beforeEach(() => {
