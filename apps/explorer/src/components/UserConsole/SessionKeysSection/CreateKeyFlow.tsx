@@ -28,7 +28,6 @@ import {
   buildEnvSnippet,
   buildLoginArgs,
   EXPIRY_PRESETS,
-  isSameIdentity,
   normalizeKeyName,
   resolveExpiry,
   SCOPE_BY_ID,
@@ -108,9 +107,6 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
-  // The wallet the dialog is showing now; an attempt only drives the UI while that is still its own wallet.
-  const identityRef = useRef<SessionKeysIdentity>({ network, account });
-  identityRef.current = { network, account };
 
   // A link that names scopes locks the rest off (reduce-only consent); a link
   // that names none leaves every scope selectable, like a manual create.
@@ -169,7 +165,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setExpirySec(expiry);
     const attempt = {};
     shownAttemptRef.current = attempt;
-    const shown = () => shownAttemptRef.current === attempt && isSameIdentity(identityRef.current, identity);
+    // The dialog follows its attempt even after a wallet switch: the banner
+    // and the reveal describe this login, and a rejection under any wallet
+    // must bring the form back rather than leave "Waiting" on screen.
+    const shown = () => shownAttemptRef.current === attempt;
     setTxState("pending");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway. The BYO path
