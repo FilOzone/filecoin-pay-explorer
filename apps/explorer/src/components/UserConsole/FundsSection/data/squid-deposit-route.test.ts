@@ -220,15 +220,20 @@ describe("source-native accounting", () => {
     const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
     expect(getSourceNativeCosts(quote, 8453)).toEqual({ fees: 5_971_701_479_908n, gas: 3_596_394_000_000n });
     expect(getSourceNativeCosts(quote, 1)).toEqual({ fees: 0n, gas: 0n });
+    // The route's native fee carries the 50% drift headroom in both the requirement and the caps.
     expect(getDepositRequiredNativeBalance(quote, 8453, USDC, 8_631_345_600_000n)).toBe(
-      5_971_701_479_908n + 8_631_345_600_000n,
+      8_957_552_219_862n + 8_631_345_600_000n,
     );
     expect(getDepositRequiredNativeBalance(quote, 8453, NATIVE_TOKEN_ADDRESS, 4_315_672_800_000n)).toBe(
-      request.sourceAmount + 5_971_701_479_908n + 4_315_672_800_000n,
+      request.sourceAmount + 8_957_552_219_862n + 4_315_672_800_000n,
     );
-    expect(captureReviewedSquidDepositCaps(quote, NATIVE_TOKEN_ADDRESS).maxTransactionValue).toBe(
-      request.sourceAmount + 5_971_701_479_908n,
-    );
+    expect(captureReviewedSquidDepositCaps(quote, NATIVE_TOKEN_ADDRESS)).toEqual({
+      sourceAmount: request.sourceAmount,
+      minimumDestinationAmount: 92_000_000_000_000_000_000n,
+      maxTransactionValue: request.sourceAmount + 8_957_552_219_862n,
+      fees: { [`8453:${NATIVE_TOKEN_ADDRESS.toLowerCase()}`]: 8_957_552_219_862n },
+      gasCosts: { [`8453:${NATIVE_TOKEN_ADDRESS.toLowerCase()}`]: 5_394_591_000_000n },
+    });
     expect(isNativeToken(NATIVE_TOKEN_ADDRESS)).toBe(true);
   });
 
@@ -526,11 +531,22 @@ describe("parseSquidDepositRoute", () => {
     expect(isExecutableQuote(quote)).toBe(true);
   });
 
-  it("rejects executable spend, fee and minimum-output drift beyond the reviewed quote", () => {
+  it("tolerates fee drift within the headroom and rejects spend, fee and minimum-output drift beyond it", () => {
     const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now), USDC);
     const executable = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);
     if (!isExecutableQuote(executable)) throw new Error("expected executable quote");
     expect(() => assertExecutableQuoteWithinReview(executable, reviewed)).not.toThrow();
+    const feeCap = 8_957_552_219_862n;
+    expect(() =>
+      assertExecutableQuoteWithinReview(
+        {
+          ...executable,
+          fees: [{ ...executable.fees[0], amount: feeCap }],
+          transaction: { ...executable.transaction, value: feeCap },
+        },
+        reviewed,
+      ),
+    ).not.toThrow();
     expect(() =>
       assertExecutableQuoteWithinReview(
         { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
@@ -539,7 +555,7 @@ describe("parseSquidDepositRoute", () => {
     ).toThrow("minimum USDFC");
     expect(() =>
       assertExecutableQuoteWithinReview(
-        { ...executable, fees: [{ ...executable.fees[0], amount: executable.fees[0].amount + 1n }] },
+        { ...executable, fees: [{ ...executable.fees[0], amount: feeCap + 1n }] },
         reviewed,
       ),
     ).toThrow("route fee");

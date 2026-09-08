@@ -712,12 +712,13 @@ describe("DirectSquidDepositDialog safety integration", () => {
       query.allowance = 100_000_000n;
       throw new SquidDepositBudgetError({
         completed: ["approve"],
-        next: "route",
+        remaining: ["route"],
         feeSoFar: 3_000_000_000_000n,
-        nextFee: 8_000_000_000_000n,
+        requiredFee: 10_000_000_000_000n,
         maxNativeFee: 9_000_000_000_000n,
       });
     });
+    // Execution's own price for the route (10e12) plus headroom outranks the fresh estimate (12e12).
     const freshBudget = {
       maximum: 12_000_000_000_000n,
       transactions: [{ kind: "route" as const, fee: 12_000_000_000_000n }],
@@ -739,7 +740,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       .findAllByType("span")
       .find((node) => node.children.join("") === "Network gas maximum:");
     expect(gasLabel?.parent?.children.map((child) => (typeof child === "string" ? child : "")).join("")).toContain(
-      "0.000012 ETH",
+      "0.000015 ETH",
     );
     expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
     expect(button(renderer, "Pay 100 USDC")?.props.disabled).toBe(false);
@@ -751,14 +752,20 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(state.execute.mock.calls[1]?.[0]).toMatchObject({
       approvalRequired: false,
       approvalResetRequired: false,
-      maxNativeFee: 12_000_000_000_000n,
+      maxNativeFee: 15_000_000_000_000n,
     });
     expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
   });
 
   it("keeps the dead end when the re-review itself cannot price the remaining transactions", async () => {
     state.execute.mockRejectedValueOnce(
-      new SquidDepositBudgetError({ completed: [], next: "route", feeSoFar: 0n, nextFee: 1n, maxNativeFee: 0n }),
+      new SquidDepositBudgetError({
+        completed: [],
+        remaining: ["route"],
+        feeSoFar: 0n,
+        requiredFee: 1n,
+        maxNativeFee: 0n,
+      }),
     );
     state.estimateBudget.mockRejectedValueOnce(new Error("Live network fee data is unavailable"));
     let renderer!: ReactTestRenderer;
