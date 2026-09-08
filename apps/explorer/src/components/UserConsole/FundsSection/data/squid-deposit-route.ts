@@ -341,6 +341,12 @@ export const SQUID_DEPOSIT_TRANSACTION_LABELS: Readonly<Record<SquidDepositTrans
   route: "Squid transaction",
 };
 
+/** "approval and Squid transaction", "allowance reset, approval and Squid transaction". */
+export const listTransactionLabels = (kinds: readonly SquidDepositTransactionKind[]) => {
+  const labels = kinds.map((kind) => SQUID_DEPOSIT_TRANSACTION_LABELS[kind]);
+  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+};
+
 /** Source-network transactions the wallet will sign for the reviewed allowance. */
 export function getDepositTransactionKinds(
   sourceToken: Address,

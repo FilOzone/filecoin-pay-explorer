@@ -15,11 +15,11 @@ import {
   FILECOIN_CHAIN_ID,
   getDepositTransactionKinds,
   isNativeToken,
+  listTransactionLabels,
   priceSourceTransaction,
   readSourceFeesPerGas,
   type SourceFeesPerGas,
   SQUID_API_BASE_URL,
-  SQUID_DEPOSIT_TRANSACTION_LABELS,
   type SquidClient,
   type SquidDepositFeeClient,
   type SquidDepositRef,
@@ -66,11 +66,6 @@ export interface SquidDepositBudgetBreach {
   maxNativeFee: bigint;
 }
 
-const listLabels = (kinds: readonly SquidDepositTransactionKind[]) => {
-  const labels = kinds.map((kind) => SQUID_DEPOSIT_TRANSACTION_LABELS[kind]);
-  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
-};
-
 /**
  * The cumulative gas cap would be exceeded before a send. Nothing beyond
  * `completed` was broadcast, so the caller can review a fresh maximum and
@@ -82,8 +77,8 @@ export class SquidDepositBudgetError extends Error {
   constructor(breach: SquidDepositBudgetBreach) {
     super(
       breach.completed.length === 0
-        ? `Network fees for the ${listLabels(breach.remaining)} are above the reviewed maximum.`
-        : `Network gas rose above the reviewed maximum before the ${listLabels(breach.remaining.slice(0, 1))}. The ${listLabels(breach.completed)} already went through and will not be repeated.`,
+        ? `Network fees for the ${listTransactionLabels(breach.remaining)} are above the reviewed maximum.`
+        : `Network gas rose above the reviewed maximum before the ${listTransactionLabels(breach.remaining.slice(0, 1))}. The ${listTransactionLabels(breach.completed)} already went through and will not be repeated.`,
     );
     this.name = "SquidDepositBudgetError";
     this.breach = breach;
