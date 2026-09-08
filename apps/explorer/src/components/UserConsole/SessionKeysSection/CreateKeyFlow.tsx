@@ -117,8 +117,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // one cannot leave the old ones expired by accident. Joined into a string so
   // the memo below does not rebuild on every render.
   const renewedScopes = isRenewal ? existingKey.scopes.join(",") : "";
-  // A link that names scopes locks the rest off (reduce-only consent); a link
-  // that names none leaves every scope selectable, like a manual create.
+  // A link locks off every scope it did not name (reduce-only consent); a
+  // link without scopes is refused before this dialog ever opens.
   const requestPresets = useMemo(() => {
     if (!prefillAddress) return null;
     const renewed = renewedScopes ? (renewedScopes.split(",") as ScopeId[]) : [];
