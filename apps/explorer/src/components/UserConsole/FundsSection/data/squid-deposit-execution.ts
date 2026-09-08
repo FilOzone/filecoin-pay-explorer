@@ -159,19 +159,24 @@ function assertSignerUnchanged(
   }
 }
 
+type SigningStateInput = Pick<
+  ExecuteSquidDepositInput,
+  "assertCurrentContext" | "getCurrentOwner" | "quote" | "request" | "sourceClient" | "walletClient"
+>;
+
 async function assertFreshSigningState({
   assertCurrentContext,
+  blockNumber,
   getCurrentOwner,
   quote,
   request,
   requireAllowance,
   sourceClient,
   walletClient,
-}: Pick<
-  ExecuteSquidDepositInput,
-  "assertCurrentContext" | "getCurrentOwner" | "quote" | "request" | "sourceClient" | "walletClient"
-> & {
+}: SigningStateInput & {
   requireAllowance: boolean;
+  /** Reads pinned to this block, so state older than a just-mined approval is refused, not returned. */
+  blockNumber?: bigint;
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
   const isNativeSource = isNativeToken(request.sourceToken);
@@ -184,6 +189,7 @@ async function assertFreshSigningState({
       request.owner,
       request.sourceToken,
       quote.transaction.approvalSpender ?? quote.transaction.target,
+      blockNumber,
     ),
   ]);
   const { native: nativeBalance, token: tokenBalance } = state;
@@ -195,6 +201,42 @@ async function assertFreshSigningState({
   if (requireAllowance && allowance !== request.sourceAmount)
     throw new Error("Source-token allowance does not match the reviewed spend after approval");
   return { allowance, nativeBalance };
+}
+
+/** Reads of the allowance an approval just set, before the mismatch counts as real. */
+const ALLOWANCE_READ_ATTEMPTS = 5;
+
+/**
+ * Reads the signing state after an approval was mined. Public RPC endpoints
+ * are load balanced, and the node that answers the read can be a block behind
+ * the one that returned the receipt, so a first read may still show the old
+ * allowance. The read is pinned to the receipt's block, which makes a lagging
+ * node fail instead of answering, and repeated a few times before the
+ * mismatch is reported as such.
+ */
+async function assertSigningStateAfterApproval({
+  attempts = ALLOWANCE_READ_ATTEMPTS,
+  blockNumber,
+  expectedAllowance,
+  pollIntervalMs,
+  sleep,
+  ...input
+}: SigningStateInput & {
+  blockNumber: bigint;
+  expectedAllowance: bigint;
+  attempts?: number;
+  pollIntervalMs: number;
+  sleep: (milliseconds: number) => Promise<void>;
+}): Promise<{ allowance: bigint; nativeBalance: bigint }> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const state = await assertFreshSigningState({ ...input, blockNumber, requireAllowance: false });
+      if (state.allowance === expectedAllowance || attempt >= attempts) return state;
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+    }
+    await sleep(pollIntervalMs);
+  }
 }
 
 async function assertCurrentWallet({
@@ -518,6 +560,7 @@ export async function executeSquidDeposit({
   assertCurrentContext,
   ...polling
 }: ExecuteSquidDepositInput): Promise<SquidDepositResult> {
+  const { sleep = defaultSleep, pollIntervalMs = 10_000 } = polling;
   if (quote.sourceChainId !== request.sourceChainId) throw new Error("Quote does not match the requested network");
   if (walletClient.account.address.toLowerCase() !== request.owner.toLowerCase()) {
     throw new Error("Wallet does not control the paying account");
@@ -532,6 +575,26 @@ export async function executeSquidDeposit({
   let totalNativeFee = 0n;
   let nativeFeeSinceBalanceRead = 0n;
   const completed: SquidDepositTransactionKind[] = [];
+  const signingState = { assertCurrentContext, getCurrentOwner, quote, request, sourceClient, walletClient };
+  // Block of the last mined approval; reads after it must not come from an older block.
+  let approvalBlock: bigint | undefined;
+  const assertRouteSigningState = async (currentQuote: ExecutableSquidDepositQuote) => {
+    const currentSigningState = { ...signingState, quote: currentQuote };
+    if (approvalBlock === undefined) {
+      return assertFreshSigningState({ ...currentSigningState, requireAllowance: !isNativeSource });
+    }
+    const state = await assertSigningStateAfterApproval({
+      ...currentSigningState,
+      blockNumber: approvalBlock,
+      expectedAllowance: request.sourceAmount,
+      pollIntervalMs,
+      sleep,
+    });
+    if (state.allowance !== request.sourceAmount) {
+      throw new Error("Source-token allowance does not match the reviewed spend after approval");
+    }
+    return state;
+  };
   {
     let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
@@ -580,15 +643,14 @@ export async function executeSquidDeposit({
         if (approvalReceipt.status !== "success") {
           throw new SquidDepositError("The source-token approval transaction reverted", "reverted", approvalHash);
         }
+        approvalBlock = approvalReceipt.blockNumber;
         if (amount === 0n) {
-          ({ allowance, nativeBalance } = await assertFreshSigningState({
-            assertCurrentContext,
-            getCurrentOwner,
-            quote,
-            request,
-            requireAllowance: false,
-            sourceClient,
-            walletClient,
+          ({ allowance, nativeBalance } = await assertSigningStateAfterApproval({
+            ...signingState,
+            blockNumber: approvalBlock,
+            expectedAllowance: 0n,
+            pollIntervalMs,
+            sleep,
           }));
           if (allowance !== 0n)
             throw new Error("Source-token allowance changed after reset. Review the payment again.");
@@ -598,15 +660,7 @@ export async function executeSquidDeposit({
     }
   }
 
-  await assertFreshSigningState({
-    assertCurrentContext,
-    getCurrentOwner,
-    quote,
-    request,
-    requireAllowance: !isNativeSource,
-    sourceClient,
-    walletClient,
-  });
+  await assertRouteSigningState(quote);
 
   // Approvals on a slow network can outlast the route's validity; a fresh route within the
   // reviewed caps keeps the swap going rather than failing after the approvals were paid for.
@@ -625,15 +679,7 @@ export async function executeSquidDeposit({
     value: routeQuote.transaction.value,
   });
   assertFeeWithinReview({ completed, feeSoFar: totalNativeFee, remaining: ["route"] }, route.fee, maxNativeFee);
-  const { nativeBalance } = await assertFreshSigningState({
-    assertCurrentContext,
-    getCurrentOwner,
-    quote: routeQuote,
-    request,
-    requireAllowance: true,
-    sourceClient,
-    walletClient,
-  });
+  const { nativeBalance } = await assertRouteSigningState(routeQuote);
   assertNativeBalance(nativeBalance, route.fee, routeQuote.transaction.value);
   if (isRouteExpiring(routeQuote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
   onStage?.("swap-requested");
