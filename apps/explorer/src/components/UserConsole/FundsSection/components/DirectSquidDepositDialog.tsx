@@ -57,10 +57,10 @@ import {
   getDepositRequiredNativeBalance,
   isExecutableQuote,
   isNativeToken,
+  listTransactionLabels,
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
   planFilGasTopUp,
   requestSquidDepositRoute,
-  SQUID_DEPOSIT_TRANSACTION_LABELS,
   type SquidClient,
   type SquidDepositFeeClient,
   type SquidDepositNetworkFeeBudget,
@@ -99,11 +99,6 @@ const DEPOSIT_TARGET = {
   usdfc: mainnet.contracts.usdfc.address,
 };
 const NETWORK_FEE_HEADROOM_LABEL = `${(Number(NETWORK_FEE_REVIEW_HEADROOM_BPS) - 10_000) / 100}%`;
-
-const listTransactionLabels = (transactions: SquidDepositNetworkFeeBudget["transactions"]) => {
-  const labels = transactions.map(({ kind }) => SQUID_DEPOSIT_TRANSACTION_LABELS[kind]);
-  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
-};
 
 type ReviewedDeposit = {
   approvalRequired: boolean;
@@ -608,7 +603,7 @@ export function DirectSquidDepositDialog({
       transactions: budget.transactions,
     });
     setNotice(
-      `${breach.message} Check the updated maximum and confirm to send the ${listTransactionLabels(budget.transactions)}.`,
+      `${breach.message} Check the updated maximum and confirm to send the ${listTransactionLabels(budget.transactions.map(({ kind }) => kind))}.`,
     );
     if (balances.native < requiredNative) {
       setError("The paying wallet does not have enough native token for the updated maximum. Add funds, then confirm.");
@@ -858,7 +853,7 @@ export function DirectSquidDepositDialog({
                 {formatUnits(reviewed.maxNativeFee, reviewedSourceChain.nativeCurrency.decimals)}{" "}
                 {reviewedSourceChain.nativeCurrency.symbol}
                 <span className='mt-1 block text-xs text-muted-foreground'>
-                  {`Covers the ${listTransactionLabels(reviewed.transactions)} at current network fees plus ${NETWORK_FEE_HEADROOM_LABEL} headroom.`}
+                  {`Covers the ${listTransactionLabels(reviewed.transactions.map(({ kind }) => kind))} at current network fees plus ${NETWORK_FEE_HEADROOM_LABEL} headroom.`}
                 </span>
               </p>
               <p>
