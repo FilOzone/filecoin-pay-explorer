@@ -663,13 +663,13 @@ export function DirectSquidDepositDialog({
             return accounts[0] ? getAddress(accounts[0]) : undefined;
           },
           maxNativeFee: reviewed.maxNativeFee,
-          onSwapAttempt: (fundsBefore) => {
+          onSwapAttempt: (fundsBefore, routeQuote) => {
             save({
               executionStage: "swap-requested",
               fundsBefore,
-              minimumDestinationAmount: executable.minimumDestinationAmount,
+              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
               owner: snapshot.owner,
-              quoteId: executable.quoteId,
+              quoteId: routeQuote.quoteId,
               recipient: snapshot.recipient,
               sourceAmount: snapshot.sourceAmount,
               sourceChainId: snapshot.sourceChainId,
@@ -679,13 +679,13 @@ export function DirectSquidDepositDialog({
               startedAt: Date.now(),
             });
           },
-          onBroadcast: ({ fundsBefore, transactionHash: hash }) => {
+          onBroadcast: ({ fundsBefore, quote: routeQuote, transactionHash: hash }) => {
             save({
               executionStage: "swap-broadcast",
               fundsBefore,
-              minimumDestinationAmount: executable.minimumDestinationAmount,
+              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
               owner: snapshot.owner,
-              quoteId: executable.quoteId,
+              quoteId: routeQuote.quoteId,
               recipient: snapshot.recipient,
               sourceAmount: snapshot.sourceAmount,
               sourceChainId: snapshot.sourceChainId,
@@ -702,6 +702,12 @@ export function DirectSquidDepositDialog({
             if (hash) setTransactionHash(hash);
           },
           quote: executable,
+          refreshQuote: async () => {
+            const fresh = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
+            if (!isExecutableQuote(fresh)) throw new Error("Squid did not return an executable route");
+            assertExecutableQuoteWithinReview(fresh, reviewedCaps);
+            return fresh;
+          },
           request,
           sourceClient: sourceFeeClient,
           squid,

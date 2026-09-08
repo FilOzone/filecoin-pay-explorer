@@ -327,7 +327,7 @@ describe("executeSquidDeposit", () => {
     const source = fakeSource();
     const fetch = vi.fn(async () => statusResponse("success"));
     const stages: [SquidDepositStage, Hash | undefined][] = [];
-    const broadcasts: { transactionHash: Hash; fundsBefore: bigint }[] = [];
+    const broadcasts: { transactionHash: Hash; fundsBefore: bigint; quote: ExecutableSquidDepositQuote }[] = [];
 
     const result = await executeSquidDeposit({
       destinationClient: fakeDestination([100n, 100n, 195n]),
@@ -370,7 +370,7 @@ describe("executeSquidDeposit", () => {
       ["bridging", ROUTE_HASH],
       ["verifying", ROUTE_HASH],
     ]);
-    expect(broadcasts).toEqual([{ transactionHash: ROUTE_HASH, fundsBefore: 100n }]);
+    expect(broadcasts).toEqual([{ transactionHash: ROUTE_HASH, fundsBefore: 100n, quote }]);
   });
 
   it("skips the approval only when the allowance exactly matches the amount", async () => {
@@ -688,7 +688,7 @@ describe("executeSquidDeposit", () => {
         walletClient: wallet,
       }),
     ).rejects.toThrow("provider response lost");
-    expect(onSwapAttempt).toHaveBeenCalledWith(100n);
+    expect(onSwapAttempt).toHaveBeenCalledWith(100n, quote);
     expect(onBroadcast).not.toHaveBeenCalled();
   });
 
@@ -725,7 +725,7 @@ describe("executeSquidDeposit", () => {
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
   });
 
-  it("rechecks expiry after approval before sending the route", async () => {
+  it("rechecks expiry after approval before sending the route when no refresh is available", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValueOnce(1_000_000).mockReturnValue(2_000_000);
     const wallet = fakeWallet();
     try {
@@ -741,6 +741,74 @@ describe("executeSquidDeposit", () => {
         }),
       ).rejects.toThrow("route expired");
       expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("fetches a fresh route after the approval when the reviewed one is about to expire", async () => {
+    // 1000 s at review; the approval lands at 2000 s, inside the 30 s margin of a route expiring at 2020 s.
+    const now = vi.spyOn(Date, "now").mockReturnValueOnce(1_000_000).mockReturnValue(2_000_000);
+    const wallet = fakeWallet();
+    const fetch = vi.fn(async () => statusResponse("success"));
+    const fresh: ExecutableSquidDepositQuote = {
+      ...quote,
+      quoteId: "quote-2",
+      minimumDestinationAmount: 91n,
+      transaction: { ...quote.transaction, data: "0xfresh0", expiresAt: 2_600 },
+    };
+    const refreshQuote = vi.fn(async () => fresh);
+    const attempts: [bigint, string][] = [];
+    const broadcasts: string[] = [];
+    try {
+      const result = await executeSquidDeposit({
+        ...signingChecks,
+        destinationClient: fakeDestination([100n, 100n, 195n]),
+        onBroadcast: ({ quote: used }) => broadcasts.push(used.quoteId),
+        onSwapAttempt: (fundsBefore, used) => attempts.push([fundsBefore, used.quoteId]),
+        quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 2_020 } },
+        refreshQuote,
+        request,
+        sleep: noSleep,
+        sourceClient: fakeSource(),
+        squid: { integratorId: "id", fetch },
+        walletClient: wallet,
+      });
+
+      expect(refreshQuote).toHaveBeenCalledOnce();
+      expect(wallet.sendTransaction.mock.calls[1]?.[0]).toMatchObject({ to: SQUID_ROUTER_ADDRESS, data: "0xfresh0" });
+      expect(attempts).toEqual([[100n, "quote-2"]]);
+      expect(broadcasts).toEqual(["quote-2"]);
+      expect(String((fetch.mock.calls[0] as unknown as [string])[0])).toContain("quoteId=quote-2");
+      expect(result.depositedAmount).toBe(95n);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("refuses a refreshed route that no longer matches the reviewed payment or is itself expired", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(2_000_000);
+    try {
+      for (const [label, fresh] of [
+        ["amount", { ...quote, sourceAmount: 1n, transaction: { ...quote.transaction, expiresAt: 2_600 } }],
+        ["expiry", { ...quote, transaction: { ...quote.transaction, expiresAt: 1_999 } }],
+      ] as const) {
+        const wallet = fakeWallet();
+        await expect(
+          executeSquidDeposit({
+            ...signingChecks,
+            approvalRequired: false,
+            destinationClient: fakeDestination([100n]),
+            quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 2_010 } },
+            refreshQuote: async () => fresh,
+            request,
+            sourceClient: fakeSource({ allowance: request.sourceAmount }),
+            squid: { integratorId: "id" },
+            walletClient: wallet,
+          }),
+        ).rejects.toThrow(label === "amount" ? "does not match the reviewed payment" : "route expired");
+        expect(wallet.sendTransaction).not.toHaveBeenCalled();
+      }
     } finally {
       now.mockRestore();
     }

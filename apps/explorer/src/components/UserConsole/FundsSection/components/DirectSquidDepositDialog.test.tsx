@@ -25,9 +25,14 @@ const state = vi.hoisted(() => ({
 }));
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as const,
-  getEthereumProvider: vi.fn(async () => ({
-    request: vi.fn(async () => ["0x1111111111111111111111111111111111111111"]),
-  })),
+  getEthereumProvider: vi.fn(
+    async (): Promise<{ request: (args: { method: string }) => Promise<unknown> }> => ({
+      // The fake provider is already on Base, the dialog's default source network.
+      request: vi.fn(async ({ method }: { method: string }) =>
+        method === "eth_chainId" ? "0x2105" : ["0x1111111111111111111111111111111111111111"],
+      ),
+    }),
+  ),
   switchChain: vi.fn(async () => undefined),
 }));
 const connectedWallets = vi.hoisted(() => ({
@@ -803,8 +808,8 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   it("keeps the route links visible when USDFC landed but the deposit step failed", async () => {
     state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
-      input.onSwapAttempt?.(5n);
-      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      input.onSwapAttempt?.(5n, input.quote);
+      input.onBroadcast?.({ fundsBefore: 5n, quote: input.quote, transactionHash: ROUTE_HASH });
       throw new SquidDepositError(
         "USDFC reached your wallet but the Filecoin Pay deposit step failed.",
         "hook-failed",
@@ -825,8 +830,8 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   it("keeps NEEDS_GAS recoverable with the route link", async () => {
     state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
-      input.onSwapAttempt?.(5n);
-      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      input.onSwapAttempt?.(5n, input.quote);
+      input.onBroadcast?.({ fundsBefore: 5n, quote: input.quote, transactionHash: ROUTE_HASH });
       throw new SquidDepositError("Add gas from the Squid route link, then check again.", "needs-gas", ROUTE_HASH);
     });
     let renderer!: ReactTestRenderer;
@@ -838,6 +843,22 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     expect(storage.getItem(getPendingSquidDepositKey(OWNER))).not.toBeNull();
     expect(JSON.stringify(renderer.toJSON())).toContain("Squid route / add gas");
+  });
+
+  it("hands execution a route refresher that re-checks the reviewed caps", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    const input = state.execute.mock.calls[0]?.[0] as ExecuteSquidDepositInput;
+
+    state.requestRoute.mockResolvedValueOnce({ ...query.quote, quoteId: "quote-2", filGasTopUp: query.filGasTopUp });
+    await expect(input.refreshQuote?.()).resolves.toMatchObject({ quoteId: "quote-2" });
+    expect(state.requestRoute).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), { quoteOnly: false });
+
+    state.requestRoute.mockResolvedValueOnce({ ...query.quote, sourceAmount: 1n });
+    await expect(input.refreshQuote?.()).rejects.toThrow("The source spend changed after review");
   });
 
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
