@@ -1047,7 +1047,9 @@ export function DirectSquidDepositDialog({
               ) : null}
               {budgetQuery.isError ? (
                 <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
-                  <span>Network fees could not be estimated.</span>
+                  <span className='break-words'>
+                    Network fees could not be estimated. {walletErrorMessage(budgetQuery.error, "")}
+                  </span>
                   <Button onClick={() => void budgetQuery.refetch()} size='compact' type='button' variant='tertiary'>
                     Retry
                   </Button>

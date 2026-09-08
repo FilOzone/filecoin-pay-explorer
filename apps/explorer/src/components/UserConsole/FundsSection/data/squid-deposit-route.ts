@@ -434,11 +434,13 @@ async function estimateApprovalFee(
   { owner, sourceToken, spender }: { owner: Address; sourceToken: Address; spender: Address },
   amount: bigint,
   fees: SourceFeesPerGas,
-  canSimulate: boolean,
 ): Promise<bigint> {
   const data = encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] });
   const transaction = { account: owner, to: sourceToken, data, value: 0n };
-  const gas = canSimulate ? undefined : await client.estimateGas(transaction).catch(() => ERC20_APPROVE_FALLBACK_GAS);
+  // A refused simulation is not a reason to withhold the review: nodes reject it for a sender
+  // without gas money (which the native-balance check reports on its own) and USDT-style tokens
+  // reject an approval behind a standing allowance. Execution simulates again before each send.
+  const gas = await client.estimateGas(transaction).catch(() => ERC20_APPROVE_FALLBACK_GAS);
   return (await priceSourceTransaction(client, sourceChainId, { ...transaction, gas }, fees)).fee;
 }
 
@@ -474,11 +476,10 @@ export async function estimateDepositNetworkFeeMaximum({
     kinds.map(async (kind) => {
       switch (kind) {
         case "reset":
-          return { kind, fee: await estimateApprovalFee(client, sourceChainId, approval, 0n, fees, true) };
         case "approve":
           return {
             kind,
-            fee: await estimateApprovalFee(client, sourceChainId, approval, sourceAmount, fees, allowance === 0n),
+            fee: await estimateApprovalFee(client, sourceChainId, approval, kind === "reset" ? 0n : sourceAmount, fees),
           };
         case "route": {
           const sourceGas = quote.gasCosts.filter(
@@ -488,16 +489,18 @@ export async function estimateDepositNetworkFeeMaximum({
           const gasLimit = sourceGas.reduce((total, cost) => total + (cost.gasLimit ?? 0n), 0n);
           // The route's calldata is unknown before confirm, so its gas limit is priced at the live fee
           // and Squid's own figure, which prices the whole route, stays as the floor.
+          // An OP Stack L1-fee read can fail on a flaky RPC; Squid's figure then stands alone and the
+          // plan check before the first signature prices the real route.
           const live =
             gasLimit > 0n
-              ? (
-                  await priceSourceTransaction(
-                    client,
-                    sourceChainId,
-                    { account: owner, to: SQUID_ROUTER_ADDRESS, data: "0x", value: 0n, gas: gasLimit },
-                    fees,
-                  )
-                ).fee
+              ? await priceSourceTransaction(
+                  client,
+                  sourceChainId,
+                  { account: owner, to: SQUID_ROUTER_ADDRESS, data: "0x", value: 0n, gas: gasLimit },
+                  fees,
+                )
+                  .then(({ fee }) => fee)
+                  .catch(() => 0n)
               : 0n;
           return { kind, fee: live > quoted ? live : quoted };
         }

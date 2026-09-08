@@ -137,6 +137,7 @@ vi.mock("@tanstack/react-query", () => ({
     if (queryKey[0] === "direct-squid-deposit-gas-budget") {
       return {
         data: query.budgetIsError ? undefined : query.budget,
+        error: query.budgetIsError ? new Error("HTTP request failed. Details: 429 Too Many Requests") : null,
         isError: query.budgetIsError,
         isFetching: false,
         refetch: vi.fn(),
@@ -706,7 +707,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     expect(button(renderer, "Review")?.props.disabled).toBe(true);
     expect(renderer.root.findAllByType("span").map((node) => node.children.join(""))).toContain(
-      "Network fees could not be estimated.",
+      "Network fees could not be estimated. HTTP request failed. Details: 429 Too Many Requests",
     );
   });
 
