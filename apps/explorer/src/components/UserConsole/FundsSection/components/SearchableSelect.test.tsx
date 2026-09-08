@@ -68,6 +68,8 @@ describe("SearchableSelect", () => {
 
     await act(async () => renderer.root.findByProps({ id: "reverse" }).props.onClick());
     expect(text(renderer.root.findAllByProps({ role: "option" })[0])).toContain("USDC");
+    await act(async () => input.props.onClick());
+    expect(text(renderer.root.findAllByProps({ role: "option" })[0])).toContain("USDC");
 
     await act(async () => input.props.onKeyDown({ key: "Escape" }));
     await act(async () => input.props.onClick());
