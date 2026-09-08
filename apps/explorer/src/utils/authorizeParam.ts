@@ -16,7 +16,7 @@ import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
  * shape whose letter case does not match EIP-55: mixed case with the wrong
  * checksum, or all uppercase. All-lowercase input never hits it.
  */
-export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network";
+export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network" | "no-scopes";
 
 /** null means the param was absent or blank, so there is no request to show at all. */
 export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
@@ -95,5 +95,9 @@ export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { e
   if ("error" in requested) return requested;
   const network = parseNetworkParam(params.get("network"));
   if (!network) return { error: "no-network" };
-  return { address: requested.address, scopes: parseScopesParam(params.get("scopes")), network };
+  // The CLI always names scopes; a link without any usable one is malformed,
+  // and reduce-only consent has nothing to reduce to.
+  const scopes = parseScopesParam(params.get("scopes"));
+  if (!scopes) return { error: "no-scopes" };
+  return { address: requested.address, scopes, network };
 }

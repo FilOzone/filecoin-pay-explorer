@@ -77,6 +77,7 @@ const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
   "bad-checksum": "The address in this link is misspelled, so nothing was added. Ask for a new link.",
   "not-an-address": "This link does not contain a valid address, so nothing was added. Ask for a new link.",
   "no-network": "This link does not say which network it is for, so nothing was added. Ask for a new link.",
+  "no-scopes": "This link does not say which scopes it needs, so nothing was added. Ask for a new link.",
 };
 
 const ConnectedSessionKeys = ({
