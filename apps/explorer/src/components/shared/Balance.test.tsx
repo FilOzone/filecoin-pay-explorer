@@ -1,5 +1,5 @@
 import { act, create } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import Balance from "./Balance";
 
@@ -18,10 +18,17 @@ vi.mock("@filecoin-pay/ui/components/dropdown-menu", () => ({
   DropdownMenuSeparator: () => <hr />,
   DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
+const privy = vi.hoisted(() => ({
+  authenticated: false,
+  exportWallet: vi.fn(async () => undefined),
+  wallets: [] as { address: string; connectorType: string; walletClientType: string; disconnect: () => void }[],
+}));
+
 vi.mock("@privy-io/react-auth", () => ({
+  useExportWallet: () => ({ exportWallet: privy.exportWallet }),
   useLogout: () => ({ logout: vi.fn() }),
-  usePrivy: () => ({ authenticated: false }),
-  useWallets: () => ({ wallets: [] }),
+  usePrivy: () => ({ authenticated: privy.authenticated }),
+  useWallets: () => ({ wallets: privy.wallets }),
 }));
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }),
@@ -41,7 +48,56 @@ function LaunchState() {
   return <output data-open={isAddFundsOpen} />;
 }
 
+const ADDRESS = "0x1111111111111111111111111111111111111111";
+
+function render() {
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <FundingLaunchProvider>
+        <Balance />
+        <LaunchState />
+      </FundingLaunchProvider>,
+    );
+  });
+  return renderer;
+}
+
+function menuItem(renderer: ReturnType<typeof create>, label: string) {
+  return renderer.root
+    .findAllByProps({ "data-menu-item": true })
+    .find((item) => item.findAllByType("span").some((span) => span.children.includes(label)));
+}
+
 describe("Balance", () => {
+  beforeEach(() => {
+    privy.authenticated = false;
+    privy.exportWallet.mockClear();
+    privy.wallets = [];
+  });
+
+  it("offers the key export only for a Privy embedded wallet, and asks Privy for that wallet's key", async () => {
+    privy.authenticated = true;
+    privy.wallets = [{ address: ADDRESS, connectorType: "embedded", walletClientType: "privy", disconnect: vi.fn() }];
+    const renderer = render();
+
+    const exportItem = menuItem(renderer, "Export key");
+    expect(exportItem).toBeDefined();
+    await act(async () => exportItem?.props.onClick());
+    expect(privy.exportWallet).toHaveBeenCalledWith({ address: ADDRESS });
+    expect(menuItem(renderer, "Log out")).toBeDefined();
+  });
+
+  it("hides the key export for an external wallet", () => {
+    privy.wallets = [
+      { address: ADDRESS, connectorType: "injected", walletClientType: "metamask", disconnect: vi.fn() },
+    ];
+    const renderer = render();
+
+    expect(menuItem(renderer, "Export key")).toBeUndefined();
+    expect(menuItem(renderer, "Log out")).toBeDefined();
+  });
+
   it("opens the shared funding host from the wallet menu", () => {
     let renderer!: ReturnType<typeof create>;
     act(() => {
