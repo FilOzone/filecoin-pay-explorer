@@ -49,6 +49,7 @@ import {
   type SquidDepositStage,
 } from "../data/squid-deposit-execution";
 import {
+  applyNetworkFeeReviewHeadroom,
   assertExecutableQuoteWithinReview,
   captureReviewedSquidDepositCaps,
   type EstimateTotalFee,
@@ -249,7 +250,8 @@ export function DirectSquidDepositDialog({
       );
     },
     queryKey: ["direct-squid-deposit-balances", sourceChainId, sourceToken?.token, owner],
-    refetchInterval: 15_000,
+    // Polling stops once a run starts: execution reads the chain itself before each send.
+    refetchInterval: stage === null ? 15_000 : false,
   });
   const recipientFilQuery = useQuery({
     enabled: open && !!recipient && !!destinationClient,
@@ -313,7 +315,8 @@ export function DirectSquidDepositDialog({
 
   const quote = quoteQuery.data;
   const budgetQuery = useQuery({
-    enabled: open && !!quote && !!owner && !!sourceToken && !!sourceFeeClient && !!balancesQuery.data,
+    // Only the form needs a live budget; a review keeps the figure it showed and the run prices itself.
+    enabled: open && !reviewed && !!quote && !!owner && !!sourceToken && !!sourceFeeClient && !!balancesQuery.data,
     queryFn: () => {
       if (!quote || !owner || !sourceToken || !sourceFeeClient || !balancesQuery.data) {
         throw new Error("Network fees are unavailable");
@@ -585,17 +588,20 @@ export function DirectSquidDepositDialog({
       spender: SQUID_ROUTER_ADDRESS,
     });
     const isNativeSource = isNativeToken(context.sourceToken);
+    // Execution priced the remaining transactions itself; the new maximum must at least cover that.
+    const floor = applyNetworkFeeReviewHeadroom(breach.breach.requiredFee);
+    const maxNativeFee = budget.maximum > floor ? budget.maximum : floor;
     const requiredNative = getDepositRequiredNativeBalance(
       current.quote,
       context.sourceChainId,
       context.sourceToken,
-      budget.maximum,
+      maxNativeFee,
     );
     setReviewed({
       ...current,
       approvalRequired: !isNativeSource && balances.allowance !== context.sourceAmount,
       approvalResetRequired: !isNativeSource && balances.allowance > 0n && balances.allowance !== context.sourceAmount,
-      maxNativeFee: budget.maximum,
+      maxNativeFee,
       requiredNative,
       transactions: budget.transactions,
     });

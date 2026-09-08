@@ -10,9 +10,11 @@ import {
 } from "viem";
 import { readSourceTokenState } from "./source-token-balances";
 import {
+  ERC20_APPROVE_FALLBACK_GAS,
   type EstimateTotalFee,
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
+  getDepositTransactionKinds,
   isNativeToken,
   SQUID_API_BASE_URL,
   SQUID_DEPOSIT_TRANSACTION_LABELS,
@@ -44,10 +46,14 @@ export class SquidDepositError extends Error {
 export interface SquidDepositBudgetBreach {
   /** Transactions already broadcast under the reviewed cap; a re-review must not repeat them. */
   completed: readonly SquidDepositTransactionKind[];
-  /** Transaction whose live fee would push the total past the cap. */
-  next: SquidDepositTransactionKind;
+  /** Transactions still to send, first one next. */
+  remaining: readonly SquidDepositTransactionKind[];
   feeSoFar: bigint;
-  nextFee: bigint;
+  /**
+   * What execution priced at current fees, buffered as it charges them: every remaining
+   * transaction before the first signature, the next send mid-run.
+   */
+  requiredFee: bigint;
   maxNativeFee: bigint;
 }
 
@@ -65,12 +71,11 @@ export class SquidDepositBudgetError extends Error {
   readonly breach: SquidDepositBudgetBreach;
 
   constructor(breach: SquidDepositBudgetBreach) {
-    const next = SQUID_DEPOSIT_TRANSACTION_LABELS[breach.next];
-    const done =
+    super(
       breach.completed.length === 0
-        ? ""
-        : ` The ${listLabels(breach.completed)} already went through and will not be repeated.`;
-    super(`Network gas rose above the reviewed maximum before the ${next}.${done}`);
+        ? `Network fees for the ${listLabels(breach.remaining)} are above the reviewed maximum.`
+        : `Network gas rose above the reviewed maximum before the ${listLabels(breach.remaining.slice(0, 1))}. The ${listLabels(breach.completed)} already went through and will not be repeated.`,
+    );
     this.name = "SquidDepositBudgetError";
     this.breach = breach;
   }
@@ -197,11 +202,12 @@ async function assertCurrentWallet({
   assertSignerUnchanged(providerOwner, walletChainId, request);
 }
 
+/** With `gas` given, viem fills only fees and nonce, so a transaction that cannot be simulated yet can still be priced. */
 async function prepareTransaction(
   sourceClient: SquidDepositSourceClient,
   walletClient: SquidDepositWalletClient,
   sourceChainId: number,
-  transaction: { to: Address; data: Hex; value: bigint },
+  transaction: { to: Address; data: Hex; value: bigint; gas?: bigint },
 ) {
   const request = await walletClient.prepareTransactionRequest({
     account: walletClient.account,
@@ -240,17 +246,66 @@ async function prepareTransaction(
 }
 
 function assertFeeWithinReview(
-  progress: { completed: readonly SquidDepositTransactionKind[]; next: SquidDepositTransactionKind; feeSoFar: bigint },
+  progress: {
+    completed: readonly SquidDepositTransactionKind[];
+    remaining: readonly SquidDepositTransactionKind[];
+    feeSoFar: bigint;
+  },
   fee: bigint,
   maxNativeFee: bigint,
   nativeBalance: bigint,
   value: bigint,
 ) {
-  const { completed, feeSoFar, next } = progress;
+  const { completed, feeSoFar, remaining } = progress;
   if (feeSoFar + fee > maxNativeFee) {
-    throw new SquidDepositBudgetError({ completed, feeSoFar, maxNativeFee, next, nextFee: fee });
+    throw new SquidDepositBudgetError({ completed, feeSoFar, maxNativeFee, remaining, requiredFee: fee });
   }
   if (nativeBalance < feeSoFar + fee + value) throw new Error("Native balance no longer covers gas and route fees");
+}
+
+/**
+ * Prices every transaction the run will send before the first signature, so a
+ * reviewed maximum that current fees cannot meet stops the run here, with
+ * nothing broadcast, rather than between an approval and the route.
+ */
+async function assertPlanWithinReview({
+  allowance,
+  maxNativeFee,
+  quote,
+  request,
+  sourceClient,
+  spender,
+  walletClient,
+}: Pick<ExecuteSquidDepositInput, "maxNativeFee" | "quote" | "request" | "sourceClient" | "walletClient"> & {
+  allowance: bigint;
+  spender: Address;
+}) {
+  const remaining = getDepositTransactionKinds(request.sourceToken, request.sourceAmount, allowance);
+  const approval = (amount: bigint, gas?: bigint) =>
+    prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
+      to: request.sourceToken,
+      data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
+      value: 0n,
+      gas,
+    });
+  const price = (kind: SquidDepositTransactionKind) => {
+    if (kind === "reset") return approval(0n);
+    // Behind a reset the approval cannot be simulated yet; budget it at the fallback gas.
+    if (kind === "approve")
+      return approval(request.sourceAmount, allowance > 0n ? ERC20_APPROVE_FALLBACK_GAS : undefined);
+    // Squid's gas limit stands in for a simulation the missing allowance would fail.
+    return prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
+      to: quote.transaction.target,
+      data: quote.transaction.data,
+      value: quote.transaction.value,
+      gas: quote.transaction.gasLimit,
+    });
+  };
+  const fees = await Promise.all(remaining.map(price));
+  const requiredFee = fees.reduce((total, { fee }) => total + fee, 0n);
+  if (requiredFee > maxNativeFee) {
+    throw new SquidDepositBudgetError({ completed: [], feeSoFar: 0n, maxNativeFee, remaining, requiredFee });
+  }
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {
@@ -439,6 +494,10 @@ export async function executeSquidDeposit({
       if (!approvalRequired) throw new Error("Source-token allowance changed after review. Review the payment again.");
       if (allowance !== 0n && !approvalResetRequired)
         throw new Error("Source-token allowance changed after review. Review the payment again.");
+    }
+    await assertPlanWithinReview({ allowance, maxNativeFee, quote, request, sourceClient, spender, walletClient });
+    if (allowance !== request.sourceAmount) {
+      const plan = getDepositTransactionKinds(request.sourceToken, request.sourceAmount, allowance);
       onStage?.("approving");
       for (const amount of allowance > 0n ? [0n, request.sourceAmount] : [request.sourceAmount]) {
         const approval = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
@@ -448,7 +507,7 @@ export async function executeSquidDeposit({
         });
         const kind = amount === 0n ? "reset" : "approve";
         assertFeeWithinReview(
-          { completed, feeSoFar: totalNativeFee, next: kind },
+          { completed, feeSoFar: totalNativeFee, remaining: plan.slice(completed.length) },
           approval.fee,
           maxNativeFee,
           nativeBalance,
@@ -499,7 +558,7 @@ export async function executeSquidDeposit({
     value: quote.transaction.value,
   });
   assertFeeWithinReview(
-    { completed, feeSoFar: totalNativeFee, next: "route" },
+    { completed, feeSoFar: totalNativeFee, remaining: ["route"] },
     route.fee,
     maxNativeFee,
     nativeBalance,

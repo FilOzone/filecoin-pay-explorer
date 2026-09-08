@@ -41,6 +41,15 @@ const FIL_GAS_TOP_UP_MAX_SHARE_PERCENT = 10n;
 const FIL_GAS_TOP_UP_DEADLINE_SECONDS = 7n * 24n * 60n * 60n;
 
 const ceilDiv = (numerator: bigint, denominator: bigint) => (numerator + denominator - 1n) / denominator;
+/**
+ * Fees can move between the quote the user reviews and the route Squid builds
+ * at confirm, and base fee can climb several blocks between review and the
+ * last send; 50% covers the drift seen in practice. The caps stay caps: what
+ * is actually paid is what the route and the network charge.
+ */
+export const NETWORK_FEE_REVIEW_HEADROOM_BPS = 15_000n;
+const BPS = 10_000n;
+export const applyNetworkFeeReviewHeadroom = (fee: bigint) => ceilDiv(fee * NETWORK_FEE_REVIEW_HEADROOM_BPS, BPS);
 const nowSeconds = (now: () => number) => BigInt(Math.floor(now() / 1000));
 /** The top-up may not eat more than a tenth of what the deposit is guaranteed to receive. */
 const exceedsTopUpShare = (spendUsdfc: bigint, minimumDestinationAmount: bigint) =>
@@ -259,14 +268,16 @@ function getCostKey(cost: SquidDepositCost): string {
   return `${cost.token.chainId}:${cost.token.address.toLowerCase()}`;
 }
 
-function getCostCaps(costs: readonly SquidDepositCost[]): Record<string, bigint> {
-  return costs.reduce<Record<string, bigint>>((caps, cost) => {
+function getCostCaps(costs: readonly SquidDepositCost[], headroom = (fee: bigint) => fee): Record<string, bigint> {
+  const totals = costs.reduce<Record<string, bigint>>((caps, cost) => {
     const key = getCostKey(cost);
     caps[key] = (caps[key] ?? 0n) + cost.amount;
     return caps;
   }, {});
+  return Object.fromEntries(Object.entries(totals).map(([key, amount]) => [key, headroom(amount)]));
 }
 
+/** The reviewed quote's costs with drift headroom; the spend and the minimum received are exact. */
 export function captureReviewedSquidDepositCaps(
   quote: SquidDepositQuote,
   sourceToken: Address,
@@ -276,9 +287,10 @@ export function captureReviewedSquidDepositCaps(
     sourceAmount: quote.sourceAmount,
     minimumDestinationAmount: quote.minimumDestinationAmount,
     maxTransactionValue:
-      getSourceNativeCosts(quote, quote.sourceChainId).fees + (sourceNative ? quote.sourceAmount : 0n),
-    fees: getCostCaps(quote.fees),
-    gasCosts: getCostCaps(quote.gasCosts),
+      applyNetworkFeeReviewHeadroom(getSourceNativeCosts(quote, quote.sourceChainId).fees) +
+      (sourceNative ? quote.sourceAmount : 0n),
+    fees: getCostCaps(quote.fees, applyNetworkFeeReviewHeadroom),
+    gasCosts: getCostCaps(quote.gasCosts, applyNetworkFeeReviewHeadroom),
   };
 }
 
@@ -304,8 +316,9 @@ export function assertExecutableQuoteWithinReview(
 }
 
 /**
- * Native balance the wallet needs before executing: route fees plus the
- * reviewed network-gas maximum, plus the spend itself for a native source.
+ * Native balance the wallet needs before executing: the route's native fee
+ * up to its reviewed cap, the reviewed network-gas maximum, and the spend
+ * itself for a native source.
  */
 export function getDepositRequiredNativeBalance(
   quote: Pick<SquidDepositQuote, "fees" | "gasCosts" | "sourceAmount">,
@@ -314,7 +327,7 @@ export function getDepositRequiredNativeBalance(
   maximumNetworkFee: bigint,
 ): bigint {
   return (
-    getSourceNativeCosts(quote, sourceChainId).fees +
+    applyNetworkFeeReviewHeadroom(getSourceNativeCosts(quote, sourceChainId).fees) +
     maximumNetworkFee +
     (isNativeToken(sourceToken) ? quote.sourceAmount : 0n)
   );
@@ -361,17 +374,12 @@ export type SquidDepositFeeClient = Pick<PublicClient, "estimateFeesPerGas" | "e
   estimateTotalFee?: EstimateTotalFee;
 };
 
-/** Base fee can climb several blocks between review and the last send; 50% covers the drift seen in practice. */
-export const NETWORK_FEE_REVIEW_HEADROOM_BPS = 15_000n;
-const BPS = 10_000n;
 /**
  * An ERC-20 approval that sets a zero allowance to a non-zero one cannot be
  * simulated while the old allowance still stands (USDT-style tokens revert),
  * so it is budgeted at the upper end of what approvals cost.
  */
-const ERC20_APPROVE_FALLBACK_GAS = 65_000n;
-
-const applyReviewHeadroom = (fee: bigint) => (fee * NETWORK_FEE_REVIEW_HEADROOM_BPS + BPS - 1n) / BPS;
+export const ERC20_APPROVE_FALLBACK_GAS = 65_000n;
 
 async function readLiveFeePerGas(client: SquidDepositFeeClient): Promise<bigint> {
   try {
@@ -456,7 +464,10 @@ export async function estimateDepositNetworkFeeMaximum({
       }
     }),
   );
-  const buffered = transactions.map((transaction) => ({ ...transaction, fee: applyReviewHeadroom(transaction.fee) }));
+  const buffered = transactions.map((transaction) => ({
+    ...transaction,
+    fee: applyNetworkFeeReviewHeadroom(transaction.fee),
+  }));
   return { maximum: buffered.reduce((total, { fee }) => total + fee, 0n), transactions: buffered };
 }
 
