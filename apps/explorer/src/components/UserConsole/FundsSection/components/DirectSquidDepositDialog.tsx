@@ -21,7 +21,6 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Address, createWalletClient, custom, formatUnits, getAddress, type Hash, parseUnits } from "viem";
-import { estimateTotalFee } from "viem/op-stack";
 import { useAccount, usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
@@ -83,7 +82,12 @@ import {
   savePendingSquidDeposit,
   subscribeToPendingSquidDeposit,
 } from "../data/squid-deposit-tracker";
-import { isOpStackChain, isUserRejectedRequest, walletErrorMessage } from "../data/squid-execution";
+import {
+  estimateOpStackTotalFee,
+  isOpStackChain,
+  isUserRejectedRequest,
+  walletErrorMessage,
+} from "../data/squid-execution";
 import { paymentTokensQueryOptions } from "../data/squid-payment-tokens";
 import { squidFetch } from "../data/squid-quote";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
@@ -174,9 +178,7 @@ export function DirectSquidDepositDialog({
   const sourceFeeClient = useMemo<(SquidDepositSourceClient & SquidDepositFeeClient) | undefined>(() => {
     if (!sourceClient) return undefined;
     if (!isOpStackChain(sourceChainId)) return sourceClient;
-    // The shared request carries both fee shapes; viem accepts one at a time.
-    const estimateFee: EstimateTotalFee = (feeRequest) =>
-      estimateTotalFee(sourceClient, feeRequest as Parameters<typeof estimateTotalFee>[1]);
+    const estimateFee: EstimateTotalFee = (feeRequest) => estimateOpStackTotalFee(sourceClient, feeRequest);
     return { ...sourceClient, estimateTotalFee: estimateFee };
   }, [sourceChainId, sourceClient]);
   const destinationClient = usePublicClient({ chainId: mainnet.id });
