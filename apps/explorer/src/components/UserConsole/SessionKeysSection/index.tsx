@@ -3,7 +3,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { ArrowSquareOutIcon, KeyIcon, WalletIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Hex } from "viem";
 import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
@@ -76,6 +76,11 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
   // must not offer a signer the new wallet never authorized.
   const [revoke, setRevoke] = useState<{ target: SessionKeyWithStatus; identity: SessionKeysIdentity } | null>(null);
   const revokeTarget = pickRevokeTarget(revoke, { network, account });
+  // A target chosen under another wallet is dropped, not just hidden:
+  // switching back must not reopen a dialog the user never reopened.
+  useEffect(() => {
+    if (revoke && !revokeTarget) setRevoke(null);
+  }, [revoke, revokeTarget]);
   const setRevokeTarget = (target: SessionKeyWithStatus | null) =>
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
