@@ -12,7 +12,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import clsx from "clsx";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
@@ -222,25 +222,28 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const expiryDate = expirySec > 0n ? new Date(Number(expirySec) * 1000) : null;
   const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
-  const txBanner =
-    txState === "pending" ? (
+  const txBanners: Partial<Record<TxState, ReactNode>> = {
+    pending: (
       <Notice tone='info' className='flex items-center gap-2'>
         <Loader2 className='h-4 w-4 animate-spin shrink-0' />
         <span>
           <b>Waiting for confirmation…</b> keep this window open. Save your session key below in the meantime.
         </span>
       </Notice>
-    ) : txState === "failed" ? (
+    ),
+    failed: (
       <Notice tone='error'>
         <b>Authorization failed.</b> The transaction did not go through, so this key was never registered. Discard it
         and try again.
       </Notice>
-    ) : (
-      <Notice tone='ok'>
-        ✓ <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
-        {scopeLabels}
-      </Notice>
-    );
+    ),
+  };
+  const txBanner = txBanners[txState] ?? (
+    <Notice tone='ok'>
+      ✓ <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
+      {scopeLabels}
+    </Notice>
+  );
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
   return (
