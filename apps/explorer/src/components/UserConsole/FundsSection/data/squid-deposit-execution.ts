@@ -14,14 +14,17 @@ import {
 import { formatAddress } from "@/utils/formatter";
 import { readSourceTokenState } from "./source-token-balances";
 import {
+  type EstimateTotalFee,
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
   isNativeToken,
   SQUID_API_BASE_URL,
+  SQUID_DEPOSIT_TRANSACTION_LABELS,
   type SquidClient,
   type SquidDepositRef,
   type SquidDepositRouteRequest,
   type SquidDepositTarget,
+  type SquidDepositTransactionKind,
   squidDepositAbi,
 } from "./squid-deposit-route";
 import { applyNetworkFeeExecutionBuffer, isOpStackChain } from "./squid-execution";
@@ -42,6 +45,41 @@ export class SquidDepositError extends Error {
   }
 }
 
+export interface SquidDepositBudgetBreach {
+  /** Transactions already broadcast under the reviewed cap; a re-review must not repeat them. */
+  completed: readonly SquidDepositTransactionKind[];
+  /** Transaction whose live fee would push the total past the cap. */
+  next: SquidDepositTransactionKind;
+  feeSoFar: bigint;
+  nextFee: bigint;
+  maxNativeFee: bigint;
+}
+
+const listLabels = (kinds: readonly SquidDepositTransactionKind[]) => {
+  const labels = kinds.map((kind) => SQUID_DEPOSIT_TRANSACTION_LABELS[kind]);
+  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+};
+
+/**
+ * The cumulative gas cap would be exceeded before a send. Nothing beyond
+ * `completed` was broadcast, so the caller can review a fresh maximum and
+ * continue rather than abandon the deposit.
+ */
+export class SquidDepositBudgetError extends Error {
+  readonly breach: SquidDepositBudgetBreach;
+
+  constructor(breach: SquidDepositBudgetBreach) {
+    const next = SQUID_DEPOSIT_TRANSACTION_LABELS[breach.next];
+    const done =
+      breach.completed.length === 0
+        ? ""
+        : ` The ${listLabels(breach.completed)} already went through and will not be repeated.`;
+    super(`Network gas rose above the reviewed maximum before the ${next}.${done}`);
+    this.name = "SquidDepositBudgetError";
+    this.breach = breach;
+  }
+}
+
 export type SquidDepositWalletClient = Pick<
   WalletClient,
   "getChainId" | "prepareTransactionRequest" | "sendTransaction"
@@ -53,17 +91,7 @@ export type SquidDepositSourceClient = Pick<
   PublicClient,
   "getBalance" | "getChainId" | "multicall" | "readContract" | "waitForTransactionReceipt"
 > & {
-  estimateTotalFee?: (request: {
-    account: Address;
-    to: Address;
-    data: Hex;
-    value: bigint;
-    nonce: number;
-    gas: bigint;
-    maxFeePerGas?: bigint;
-    maxPriorityFeePerGas?: bigint;
-    gasPrice?: bigint;
-  }) => Promise<bigint>;
+  estimateTotalFee?: EstimateTotalFee;
 };
 export type SquidDepositDestinationClient = Pick<PublicClient, "readContract" | "waitForTransactionReceipt">;
 
@@ -214,8 +242,15 @@ async function prepareTransaction(
   return { fee: applyNetworkFeeExecutionBuffer(sourceChainId, totalFee), request };
 }
 
-function assertFeeWithinReview(feeSoFar: bigint, fee: bigint, maxNativeFee: bigint) {
-  if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
+function assertFeeWithinReview(
+  progress: { completed: readonly SquidDepositTransactionKind[]; next: SquidDepositTransactionKind; feeSoFar: bigint },
+  fee: bigint,
+  maxNativeFee: bigint,
+) {
+  const { completed, feeSoFar, next } = progress;
+  if (feeSoFar + fee > maxNativeFee) {
+    throw new SquidDepositBudgetError({ completed, feeSoFar, maxNativeFee, next, nextFee: fee });
+  }
 }
 
 function assertNativeBalance(nativeBalance: bigint, fee: bigint, value: bigint) {
@@ -442,6 +477,7 @@ export async function executeSquidDeposit({
   const isNativeSource = isNativeToken(request.sourceToken);
   let totalNativeFee = 0n;
   let nativeFeeSinceBalanceRead = 0n;
+  const completed: SquidDepositTransactionKind[] = [];
   {
     let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
@@ -466,7 +502,8 @@ export async function executeSquidDeposit({
           data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
           value: 0n,
         });
-        assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee);
+        const kind = amount === 0n ? "reset" : "approve";
+        assertFeeWithinReview({ completed, feeSoFar: totalNativeFee, next: kind }, approval.fee, maxNativeFee);
         assertNativeBalance(nativeBalance, nativeFeeSinceBalanceRead + approval.fee, 0n);
         await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
         const approvalHash = await walletClient.sendTransaction({
@@ -476,6 +513,7 @@ export async function executeSquidDeposit({
         });
         totalNativeFee += approval.fee;
         nativeFeeSinceBalanceRead += approval.fee;
+        completed.push(kind);
         const approvalReceipt = await sourceClient.waitForTransactionReceipt({ hash: approvalHash });
         if (approvalReceipt.status !== "success") {
           throw new SquidDepositError("The source-token approval transaction reverted", "reverted", approvalHash);
@@ -513,7 +551,7 @@ export async function executeSquidDeposit({
     data: quote.transaction.data,
     value: quote.transaction.value,
   });
-  assertFeeWithinReview(totalNativeFee, route.fee, maxNativeFee);
+  assertFeeWithinReview({ completed, feeSoFar: totalNativeFee, next: "route" }, route.fee, maxNativeFee);
   const { nativeBalance } = await assertFreshSigningState({
     assertCurrentContext,
     getCurrentOwner,
