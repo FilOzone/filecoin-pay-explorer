@@ -107,7 +107,7 @@ const Operators = () => {
 
           {!isError && !isLoading && allOperators.length === 0 && hasActiveFilters && (
             <ListEmptyNoResults
-              description={"No operator found with this address. Make sure the address is correct and try again."}
+              description='No operator found with this address. Make sure the address is correct and try again.'
               clearLabel='Clear Search'
               onClear={handleClearFilters}
             />

@@ -200,7 +200,7 @@ const Rails = () => {
 
           {!isError && !isLoading && allRails.length === 0 && hasActiveFilters && (
             <ListEmptyNoResults
-              description={"Try adjusting your search filters to find what you're looking for."}
+              description='Try adjusting your search filters to find what you are looking for.'
               clearLabel='Clear Filters'
               onClear={handleClearFilters}
             />

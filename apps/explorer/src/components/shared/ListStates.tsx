@@ -3,9 +3,9 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { AlertCircle, SearchIcon } from "lucide-react";
 
 /**
- * The empty and error states shared by the paginated explorer list pages
- * (accounts, operators, rails). They all render the same card with the same
- * actions; only the entity noun and the "no results" wording differ.
+ * The empty and error states shared by the paginated explorer list pages.
+ * They all render the same card with the same actions;
+ * only the entity noun and the "no results" wording differ.
  */
 
 type EntityLabelProps = {
