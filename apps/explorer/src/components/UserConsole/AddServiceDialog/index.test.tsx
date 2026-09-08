@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   isSubmitting: false,
   isExecuting: false,
   submit: vi.fn(),
+  setServiceChoice: vi.fn(),
+  setCustomServiceInput: vi.fn(),
+  setTokenChoice: vi.fn(),
+  services: [] as { address: string; name: string; payerCount: number }[],
+  knownTokens: [] as { address: string; symbol: string; decimals: number }[],
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -57,20 +62,20 @@ vi.mock("@/hooks/useSynapse", () => ({
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
   useServiceSelection: () => ({
-    services: [],
+    services: mocks.services,
     isLoadingServices: false,
     serviceChoice: OPERATOR,
-    setServiceChoice: vi.fn(),
+    setServiceChoice: mocks.setServiceChoice,
     customServiceInput: "",
-    setCustomServiceInput: vi.fn(),
+    setCustomServiceInput: mocks.setCustomServiceInput,
     selectedService: undefined,
     operatorAddress: OPERATOR,
     reset: vi.fn(),
   }),
   useTokenSelection: () => ({
-    knownTokens: [],
+    knownTokens: mocks.knownTokens,
     tokenChoice: TOKEN,
-    setTokenChoice: vi.fn(),
+    setTokenChoice: mocks.setTokenChoice,
     customTokenInput: "",
     setCustomTokenInput: vi.fn(),
     token: { address: TOKEN, symbol: "TKN", decimals: 18 },
@@ -86,10 +91,13 @@ vi.mock("./hooks", () => ({
   },
 }));
 
-function renderDialog(onOpenChange = vi.fn()) {
+function renderDialog(
+  onOpenChange = vi.fn(),
+  prefill?: { operator: `0x${string}`; token: `0x${string}`; amount: string },
+) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<AddServiceDialog open onOpenChange={onOpenChange} />);
+    renderer = create(<AddServiceDialog open onOpenChange={onOpenChange} prefill={prefill} />);
   });
   return { renderer, onOpenChange };
 }
@@ -105,9 +113,37 @@ beforeEach(() => {
   mocks.dialogOpenChange = undefined;
   mocks.dialogContentProps = undefined;
   mocks.onSubmitOnChain = undefined;
+  mocks.setServiceChoice.mockReset();
+  mocks.setCustomServiceInput.mockReset();
+  mocks.setTokenChoice.mockReset();
+  mocks.services = [];
+  mocks.knownTokens = [];
 });
 
 describe("AddServiceDialog", () => {
+  it("fills service, token, and amount from a funding link, picking known entries by address", () => {
+    mocks.services = [{ address: OPERATOR, name: "Warm Storage", payerCount: 3 }];
+    mocks.knownTokens = [{ address: TOKEN, symbol: "USDFC", decimals: 18 }];
+    const { renderer } = renderDialog(vi.fn(), {
+      operator: OPERATOR.toUpperCase().replace("0X", "0x") as `0x${string}`,
+      token: TOKEN,
+      amount: "2",
+    });
+
+    expect(mocks.setServiceChoice).toHaveBeenCalledWith(OPERATOR);
+    expect(mocks.setTokenChoice).toHaveBeenCalledWith(TOKEN);
+    expect(mocks.setCustomServiceInput).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("2");
+  });
+
+  it("falls back to a custom address when the link names a service the list does not know", () => {
+    const other = "0x3333333333333333333333333333333333333333" as const;
+    renderDialog(vi.fn(), { operator: other, token: TOKEN, amount: "1" });
+
+    expect(mocks.setServiceChoice).toHaveBeenCalledWith("custom");
+    expect(mocks.setCustomServiceInput).toHaveBeenCalledWith(other);
+  });
+
   it("blocks every user close while busy but still closes after onchain submission", () => {
     mocks.isSubmitting = true;
     const { renderer, onOpenChange } = renderDialog();

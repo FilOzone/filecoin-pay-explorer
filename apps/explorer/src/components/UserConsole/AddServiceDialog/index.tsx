@@ -18,8 +18,8 @@ import {
   SelectValue,
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
-import { formatUnits, maxUint256, parseUnits } from "viem";
+import { useEffect, useRef, useState } from "react";
+import { formatUnits, type Hex, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
@@ -27,9 +27,18 @@ import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 import { CUSTOM_OPTION, useAddServiceSubmit, useServiceSelection, useTokenSelection } from "./hooks";
 
+/** Values a funding link fills in before the dialog opens; the user can still edit every field. */
+export interface AddServicePrefill {
+  operator: Hex;
+  token: Hex;
+  /** Decimal amount as typed into the deposit field. */
+  amount: string;
+}
+
 interface AddServiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  prefill?: AddServicePrefill | null;
 }
 
 const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: string }> = ({
@@ -74,7 +83,7 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
   </div>
 );
 
-const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange }) => {
+const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange, prefill }) => {
   const serviceSelection = useServiceSelection();
   const tokenSelection = useTokenSelection(open);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
@@ -106,6 +115,33 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange 
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
+
+  // A funding link fills the form once per opening, after the service list has
+  // loaded so a known service is picked by name rather than as a custom address.
+  const prefillApplied = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      prefillApplied.current = false;
+      return;
+    }
+    if (!prefill || prefillApplied.current || isLoadingServices) return;
+    prefillApplied.current = true;
+    const known = services.find((s) => s.address.toLowerCase() === prefill.operator.toLowerCase());
+    if (known) {
+      serviceSelection.setServiceChoice(known.address);
+    } else {
+      serviceSelection.setServiceChoice(CUSTOM_OPTION);
+      serviceSelection.setCustomServiceInput(prefill.operator);
+    }
+    const knownToken = tokenSelection.knownTokens.find((t) => t.address.toLowerCase() === prefill.token.toLowerCase());
+    if (knownToken) {
+      tokenSelection.setTokenChoice(knownToken.address);
+    } else {
+      tokenSelection.setTokenChoice(CUSTOM_OPTION);
+      tokenSelection.setCustomTokenInput(prefill.token);
+    }
+    setDepositAmount(prefill.amount);
+  }, [open, prefill, isLoadingServices, services, serviceSelection, tokenSelection]);
 
   // Amounts are denominated in the token that was on screen when they were
   // typed, so any change of token clears the field rather than reinterpreting it.
