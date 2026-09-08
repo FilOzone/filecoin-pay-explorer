@@ -280,7 +280,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.recipientFilIsFetching = false;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
-    wallet.switchChain.mockClear();
+    wallet.switchChain.mockReset().mockResolvedValue(undefined);
     topUp.setActive.mockClear();
     vi.stubGlobal("navigator", {
       locks: {
@@ -929,6 +929,51 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     state.requestRoute.mockResolvedValueOnce({ ...query.quote, sourceAmount: 1n });
     await expect(input.refreshQuote?.()).rejects.toThrow("The source spend changed after review");
+  });
+
+  it("keeps the progress view up until the dialog closes after a successful deposit", async () => {
+    let settle!: () => void;
+    state.execute.mockImplementationOnce(
+      (input: ExecuteSquidDepositInput) =>
+        new Promise((resolve) => {
+          input.onStage?.("verifying", ROUTE_HASH);
+          settle = () =>
+            resolve({ depositedAmount: 92n, fundsAfter: 97n, fundsBefore: 5n, transactionHash: ROUTE_HASH });
+        }),
+    );
+    // The return to Filecoin takes a real round trip, during which React paints whatever state is current.
+    wallet.switchChain.mockImplementation(
+      () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 0)),
+    );
+    let renderer!: ReactTestRenderer;
+    const viewsAtClose: string[] = [];
+    const onOpenChange = vi.fn((open: boolean) => {
+      if (open) return;
+      const progress = renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" }).length;
+      const review = renderer.root.findAllByProps({ "aria-label": "Reviewed Squid deposit" }).length;
+      viewsAtClose.push(progress ? "progress" : review ? "review" : "form");
+    });
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(1);
+
+    // Settled outside act so the intermediate renders happen as they would in the browser.
+    settle();
+    await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    expect(viewsAtClose).toEqual(["progress"]);
+    // The progress view rides out the close animation, and the next open starts on the form.
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open={false} />);
+    });
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(1);
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0);
+    expect(amountInput(renderer)).toBeDefined();
   });
 
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {

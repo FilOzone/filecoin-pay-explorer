@@ -458,6 +458,13 @@ export function DirectSquidDepositDialog({
     };
   }, [open, setTopUpActive]);
 
+  // A finished run leaves its progress view up through the close animation; start the next open clean.
+  useEffect(() => {
+    if (!open) return;
+    setStage(null);
+    setTransactionHash(null);
+  }, [open]);
+
   useEffect(() => {
     if (!open || !recipient) return;
     const refresh = () => {
@@ -530,10 +537,11 @@ export function DirectSquidDepositDialog({
 
   const finish = async (owner: Address, depositRecipient: Address, depositedAmount: bigint) => {
     clearSaved(owner);
-    setStage(null);
-    setTransactionHash(null);
     toast.success(`Deposited ${formatUnits(depositedAmount, 18)} USDFC into Filecoin Pay`);
     await invalidateTopUpQueries(queryClient, accountId, depositRecipient);
+    // The stage is left in place: the review was already dropped by the chain switch, and a reset
+    // here would land in the same render as the parent's close, so the dialog would animate out
+    // showing the form. The next open clears it.
     if (await restoreFilecoin()) onOpenChange(false);
   };
 
@@ -1115,7 +1123,7 @@ export function DirectSquidDepositDialog({
           )}
           {transactionHash && !pending ? <code className='break-all text-xs'>{transactionHash}</code> : null}
           {error ? (
-            <p className='text-destructive' role='alert'>
+            <p className='break-words text-destructive' role='alert'>
               {error}
             </p>
           ) : null}
