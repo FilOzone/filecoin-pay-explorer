@@ -11,21 +11,23 @@ import {
 import { readSourceTokenState } from "./source-token-balances";
 import {
   ERC20_APPROVE_FALLBACK_GAS,
-  type EstimateTotalFee,
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
   getDepositTransactionKinds,
   isNativeToken,
+  priceSourceTransaction,
+  readSourceFeesPerGas,
+  type SourceFeesPerGas,
   SQUID_API_BASE_URL,
   SQUID_DEPOSIT_TRANSACTION_LABELS,
   type SquidClient,
+  type SquidDepositFeeClient,
   type SquidDepositRef,
   type SquidDepositRouteRequest,
   type SquidDepositTarget,
   type SquidDepositTransactionKind,
   squidDepositAbi,
 } from "./squid-deposit-route";
-import { applyNetworkFeeExecutionBuffer, isOpStackChain } from "./squid-execution";
 
 export type SquidDepositStage = "approving" | "swap-requested" | "swap-broadcast" | "bridging" | "verifying";
 export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed" | "needs-gas";
@@ -81,19 +83,16 @@ export class SquidDepositBudgetError extends Error {
   }
 }
 
-export type SquidDepositWalletClient = Pick<
-  WalletClient,
-  "getChainId" | "prepareTransactionRequest" | "sendTransaction"
-> & {
+export type SquidDepositWalletClient = Pick<WalletClient, "getChainId" | "sendTransaction"> & {
   account: Account;
 };
 
+/** Reads state and prices transactions on the source network; the wallet only signs what it is handed. */
 export type SquidDepositSourceClient = Pick<
   PublicClient,
   "getBalance" | "getChainId" | "multicall" | "readContract" | "waitForTransactionReceipt"
-> & {
-  estimateTotalFee?: EstimateTotalFee;
-};
+> &
+  SquidDepositFeeClient;
 export type SquidDepositDestinationClient = Pick<PublicClient, "readContract">;
 
 export interface SquidDepositResult {
@@ -202,47 +201,28 @@ async function assertCurrentWallet({
   assertSignerUnchanged(providerOwner, walletChainId, request);
 }
 
-/** With `gas` given, viem fills only fees and nonce, so a transaction that cannot be simulated yet can still be priced. */
+/**
+ * Prices a transaction on the source client and returns it fully specified, so
+ * the wallet signs exactly what was accounted for instead of filling fees by
+ * its own rules. Without `gas` the call is simulated, which also catches a revert.
+ */
 async function prepareTransaction(
   sourceClient: SquidDepositSourceClient,
   walletClient: SquidDepositWalletClient,
   sourceChainId: number,
   transaction: { to: Address; data: Hex; value: bigint; gas?: bigint },
+  fees?: SourceFeesPerGas,
 ) {
-  const request = await walletClient.prepareTransactionRequest({
-    account: walletClient.account,
-    chain: undefined,
-    ...transaction,
-  });
-  const { gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce } = request;
-  const hasLegacyFee = gasPrice !== undefined && gasPrice > 0n;
-  const hasEip1559Fee =
-    maxFeePerGas !== undefined &&
-    maxPriorityFeePerGas !== undefined &&
-    maxFeePerGas > 0n &&
-    maxPriorityFeePerGas >= 0n &&
-    maxPriorityFeePerGas <= maxFeePerGas;
-  if (gas === undefined || gas <= 0n || (!hasLegacyFee && !hasEip1559Fee)) {
-    throw new Error("Complete execution fee is unavailable");
-  }
-  if (!isOpStackChain(sourceChainId)) {
-    return { fee: gas * (hasLegacyFee ? gasPrice : (maxFeePerGas as bigint)), request };
-  }
-  if (!sourceClient.estimateTotalFee || !Number.isSafeInteger(nonce)) {
-    throw new Error("OP Stack total-fee accounting is unavailable");
-  }
-  const totalFee = await sourceClient.estimateTotalFee({
-    account: walletClient.account.address,
-    to: transaction.to,
-    data: transaction.data,
-    value: transaction.value,
-    nonce,
-    gas,
-    ...(gasPrice === undefined ? {} : { gasPrice }),
-    ...(maxFeePerGas === undefined ? {} : { maxFeePerGas }),
-    ...(maxPriorityFeePerGas === undefined ? {} : { maxPriorityFeePerGas }),
-  });
-  return { fee: applyNetworkFeeExecutionBuffer(sourceChainId, totalFee), request };
+  const priced = await priceSourceTransaction(
+    sourceClient,
+    sourceChainId,
+    { account: walletClient.account.address, ...transaction },
+    fees,
+  );
+  return {
+    fee: priced.fee,
+    request: { to: transaction.to, data: transaction.data, value: transaction.value, gas: priced.gas, ...priced.fees },
+  };
 }
 
 function assertFeeWithinReview(
@@ -281,28 +261,41 @@ async function assertPlanWithinReview({
   spender: Address;
 }) {
   const remaining = getDepositTransactionKinds(request.sourceToken, request.sourceAmount, allowance);
+  const fees = await readSourceFeesPerGas(sourceClient);
   const approval = (amount: bigint, gas?: bigint) =>
-    prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
-      to: request.sourceToken,
-      data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
-      value: 0n,
-      gas,
-    });
+    prepareTransaction(
+      sourceClient,
+      walletClient,
+      request.sourceChainId,
+      {
+        to: request.sourceToken,
+        data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
+        value: 0n,
+        gas,
+      },
+      fees,
+    );
   const price = (kind: SquidDepositTransactionKind) => {
     if (kind === "reset") return approval(0n);
     // Behind a reset the approval cannot be simulated yet; budget it at the fallback gas.
     if (kind === "approve")
       return approval(request.sourceAmount, allowance > 0n ? ERC20_APPROVE_FALLBACK_GAS : undefined);
     // Squid's gas limit stands in for a simulation the missing allowance would fail.
-    return prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
-      to: quote.transaction.target,
-      data: quote.transaction.data,
-      value: quote.transaction.value,
-      gas: quote.transaction.gasLimit,
-    });
+    return prepareTransaction(
+      sourceClient,
+      walletClient,
+      request.sourceChainId,
+      {
+        to: quote.transaction.target,
+        data: quote.transaction.data,
+        value: quote.transaction.value,
+        gas: quote.transaction.gasLimit,
+      },
+      fees,
+    );
   };
-  const fees = await Promise.all(remaining.map(price));
-  const requiredFee = fees.reduce((total, { fee }) => total + fee, 0n);
+  const priced = await Promise.all(remaining.map(price));
+  const requiredFee = priced.reduce((total, { fee }) => total + fee, 0n);
   if (requiredFee > maxNativeFee) {
     throw new SquidDepositBudgetError({ completed: [], feeSoFar: 0n, maxNativeFee, remaining, requiredFee });
   }

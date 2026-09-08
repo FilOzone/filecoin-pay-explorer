@@ -76,8 +76,14 @@ function fakeSource({
 } = {}) {
   let allowanceReads = 0;
   const source = {
+    // Legacy fee data (1 gwei) keeps the sent requests simple to assert on.
+    estimateFeesPerGas: vi.fn(async () => {
+      throw new Error("EIP-1559 fees not supported");
+    }),
+    estimateGas: vi.fn(async ({ to }: { to: Address }) => (to === USDC ? 60_000n : 599_399n)),
     getBalance: vi.fn(async () => nativeBalance),
     getChainId: vi.fn(async () => 8453),
+    getGasPrice: vi.fn(async () => 1_000_000_000n),
     estimateTotalFee: vi.fn(
       async ({ gas, gasPrice, maxFeePerGas }: { gas: bigint; gasPrice?: bigint; maxFeePerGas?: bigint }) =>
         totalFeeSequence?.length
@@ -95,26 +101,21 @@ function fakeSource({
     ),
     waitForTransactionReceipt: vi.fn(async () => ({ status: receiptStatus })),
   };
-  return source as unknown as SquidDepositSourceClient;
+  return source as unknown as SquidDepositSourceClient & {
+    estimateGas: ReturnType<typeof vi.fn>;
+    estimateTotalFee: ReturnType<typeof vi.fn>;
+  };
 }
 
 function fakeWallet(hashes?: Hash[]) {
   const pendingHashes = hashes ? [...hashes] : undefined;
-  let nonce = 0;
   return {
     account: { address: OWNER },
     getChainId: vi.fn(async () => 8453),
-    prepareTransactionRequest: vi.fn(async (transaction: { to: Address; data: Hex; value: bigint }) => ({
-      ...transaction,
-      gas: transaction.to === USDC ? 60_000n : 599_399n,
-      gasPrice: 1_000_000_000n,
-      nonce: nonce++,
-    })),
     sendTransaction: vi.fn(async ({ to }: { to: Address }) =>
       pendingHashes?.length ? (pendingHashes.shift() as Hash) : to === USDC ? APPROVAL_HASH : ROUTE_HASH,
     ),
   } as unknown as SquidDepositWalletClient & {
-    prepareTransactionRequest: ReturnType<typeof vi.fn>;
     sendTransaction: ReturnType<typeof vi.fn>;
   };
 }
@@ -521,6 +522,7 @@ describe("executeSquidDeposit", () => {
 
   it("prices the whole plan before the first signature and stops there when it exceeds the reviewed maximum", async () => {
     const wallet = fakeWallet();
+    const source = fakeSource();
     // Base is an OP Stack chain, so each fee carries the 20% execution buffer: 72e12 approval + 719e12 route.
     const requiredFee = 72_000_000_000_000n + 719_278_800_000_000n;
     await expect(
@@ -530,7 +532,7 @@ describe("executeSquidDeposit", () => {
         maxNativeFee: requiredFee - 1n,
         quote,
         request,
-        sourceClient: fakeSource(),
+        sourceClient: source,
         squid: { integratorId: "id" },
         walletClient: wallet,
       }),
@@ -547,12 +549,10 @@ describe("executeSquidDeposit", () => {
     });
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
     // The route was priced from Squid's gas limit, without a simulation the missing allowance would fail.
-    expect(
-      wallet.prepareTransactionRequest.mock.calls.map((call) => (call as [{ to: string; gas?: bigint }])[0]),
-    ).toEqual([
-      expect.objectContaining({ to: USDC }),
-      expect.objectContaining({ to: SQUID_ROUTER_ADDRESS, gas: 599_399n }),
-    ]);
+    expect(source.estimateGas.mock.calls.map((call) => (call as [{ to: string }])[0].to)).toEqual([USDC]);
+    expect(source.estimateTotalFee).toHaveBeenCalledWith(
+      expect.objectContaining({ to: SQUID_ROUTER_ADDRESS, gas: 599_399n, gasPrice: 1_000_000_000n }),
+    );
   });
 
   it("reports a cap breach after the approvals executed so the route can be re-reviewed, not repeated", async () => {
@@ -697,15 +697,15 @@ describe("executeSquidDeposit", () => {
     "dialog unmounted",
   ])("rechecks the live context after transaction preparation when the %s", async (change) => {
     const wallet = fakeWallet();
+    const source = fakeSource({ allowance: request.sourceAmount });
     let mounted = true;
     let liveRecipient: Address = RECIPIENT;
-    wallet.prepareTransactionRequest.mockImplementationOnce(
-      async (transaction: { to: Address; data: Hex; value: bigint }) => {
-        if (change === "dialog unmounted") mounted = false;
-        else liveRecipient = OWNER;
-        return { ...transaction, gas: 599_399n, gasPrice: 1_000_000_000n, nonce: 0 };
-      },
-    );
+    // The plan check prices the route from Squid's gas limit; the send simulates it, and that is when the context moves.
+    source.estimateGas.mockImplementationOnce(async () => {
+      if (change === "dialog unmounted") mounted = false;
+      else liveRecipient = OWNER;
+      return 599_399n;
+    });
     const assertCurrentContext = () => {
       if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
     };
@@ -717,7 +717,7 @@ describe("executeSquidDeposit", () => {
         destinationClient: fakeDestination([100n]),
         quote,
         request,
-        sourceClient: fakeSource({ allowance: request.sourceAmount }),
+        sourceClient: source,
         squid: { integratorId: "id" },
         walletClient: wallet,
       }),
