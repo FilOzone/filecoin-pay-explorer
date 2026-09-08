@@ -75,8 +75,6 @@ const Balance = () => {
   const exitWallet = async () => {
     try {
       await exit();
-      // Browser extensions cannot be disconnected programmatically; the site stays authorised until revoked there.
-      if (exitAction === "manual-disconnect") toast.info("Also disconnect this site from your wallet extension");
     } catch (error) {
       toast.error(exitAction === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
         description: error instanceof Error ? error.message : undefined,
