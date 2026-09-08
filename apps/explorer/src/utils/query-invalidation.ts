@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { getAddress, isAddress } from "viem";
 
 /**
  * Subgraph-backed queries lag the chain by a block or two, so one pass right
@@ -13,7 +14,7 @@ const ACCOUNT_REFRESH_DELAYS_MS: readonly number[] = [10_000, 30_000];
  * be swapped out underneath the user.
  */
 function getAccountQueryPrefixes(address: string): readonly (readonly unknown[])[] {
-  const ids = [...new Set([address, address.toLowerCase()])];
+  const ids = [...new Set([address, address.toLowerCase(), ...(isAddress(address) ? [getAddress(address)] : [])])];
   return [
     ...ids.map((id) => ["account", id] as const),
     ["payments", "account-summary"],
