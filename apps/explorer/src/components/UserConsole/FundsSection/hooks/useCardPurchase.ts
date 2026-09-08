@@ -8,6 +8,7 @@ import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { config } from "@/services/wagmi/config";
+import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 
 export const CARD_CHAIN_ID = 8453;
@@ -186,10 +187,7 @@ export function useCardPurchase({
 
     pendingPurchase.current = null;
     clearPendingCardPurchase(pending.recipient);
-    void queryClient.invalidateQueries({
-      queryKey: ["squid", "source-token-balances", pending.recipient, CARD_CHAIN_ID],
-    });
-    void queryClient.invalidateQueries({ queryKey: ["direct-squid-deposit-balances", CARD_CHAIN_ID] });
+    void invalidateSourceBalanceQueries(queryClient, pending.recipient, CARD_CHAIN_ID);
     setStatus("idle");
     onPurchased(landed.balance - pending.before);
   };
