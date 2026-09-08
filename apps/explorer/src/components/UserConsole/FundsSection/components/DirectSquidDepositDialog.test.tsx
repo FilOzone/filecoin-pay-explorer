@@ -672,6 +672,36 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
   });
 
+  it("shows the token to USDFC rate on the quote stage and the review card", async () => {
+    const destinationAmount = query.quote.destinationAmount;
+    query.quote.destinationAmount = 94_000_000_000_000_000_000n;
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      await act(async () => {
+        amountInput(renderer).props.onChange({ target: { value: "100" } });
+      });
+      const rateLine = () => {
+        const label = renderer.root.findAllByType("span").find((node) => node.children.join("") === "Rate:");
+        return label?.parent?.children
+          .map((child) => (typeof child === "string" ? child : child.children.join("")))
+          .join("");
+      };
+
+      // 100 USDC buys 94 USDFC plus the 0.125 USDFC spent on the FIL top-up.
+      expect(rateLine()).toBe("Rate: 1 USDC ≈ 0.9413 USDFC (1 USDFC ≈ 1.062 USDC)");
+
+      await act(async () => {
+        button(renderer, "Review")?.props.onClick();
+      });
+      expect(rateLine()).toBe("Rate: 1 USDC ≈ 0.9413 USDFC (1 USDFC ≈ 1.062 USDC)");
+    } finally {
+      query.quote.destinationAmount = destinationAmount;
+    }
+  });
+
   it("cannot review while the gas budget is unavailable", async () => {
     query.budgetIsError = true;
     let renderer!: ReactTestRenderer;

@@ -54,6 +54,7 @@ import {
   type EstimateTotalFee,
   estimateDepositNetworkFeeMaximum,
   FIL_GAS_TOP_UP_AMOUNT,
+  getDepositExchangeRate,
   getDepositRequiredNativeBalance,
   isExecutableQuote,
   isNativeToken,
@@ -62,6 +63,7 @@ import {
   planFilGasTopUp,
   requestSquidDepositRoute,
   type SquidClient,
+  type SquidDepositExchangeRate,
   type SquidDepositFeeClient,
   type SquidDepositNetworkFeeBudget,
   type SquidDepositQuote,
@@ -99,6 +101,20 @@ const DEPOSIT_TARGET = {
   usdfc: mainnet.contracts.usdfc.address,
 };
 const NETWORK_FEE_HEADROOM_LABEL = `${(Number(NETWORK_FEE_REVIEW_HEADROOM_BPS) - 10_000) / 100}%`;
+
+const RATE_FORMAT = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 });
+
+function DepositRate({ rate, sourceSymbol }: { rate: SquidDepositExchangeRate; sourceSymbol: string }) {
+  return (
+    <p>
+      <span className='text-muted-foreground'>Rate:</span> 1 {sourceSymbol} ≈ {RATE_FORMAT.format(rate.usdfcPerSource)}{" "}
+      USDFC{" "}
+      <span className='text-muted-foreground'>
+        (1 USDFC ≈ {RATE_FORMAT.format(rate.sourcePerUsdfc)} {sourceSymbol})
+      </span>
+    </p>
+  );
+}
 
 type ReviewedDeposit = {
   approvalRequired: boolean;
@@ -731,6 +747,8 @@ export function DirectSquidDepositDialog({
   };
 
   const budget = budgetQuery.isError ? undefined : budgetQuery.data;
+  const rate = quote && sourceToken ? getDepositExchangeRate(quote, sourceToken.decimals) : null;
+  const reviewedRate = reviewed ? getDepositExchangeRate(reviewed.quote, reviewed.sourceDecimals) : null;
   const networkFeeMaximum = budget?.maximum ?? null;
   const requiredNative =
     quote && sourceToken && networkFeeMaximum !== null
@@ -865,6 +883,7 @@ export function DirectSquidDepositDialog({
                 <span className='text-muted-foreground'>Receive at least:</span>{" "}
                 {formatUnits(reviewed.quote.minimumDestinationAmount, 18)} USDFC
               </p>
+              {reviewedRate ? <DepositRate rate={reviewedRate} sourceSymbol={reviewed.sourceSymbol} /> : null}
               {reviewed.quote.filGasTopUp ? (
                 <p>
                   <span className='text-muted-foreground'>Wallet top-up:</span> At least{" "}
@@ -1032,6 +1051,15 @@ export function DirectSquidDepositDialog({
                 <p className='inline-flex items-center gap-2 text-muted-foreground'>
                   <Loader2 className='h-4 w-4 animate-spin' /> Fetching a quote…
                 </p>
+              ) : null}
+              {quote && rate && sourceToken && !quoteQuery.isFetching ? (
+                <div className='grid gap-1'>
+                  <p>
+                    <span className='text-muted-foreground'>Receive at least:</span>{" "}
+                    {formatUnits(quote.minimumDestinationAmount, 18)} USDFC
+                  </p>
+                  <DepositRate rate={rate} sourceSymbol={sourceToken.symbol} />
+                </div>
               ) : null}
               {quoteQuery.error ? (
                 <p className='text-destructive'>

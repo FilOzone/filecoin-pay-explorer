@@ -251,6 +251,29 @@ export function buildDepositPostHook({ payments, usdfc, recipient }: SquidDeposi
   };
 }
 
+export interface SquidDepositExchangeRate {
+  /** USDFC expected per whole unit of the source token. */
+  usdfcPerSource: number;
+  /** Source token per whole USDFC, the same rate read the other way. */
+  sourcePerUsdfc: number;
+}
+
+/**
+ * Expected swap rate of the quote, read from the whole route output: the FIL
+ * top-up is spent from that output, so it is added back rather than shown
+ * as a worse rate.
+ */
+export function getDepositExchangeRate(
+  quote: Pick<SquidDepositQuote, "sourceAmount" | "destinationAmount" | "filGasTopUp">,
+  sourceDecimals: number,
+): SquidDepositExchangeRate | null {
+  if (quote.sourceAmount <= 0n) return null;
+  const sourceUnits = Number(quote.sourceAmount) / 10 ** sourceDecimals;
+  const usdfcUnits = Number(quote.destinationAmount + (quote.filGasTopUp?.spendUsdfc ?? 0n)) / 1e18;
+  if (!(sourceUnits > 0) || !(usdfcUnits > 0)) return null;
+  return { usdfcPerSource: usdfcUnits / sourceUnits, sourcePerUsdfc: sourceUnits / usdfcUnits };
+}
+
 /** Native-token gas and route fees the paying wallet owes on the source network. */
 export function getSourceNativeCosts(
   quote: Pick<SquidDepositQuote, "fees" | "gasCosts">,
