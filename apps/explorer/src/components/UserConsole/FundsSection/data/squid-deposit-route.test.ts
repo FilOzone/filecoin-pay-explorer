@@ -1,19 +1,22 @@
 import { NATIVE_TOKEN_ADDRESS, SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { decodeFunctionData } from "viem";
+import { decodeFunctionData, encodeFunctionData, erc20Abi } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
   assertExecutableQuoteWithinReview,
   buildDepositPostHook,
   captureReviewedSquidDepositCaps,
+  estimateDepositNetworkFeeMaximum,
   FIL_GAS_TOP_UP_AMOUNT,
-  getDepositNetworkFeeMaximum,
   getDepositRequiredNativeBalance,
+  getDepositTransactionKinds,
   getSourceNativeCosts,
   isExecutableQuote,
   isNativeToken,
+  NETWORK_FEE_REVIEW_HEADROOM_BPS,
   parseSquidDepositRoute,
   planFilGasTopUp,
   requestSquidDepositRoute,
+  type SquidDepositFeeClient,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
   squidDepositAbi,
   sushiSwapRouterAbi,
@@ -213,31 +216,212 @@ describe("planFilGasTopUp", () => {
 });
 
 describe("source-native accounting", () => {
-  it("sums source-network native costs and the reviewed network-fee maximum", () => {
+  it("sums source-network native costs and the native balance a review requires", () => {
     const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
     expect(getSourceNativeCosts(quote, 8453)).toEqual({ fees: 5_971_701_479_908n, gas: 3_596_394_000_000n });
     expect(getSourceNativeCosts(quote, 1)).toEqual({ fees: 0n, gas: 0n });
-    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, USDC, 0n);
-    expect(maximumNetworkFee).toBe(8_631_345_600_000n);
-    expect(getDepositNetworkFeeMaximum(quote, 8453, USDC, 1n)).toBe(12_947_018_400_000n);
-    expect(getDepositNetworkFeeMaximum(quote, 8453, USDC, request.sourceAmount + 1n)).toBe(12_947_018_400_000n);
-    expect(getDepositRequiredNativeBalance(quote, 8453, USDC, maximumNetworkFee)).toBe(
+    expect(getDepositRequiredNativeBalance(quote, 8453, USDC, 8_631_345_600_000n)).toBe(
       5_971_701_479_908n + 8_631_345_600_000n,
     );
-    expect(getDepositNetworkFeeMaximum(quote, 1, USDC, request.sourceAmount)).toBe(0n);
-  });
-
-  it("includes the source spend in native-token requirements and allows only one transaction", () => {
-    const quote = parseSquidDepositRoute(fakeRoute(), request, true, now);
-    const maximumNetworkFee = getDepositNetworkFeeMaximum(quote, 8453, NATIVE_TOKEN_ADDRESS, 0n);
-    expect(maximumNetworkFee).toBe(4_315_672_800_000n);
-    expect(getDepositRequiredNativeBalance(quote, 8453, NATIVE_TOKEN_ADDRESS, maximumNetworkFee)).toBe(
-      request.sourceAmount + 5_971_701_479_908n + maximumNetworkFee,
+    expect(getDepositRequiredNativeBalance(quote, 8453, NATIVE_TOKEN_ADDRESS, 4_315_672_800_000n)).toBe(
+      request.sourceAmount + 5_971_701_479_908n + 4_315_672_800_000n,
     );
     expect(captureReviewedSquidDepositCaps(quote, NATIVE_TOKEN_ADDRESS).maxTransactionValue).toBe(
       request.sourceAmount + 5_971_701_479_908n,
     );
     expect(isNativeToken(NATIVE_TOKEN_ADDRESS)).toBe(true);
+  });
+
+  it("lists the transactions the wallet will sign for the current allowance", () => {
+    expect(getDepositTransactionKinds(USDC, request.sourceAmount, 0n)).toEqual(["approve", "route"]);
+    expect(getDepositTransactionKinds(USDC, request.sourceAmount, 1n)).toEqual(["reset", "approve", "route"]);
+    expect(getDepositTransactionKinds(USDC, request.sourceAmount, request.sourceAmount + 1n)).toEqual([
+      "reset",
+      "approve",
+      "route",
+    ]);
+    expect(getDepositTransactionKinds(USDC, request.sourceAmount, request.sourceAmount)).toEqual(["route"]);
+    expect(getDepositTransactionKinds(NATIVE_TOKEN_ADDRESS, request.sourceAmount, 0n)).toEqual(["route"]);
+  });
+});
+
+describe("estimateDepositNetworkFeeMaximum", () => {
+  const GWEI = 1_000_000_000n;
+  const withHeadroom = (fee: bigint) => (fee * NETWORK_FEE_REVIEW_HEADROOM_BPS + 9_999n) / 10_000n;
+  const approveData = (amount: bigint) =>
+    encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [SQUID_ROUTER_ADDRESS, amount] });
+
+  function fakeFeeClient({
+    approveGas = 46_000n,
+    feePerGas = 2n * GWEI,
+    gasPrice = 3n * GWEI,
+    legacy = false,
+    resetGas = 30_000n,
+    revertApproveWhileAllowed = true,
+    totalFee,
+  }: {
+    approveGas?: bigint;
+    feePerGas?: bigint;
+    gasPrice?: bigint;
+    legacy?: boolean;
+    resetGas?: bigint;
+    revertApproveWhileAllowed?: boolean;
+    totalFee?: bigint;
+  } = {}) {
+    let allowanceStands = false;
+    const client = {
+      estimateFeesPerGas: vi.fn(async () => {
+        if (legacy) throw new Error("EIP-1559 fees not supported");
+        return { maxFeePerGas: feePerGas, maxPriorityFeePerGas: GWEI };
+      }),
+      estimateGas: vi.fn(async ({ data }: { data: string }) => {
+        if (data === approveData(0n)) {
+          allowanceStands = true;
+          return resetGas;
+        }
+        if (allowanceStands && revertApproveWhileAllowed) throw new Error("execution reverted");
+        return approveGas;
+      }),
+      getGasPrice: vi.fn(async () => gasPrice),
+      ...(totalFee === undefined ? {} : { estimateTotalFee: vi.fn(async () => totalFee) }),
+    };
+    return client as unknown as SquidDepositFeeClient & {
+      estimateGas: ReturnType<typeof vi.fn>;
+      estimateTotalFee?: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  const gasLimitRoute = () =>
+    parseSquidDepositRoute(
+      fakeRoute({
+        estimate: {
+          gasCosts: [
+            {
+              type: "executeCall",
+              amount: "3596394000000",
+              gasLimit: "599399",
+              token: { address: NATIVE_TOKEN_ADDRESS, chainId: 8453, symbol: "ETH", decimals: 18 },
+            },
+          ],
+        },
+      }),
+      request,
+      true,
+      now,
+    );
+
+  const estimate = (client: SquidDepositFeeClient, allowance: bigint, overrides: { quote?: unknown } = {}) =>
+    estimateDepositNetworkFeeMaximum({
+      allowance,
+      client,
+      owner: OWNER,
+      quote: (overrides.quote as ReturnType<typeof gasLimitRoute>) ?? gasLimitRoute(),
+      sourceAmount: request.sourceAmount,
+      sourceChainId: 8453,
+      sourceToken: USDC,
+      spender: SQUID_ROUTER_ADDRESS,
+    });
+
+  it("prices a simulated approval and the route's gas limit at the live fee, each with headroom", async () => {
+    const client = fakeFeeClient();
+    const approveFee = 46_000n * 2n * GWEI;
+    const routeFee = 599_399n * 2n * GWEI;
+
+    await expect(estimate(client, 0n)).resolves.toEqual({
+      maximum: withHeadroom(approveFee) + withHeadroom(routeFee),
+      transactions: [
+        { kind: "approve", fee: withHeadroom(approveFee) },
+        { kind: "route", fee: withHeadroom(routeFee) },
+      ],
+    });
+    expect(client.estimateGas).toHaveBeenCalledWith({
+      account: OWNER,
+      to: USDC,
+      data: approveData(request.sourceAmount),
+      value: 0n,
+    });
+  });
+
+  it("falls back to a fixed approval gas when the approval cannot be simulated behind a reset", async () => {
+    const client = fakeFeeClient();
+    const resetFee = 30_000n * 2n * GWEI;
+    const approveFee = 65_000n * 2n * GWEI;
+    const routeFee = 599_399n * 2n * GWEI;
+
+    await expect(estimate(client, 1n)).resolves.toEqual({
+      maximum: withHeadroom(resetFee) + withHeadroom(approveFee) + withHeadroom(routeFee),
+      transactions: [
+        { kind: "reset", fee: withHeadroom(resetFee) },
+        { kind: "approve", fee: withHeadroom(approveFee) },
+        { kind: "route", fee: withHeadroom(routeFee) },
+      ],
+    });
+  });
+
+  it("keeps a simulated approval estimate behind a reset when the token allows it", async () => {
+    const client = fakeFeeClient({ revertApproveWhileAllowed: false });
+    const { transactions } = await estimate(client, 1n);
+    expect(transactions[1]).toEqual({ kind: "approve", fee: withHeadroom(46_000n * 2n * GWEI) });
+  });
+
+  it("uses Squid's own estimate when it is higher or when no gas limit is reported", async () => {
+    const lowFeeClient = fakeFeeClient({ feePerGas: 1n });
+    const { transactions } = await estimate(lowFeeClient, request.sourceAmount);
+    expect(transactions).toEqual([{ kind: "route", fee: withHeadroom(3_596_394_000_000n) }]);
+
+    const withoutLimit = parseSquidDepositRoute(fakeRoute(), request, true, now);
+    await expect(estimate(fakeFeeClient(), request.sourceAmount, { quote: withoutLimit })).resolves.toEqual({
+      maximum: withHeadroom(3_596_394_000_000n),
+      transactions: [{ kind: "route", fee: withHeadroom(3_596_394_000_000n) }],
+    });
+  });
+
+  it("falls back to the legacy gas price on chains without EIP-1559 fees", async () => {
+    const client = fakeFeeClient({ legacy: true });
+    const { transactions } = await estimate(client, 0n);
+    expect(transactions).toEqual([
+      { kind: "approve", fee: withHeadroom(46_000n * 3n * GWEI) },
+      { kind: "route", fee: withHeadroom(599_399n * 3n * GWEI) },
+    ]);
+  });
+
+  it("prices approvals with the OP Stack total fee when the client provides it", async () => {
+    const client = fakeFeeClient({ totalFee: 500_000_000_000_000n });
+    const { transactions } = await estimate(client, 0n);
+    expect(transactions[0]).toEqual({ kind: "approve", fee: withHeadroom(500_000_000_000_000n) });
+    expect(client.estimateTotalFee).toHaveBeenCalledWith({
+      account: OWNER,
+      to: USDC,
+      data: approveData(request.sourceAmount),
+      value: 0n,
+      gas: 46_000n,
+      maxFeePerGas: 2n * GWEI,
+    });
+  });
+
+  it("budgets only the route for a native source", async () => {
+    const client = fakeFeeClient();
+    await expect(
+      estimateDepositNetworkFeeMaximum({
+        allowance: 0n,
+        client,
+        owner: OWNER,
+        quote: gasLimitRoute(),
+        sourceAmount: request.sourceAmount,
+        sourceChainId: 8453,
+        sourceToken: NATIVE_TOKEN_ADDRESS,
+        spender: SQUID_ROUTER_ADDRESS,
+      }),
+    ).resolves.toEqual({
+      maximum: withHeadroom(599_399n * 2n * GWEI),
+      transactions: [{ kind: "route", fee: withHeadroom(599_399n * 2n * GWEI) }],
+    });
+    expect(client.estimateGas).not.toHaveBeenCalled();
+  });
+
+  it("fails closed without live fee data", async () => {
+    const client = fakeFeeClient({ legacy: true, gasPrice: 0n });
+    await expect(estimate(client, 0n)).rejects.toThrow("Live network fee data is unavailable");
   });
 });
 
