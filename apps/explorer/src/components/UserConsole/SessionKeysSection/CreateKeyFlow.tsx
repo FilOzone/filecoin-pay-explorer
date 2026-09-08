@@ -312,6 +312,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       ✓ <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
     </Notice>
   );
+  function submitLabel(): string {
+    if (isExistingKey) return "Authorize scopes";
+    if (prefillAddress) return "Review & authorize";
+    return "Create session key";
+  }
+
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
   return (
@@ -520,12 +526,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <span className='flex items-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
-                ) : isExistingKey ? (
-                  "Authorize scopes"
-                ) : prefillAddress ? (
-                  "Review & authorize"
                 ) : (
-                  "Create session key"
+                  submitLabel()
                 )}
               </Button>
             </DialogFooter>
