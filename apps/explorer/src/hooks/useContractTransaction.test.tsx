@@ -21,6 +21,9 @@ const wagmi = vi.hoisted(() => ({
   writeContractAsync: vi.fn(),
 }));
 
+vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+}));
 vi.mock("wagmi", () => ({
   useConfig: () => ({}),
   useWriteContract: () => ({ writeContractAsync: wagmi.writeContractAsync, isPending: false }),
