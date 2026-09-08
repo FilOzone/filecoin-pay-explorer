@@ -791,6 +791,68 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
   });
 
+  it("shows the deposit as numbered steps while it runs, with the approval only when signed", async () => {
+    query.allowance = 0n;
+    let onStage!: ExecuteSquidDepositInput["onStage"];
+    let finishExecution!: () => void;
+    state.execute.mockImplementationOnce(
+      (input: ExecuteSquidDepositInput) =>
+        new Promise<never>((_, reject) => {
+          onStage = input.onStage;
+          finishExecution = () => reject(new Error("stopped"));
+        }),
+    );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    const steps = () =>
+      renderer.root
+        .findByProps({ "aria-label": "Squid deposit progress" })
+        .findAllByType("li")
+        .map((item) => item.findAllByType("span").at(-1)?.children.join(""));
+    const instruction = () =>
+      renderer.root.findByProps({ "aria-label": "Squid deposit progress" }).findAllByType("p")[0]?.children.join("");
+
+    expect(steps()).toEqual([
+      "Prepare the route",
+      "Confirm the swap",
+      "Source network confirms",
+      "Bridge and deposit",
+      "Balance confirmed",
+    ]);
+    expect(instruction()).toBe("Preparing the route…");
+    expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
+
+    await act(async () => onStage?.("approving"));
+    expect(steps()).toEqual([
+      "Prepare the route",
+      "Approve USDC",
+      "Confirm the swap",
+      "Source network confirms",
+      "Bridge and deposit",
+      "Balance confirmed",
+    ]);
+    expect(instruction()).toBe("Step 1 of 2: approve USDC in your wallet");
+
+    await act(async () => onStage?.("swap-requested"));
+    expect(instruction()).toBe("Step 2 of 2: confirm the swap in your wallet");
+
+    await act(async () => onStage?.("swap-broadcast", ROUTE_HASH));
+    const links = renderer.root
+      .findByProps({ "aria-label": "Squid deposit progress" })
+      .findAllByType("a")
+      .map((link) => [link.children.join(""), link.props.href]);
+    expect(links).toEqual([
+      ["Source transaction", `https://basescan.org/tx/${ROUTE_HASH}`],
+      ["Squid route / add gas", `https://axelarscan.io/gmp/${ROUTE_HASH}`],
+    ]);
+
+    await act(async () => finishExecution());
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0);
+  });
+
   it("executes once when Pay is clicked twice", async () => {
     let finishExecution!: () => void;
     state.execute.mockImplementationOnce(
