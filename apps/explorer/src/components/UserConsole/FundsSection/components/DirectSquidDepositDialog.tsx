@@ -26,6 +26,7 @@ import { getAccount } from "wagmi/actions";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
+import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { useTopUpActivity } from "../../TopUpActivityContext";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
@@ -689,6 +690,12 @@ export function DirectSquidDepositDialog({
         hasSwitchedToSource.current = snapshot.sourceChainId !== mainnet.id;
         assertContext(snapshot);
         const provider = await payingWallet.getEthereumProvider();
+        // Privy's switchChain lands on a wallet object published later; the provider from the one held
+        // here can still be on the old chain, so the switch is confirmed, or repeated, on the provider.
+        if (!(await ensureWalletChain(provider, snapshot.sourceChainId))) {
+          throw new Error(`The wallet did not switch to ${sourceChain.name}. Try again.`);
+        }
+        assertContext(snapshot);
         const walletClient = createWalletClient({
           account: snapshot.owner,
           chain: sourceChain,
