@@ -1,8 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
+import { getAddress } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateAccountQueries, invalidateSourceBalanceQueries } from "./query-invalidation";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
+const CHECKSUMMED_OWNER = getAddress("0xabcdef0000000000000000000000000000000001");
 
 describe("invalidateAccountQueries", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -44,15 +46,19 @@ describe("invalidateAccountQueries", () => {
   it("refetches only mounted queries and lets a later mutation replace the pending passes", async () => {
     const queryClient = new QueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const checksummedAccount = ["account", CHECKSUMMED_OWNER, "mainnet"] as const;
+    queryClient.setQueryData(checksummedAccount, "cached");
 
-    await invalidateAccountQueries(queryClient, OWNER, { repeatAfterMs: [5_000] });
+    await invalidateAccountQueries(queryClient, CHECKSUMMED_OWNER, { repeatAfterMs: [5_000] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["readContract"], refetchType: "active" });
     const immediatePasses = invalidateQueries.mock.calls.length;
 
-    await invalidateAccountQueries(queryClient, OWNER.toLowerCase(), { repeatAfterMs: [5_000] });
+    await invalidateAccountQueries(queryClient, CHECKSUMMED_OWNER.toLowerCase(), { repeatAfterMs: [5_000] });
+    queryClient.setQueryData(checksummedAccount, "refetched");
     await vi.advanceTimersByTimeAsync(5_000);
     // Two immediate passes and one delayed pass: the first mutation's timer was replaced, not stacked.
     expect(invalidateQueries.mock.calls.length).toBe(immediatePasses * 3);
+    expect(queryClient.getQueryState(checksummedAccount)?.isInvalidated).toBe(true);
   });
 });
 
