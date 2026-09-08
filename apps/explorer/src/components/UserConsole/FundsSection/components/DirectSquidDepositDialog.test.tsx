@@ -938,6 +938,27 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(JSON.stringify(renderer.toJSON())).toContain("Squid route / add gas");
   });
 
+  it("switches the wallet's provider to the source chain when it still reports the old one", async () => {
+    let chain = "0x13a";
+    const request = vi.fn(async ({ method, params }: { method: string; params?: [{ chainId: string }] }) => {
+      if (method === "wallet_switchEthereumChain") {
+        chain = params?.[0].chainId ?? chain;
+        return null;
+      }
+      return method === "eth_chainId" ? chain : [OWNER];
+    });
+    wallet.getEthereumProvider.mockResolvedValueOnce({ request });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    expect(wallet.switchChain).toHaveBeenCalledWith(8453);
+    expect(request).toHaveBeenCalledWith({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x2105" }] });
+    expect(state.execute).toHaveBeenCalledOnce();
+  });
+
   it("hands execution a route refresher that re-checks the reviewed caps", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
