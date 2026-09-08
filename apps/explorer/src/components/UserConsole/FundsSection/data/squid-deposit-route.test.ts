@@ -363,6 +363,32 @@ describe("estimateDepositNetworkFeeMaximum", () => {
     });
   });
 
+  it("falls back to the fixed approval gas when the node refuses the simulation, as it does for a sender without gas money", async () => {
+    const client = fakeFeeClient();
+    client.estimateGas.mockRejectedValue(new Error("insufficient funds for gas * price + value"));
+    const { transactions } = await estimate(client, 0n);
+    expect(transactions[0]).toEqual({ kind: "approve", fee: withHeadroom(65_000n * 2n * GWEI) });
+  });
+
+  it("keeps Squid's route figure when the OP Stack total fee cannot be read", async () => {
+    const client = fakeFeeClient({ totalFee: 500_000_000_000_000n });
+    client.estimateTotalFee?.mockRejectedValue(new Error("oracle unavailable"));
+    const baseRoute = parseSquidDepositRoute(
+      fakeRoute({
+        estimate: {
+          gasCosts: [{ ...ethereumGasCost("599399"), token: { ...ethereumGasCost().token, chainId: 8453 } }],
+        },
+      }),
+      request,
+      true,
+      now,
+    );
+    await expect(estimate(client, request.sourceAmount, { quote: baseRoute, sourceChainId: 8453 })).resolves.toEqual({
+      maximum: withHeadroom(3_596_394_000_000n),
+      transactions: [{ kind: "route", fee: withHeadroom(3_596_394_000_000n) }],
+    });
+  });
+
   it("keeps a simulated approval estimate behind a reset when the token allows it", async () => {
     const client = fakeFeeClient({ revertApproveWhileAllowed: false });
     const { transactions } = await estimate(client, 1n);
