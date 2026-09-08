@@ -148,6 +148,13 @@ export function DirectSquidDepositDialog({
 }) {
   const { address: connectedRecipient } = useAccount();
   const { wallets } = useWallets();
+  // Privy hands out a new wallets array on every chain switch; only the set of addresses matters here.
+  const walletAddressesKey = wallets
+    .map((wallet) => wallet.address.toLowerCase())
+    .sort()
+    .join(",");
+  const walletsRef = useRef(wallets);
+  walletsRef.current = wallets;
   const { setTopUpActive } = useTopUpActivity();
   const queryClient = useQueryClient();
   const [payingAddress, setPayingAddress] = useState("");
@@ -291,6 +298,7 @@ export function DirectSquidDepositDialog({
   const quoteQuery = useQuery({
     enabled:
       open &&
+      stage === null &&
       !reviewed &&
       !!recipient &&
       !!payingWallet &&
@@ -334,7 +342,15 @@ export function DirectSquidDepositDialog({
   const quote = quoteQuery.data;
   const budgetQuery = useQuery({
     // Only the form needs a live budget; a review keeps the figure it showed and the run prices itself.
-    enabled: open && !reviewed && !!quote && !!owner && !!sourceToken && !!sourceFeeClient && !!balancesQuery.data,
+    enabled:
+      open &&
+      stage === null &&
+      !reviewed &&
+      !!quote &&
+      !!owner &&
+      !!sourceToken &&
+      !!sourceFeeClient &&
+      !!balancesQuery.data,
     queryFn: () => {
       if (!quote || !owner || !sourceToken || !sourceFeeClient || !balancesQuery.data) {
         throw new Error("Network fees are unavailable");
@@ -465,8 +481,10 @@ export function DirectSquidDepositDialog({
     setTransactionHash(null);
   }, [open]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wallets is read through a ref; the effect keys on the address set so a chain switch mid-run does not drop the review.
   useEffect(() => {
     if (!open || !recipient) return;
+    const wallets = walletsRef.current;
     const refresh = () => {
       const saved = wallets
         .map((wallet) => {
@@ -494,7 +512,7 @@ export function DirectSquidDepositDialog({
     return () => {
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
-  }, [open, recipient, wallets]);
+  }, [open, recipient, walletAddressesKey]);
 
   const assertContext = (snapshot: SquidDepositContextSnapshot) =>
     assertSquidDepositContext(latestContext.current, snapshot, getAccount(config).address, isMounted.current);

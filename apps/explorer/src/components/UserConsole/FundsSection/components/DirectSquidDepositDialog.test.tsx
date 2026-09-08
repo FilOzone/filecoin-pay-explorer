@@ -931,6 +931,33 @@ describe("DirectSquidDepositDialog safety integration", () => {
     await expect(input.refreshQuote?.()).rejects.toThrow("The source spend changed after review");
   });
 
+  it("keeps the review, and a failure's message, when Privy re-emits the same wallets", async () => {
+    state.execute.mockRejectedValueOnce(new Error("The Squid route expired. Refresh the quote."));
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe(
+      "The Squid route expired. Refresh the quote.",
+    );
+
+    // A chain switch makes Privy publish a new array holding the same wallet.
+    connectedWallets.current = [{ ...wallet }];
+    try {
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      expect(renderer.root.findAllByProps({ "aria-label": "Reviewed Squid deposit" })).toHaveLength(1);
+      expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe(
+        "The Squid route expired. Refresh the quote.",
+      );
+      expect(button(renderer, "Pay 100 USDC")?.props.disabled).toBe(false);
+    } finally {
+      connectedWallets.current = [wallet];
+    }
+  });
+
   it("keeps the progress view up until the dialog closes after a successful deposit", async () => {
     let settle!: () => void;
     state.execute.mockImplementationOnce(
