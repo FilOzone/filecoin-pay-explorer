@@ -13,7 +13,7 @@ import {
   type PublicClient,
   parseAbi,
 } from "viem";
-import { isOpStackChain } from "./squid-execution";
+import { applyNetworkFeeExecutionBuffer, isOpStackChain } from "./squid-execution";
 
 export const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
 
@@ -381,16 +381,51 @@ export type SquidDepositFeeClient = Pick<PublicClient, "estimateFeesPerGas" | "e
  */
 export const ERC20_APPROVE_FALLBACK_GAS = 65_000n;
 
-async function readLiveFeePerGas(client: SquidDepositFeeClient): Promise<bigint> {
+/** Fee fields a source transaction is sent with, as the network prices them. */
+export type SourceFeesPerGas = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint } | { gasPrice: bigint };
+
+export async function readSourceFeesPerGas(client: SquidDepositFeeClient): Promise<SourceFeesPerGas> {
   try {
-    const { maxFeePerGas } = await client.estimateFeesPerGas();
-    if (maxFeePerGas !== undefined && maxFeePerGas > 0n) return maxFeePerGas;
+    const { maxFeePerGas, maxPriorityFeePerGas } = await client.estimateFeesPerGas();
+    if (maxFeePerGas !== undefined && maxFeePerGas > 0n) {
+      return { maxFeePerGas, maxPriorityFeePerGas: maxPriorityFeePerGas ?? 0n };
+    }
   } catch {
     // Chains without EIP-1559 base fees fall through to the legacy price.
   }
   const gasPrice = await client.getGasPrice();
   if (gasPrice <= 0n) throw new Error("Live network fee data is unavailable");
-  return gasPrice;
+  return { gasPrice };
+}
+
+export interface PricedSourceTransaction {
+  gas: bigint;
+  fees: SourceFeesPerGas;
+  /** Native cost as execution accounts for it: gas × fee per gas, or the buffered OP Stack total. */
+  fee: bigint;
+}
+
+/**
+ * The one way a source transaction is priced, at review and before every
+ * send, so the reviewed maximum and the execution cap can only disagree when
+ * the network moved. Gas is simulated unless given; on OP Stack chains the
+ * L1 data charge is included and the execution buffer applied.
+ */
+export async function priceSourceTransaction(
+  client: SquidDepositFeeClient,
+  sourceChainId: number,
+  transaction: { account: Address; to: Address; data: Hex; value: bigint; gas?: bigint },
+  fees?: SourceFeesPerGas,
+): Promise<PricedSourceTransaction> {
+  const { gas: givenGas, ...request } = transaction;
+  const feesPerGas = fees ?? (await readSourceFeesPerGas(client));
+  const gas = givenGas ?? (await client.estimateGas(request));
+  if (gas <= 0n) throw new Error("Complete execution fee is unavailable");
+  const perGas = "gasPrice" in feesPerGas ? feesPerGas.gasPrice : feesPerGas.maxFeePerGas;
+  if (!isOpStackChain(sourceChainId)) return { gas, fees: feesPerGas, fee: gas * perGas };
+  if (!client.estimateTotalFee) throw new Error("OP Stack total-fee accounting is unavailable");
+  const totalFee = await client.estimateTotalFee({ ...request, gas, ...feesPerGas });
+  return { gas, fees: feesPerGas, fee: applyNetworkFeeExecutionBuffer(sourceChainId, totalFee) };
 }
 
 async function estimateApprovalFee(
@@ -398,21 +433,13 @@ async function estimateApprovalFee(
   sourceChainId: number,
   { owner, sourceToken, spender }: { owner: Address; sourceToken: Address; spender: Address },
   amount: bigint,
-  feePerGas: bigint,
+  fees: SourceFeesPerGas,
   canSimulate: boolean,
 ): Promise<bigint> {
   const data = encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] });
   const transaction = { account: owner, to: sourceToken, data, value: 0n };
-  let gas: bigint;
-  if (canSimulate) {
-    gas = await client.estimateGas(transaction);
-  } else {
-    gas = await client.estimateGas(transaction).catch(() => ERC20_APPROVE_FALLBACK_GAS);
-  }
-  if (isOpStackChain(sourceChainId) && client.estimateTotalFee) {
-    return client.estimateTotalFee({ ...transaction, gas, maxFeePerGas: feePerGas });
-  }
-  return gas * feePerGas;
+  const gas = canSimulate ? undefined : await client.estimateGas(transaction).catch(() => ERC20_APPROVE_FALLBACK_GAS);
+  return (await priceSourceTransaction(client, sourceChainId, { ...transaction, gas }, fees)).fee;
 }
 
 /**
@@ -441,24 +468,37 @@ export async function estimateDepositNetworkFeeMaximum({
   spender: Address;
 }): Promise<SquidDepositNetworkFeeBudget> {
   const kinds = getDepositTransactionKinds(sourceToken, sourceAmount, allowance);
-  const feePerGas = await readLiveFeePerGas(client);
+  const fees = await readSourceFeesPerGas(client);
   const approval = { owner, sourceToken, spender };
   const transactions = await Promise.all(
     kinds.map(async (kind) => {
       switch (kind) {
         case "reset":
-          return { kind, fee: await estimateApprovalFee(client, sourceChainId, approval, 0n, feePerGas, true) };
+          return { kind, fee: await estimateApprovalFee(client, sourceChainId, approval, 0n, fees, true) };
         case "approve":
           return {
             kind,
-            fee: await estimateApprovalFee(client, sourceChainId, approval, sourceAmount, feePerGas, allowance === 0n),
+            fee: await estimateApprovalFee(client, sourceChainId, approval, sourceAmount, fees, allowance === 0n),
           };
         case "route": {
           const sourceGas = quote.gasCosts.filter(
             (cost) => cost.token.chainId === sourceChainId && isNativeToken(cost.token.address),
           );
           const quoted = sourceGas.reduce((total, cost) => total + cost.amount, 0n);
-          const live = sourceGas.reduce((total, cost) => total + (cost.gasLimit ?? 0n), 0n) * feePerGas;
+          const gasLimit = sourceGas.reduce((total, cost) => total + (cost.gasLimit ?? 0n), 0n);
+          // The route's calldata is unknown before confirm, so its gas limit is priced at the live fee
+          // and Squid's own figure, which prices the whole route, stays as the floor.
+          const live =
+            gasLimit > 0n
+              ? (
+                  await priceSourceTransaction(
+                    client,
+                    sourceChainId,
+                    { account: owner, to: SQUID_ROUTER_ADDRESS, data: "0x", value: 0n, gas: gasLimit },
+                    fees,
+                  )
+                ).fee
+              : 0n;
           return { kind, fee: live > quoted ? live : quoted };
         }
       }
