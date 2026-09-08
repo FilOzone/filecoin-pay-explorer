@@ -72,6 +72,7 @@ export function SearchableSelect({
   }, [isOpen, options, value]);
 
   const open = () => {
+    if (isOpen) return;
     setFrozenOptions(options);
     setActiveIndex(0);
     setIsOpen(true);
