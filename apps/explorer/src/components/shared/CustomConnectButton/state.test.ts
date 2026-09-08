@@ -31,10 +31,12 @@ describe("getWalletEntryState", () => {
 });
 
 describe("getWalletExitAction", () => {
-  it("labels Privy sessions as logout and connection-only wallets as disconnect", () => {
+  it("labels Privy sessions and extension wallets as logout, remote connect-only wallets as disconnect", () => {
     expect(getWalletExitAction(true)).toBe("logout");
+    expect(getWalletExitAction(true, "injected")).toBe("logout");
+    expect(getWalletExitAction(false, "injected")).toBe("logout");
     expect(getWalletExitAction(false)).toBe("disconnect");
-    expect(getWalletExitAction(false, "injected")).toBe("manual-disconnect");
+    expect(getWalletExitAction(false, "wallet_connect_v2")).toBe("disconnect");
   });
 
   it("calls only the exit operation for the active session type", async () => {
@@ -49,11 +51,14 @@ describe("getWalletExitAction", () => {
 
     logout.mockClear();
     pauseSelection.mockClear();
-    await exitWalletSession({ authenticated: false, logout, disconnect, pauseSelection });
+    const disconnectConnection = vi.fn(async () => undefined);
+    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection, pauseSelection });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
+    expect(disconnectConnection).toHaveBeenCalledOnce();
     expect(pauseSelection).toHaveBeenCalledOnce();
     expect(pauseSelection.mock.invocationCallOrder[0]).toBeLessThan(disconnect.mock.invocationCallOrder[0]);
+    expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(disconnectConnection.mock.invocationCallOrder[0]);
   });
 
   it("restores wallet selection when a connect-only wallet cannot be disconnected", async () => {
