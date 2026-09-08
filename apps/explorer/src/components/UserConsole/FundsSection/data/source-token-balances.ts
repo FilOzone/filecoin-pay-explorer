@@ -35,14 +35,18 @@ export async function readSourceTokenState(
   owner: Address,
   tokenAddress: Address,
   spender: Address,
+  /** Pins the read to a block, so a node behind it fails instead of answering with older state. */
+  blockNumber?: bigint,
 ): Promise<SourceTokenState> {
-  const nativePromise = client.getBalance({ address: owner });
+  const at = blockNumber === undefined ? {} : { blockNumber };
+  const nativePromise = client.getBalance({ address: owner, ...at });
   if (normalizeAddress(tokenAddress) === normalizeAddress(NATIVE_TOKEN_ADDRESS)) {
     const native = await nativePromise;
     return { allowance: 0n, native, token: native };
   }
   const [[token, allowance], native] = await Promise.all([
     client.multicall({
+      ...at,
       allowFailure: false,
       contracts: [
         { abi: erc20Abi, address: tokenAddress, args: [owner], functionName: "balanceOf" as const },
