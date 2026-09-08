@@ -13,8 +13,8 @@ import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 /**
  * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
- * shape whose mixed-case letters do not match EIP-55; all-lowercase input
- * never hits it.
+ * shape whose letter case does not match EIP-55: mixed case with the wrong
+ * checksum, or all uppercase. All-lowercase input never hits it.
  */
 export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network";
 
@@ -89,9 +89,9 @@ export interface AuthorizeLink {
  * none, an error when any part is unusable, otherwise every field validated.
  */
 export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
-  if (!params.has("authorize") && !params.has("scopes")) return null;
-  const requested = parseAuthorizeParam(params.get("authorize"));
-  if (!requested) return null;
+  if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
+  // Scopes or a network without an address is still a pairing request, just a broken one.
+  const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };
   if ("error" in requested) return requested;
   const network = parseNetworkParam(params.get("network"));
   if (!network) return { error: "no-network" };

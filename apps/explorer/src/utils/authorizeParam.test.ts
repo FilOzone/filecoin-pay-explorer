@@ -139,6 +139,15 @@ describe("parseNetworkParam", () => {
 });
 
 describe("parseAuthorizeLink", () => {
+  it("reports a link that names scopes or a network but no address", () => {
+    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("scopes=addPieces")), { error: "not-an-address" });
+    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("network=calibration")), { error: "not-an-address" });
+    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("authorize=&scopes=addPieces")), {
+      error: "not-an-address",
+    });
+    assert.equal(parseAuthorizeLink(new URLSearchParams("foo=bar")), null);
+  });
+
   const link = (query: string) => parseAuthorizeLink(new URLSearchParams(query));
 
   it("returns every validated field for a complete link", () => {
