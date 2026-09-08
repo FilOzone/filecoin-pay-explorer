@@ -1,5 +1,24 @@
+import type { ToasterProps } from "sonner";
 import type { TransactionMetadata } from "@/types";
 import { formatAddress } from "./formatter";
+
+/**
+ * Every toast draws on the console's own tokens. Sonner colours the
+ * description by its own theme (near-white under a dark OS scheme), while the
+ * background here follows the page, which has no dark variant: on a dark
+ * system the description turned light grey on white. Binding it to the same
+ * text token as the title keeps it readable whatever sonner thinks the theme
+ * is; the trailing `!` outranks sonner's own description rule.
+ */
+export const TOAST_OPTIONS: NonNullable<ToasterProps["toastOptions"]> = {
+  classNames: { description: "text-(--normal-text)! opacity-80" },
+  style: {
+    "--normal-bg": "var(--color-card-background-hover)",
+    "--normal-text": "var(--color-text-base)",
+    "--normal-border": "var(--color-border-base)",
+    "--border-radius": "var(--radius)",
+  } as React.CSSProperties,
+};
 
 export const getToastContent = (metadata: TransactionMetadata, status: "pending" | "success" | "error") => {
   const { type, amount, token, operator, recipient, railId } = metadata;
