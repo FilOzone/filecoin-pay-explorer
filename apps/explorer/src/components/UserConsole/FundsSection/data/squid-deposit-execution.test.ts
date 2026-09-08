@@ -716,7 +716,7 @@ describe("executeSquidDeposit", () => {
     const failure = await executeSquidDeposit({
       ...signingChecks,
       approvalResetRequired: true,
-      destinationClient: fakeDestination([100n]),
+      destinationClient: fakeDestination(),
       maxNativeFee: resetFee + approveFee + routeFee,
       quote,
       request,
@@ -745,7 +745,7 @@ describe("executeSquidDeposit", () => {
     await executeSquidDeposit({
       ...signingChecks,
       approvalRequired: false,
-      destinationClient: fakeDestination([100n, 100n, 195n]),
+      destinationClient: fakeDestination(),
       maxNativeFee: routeFee,
       quote,
       request,
@@ -954,7 +954,7 @@ describe("executeSquidDeposit", () => {
     try {
       const result = await executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n, 100n, 195n]),
+        destinationClient: fakeDestination(),
         onBroadcast: ({ quote: used }) => broadcasts.push(used.quoteId),
         onSwapAttempt: (fundsBefore, used) => attempts.push([fundsBefore, used.quoteId]),
         quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 2_020 } },
@@ -989,7 +989,7 @@ describe("executeSquidDeposit", () => {
           executeSquidDeposit({
             ...signingChecks,
             approvalRequired: false,
-            destinationClient: fakeDestination([100n]),
+            destinationClient: fakeDestination(),
             quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 2_010 } },
             refreshQuote: async () => fresh,
             request,
