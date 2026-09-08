@@ -25,6 +25,7 @@ vi.mock("@privy-io/react-auth", () => ({
 }));
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }),
+  useDisconnect: () => ({ disconnectAsync: vi.fn(async () => undefined) }),
   useBalance: () => ({ data: { value: 0n }, isLoading: false }),
   useReadContract: () => ({ data: 0n, isLoading: false }),
   useWalletClient: () => ({ data: undefined }),
