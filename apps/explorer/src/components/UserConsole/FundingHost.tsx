@@ -84,6 +84,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       {() => {
         const chooseMethod = (method: AddFundsMethod) => {
           if (method === "card") {
+            launch.closeAddFunds();
             void card.buyWithCard();
             return;
           }
