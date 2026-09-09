@@ -43,6 +43,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
     isError,
     error,
   } = useWaitForTransactionReceipt({
+    chainId,
     hash: currentTxHash,
     query: {
       enabled: !!currentTxHash,
