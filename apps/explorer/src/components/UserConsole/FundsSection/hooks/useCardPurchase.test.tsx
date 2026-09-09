@@ -240,7 +240,7 @@ describe("useCardPurchase", () => {
     });
     stored.set(
       `filecoin-pay:card-purchase:v1:${ADDRESS.toLowerCase()}`,
-      JSON.stringify({ before: "10", contextKey: harness.contextKey, recipient: ADDRESS }),
+      JSON.stringify({ before: "10", contextKey: harness.contextKey, recipient: ADDRESS, submitted: true }),
     );
 
     await act(async () => latest.buyWithCard());
@@ -299,6 +299,10 @@ describe("useCardPurchase", () => {
     expect(stored.size).toBe(0);
 
     await act(async () => renderer.unmount());
+    stored.set(
+      `filecoin-pay:card-purchase:v1:${ADDRESS.toLowerCase()}`,
+      JSON.stringify({ before: "10", contextKey: harness.contextKey, recipient: ADDRESS }),
+    );
     await act(async () => {
       create(<Harness />);
     });
