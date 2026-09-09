@@ -284,13 +284,24 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     }
   };
 
+  const parsedDepositAmount = (() => {
+    if (!currentToken || amount === "") return null;
+    try {
+      const parsed = parseUnits(amount, currentToken.decimals);
+      return parsed > 0n ? parsed : null;
+    } catch {
+      return null;
+    }
+  })();
+  const hasInsufficientBalance = parsedDepositAmount !== null && balance !== undefined && parsedDepositAmount > balance;
+
   const handleDeposit = async () => {
     if (!currentToken) {
       console.log("No token selected");
       return;
     }
 
-    if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (parsedDepositAmount === null || balance === undefined || hasInsufficientBalance) {
       console.log("Invalid amount");
       return;
     }
@@ -313,7 +324,6 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setIsSubmitting(true);
 
     try {
-      const amountInWei = parseUnits(amount, currentToken.decimals);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
 
       console.log("[Deposit] Getting permit signature...");
@@ -330,7 +340,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           tokenName: currentToken.name,
           ownerAddress: userAddress,
           spenderAddress: constants.contracts.payments.address,
-          amount: amountInWei,
+          amount: parsedDepositAmount,
           deadline,
           chainId: constants.chain.id,
         },
@@ -351,7 +361,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
         args: [
           currentToken.address,
           userAddress,
-          amountInWei,
+          parsedDepositAmount,
           permitSignature.deadline,
           permitSignature.v,
           permitSignature.r,
@@ -375,7 +385,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     }
   };
 
-  const canDeposit = Boolean(currentToken) && Boolean(amount) && !isBusy;
+  const canDeposit = parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy;
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
@@ -489,6 +499,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
               <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
+              {hasInsufficientBalance ? <p className='text-xs text-destructive'>Insufficient wallet balance.</p> : null}
             </div>
           ) : null}
 
