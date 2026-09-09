@@ -14,7 +14,7 @@
  * stays unit-testable in isolation.
  */
 
-import { isAddress } from "viem";
+import { type Address, type Hex, isAddress } from "viem";
 
 export type ScopeId = "createDataSet" | "addPieces" | "schedulePieceRemovals" | "terminateService";
 
@@ -22,7 +22,8 @@ export interface SessionKeyScope {
   id: ScopeId;
   label: string;
   description: string;
-  typehash: `0x${string}`;
+  /** bytes32 EIP-712 typehash, not an address. */
+  typehash: Hex;
   /** Grants the key power to remove data or end service — UI flags these. */
   destructive?: boolean;
 }
@@ -60,8 +61,6 @@ export const SCOPE_BY_ID: Record<ScopeId, SessionKeyScope> = Object.fromEntries(
   SESSION_KEY_SCOPES.map((s) => [s.id, s]),
 ) as Record<ScopeId, SessionKeyScope>;
 
-type Address = `0x${string}`;
-
 /**
  * Arguments for SessionKeyRegistry `login(signer, expiry, permissions[], origin)`.
  * A permission is the scope's FWSS typehash; `origin` is the public key name.
@@ -71,12 +70,12 @@ export function buildLoginArgs(
   expiry: bigint,
   scopes: ScopeId[],
   name: string,
-): [Address, bigint, Address[], string] {
+): [Address, bigint, Hex[], string] {
   return [signer, expiry, scopes.map((id) => SCOPE_BY_ID[id].typehash), name];
 }
 
 /** Arguments for SessionKeyRegistry `revoke(signer, permissions[], origin)`: login with expiry 0. */
-export function buildRevokeArgs(signer: Address, scopes: ScopeId[], name: string): [Address, Address[], string] {
+export function buildRevokeArgs(signer: Address, scopes: ScopeId[], name: string): [Address, Hex[], string] {
   return [signer, scopes.map((id) => SCOPE_BY_ID[id].typehash), name];
 }
 
