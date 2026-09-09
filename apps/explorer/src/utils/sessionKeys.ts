@@ -11,7 +11,7 @@
  * bumped to a version whose synapse-core is 0.7 or newer.
  *
  * NOTE: this module stays free of `@/` imports and side effects so its logic
- \* stays unit-testable in isolation.
+ * stays unit-testable in isolation.
  */
 
 import { isAddress } from "viem";
@@ -224,7 +224,7 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
     if (typeof item !== "object" || item === null) continue;
     const r = item as Record<string, unknown>;
     // Strict: viem throws on a mixed-case address with a wrong checksum, which would take down every read.
-    if (typeof r.sessionKeyPublic !== "string" || !isAddress(r.sessionKeyPublic)) continue;
+    if (typeof r.sessionKeyPublic !== "string" || !isAddress(r.sessionKeyPublic, { strict: true })) continue;
     if (!Array.isArray(r.scopes)) continue;
     const scopes = r.scopes.filter((s): s is ScopeId => typeof s === "string" && Object.hasOwn(SCOPE_BY_ID, s));
     if (scopes.length === 0) continue;

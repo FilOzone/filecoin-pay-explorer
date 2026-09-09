@@ -213,7 +213,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const downloadEnv = () => {
     if (!generated) return;
     download(
-      `session-key-${cleanName || "unnamed"}.env`,
+      // The on-chain name allows characters a filename cannot; only the filename is narrowed.
+      `session-key-${cleanName.replace(/[\\/:*?"<>|]/g, "-") || "unnamed"}.env`,
       buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress),
       "text/plain",
     );
