@@ -80,6 +80,26 @@ describe("fetchAuthorizationEvents", () => {
     expect(events.at(-1)).toMatchObject({ blockNumber: 3000n, logIndex: 1 });
   });
 
+  it("stops after one page when Blockscout ignored the filter, since that wallet then has no grants", async () => {
+    const everyoneElse = Array.from({ length: 1000 }, (_, i) => row(STRANGER, 1000 + i, 0));
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls += 1;
+      return { ok: true, json: async () => ({ status: "1", message: "OK", result: everyoneElse }) };
+    });
+
+    const events = await fetchAuthorizationEvents("calibration", registry, OWNER);
+
+    expect(calls).toBe(1);
+    expect(events).toEqual([]);
+  });
+
+  it("skips a row with a null topic instead of aborting the sync", () => {
+    const broken = { ...row(OWNER, 7), topics: [topic0, null] } as unknown as BlockscoutLogEntry;
+    const events = decodeAuthorizationLogs([broken, row(OWNER, 8)], event, topic0, topicFor(OWNER), 0);
+    expect(events.map((e) => e.blockNumber)).toEqual([8n]);
+  });
+
   it("stops instead of looping when a full page cannot be moved past by block", async () => {
     // Every row in one block: the next request from that block would return the same page forever.
     const stuck = Array.from({ length: 1000 }, (_, i) => row(OWNER, 5000, i));

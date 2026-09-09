@@ -77,6 +77,10 @@ export async function fetchAuthorizationEvents(
       rawLogs.push(log);
       added += 1;
     }
+    // Blockscout ignores the topic filters for a value it has never indexed and
+    // returns the registry's whole log instead. That means this wallet has no
+    // grants: stop here rather than page through everyone else's.
+    if (page.some((log) => (log.topics[1] ?? "").toLowerCase() !== topic1)) break;
     if (page.length < PAGE_SIZE) break;
     // A full page with nothing new means the range cannot advance: one block
     // holds more logs than a page, and block ranges cannot split a block.
@@ -103,6 +107,8 @@ export function decodeAuthorizationLogs(
 ): DecodedAuthorizationEvent[] {
   const events: DecodedAuthorizationEvent[] = [];
   for (const log of rawLogs) {
+    // A null topic is a shape this decoder cannot take; one bad row must not abort the sync.
+    if (log.topics.some((topic) => topic == null)) continue;
     if ((log.topics[0] ?? "").toLowerCase() !== topic0.toLowerCase()) continue;
     if ((log.topics[1] ?? "").toLowerCase() !== topic1.toLowerCase()) continue;
 

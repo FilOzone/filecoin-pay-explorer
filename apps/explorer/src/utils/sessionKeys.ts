@@ -239,7 +239,10 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
       createdAt: typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : 0,
       ...(typeof r.txHash === "string" ? { txHash: r.txHash } : {}),
       ...(r.source === "chain" ? { source: "chain" as const } : {}),
-      ...(typeof r.revokedAt === "number" && Number.isFinite(r.revokedAt) ? { revokedAt: r.revokedAt } : {}),
+      // Known only for synced records; a local record cannot claim a revocation time.
+      ...(r.source === "chain" && typeof r.revokedAt === "number" && Number.isFinite(r.revokedAt)
+        ? { revokedAt: r.revokedAt }
+        : {}),
     });
   }
   return out;

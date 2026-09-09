@@ -156,6 +156,11 @@ describe("sanitizeRecords", () => {
 
   it("drops records with a malformed address or no scope array", () => {
     assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: "0xnot-an-address" }]), []);
+    // A revocation time is chain knowledge; a local record cannot carry one.
+    assert.deepEqual(sanitizeRecords([{ ...good, revokedAt: 5 }]), [good]);
+    assert.deepEqual(sanitizeRecords([{ ...good, source: "chain", revokedAt: 5 }]), [
+      { ...good, source: "chain", revokedAt: 5 },
+    ]);
     // Mixed case with a wrong checksum: viem would throw on the read, so the record is rejected here.
     assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: `${SIGNER.slice(0, -1)}a` }]), []);
     assert.equal(sanitizeRecords([{ ...good, sessionKeyPublic: SIGNER.toLowerCase() }]).length, 1);
