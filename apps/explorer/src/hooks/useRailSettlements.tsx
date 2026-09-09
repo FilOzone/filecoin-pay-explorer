@@ -17,8 +17,10 @@ interface RailSettlementState {
 }
 
 interface UseRailSettlementsOptions {
+  account?: Hex;
   contractAddress: Hex;
   abi: Abi;
+  chainId: number;
   explorerUrl?: string;
   onSettlementSuccess?: (railId: string, receipt: TransactionReceipt) => void;
   onSettlementError?: (railId: string, error: Error) => void;
@@ -33,7 +35,7 @@ export interface SettleRailParams {
 }
 
 export const useRailSettlements = (options: UseRailSettlementsOptions) => {
-  const { contractAddress, abi, explorerUrl, onSettlementSuccess, onSettlementError } = options;
+  const { account, contractAddress, abi, chainId, explorerUrl, onSettlementSuccess, onSettlementError } = options;
 
   const [settlements, setSettlements] = useState<Map<string, RailSettlementState>>(new Map());
   const [pendingTxHashes, setPendingTxHashes] = useState<Set<Hex>>(new Set());
@@ -54,6 +56,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
     isError,
     error,
   } = useWaitForTransactionReceipt({
+    chainId,
     hash: currentPendingTx,
     query: {
       enabled: !!currentPendingTx,
@@ -153,8 +156,10 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         );
 
         const txHash = await writeContractAsync({
+          account,
           address: contractAddress,
           abi,
+          chainId,
           functionName: "settleRail",
           args: [railId, untilEpoch],
         });
@@ -207,7 +212,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         throw err;
       }
     },
-    [contractAddress, abi, writeContractAsync],
+    [account, contractAddress, abi, chainId, writeContractAsync],
   );
 
   const isSettling = useCallback(

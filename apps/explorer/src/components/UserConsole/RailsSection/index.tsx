@@ -37,8 +37,10 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, us
   const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: network });
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
+    account: userAddress as `0x${string}`,
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
+    chainId: chain.id,
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
