@@ -51,14 +51,23 @@ export interface SpendHistoryOneTimePaymentResponse {
 export interface AccountSpendHistoryResponse {
   /**
    * The epoch the history was read at — `block.number` is the Filecoin epoch, so
-   * it compares directly with period bounds. Taken from the first page, which is
-   * the earliest block every page is known to cover. Null while a deployment is
-   * still starting up.
+   * it compares directly with period bounds. Every page is pinned to it.
+   *
+   * Never null: the subgraph omits it only while a deployment is starting up,
+   * and the loader throws in that case rather than returning a history the chart
+   * would have no ceiling to integrate against.
    */
-  _meta: { block: { number: number } } | null;
+  _meta: { block: { number: number } };
   railRatePeriods: SpendHistoryRatePeriodResponse[];
   oneTimePayments: SpendHistoryOneTimePaymentResponse[];
-  /** A page cap was hit, so the history may be missing records. */
+  /**
+   * Paging stopped at its cap rather than at the end of the data.
+   *
+   * This does mean records were left unread — the walk only stops early on a
+   * full final page. What it cannot say is whether any of them fall inside the
+   * charted months, or which: ids carry no order in time, so the rows that were
+   * read are an arbitrary subset.
+   */
   reachedPageLimit: boolean;
 }
 
@@ -235,15 +244,16 @@ export const useAccountSpendHistory = (
       // the two walks see different states, and cursor paging can miss rows
       // outright: ids are not ordered in time, so an entity written mid-walk can
       // land below the cursor.
-      const { _meta } = await executeQuery<{ _meta: AccountSpendHistoryResponse["_meta"] }>(
+      // Nullable here and only here: the subgraph omits `_meta` while a
+      // deployment is starting up. Throwing lets Query retry, where falling back
+      // to the clock would let open periods accrue past the data that exists —
+      // and it is what lets everything downstream treat the block as given.
+      const { _meta } = await executeQuery<{ _meta: AccountSpendHistoryResponse["_meta"] | null }>(
         GET_SUBGRAPH_BLOCK,
         undefined,
         signal,
       );
 
-      // Only null while a deployment is starting up. Throwing lets Query retry,
-      // where falling back to the clock would let open periods accrue past the
-      // data that exists.
       if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
       const block = _meta.block.number;
 

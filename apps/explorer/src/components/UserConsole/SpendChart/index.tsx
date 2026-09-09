@@ -8,7 +8,7 @@ import type { Network } from "@/types";
 import { SpendChartEmptyState, SpendChartErrorState, SpendChartLayout, SpendChartLoadingState } from "./components";
 import { buildMonthWindows } from "./utils/buildMonthWindows";
 import { buildSpendSeries } from "./utils/buildSpendSeries";
-import { hasReachedSpendHistoryLimit, toSpendHistory } from "./utils/toSpendHistory";
+import { toSpendHistory } from "./utils/toSpendHistory";
 
 // Keeps recharts out of the initial console bundle. `ssr: false` because the
 // chart measures its own container, which has no size on the server.
@@ -57,7 +57,7 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
   // bills epochs whose rate changes and terminations are not indexed yet. The
   // loader guarantees this is present — it throws rather than letting the chart
   // accrue past the data.
-  const indexedEpoch = data ? BigInt(data._meta?.block.number ?? 0) : 0n;
+  const indexedEpoch = data ? BigInt(data._meta.block.number) : 0n;
 
   const rows = useMemo(() => {
     if (!history) return null;
@@ -86,7 +86,7 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
         rows={rows}
         tokenDecimals={token.decimals}
         tokenSymbol={token.symbol}
-        hasReachedHistoryLimit={data ? hasReachedSpendHistoryLimit(data) : false}
+        hasReachedHistoryLimit={data?.reachedPageLimit ?? false}
       />
     </SpendChartLayout>
   );

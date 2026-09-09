@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccountSpendHistoryResponse } from "@/hooks/useAccountDetails";
-import { hasReachedSpendHistoryLimit, toSpendHistory } from "./toSpendHistory";
+import { toSpendHistory } from "./toSpendHistory";
 
 const OPERATOR = { address: "0x000000000000000000000000000000000000000A" };
 
@@ -47,15 +47,5 @@ describe("toSpendHistory", () => {
 
     expect(history.periods[0].operatorAddress).toBe(OPERATOR.address.toLowerCase());
     expect(history.oneTimePayments[0].operatorAddress).toBe(OPERATOR.address.toLowerCase());
-  });
-});
-
-describe("hasReachedSpendHistoryLimit", () => {
-  it("is false when paging ran to the end of the data", () => {
-    expect(hasReachedSpendHistoryLimit(makeResponse({ reachedPageLimit: false }))).toBe(false);
-  });
-
-  it("is true when paging stopped at its cap", () => {
-    expect(hasReachedSpendHistoryLimit(makeResponse({ reachedPageLimit: true }))).toBe(true);
   });
 });

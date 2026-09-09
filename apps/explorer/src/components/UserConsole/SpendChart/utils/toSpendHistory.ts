@@ -2,16 +2,6 @@ import type { AccountSpendHistoryResponse } from "@/hooks/useAccountDetails";
 import type { SpendHistory } from "../types";
 
 /**
- * Returns true when paging stopped at its cap rather than at the end of the data.
- *
- * Unlike the row caps this replaced, reaching the page limit does mean records
- * were left unread — the walk only stops early on a full final page. What it
- * still cannot say is whether any of them fall inside the charted months.
- */
-export const hasReachedSpendHistoryLimit = (response: AccountSpendHistoryResponse): boolean =>
-  response.reachedPageLimit;
-
-/**
  * The single seam between the subgraph and the chart.
  *
  * Everything downstream — the accrual maths, its tests, every component — works

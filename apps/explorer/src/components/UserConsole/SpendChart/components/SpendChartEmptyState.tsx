@@ -6,12 +6,16 @@ type SpendChartEmptyStateProps = {
   tokenSymbol: string;
 };
 
+/**
+ * Shown when every charted month totals zero, which is not the same as having no
+ * rails.
+ */
 const SpendChartEmptyState = ({ tokenSymbol }: SpendChartEmptyStateProps) => (
   <SpendChartLayout tokenSymbol={tokenSymbol}>
     <EmptyStateCard
       titleTag='h4'
-      title='Nothing scheduled yet'
-      description={`You have no rails paying in ${tokenSymbol}, so there is nothing to chart.`}
+      title='Nothing in the last six months'
+      description={`No ${tokenSymbol} has been scheduled or paid over the months charted here.`}
       icon={ChartBarIcon}
     />
   </SpendChartLayout>
