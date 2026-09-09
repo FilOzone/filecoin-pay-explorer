@@ -17,16 +17,14 @@ const wagmi = vi.hoisted(() => ({
   },
   nextHash: "0x0",
   submitFailure: undefined as unknown,
+  usePublicClient: vi.fn(),
   writeContractAsync: vi.fn(),
 }));
 
 vi.mock("wagmi", () => ({
   useConfig: () => ({}),
   useWriteContract: () => ({ writeContractAsync: wagmi.writeContractAsync, isPending: false }),
-  usePublicClient: () => ({
-    waitForTransactionReceipt: ({ hash }: { hash: string }) =>
-      new Promise<TransactionReceipt>((resolve) => receipts.set(hash, { resolve })),
-  }),
+  usePublicClient: wagmi.usePublicClient,
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => wagmi.account }));
 
@@ -56,6 +54,10 @@ describe("useContractTransaction", () => {
     wagmi.account = { address: ACCOUNT, chainId: CHAIN_ID };
     wagmi.nextHash = "0x0";
     wagmi.submitFailure = undefined;
+    wagmi.usePublicClient.mockReset().mockReturnValue({
+      waitForTransactionReceipt: ({ hash }: { hash: string }) =>
+        new Promise<TransactionReceipt>((resolve) => receipts.set(hash, { resolve })),
+    });
     wagmi.writeContractAsync.mockReset().mockImplementation(async () => {
       if (wagmi.submitFailure !== undefined) throw wagmi.submitFailure;
       return wagmi.nextHash;
@@ -65,6 +67,11 @@ describe("useContractTransaction", () => {
   afterEach(() => {
     for (const renderer of mounted.splice(0)) act(() => renderer.unmount());
     receipts.clear();
+  });
+
+  it("pins receipt polling to the transaction chain", () => {
+    mount(pinnedOptions);
+    expect(wagmi.usePublicClient).toHaveBeenCalledWith({ chainId: CHAIN_ID });
   });
 
   it("hands a submission failure to the caller as an Error whatever the wallet threw", async () => {

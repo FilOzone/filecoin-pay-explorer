@@ -42,7 +42,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
   const [inFlightCount, setInFlightCount] = useState(0);
   const config = useConfig();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId });
 
   const explorerAction = (txHash: Hex) =>
     explorerUrl
