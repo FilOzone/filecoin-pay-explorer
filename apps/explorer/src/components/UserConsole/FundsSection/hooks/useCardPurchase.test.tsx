@@ -269,6 +269,44 @@ describe("useCardPurchase", () => {
     });
   });
 
+  it("does not persist a card purchase before Privy reports submission", async () => {
+    chain.readContract.mockResolvedValue(10n);
+    let rejectFunding!: (error: Error) => void;
+    privy.fund.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFunding = reject;
+        }),
+    );
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    let purchase!: Promise<void>;
+    await act(async () => {
+      purchase = latest.buyWithCard() as Promise<void>;
+      await Promise.resolve();
+    });
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(stored.size).toBe(0);
+
+    await act(async () => {
+      rejectFunding(new Error("User exited flow"));
+      await purchase;
+    });
+    expect(latest.label).toBe("Buy USDC with card");
+    expect(stored.size).toBe(0);
+
+    await act(async () => renderer.unmount());
+    await act(async () => {
+      create(<Harness />);
+    });
+    expect(latest.label).toBe("Buy USDC with card");
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
   it("keeps cancellation recoverable and reports provider failures", async () => {
     chain.readContract.mockResolvedValue(10n);
     await act(async () => {
