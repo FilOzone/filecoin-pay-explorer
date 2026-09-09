@@ -197,7 +197,7 @@ export function useCardPurchase({
   const purchase = async (requested?: LoginContext) => {
     if (!publicClient) return reportBaseClientUnavailable();
     const intent = requested ?? { contextKey, recipient: getAddress(address) };
-    let claimed = false;
+    let purchaseStatus: "confirmed" | "submitted" | undefined;
 
     setStatus("opening");
     try {
@@ -211,8 +211,14 @@ export function useCardPurchase({
         const before = await readUsdcBalance(publicClient, intent.recipient);
         if (!isCurrent(intent)) return null;
         const next = { before, ...intent };
+        const result = await fund({
+          source: {},
+          destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
+          environment: getOnrampEnvironment(),
+        });
+        purchaseStatus = result.status;
+        pendingPurchase.current = next;
         savePendingCardPurchase(next);
-        claimed = true;
         return next;
       });
       if (!pending) {
@@ -220,30 +226,22 @@ export function useCardPurchase({
         return;
       }
       pendingPurchase.current = pending;
-      if (!claimed) {
+      if (!purchaseStatus) {
         setStatus("delayed");
         return;
       }
-      const result = await fund({
-        source: {},
-        destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
-        environment: getOnrampEnvironment(),
-      });
       if (!isCurrent(intent)) {
         setStatus("delayed");
         reportWalletChanged();
         return;
       }
-      await checkPendingPurchase(result.status === "submitted");
+      await checkPendingPurchase(purchaseStatus === "submitted");
     } catch (error) {
-      pendingPurchase.current = null;
-      if (claimed) {
-        try {
-          clearPendingCardPurchase(intent.recipient);
-        } catch {
-          // The original error already explains why card funding could not start safely.
-        }
+      if (purchaseStatus) {
+        if (isMounted.current) setStatus("delayed");
+        return;
       }
+      pendingPurchase.current = null;
       if (!isFundingExit(error)) {
         toast.error("Card purchase failed", {
           description: error instanceof Error ? error.message : "Privy card funding is unavailable.",
