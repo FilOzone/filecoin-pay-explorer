@@ -17,7 +17,7 @@ export interface PermitSignature {
   deadline: bigint;
 }
 
-export function getPermitDomain(tokenAddress: Hex, tokenName: string, chainId: number) {
+export function buildPermitDomain(tokenAddress: Hex, tokenName: string, chainId: number) {
   return {
     name: tokenName,
     version: "1",
@@ -28,7 +28,7 @@ export function getPermitDomain(tokenAddress: Hex, tokenName: string, chainId: n
 
 export function getPermitDomainSeparator(tokenAddress: Hex, tokenName: string, chainId: number) {
   return hashDomain({
-    domain: getPermitDomain(tokenAddress, tokenName, chainId),
+    domain: buildPermitDomain(tokenAddress, tokenName, chainId),
     types: {
       EIP712Domain: [
         { name: "name", type: "string" },
@@ -101,7 +101,7 @@ export async function getPermitSignature(
     getPermitNonce(tokenAddress, ownerAddress, publicClient),
   ]);
 
-  const domain = getPermitDomain(tokenAddress, tokenNameFetched, chainId);
+  const domain = buildPermitDomain(tokenAddress, tokenNameFetched, chainId);
 
   const types = {
     Permit: [

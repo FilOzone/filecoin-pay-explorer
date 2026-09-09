@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { GET_APPROVED_OPERATOR_CLIENTS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
+import { getChainIdFromNetwork } from "@/utils/network";
 import { useGraphQLClient } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
 import { useServiceMetadata } from "./useServiceMetadata";
@@ -66,17 +67,17 @@ export interface ApprovableService {
 }
 
 /**
- * Services eligible for the Add Service dropdown: operators meeting the
- * per-network {@link MIN_UNIQUE_PAYERS} bar (from subgraph approvals) that
- * also publish an onchain name via IFilecoinServiceMetadata. Anything unnamed
- * or low-adoption stays reachable through the dialog's custom-address entry
- * instead.
+ * Discovers named services that meet the network's payer threshold.
+ * `enabled` pauses reads while the UI is closed. Payer counts remain a
+ * client-side aggregation until approval volume warrants a subgraph model.
  */
-export function useApprovableServices(options?: { networkOverride?: Network }) {
+export function useApprovableServices(options?: { enabled?: boolean; networkOverride?: Network }) {
   const { network: contextNetwork } = useNetwork();
   const network = options?.networkOverride ?? contextNetwork;
+  const enabled = options?.enabled ?? true;
   const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
   const { data: approvals, isLoading } = useQuery({
+    enabled,
     queryKey: ["approvedOperatorClients", network],
     queryFn: () =>
       getApprovedOperatorClients((cursor) =>
@@ -89,10 +90,11 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
 
   const candidates = useMemo(() => getApprovableServiceCandidates(approvals ?? [], network), [approvals, network]);
 
-  // The name gate means candidates are invisible until their onchain reads
-  // land — without this, the dropdown briefly claims there are no services.
+  // Gate metadata separately because disabled queries retain cached candidates.
   const { metadata, isLoading: isLoadingMetadata } = useServiceMetadata(
     candidates.map((candidate) => candidate.address),
+    getChainIdFromNetwork(network),
+    enabled,
   );
 
   const services = useMemo<ApprovableService[]>(

@@ -28,7 +28,7 @@ export interface ServiceMetadataResult {
   isLoading: boolean;
 }
 
-export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
+export function useServiceMetadata(addresses: string[], chainId: number, enabled = true): ServiceMetadataResult {
   const validAddresses = useMemo(() => addresses.filter((address) => isAddress(address)), [addresses]);
 
   const { data, isLoading } = useReadContracts({
@@ -37,9 +37,10 @@ export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
         address: address as `0x${string}`,
         abi: metadataAbi,
         functionName,
+        chainId,
       })),
     ),
-    query: { staleTime: 60 * 60 * 1000 },
+    query: { enabled: enabled && validAddresses.length > 0, staleTime: 60 * 60 * 1000 },
   });
 
   const metadata = useMemo(() => {
@@ -59,5 +60,5 @@ export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
     return map;
   }, [data, validAddresses]);
 
-  return { metadata, isLoading: validAddresses.length > 0 && isLoading };
+  return { metadata, isLoading: enabled && validAddresses.length > 0 && isLoading };
 }

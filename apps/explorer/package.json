@@ -31,7 +31,8 @@
     "sonner": "^2.0.7",
     "use-debounce": "^10.1.1",
     "viem": "^2.48.11",
-    "wagmi": "^3.6.14"
+    "wagmi": "^3.6.14",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
