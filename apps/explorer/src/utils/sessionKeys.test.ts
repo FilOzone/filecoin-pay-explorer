@@ -334,8 +334,10 @@ describe("existingKeyPrefill", () => {
     assert.deepEqual(existingKeyPrefill(partlyRevoked), { name: "ci", scopes: ["createDataSet"], expirySec: null });
   });
 
-  it("inherits nothing from a revoked or unresolved key", () => {
-    assert.deepEqual(existingKeyPrefill({ ...base, status: "revoked" }), { name: "ci", scopes, expirySec: null });
+  it("brings only the name from a fully revoked key, and no expiry from an unresolved one", () => {
+    // Revoked means every scope expiry is zero on chain, so nothing is left to renew.
+    const revoked = { ...base, status: "revoked" as const, scopeExpiries: { createDataSet: 0n, addPieces: 0n } };
+    assert.deepEqual(existingKeyPrefill(revoked), { name: "ci", scopes: [], expirySec: null });
     assert.deepEqual(existingKeyPrefill({ ...base, status: "unknown" }), { name: "ci", scopes, expirySec: null });
   });
 

@@ -117,12 +117,13 @@ export interface ExistingKeyPrefill {
 }
 
 /**
- * Prefill for re-authorizing a signer the list already knows. An active key
- * keeps its expiry so new scopes line up with the old ones. An expired,
- * revoked, or unresolved key inherits nothing: the owner picks a fresh expiry
- * and the same signer is granted again, so no new key is made. Only scopes
- * with a live or lapsed grant come along: one revoked to zero on chain was
- * taken away on purpose and must not be re-granted by a renewal.
+ * Prefill for re-authorizing a signer the list already knows. The name always
+ * carries over, since the same signer is granted again and no new key is
+ * made. An active key keeps its expiry so new scopes line up with the old
+ * ones; any other key gets a fresh expiry from the owner. Only scopes with a
+ * live or lapsed grant come along: one revoked to zero on chain was taken
+ * away on purpose and must not be re-granted by a renewal, so a fully revoked
+ * key brings its name and nothing else.
  */
 export function existingKeyPrefill(
   key:
