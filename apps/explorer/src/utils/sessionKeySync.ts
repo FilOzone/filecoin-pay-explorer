@@ -97,7 +97,8 @@ export function foldAuthorizationEvents(
 
     const firstGrant = grants[0];
     const latestRevoke = revokes.length > 0 ? revokes[revokes.length - 1] : undefined;
-    const latestNamedGrant = [...grants].reverse().find((grant) => grant.origin !== "");
+    // Judged after cleanup: an origin of only whitespace or stripped characters is no name.
+    const latestNamedGrant = [...grants].reverse().find((grant) => normalizeKeyName(grant.origin) !== "");
 
     records.push({
       // Origin is written by whoever made the grant, so it gets the same cleanup as typed names.
