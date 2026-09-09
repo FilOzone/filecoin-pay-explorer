@@ -35,7 +35,7 @@ function getCardPurchaseStorage(): StorageLike {
 function savePendingCardPurchase(pending: PurchaseContext) {
   getCardPurchaseStorage().setItem(
     getCardPurchaseStorageKey(pending.recipient),
-    JSON.stringify({ ...pending, before: pending.before.toString() }),
+    JSON.stringify({ ...pending, before: pending.before.toString(), submitted: true }),
   );
 }
 
@@ -49,6 +49,7 @@ function loadPendingCardPurchase(recipient: string): PurchaseContext | null {
       !/^\d+$/.test(parsed.before) ||
       typeof parsed.contextKey !== "string" ||
       typeof parsed.recipient !== "string" ||
+      parsed.submitted !== true ||
       !isAddress(parsed.recipient) ||
       parsed.recipient.toLowerCase() !== recipient.toLowerCase()
     )
