@@ -12,12 +12,13 @@ const mocks = vi.hoisted(() => ({
     chainId: 314 as number | undefined,
   },
   writeContractAsync: vi.fn(),
+  waitForTransactionReceipt: vi.fn(() => ({ isSuccess: false, isError: false })),
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), loading: vi.fn() } }));
 vi.mock("wagmi", () => ({
   useConfig: () => ({}),
-  useWaitForTransactionReceipt: () => ({ isSuccess: false, isError: false }),
+  useWaitForTransactionReceipt: mocks.waitForTransactionReceipt,
   useWriteContract: () => ({ writeContractAsync: mocks.writeContractAsync, isPending: false }),
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => mocks.account }));
@@ -43,6 +44,17 @@ describe("useContractTransaction", () => {
   beforeEach(() => {
     mocks.account = { address: ACCOUNT, chainId: CHAIN_ID };
     mocks.writeContractAsync.mockReset().mockResolvedValue(`0x${"1".repeat(64)}`);
+    mocks.waitForTransactionReceipt.mockClear();
+  });
+
+  it("watches the receipt on the transaction's pinned chain", () => {
+    renderHook();
+
+    expect(mocks.waitForTransactionReceipt).toHaveBeenCalledWith({
+      chainId: CHAIN_ID,
+      hash: undefined,
+      query: { enabled: false },
+    });
   });
 
   it("rejects a write when the network changes while prior authorization is pending", async () => {
