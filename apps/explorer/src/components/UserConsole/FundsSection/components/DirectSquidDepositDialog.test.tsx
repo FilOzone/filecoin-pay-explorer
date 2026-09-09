@@ -581,11 +581,11 @@ describe("DirectSquidDepositDialog safety integration", () => {
   });
 
   it.each([
-    [0n, false, true, "Your wallet does not have enough FIL for fees."],
-    [1n, false, true, "Your wallet does not have enough FIL for fees."],
-    [250_000_000_000_000_000n, false, false, "You already have FIL for fees."],
-    [0n, true, true, "Your wallet does not have enough FIL for fees."],
-  ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked, hint) => {
+    [0n, false, "Your wallet does not have enough FIL for fees."],
+    [1n, false, "Your wallet does not have enough FIL for fees."],
+    [250_000_000_000_000_000n, false, "You already have FIL for fees."],
+    [0n, true, "Your wallet does not have enough FIL for fees."],
+  ])("defaults the FIL option on for destination balance %s (error: %s)", async (balance, isError, hint) => {
     query.recipientFil = balance;
     query.recipientFilIsError = isError;
     let renderer!: ReactTestRenderer;
@@ -594,12 +594,12 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
 
     const option = renderer.root.findByProps({ id: "direct-squid-fil-gas" });
-    expect(option.props.checked).toBe(checked);
+    expect(option.props.checked).toBe(true);
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain("Include 0.05 FIL for transaction fees");
     expect(text).toContain(hint);
     expect(text).toContain("The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.");
-    expect(text.includes("+ 0.05 FIL for network fees")).toBe(checked);
+    expect(text).toContain("+ 0.05 FIL for network fees");
   });
 
   it("keeps a funded wallet funded while the FIL balance refetches in the background", async () => {
@@ -615,7 +615,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(text).not.toContain("does not have enough FIL");
   });
 
-  it("waits for a fresh destination balance before defaulting from cached data", async () => {
+  it("does not wait for a fresh destination balance to enable the FIL option", async () => {
     query.recipientFil = 0n;
     query.recipientFilIsFetching = true;
     let renderer!: ReactTestRenderer;
@@ -626,7 +626,8 @@ describe("DirectSquidDepositDialog safety integration", () => {
     await act(async () => {
       amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
-    expect(query.quoteEnabled).toBe(false);
+    expect(query.quoteEnabled).toBe(true);
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
 
     query.recipientFil = 250_000_000_000_000_000n;
     query.recipientFilIsFetching = false;
@@ -634,7 +635,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
 
-    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
     expect(query.quoteEnabled).toBe(true);
 
     query.recipientFilIsFetching = true;
@@ -675,6 +676,24 @@ describe("DirectSquidDepositDialog safety integration", () => {
       expect.anything(),
       { quoteOnly: false },
     );
+  });
+
+  it("defaults the FIL top-up on again when reopened", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = (open: boolean) => (
+      <DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open={open} />
+    );
+    await act(async () => {
+      renderer = create(render(true));
+    });
+    await act(async () => {
+      renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.onChange(false);
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
+
+    await act(async () => renderer.update(render(false)));
+    await act(async () => renderer.update(render(true)));
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
   });
 
   it("reviews the live-estimated gas maximum and passes it to execution", async () => {

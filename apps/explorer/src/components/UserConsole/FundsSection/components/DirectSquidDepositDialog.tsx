@@ -171,8 +171,6 @@ export function DirectSquidDepositDialog({
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isFilGasTopUpEnabled, setFilGasTopUpEnabled] = useState(true);
-  // Recipient whose fresh FIL balance already set the checkbox default; quotes wait for it.
-  const [filGasDefaultRecipient, setFilGasDefaultRecipient] = useState("");
   const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositUiStage | null>(null);
   // Whether this run signed an approval, so the swap reads as the second of two signatures.
@@ -315,7 +313,6 @@ export function DirectSquidDepositDialog({
       !!payingWallet &&
       !!sourceToken &&
       parsedAmount !== null &&
-      filGasDefaultRecipient === recipient &&
       !balancesQuery.isError &&
       (balancesQuery.data?.token ?? 0n) >= parsedAmount,
     queryFn: async () => {
@@ -399,15 +396,8 @@ export function DirectSquidDepositDialog({
   };
 
   useEffect(() => {
-    if (!open) {
-      setFilGasDefaultRecipient("");
-      return;
-    }
-    // The default waits for the fresh read that every open triggers, not the cached balance.
-    if (!recipient || recipientFilQuery.isFetching || filGasDefaultRecipient === recipient) return;
-    setFilGasDefaultRecipient(recipient);
-    setFilGasTopUpEnabled(recipientFilStatus !== "funded");
-  }, [filGasDefaultRecipient, open, recipient, recipientFilQuery.isFetching, recipientFilStatus]);
+    if (open) setFilGasTopUpEnabled(true);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
