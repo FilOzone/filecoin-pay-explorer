@@ -32,7 +32,13 @@ export interface ServiceMetadataResult {
   isLoading: boolean;
 }
 
-export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
+/**
+ * @param chainId Chain to read from. Pass the chain backing the data these
+ * addresses came from — without it wagmi reads from whatever chain the wallet
+ * is on, which is not always the network being displayed (the dashboard shows
+ * mainnet during a cross-chain top-up, for one).
+ */
+export function useServiceMetadata(addresses: string[], chainId?: number): ServiceMetadataResult {
   const validAddresses = useMemo(() => addresses.filter((address) => isAddress(address)), [addresses]);
 
   const { data, isLoading } = useReadContracts({
@@ -41,6 +47,7 @@ export function useServiceMetadata(addresses: string[]): ServiceMetadataResult {
         address: address as `0x${string}`,
         abi: metadataAbi,
         functionName,
+        chainId,
       })),
     ),
     query: { staleTime: 60 * 60 * 1000 },

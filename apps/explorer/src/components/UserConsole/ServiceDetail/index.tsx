@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { getChain } from "@/constants/chains";
 import { getServiceProfile } from "@/constants/service-metadata";
 import { useAccountService } from "@/hooks/useAccountServices";
 import { useServiceMetadata } from "@/hooks/useServiceMetadata";
@@ -39,7 +40,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
   });
 
   const operatorAddresses = useMemo(() => [operatorId], [operatorId]);
-  const { metadata } = useServiceMetadata(operatorAddresses);
+  const { metadata } = useServiceMetadata(operatorAddresses, getChain(network).id);
 
   if (isLoading) {
     return <ServiceLoadingState />;

@@ -24,6 +24,7 @@ const ServicePage = () => {
     return null;
   }
 
+  // The (console) layout admits only Filecoin chains
   return <ServiceDetail network={getNetworkFromChainId(chainId)} operatorAddress={operator} userAddress={address} />;
 };
 

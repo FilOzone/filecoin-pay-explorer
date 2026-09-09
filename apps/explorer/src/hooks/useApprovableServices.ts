@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { getChain } from "@/constants/chains";
 import { GET_APPROVED_OPERATOR_CLIENTS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { useGraphQLClient } from "./useGraphQLQuery";
@@ -89,6 +90,7 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
   // land — without this, the dropdown briefly claims there are no services.
   const { metadata, isLoading: isLoadingMetadata } = useServiceMetadata(
     candidates.map((candidate) => candidate.address),
+    getChain(network).id,
   );
 
   const services = useMemo<ApprovableService[]>(
