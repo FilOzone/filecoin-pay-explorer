@@ -49,7 +49,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
               <ExternalLink className='h-3 w-3' />
             </span>
           ),
-          onClick: () => window.open(`${explorerUrl}/tx/${txHash}`, "_blank"),
+          onClick: () => window.open(`${explorerUrl}/tx/${txHash}`, "_blank", "noopener,noreferrer"),
         }
       : undefined;
 
@@ -94,20 +94,21 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
             action: explorerAction(txHash),
           });
           onConfirmed?.(receipt);
-        } catch (receiptError) {
+        } catch (caught) {
+          const receiptError = caught instanceof Error ? caught : new Error(String(caught));
           const failure = getToastContent(metadata, "error");
           console.error(`[Transaction Error] ${failure.title}:`, {
-            error: receiptError instanceof Error ? receiptError.message : String(receiptError),
+            error: receiptError.message,
             txHash,
             metadata,
-            fullError: receiptError,
+            fullError: caught,
           });
           toast.error(failure.title, {
             id: toastId,
             description: "Request failed. See console logs for more details.",
             action: explorerAction(txHash),
           });
-          onReverted?.(receiptError as Error);
+          onReverted?.(receiptError);
         } finally {
           setInFlightCount((count) => count - 1);
         }
