@@ -126,6 +126,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
   const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && txState !== "pending";
+  // The bring-your-own path stays on the form while its login confirms; the
+  // fields freeze so the success screen shows what was actually submitted.
+  const formLocked = txState === "pending";
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -144,7 +147,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       setGenerated(key);
       signerAddress = keyAccount.address;
     } else {
-      signerAddress = ownAddress as Hex;
+      // The button is disabled on an invalid address; this guards any other caller.
+      if (!isAddress(ownAddress)) return;
+      signerAddress = ownAddress;
     }
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
@@ -281,7 +286,13 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 <Label htmlFor='sk-name'>
                   Name <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
                 </Label>
-                <Input id='sk-name' placeholder='e.g. ci-uploader' value={name} onChange={setName} />
+                <Input
+                  id='sk-name'
+                  placeholder='e.g. ci-uploader'
+                  value={name}
+                  onChange={setName}
+                  disabled={formLocked}
+                />
                 <p className='text-xs text-zinc-500'>
                   Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
                 </p>
@@ -301,6 +312,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   >
                     <input
                       type='checkbox'
+                      disabled={formLocked}
                       className='mt-1'
                       checked={checkedScopes[scope.id]}
                       onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
@@ -327,6 +339,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-expiry'>Expiration</Label>
                 <select
+                  disabled={formLocked}
                   id='sk-expiry'
                   className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                   value={presetIndex}
@@ -342,6 +355,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 {presetIndex === "custom" && (
                   <input
                     type='date'
+                    disabled={formLocked}
                     aria-label='Custom expiry date'
                     className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                     value={customDate}
@@ -356,6 +370,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
                   <input
                     type='radio'
+                    disabled={formLocked}
                     name='sk-signer'
                     className='mt-1'
                     checked={signerMode === "generate"}
@@ -373,6 +388,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
                   <input
                     type='radio'
+                    disabled={formLocked}
                     name='sk-signer'
                     className='mt-1'
                     checked={signerMode === "own"}
@@ -387,6 +403,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     {signerMode === "own" && (
                       <input
                         type='text'
+                        disabled={formLocked}
                         placeholder='0x… session key public address'
                         className='mt-2 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm font-mono'
                         value={ownAddress}
