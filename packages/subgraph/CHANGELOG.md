@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.2.0...v1.2.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* tolerate replayed rail rate events ([3012086](https://github.com/FilOzone/filecoin-pay-explorer/commit/3012086ad2a306a17a958a7147ced6a845f4f8be))
+* tolerate replayed rail rate events ([8332f99](https://github.com/FilOzone/filecoin-pay-explorer/commit/8332f9959ae0c3d511b2bf924fb1f2d53ad68a88))
+* track processed rail rate events ([496404e](https://github.com/FilOzone/filecoin-pay-explorer/commit/496404eb891d42f80dcba11c50d10a536ff1cbb4))
+
 ## [1.2.0](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.1.2...v1.2.0) (2026-09-07)
 
 
