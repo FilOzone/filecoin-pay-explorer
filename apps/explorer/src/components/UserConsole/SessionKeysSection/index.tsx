@@ -9,7 +9,7 @@ import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { formatAddress } from "@/utils/formatter";
-import { pickRevokeTarget, SCOPE_BY_ID } from "@/utils/sessionKeys";
+import { pickRevokeTarget, SCOPE_BY_ID, scopeStatusWord } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -194,15 +194,16 @@ const ConnectedSessionKeys = ({ network, account }: ConnectedProps) => {
                     </td>
                     <td className='px-4 py-3'>
                       <span className='text-xs text-zinc-700 dark:text-zinc-300'>
-                        {key.scopes.map((scopeId, i) => (
-                          <span
-                            key={scopeId}
-                            className={clsx(key.scopeActive[scopeId] === false && "text-zinc-400 dark:text-zinc-500")}
-                          >
-                            {i > 0 && ", "}
-                            {SCOPE_BY_ID[scopeId].label}
-                          </span>
-                        ))}
+                        {key.scopes.map((scopeId, i) => {
+                          const statusWord = scopeStatusWord(key.scopeExpiries[scopeId], key.scopeActive[scopeId]);
+                          return (
+                            <span key={scopeId} className={clsx(statusWord && "text-zinc-400 dark:text-zinc-500")}>
+                              {i > 0 && ", "}
+                              {SCOPE_BY_ID[scopeId].label}
+                              {statusWord && ` (${statusWord})`}
+                            </span>
+                          );
+                        })}
                       </span>
                     </td>
                     <td className='px-4 py-3'>{formatExpiry(key)}</td>

@@ -87,6 +87,16 @@ export function isScopeActive(expiry: bigint, nowSec: bigint): boolean {
 }
 
 /**
+ * Word shown beside a scope that is no longer live, so its state is not
+ * carried by color alone. Null while the scope is live or its expiry has
+ * not been read yet.
+ */
+export function scopeStatusWord(expiry: bigint | undefined, active: boolean | undefined): "expired" | "revoked" | null {
+  if (active !== false) return null;
+  return expiry === 0n ? "revoked" : "expired";
+}
+
+/**
  * Whole-key status from the per-scope expiries the key was granted:
  * any live scope -> active; all zero -> revoked; otherwise -> expired.
  */
