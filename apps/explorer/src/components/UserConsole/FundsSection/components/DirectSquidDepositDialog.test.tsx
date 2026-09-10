@@ -89,7 +89,12 @@ vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "squid-payment-tokens") {
-      return { data: query.tokens, isError: false, isPending: false, refetch: vi.fn() };
+      return {
+        data: query.tokens.filter((token) => token.chainId === queryKey[1]),
+        isError: false,
+        isPending: false,
+        refetch: vi.fn(),
+      };
     }
     if (queryKey[0] === "squid" && queryKey[1] === "source-token-balances") {
       return { data: query.inventory, isPending: false };
@@ -314,6 +319,24 @@ describe("DirectSquidDepositDialog safety integration", () => {
       quoteOnly: false,
     });
     expect(state.execute.mock.calls[0][0].request.sourceToken).toBe(USDT);
+  });
+
+  it("clears the selected token when the source network changes", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByProps({ "aria-label": "Source token" }).props.onChange({ target: { value: USDT } });
+    });
+    expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDT);
+
+    const sourceNetwork = renderer.root.findAll(
+      (candidate) => candidate.props.value === "8453" && typeof candidate.props.onValueChange === "function",
+    )[0];
+    await act(async () => sourceNetwork.props.onValueChange("42161"));
+
+    expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe("");
   });
 
   it("labels duplicate symbols with their address", async () => {
