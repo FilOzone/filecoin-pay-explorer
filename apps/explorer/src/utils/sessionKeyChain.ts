@@ -123,15 +123,18 @@ export function decodeAuthorizationLogs(
 ): DecodedAuthorizationEvent[] {
   const events: DecodedAuthorizationEvent[] = [];
   for (const log of rawLogs) {
-    // A null topic is a shape this decoder cannot take; one bad row must not abort the sync.
-    if (log.topics.some((topic) => topic == null)) continue;
-    if ((log.topics[0] ?? "").toLowerCase() !== topic0.toLowerCase()) continue;
-    if ((log.topics[1] ?? "").toLowerCase() !== topic1.toLowerCase()) continue;
+    // Blockscout pads `topics` to four entries with nulls. The event has one
+    // indexed field, so a real row is [topic0, identity, null, null]. Only the
+    // entries before the first null are topics; a row without an owner topic
+    // is skipped so one bad row cannot abort the sync.
+    const topics = topicsBeforePadding(log.topics);
+    if ((topics[0] ?? "").toLowerCase() !== topic0.toLowerCase()) continue;
+    if ((topics[1] ?? "").toLowerCase() !== topic1.toLowerCase()) continue;
 
     const decoded = decodeEventLog({
       abi: [event],
       data: log.data as Hex,
-      topics: log.topics as [Hex, ...Hex[]],
+      topics: topics as [Hex, ...Hex[]],
     });
     const { signer, expiry, permissions, origin } = decoded.args as {
       signer: Hex;
@@ -154,4 +157,10 @@ export function decodeAuthorizationLogs(
     });
   }
   return events;
+}
+
+/** The leading non-null entries of a Blockscout `topics` array. */
+function topicsBeforePadding(topics: (string | null)[]): string[] {
+  const firstNull = topics.findIndex((topic) => topic == null);
+  return (firstNull === -1 ? topics : topics.slice(0, firstNull)) as string[];
 }
