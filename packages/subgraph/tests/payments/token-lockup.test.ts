@@ -1,5 +1,6 @@
-import { BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { afterEach, assert, beforeAll, clearStore, describe, test } from "matchstick-as";
+import { RateChangeQueue } from "../../generated/schema";
 import {
   handleRailFinalized,
   handleRailLockupModified,
@@ -7,6 +8,7 @@ import {
   handleRailSettled,
   handleRailTerminated,
 } from "../../src/payments";
+import { latestRateChangeEpoch } from "../../src/utils/helpers";
 import { ZERO_BIG_INT } from "../../src/utils/metrics";
 import { mockERC20Contract } from "../mocks";
 import {
@@ -15,6 +17,7 @@ import {
   createRailRateModifiedEvent,
   createRailSettledEvent,
   createRailTerminatedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertTokenTotalLockup,
@@ -35,6 +38,7 @@ describe("Token Lockup Tracking", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("should track token lockup correctly through complete rail lifecycle", () => {
@@ -286,5 +290,15 @@ describe("Token Lockup Tracking", () => {
     assert.bigIntEquals(lockupCurrent, ZERO_BIG_INT);
     assert.bigIntEquals(lockupRate, ZERO_BIG_INT);
     assert.bigIntEquals(lockupLastSettledUntilEpoch, blockNumber);
+  });
+
+  test("should find the latest rate change regardless of derived relationship order", () => {
+    const later = new RateChangeQueue(Bytes.fromHexString("0x01"));
+    later.untilEpoch = GraphBN.fromI64(80);
+    const earlier = new RateChangeQueue(Bytes.fromHexString("0x02"));
+    earlier.untilEpoch = GraphBN.fromI64(50);
+
+    assert.bigIntEquals(latestRateChangeEpoch([later, earlier], GraphBN.fromI64(10)), GraphBN.fromI64(80));
+    assert.bigIntEquals(latestRateChangeEpoch([later, earlier], GraphBN.fromI64(90)), GraphBN.fromI64(90));
   });
 });

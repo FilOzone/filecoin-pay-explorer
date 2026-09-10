@@ -14,7 +14,7 @@ function ApprovalSectionLayout({ children, handleOpenApprove }: ApprovalSectionL
         <Button variant='primary' onClick={handleOpenApprove} className='py-2'>
           <span className='flex items-center gap-2'>
             <Plus className='h-4 w-4' />
-            Approve Service
+            Add Service
           </span>
         </Button>
       </div>

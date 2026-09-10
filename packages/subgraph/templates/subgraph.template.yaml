@@ -24,9 +24,11 @@ dataSources:
         - OperatorApproval
         - Settlement
         - RateChangeQueue
+        - RailRatePeriod
         - UserToken
         - Token
         - Account
+        - AccountOperator
         - Operator
         - Payments
       abis:
