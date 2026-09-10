@@ -14,6 +14,7 @@ import clsx from "clsx";
 import { Loader2 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
+import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
@@ -65,9 +66,10 @@ const EMPTY_SELECTION = Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, 
  * Create flow + reveal. One wallet transaction calling the registry's
  * `login(signer, expiry, [scopes], name)` — "login" is SessionKeyRegistry's
  * ABI name for granting an authorization, not a wallet connect.
- * The session signer is always generated locally in the browser — its private key
- * never exists onchain, on our servers, or anywhere else.
- *
+ * The session signer is either generated locally in the browser — its private key
+ * never exists onchain, on our servers, or anywhere else — or a public address the
+ * caller already controls. On the bring-your-own-address path no secret ever
+ * touches the console; the login call simply authorizes the pasted address.
  */
 export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   open,
@@ -80,12 +82,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   onConfirmed,
   onFailed,
 }) => {
-  const [step, setStep] = useState<"form" | "reveal">("form");
+  const [step, setStep] = useState<"form" | "reveal" | "registered">("form");
   const [txState, setTxState] = useState<TxState>("idle");
   const [name, setName] = useState("");
   const [checkedScopes, setCheckedScopes] = useState<Record<ScopeId, boolean>>(EMPTY_SELECTION);
   const [presetIndex, setPresetIndex] = useState("1"); // default 30 days
   const [customDate, setCustomDate] = useState("");
+  const [signerMode, setSignerMode] = useState<"generate" | "own">("generate");
+  const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
   const [expirySec, setExpirySec] = useState<bigint>(0n);
   // Tracks the submitted login until its receipt settles. `uiActive` goes false
@@ -100,7 +104,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     onSuccess: () => {
       const flight = inFlightRef.current;
       inFlightRef.current = null;
-      if (flight?.uiActive) setTxState("confirmed");
+      if (flight?.uiActive) {
+        setTxState("confirmed");
+        setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
+      }
       if (flight) onConfirmed?.(flight.address);
     },
     onError: () => {
@@ -116,8 +123,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const expiryChoice = () => resolveExpiry(presetIndex, customDate, Date.now());
 
+  const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
-  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && txState !== "pending";
+  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && txState !== "pending";
+  // The bring-your-own path stays on the form while its login confirms; the
+  // fields freeze so the success screen shows what was actually submitted.
+  const formLocked = txState === "pending";
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -127,19 +138,28 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const handleCreate = async () => {
     const expiry = expiryChoice();
     if (!expiry) return;
-    const privateKey = generatePrivateKey();
-    const keyAccount = privateKeyToAccount(privateKey);
-    const key: GeneratedKey = { privateKey, address: keyAccount.address, walletAddress: account };
-    setGenerated(key);
-    const signerAddress = keyAccount.address;
+    let signerAddress: Hex;
+    let key: GeneratedKey | null = null;
+    if (signerMode === "generate") {
+      const privateKey = generatePrivateKey();
+      const keyAccount = privateKeyToAccount(privateKey);
+      key = { privateKey, address: keyAccount.address, walletAddress: account };
+      setGenerated(key);
+      signerAddress = keyAccount.address;
+    } else {
+      // The button is disabled on an invalid address; this guards any other caller.
+      if (!isAddress(ownAddress)) return;
+      signerAddress = ownAddress;
+    }
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
     setExpirySec(expiry);
     inFlightRef.current = { address: signerAddress, identity, uiActive: true };
     setTxState("pending");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
-    // never lose the key of an authorization that lands anyway.
-    setStep("reveal");
+    // never lose the key of an authorization that lands anyway. The BYO path
+    // has no secret, so it stays on the form until the login confirms.
+    if (key) setStep("reveal");
     try {
       const txHash = await execute({
         functionName: "login",
@@ -177,6 +197,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setCheckedScopes(EMPTY_SELECTION);
     setPresetIndex("1");
     setCustomDate("");
+    setSignerMode("generate");
+    setOwnAddress("");
     setGenerated(null);
     setExpirySec(0n);
   }, []);
@@ -256,13 +278,21 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <DialogTitle>New session key</DialogTitle>
               <DialogDescription>One wallet transaction. All selected scopes share the same expiry.</DialogDescription>
             </DialogHeader>
+            {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
+            {txState === "failed" && txBanner}
 
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-name'>
                   Name <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
                 </Label>
-                <Input id='sk-name' placeholder='e.g. ci-uploader' value={name} onChange={setName} />
+                <Input
+                  id='sk-name'
+                  placeholder='e.g. ci-uploader'
+                  value={name}
+                  onChange={setName}
+                  disabled={formLocked}
+                />
                 <p className='text-xs text-zinc-500'>
                   Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
                 </p>
@@ -282,6 +312,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   >
                     <input
                       type='checkbox'
+                      disabled={formLocked}
                       className='mt-1'
                       checked={checkedScopes[scope.id]}
                       onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
@@ -308,6 +339,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-expiry'>Expiration</Label>
                 <select
+                  disabled={formLocked}
                   id='sk-expiry'
                   className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                   value={presetIndex}
@@ -323,6 +355,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                 {presetIndex === "custom" && (
                   <input
                     type='date'
+                    disabled={formLocked}
                     aria-label='Custom expiry date'
                     className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                     value={customDate}
@@ -330,6 +363,58 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   />
                 )}
                 <p className='text-xs text-zinc-500'>The key stops working on this date. Every key has to expire.</p>
+              </div>
+
+              <div className='flex flex-col gap-2'>
+                <Label>Session signer</Label>
+                <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
+                  <input
+                    type='radio'
+                    disabled={formLocked}
+                    name='sk-signer'
+                    className='mt-1'
+                    checked={signerMode === "generate"}
+                    onChange={() => setSignerMode("generate")}
+                  />
+                  <span>
+                    <span className='block text-sm font-medium'>Generate for me (default)</span>
+                    <span className='block text-xs text-zinc-500'>
+                      Creates a <b>private key + public address keypair</b> in your browser. The private key is revealed
+                      on the next screen but is never stored, so <b>make sure you save it somewhere safe immediately</b>
+                      .
+                    </span>
+                  </span>
+                </label>
+                <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
+                  <input
+                    type='radio'
+                    disabled={formLocked}
+                    name='sk-signer'
+                    className='mt-1'
+                    checked={signerMode === "own"}
+                    onChange={() => setSignerMode("own")}
+                  />
+                  <span className='flex-1'>
+                    <span className='block text-sm font-medium'>I'll bring my own address</span>
+                    <span className='block text-xs text-zinc-500'>
+                      Generate the keypair yourself and paste <b>only</b> the session key's <b>public address</b> — the
+                      private key should never touch this console.
+                    </span>
+                    {signerMode === "own" && (
+                      <input
+                        type='text'
+                        disabled={formLocked}
+                        placeholder='0x… session key public address'
+                        className='mt-2 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm font-mono'
+                        value={ownAddress}
+                        onChange={(e) => setOwnAddress(e.target.value.trim())}
+                      />
+                    )}
+                    {signerMode === "own" && ownAddress.length > 0 && !isAddress(ownAddress) && (
+                      <span className='block text-xs text-red-600 mt-1'>Not a valid address.</span>
+                    )}
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -391,6 +476,26 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={closeDialog}>
                 {txState === "failed" ? "Close" : "Done — I saved the key"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {step === "registered" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Session key registered</DialogTitle>
+              <DialogDescription>
+                <b>{displayName}</b> is active until {expiryDate ? expiryDate.toLocaleDateString() : "—"} · scopes:{" "}
+                {scopeLabels}
+              </DialogDescription>
+            </DialogHeader>
+            <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
+              <span className='font-mono break-all'>{ownAddress}</span> is now authorized.
+            </div>
+            <DialogFooter>
+              <Button variant='primary' size='compact' onClick={() => handleOpenChange(false)}>
+                Done
               </Button>
             </DialogFooter>
           </>
