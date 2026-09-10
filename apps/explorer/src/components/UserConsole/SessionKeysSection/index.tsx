@@ -14,7 +14,7 @@ import { getChain } from "@/constants/chains";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
-import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId } from "@/utils/sessionKeys";
+import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, type ScopeId, scopeStatusWord } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -330,18 +330,23 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
                         {uniformExpiry ? (
                           <div className='text-xs text-zinc-700 dark:text-zinc-300'>
                             <span className='whitespace-nowrap'>
-                              {key.scopes.map((scopeId, i) => (
-                                <span
-                                  key={scopeId}
-                                  className={clsx(
-                                    key.scopeActive[scopeId] === false && "text-zinc-400 dark:text-zinc-500",
-                                  )}
-                                >
-                                  {/* Two scopes per line: comma within a pair, line break between pairs. */}
-                                  {i > 0 && (i % 2 === 0 ? <br /> : ", ")}
-                                  {SCOPE_BY_ID[scopeId].label}
-                                </span>
-                              ))}
+                              {key.scopes.map((scopeId, i) => {
+                                const statusWord = scopeStatusWord(
+                                  key.scopeExpiries[scopeId],
+                                  key.scopeActive[scopeId],
+                                );
+                                return (
+                                  <span
+                                    key={scopeId}
+                                    className={clsx(statusWord && "text-zinc-400 dark:text-zinc-500")}
+                                  >
+                                    {/* Two scopes per line: comma within a pair, line break between pairs. */}
+                                    {i > 0 && (i % 2 === 0 ? <br /> : ", ")}
+                                    {SCOPE_BY_ID[scopeId].label}
+                                    {statusWord && ` (${statusWord})`}
+                                  </span>
+                                );
+                              })}
                             </span>
                             {/* Shared across every scope here by definition (that's what "uniform" means) — one line,
                                 not repeated per scope. Expired-key case shows no date: nothing here is still granted. */}
@@ -356,6 +361,7 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
                             {key.scopes.map((scopeId) => {
                               const scopeExpiry = key.scopeExpiries[scopeId];
                               const scopeIsActive = key.scopeActive[scopeId] === true;
+                              const statusWord = scopeStatusWord(scopeExpiry, key.scopeActive[scopeId]);
                               return (
                                 <div
                                   key={scopeId}
@@ -364,7 +370,10 @@ const ConnectedSessionKeys = ({ network, account, prefillAddress, prefillScopes,
                                     !scopeIsActive && "text-zinc-400 dark:text-zinc-500",
                                   )}
                                 >
-                                  <span>{SCOPE_BY_ID[scopeId].label}</span>
+                                  <span>
+                                    {SCOPE_BY_ID[scopeId].label}
+                                    {statusWord && ` (${statusWord})`}
+                                  </span>
                                   {scopeIsActive && scopeExpiry != null && scopeExpiry > 0n && (
                                     <span className='text-[10px] whitespace-nowrap'>
                                       until {formatDateTime(Number(scopeExpiry) * 1000)}

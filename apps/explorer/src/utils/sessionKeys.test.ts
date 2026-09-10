@@ -16,6 +16,7 @@ import {
   type ScopeId,
   SESSION_KEY_SCOPES,
   sanitizeRecords,
+  scopeStatusWord,
 } from "./sessionKeys";
 
 const CREATE_PREIMAGE =
@@ -72,6 +73,12 @@ describe("deriveKeyStatus", () => {
     assert.equal(deriveKeyStatus([now], now), "active");
     assert.equal(isScopeActive(now, now), true);
     assert.equal(isScopeActive(now - 1n, now), false);
+  });
+  it("names a lapsed scope's state instead of leaving it to color", () => {
+    assert.equal(scopeStatusWord(now - 1n, false), "expired");
+    assert.equal(scopeStatusWord(0n, false), "revoked");
+    assert.equal(scopeStatusWord(now + 1n, true), null);
+    assert.equal(scopeStatusWord(undefined, undefined), null);
   });
 });
 
