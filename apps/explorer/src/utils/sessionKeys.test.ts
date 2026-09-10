@@ -163,6 +163,11 @@ describe("sanitizeRecords", () => {
 
   it("drops records with a malformed address or no scope array", () => {
     assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: "0xnot-an-address" }]), []);
+    // A revocation time is chain knowledge; a local record cannot carry one.
+    assert.deepEqual(sanitizeRecords([{ ...good, revokedAt: 5 }]), [good]);
+    assert.deepEqual(sanitizeRecords([{ ...good, source: "chain", revokedAt: 5 }]), [
+      { ...good, source: "chain", revokedAt: 5 },
+    ]);
     // Mixed case with a wrong checksum: viem would throw on the read, so the record is rejected here.
     assert.deepEqual(sanitizeRecords([{ ...good, sessionKeyPublic: `${SIGNER.slice(0, -1)}a` }]), []);
     assert.equal(sanitizeRecords([{ ...good, sessionKeyPublic: SIGNER.toLowerCase() }]).length, 1);
@@ -272,5 +277,27 @@ describe("deriveSessionKeys", () => {
     assert.equal(deriveSessionKeys([{ ...fresh, txHash: undefined }], zeros, now, nowMs)[0].status, "revoked");
     // Old record: the grace has lapsed regardless.
     assert.equal(deriveSessionKeys([{ ...keyA, txHash: "0xabc" }], zeros, now, nowMs)[0].status, "revoked");
+  });
+});
+
+describe("sanitizeRecords chain-sync fields", () => {
+  it("preserves source and revokedAt from synced records", () => {
+    const synced = {
+      name: "imported",
+      sessionKeyPublic: SIGNER,
+      scopes: ["addPieces"],
+      createdAt: 1,
+      source: "chain",
+      revokedAt: 2,
+    };
+    assert.deepEqual(sanitizeRecords([synced]), [synced]);
+  });
+
+  it("drops forged source/revokedAt values instead of trusting them", () => {
+    const [rec] = sanitizeRecords([
+      { name: "x", sessionKeyPublic: SIGNER, scopes: ["addPieces"], createdAt: 1, source: "evil", revokedAt: "soon" },
+    ]);
+    assert.equal("source" in rec, false);
+    assert.equal("revokedAt" in rec, false);
   });
 });

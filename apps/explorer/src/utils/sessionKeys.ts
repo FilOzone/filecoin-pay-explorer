@@ -218,6 +218,10 @@ export interface SessionKeyRecord {
   scopes: ScopeId[];
   createdAt: number;
   txHash?: string;
+  /** Present when this record came from a chain sync rather than the local create-key flow. */
+  source?: "chain";
+  /** Timestamp (ms) of the latest onchain revoke event, known only for synced records. */
+  revokedAt?: number;
 }
 
 /**
@@ -244,6 +248,11 @@ export function sanitizeRecords(value: unknown): SessionKeyRecord[] {
       scopes,
       createdAt: typeof r.createdAt === "number" && Number.isFinite(r.createdAt) ? r.createdAt : 0,
       ...(typeof r.txHash === "string" ? { txHash: r.txHash } : {}),
+      ...(r.source === "chain" ? { source: "chain" as const } : {}),
+      // Known only for synced records; a local record cannot claim a revocation time.
+      ...(r.source === "chain" && typeof r.revokedAt === "number" && Number.isFinite(r.revokedAt)
+        ? { revokedAt: r.revokedAt }
+        : {}),
     });
   }
   return out;
