@@ -15,7 +15,10 @@ const PERMISSION = `0x${"ab".repeat(32)}` as Hex;
 const [topic0] = encodeEventTopics({ abi: [event], eventName: "AuthorizationsUpdated" });
 const topicFor = (identity: Hex) => pad(identity, { size: 32 }).toLowerCase();
 
-/** One raw Blockscout row: a real ABI encoding of AuthorizationsUpdated(identity, signer, expiry, permissions, origin). */
+/**
+ * One raw Blockscout row: a real ABI encoding of AuthorizationsUpdated(identity, signer, expiry, permissions, origin),
+ * with `topics` null-padded to four entries the way Blockscout's getLogs returns it.
+ */
 function row(identity: Hex, block: number, logIndex = 0, expiry = 100n): BlockscoutLogEntry {
   const data = encodeAbiParameters(
     [
@@ -28,7 +31,7 @@ function row(identity: Hex, block: number, logIndex = 0, expiry = 100n): Blocksc
   );
   return {
     data,
-    topics: [topic0, topicFor(identity)],
+    topics: [topic0, topicFor(identity), null, null],
     blockNumber: `0x${block.toString(16)}`,
     logIndex: `0x${logIndex.toString(16)}`,
     timeStamp: "0x10",
@@ -56,6 +59,26 @@ describe("decodeAuthorizationLogs", () => {
         logIndex: 0,
       },
     ]);
+  });
+});
+
+describe("decodeAuthorizationLogs with Blockscout's null padding", () => {
+  it("reads a row whose topics are padded to four entries with nulls", () => {
+    const padded = { ...row(OWNER, 9), topics: [topic0, topicFor(OWNER), null, null] };
+    const events = decodeAuthorizationLogs([padded], event, topic0, topicFor(OWNER), 0);
+    expect(events.map((e) => e.blockNumber)).toEqual([9n]);
+  });
+
+  it("reads a row whose topics are not padded at all", () => {
+    const plain = { ...row(OWNER, 10), topics: [topic0, topicFor(OWNER)] };
+    const events = decodeAuthorizationLogs([plain], event, topic0, topicFor(OWNER), 0);
+    expect(events.map((e) => e.blockNumber)).toEqual([10n]);
+  });
+
+  it("skips a row whose owner topic is missing instead of aborting the sync", () => {
+    const broken: BlockscoutLogEntry = { ...row(OWNER, 7), topics: [topic0, null, null, null] };
+    const events = decodeAuthorizationLogs([broken, row(OWNER, 8)], event, topic0, topicFor(OWNER), 0);
+    expect(events.map((e) => e.blockNumber)).toEqual([8n]);
   });
 });
 
@@ -102,12 +125,6 @@ describe("fetchAuthorizationEvents", () => {
     );
 
     await expect(fetchAuthorizationEvents("calibration", registry, OWNER, 10)).rejects.toThrow(/did not answer within/);
-  });
-
-  it("skips a row with a null topic instead of aborting the sync", () => {
-    const broken = { ...row(OWNER, 7), topics: [topic0, null] } as unknown as BlockscoutLogEntry;
-    const events = decodeAuthorizationLogs([broken, row(OWNER, 8)], event, topic0, topicFor(OWNER), 0);
-    expect(events.map((e) => e.blockNumber)).toEqual([8n]);
   });
 
   it("stops instead of looping when a full page cannot be moved past by block", async () => {
