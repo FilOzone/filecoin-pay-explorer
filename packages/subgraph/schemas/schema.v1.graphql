@@ -152,6 +152,11 @@ type RailRatePeriod @entity(immutable: false) {
   untilEpoch: BigInt # inclusive; null while the period is open
 }
 
+# Records processed RailRateModified events so exact replays can be ignored without changing rate-period state.
+type ProcessedRailRateModification @entity(immutable: true) {
+  id: Bytes! # transaction hash + log index
+}
+
 type RateChangeQueue @entity(immutable: false) {
   id: Bytes! # railId,startEpoch
   startEpoch: BigInt! # exclusive: rate applies starting at `startEpoch + 1`

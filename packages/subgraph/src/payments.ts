@@ -15,6 +15,7 @@ import {
 import {
   FeeAuctionPurchase,
   OperatorApproval,
+  ProcessedRailRateModification,
   Rail,
   RailRatePeriod,
   Settlement,
@@ -373,6 +374,16 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
   const railId = event.params.railId;
   const oldRate = event.params.oldRate;
   const newRate = event.params.newRate;
+  const eventId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+
+  if (ProcessedRailRateModification.load(eventId)) {
+    log.warning("[handleRailRateModified] Ignoring replayed event railId={} txHash={} logIndex={}", [
+      railId.toString(),
+      event.transaction.hash.toHexString(),
+      event.logIndex.toString(),
+    ]);
+    return;
+  }
 
   const rail = Rail.load(getRailEntityId(railId));
 
@@ -380,6 +391,11 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     log.warning("[handleRailPaymentRateModified] Rail not found for railId: {}", [railId.toString()]);
     return;
   }
+
+  // Graph Node rolls entity writes back if the handler aborts, so this marker
+  // persists only when processing completes without a deterministic error.
+  const processedRateModification = new ProcessedRailRateModification(eventId);
+  processedRateModification.save();
 
   if (oldRate.notEqual(newRate)) {
     const currentRatePeriod = RailRatePeriod.load(rail.currentRatePeriod);
@@ -394,6 +410,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       );
       return;
     }
+
     if (currentRatePeriod.rate.notEqual(oldRate)) {
       failRatePeriodInvariant(
         "[handleRailRateModified] Current rate period does not match oldRate",
@@ -481,14 +498,7 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       currentRatePeriod.untilEpoch = event.block.number;
       currentRatePeriod.save();
 
-      const newRatePeriodId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
-      const newRatePeriod = createRailRatePeriod(
-        newRatePeriodId,
-        rail,
-        newRate,
-        event.block.number,
-        existingUntilEpoch,
-      );
+      const newRatePeriod = createRailRatePeriod(eventId, rail, newRate, event.block.number, existingUntilEpoch);
       rail.currentRatePeriod = newRatePeriod.id;
     }
   }
