@@ -428,3 +428,61 @@ describe("SquidQuoteReview token inventory", () => {
     renderer.unmount();
   });
 });
+
+describe("SquidQuoteReview quote summary", () => {
+  it("does not publish a maximum without gas and labels the two receive floors accurately", async () => {
+    const plan: SquidFundingPlan = {
+      maxSourceAmount: 2n,
+      owner: ownerA,
+      quotes: [
+        {
+          actions: [],
+          costs: [
+            {
+              amount: 0n,
+              kind: "gas",
+              name: "Source gas",
+              token: { address: NATIVE_TOKEN_ADDRESS, chainId: 8453, decimals: 18, symbol: "ETH" },
+            },
+          ],
+          destinationAmount: 2_000_000_000_000_000_000n,
+          id: "quote",
+          requirement: {
+            amount: 1_000_000_000_000_000_000n,
+            chainId: 314,
+            id: "requirement",
+            recipient: ownerA,
+            token: "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+          },
+          sourceAmount: 1n,
+        },
+      ],
+      slippage: 1,
+      source: usdc,
+    };
+    vi.clearAllMocks();
+    fetchSourceTokens.mockResolvedValue([usdc]);
+    readSourceTokenBalances.mockResolvedValue(balances([[usdc.token, 2n]]));
+    planSquidTopUp.mockResolvedValue(plan);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await renderReview(queryClient, 1_000_000_000_000_000_000n);
+
+    await chooseNetwork(8453);
+    await expectTokenOptions([usdc.token]);
+    await act(async () => controls.token?.onValueChange(usdc.token));
+    await vi.waitFor(() => expect(planSquidTopUp).toHaveBeenCalledOnce());
+
+    const labels = renderer.root.findAllByType("dt").map(({ children }) => children.join(""));
+    const values = renderer.root.findAllByType("dd").map(({ children }) => children.join(""));
+    expect(labels).toContain("Execution minimum received");
+    expect(labels).toContain("Current reviewed quote");
+    expect(labels).toContain("Maximum native fees required");
+    expect(values).toContain("1 USDFC");
+    expect(values).toContain("2 USDFC");
+    expect(values).toContain("Unavailable");
+    expect(values).not.toContain("Calculating…");
+
+    renderer.unmount();
+    queryClient.clear();
+  });
+});
