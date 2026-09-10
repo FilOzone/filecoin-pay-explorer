@@ -2,22 +2,33 @@
  * Validate the `?authorize=` / `?scopes=` search params used by the
  * filecoin-pin CLI pairing flow (`session create --console`). Both params are
  * untrusted URL input and never throw:
- * - `authorize` is either a real 20-byte EVM address — checksummed here so
- *   the UI only ever renders the canonical form — or it is dropped entirely.
+ * - `authorize` is either a real 20-byte EVM address, checksummed here so
+ *   the UI only ever renders the canonical form, or a typed error the page
+ *   shows instead of dropping the request.
  * - `scopes` is a comma-separated scope-id list; unknown entries are dropped,
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
 import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
-export function parseAuthorizeParam(value: string | null | undefined): `0x${string}` | null {
+/**
+ * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
+ * shape whose letter case does not match EIP-55: mixed case with the wrong
+ * checksum, or all uppercase. All-lowercase input never hits it.
+ */
+export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network" | "no-scopes";
+
+/** null means the param was absent or blank, so there is no request to show at all. */
+export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
+
+export function parseAuthorizeParam(value: string | null | undefined): AuthorizeParamResult {
   if (typeof value !== "string") return null;
   const candidate = value.trim();
-  // isAddress (strict by default) accepts all-lowercase hex or a correctly
-  // checksummed address, and rejects everything else — including mixed-case
-  // strings whose checksum doesn't verify.
-  if (!isAddress(candidate)) return null;
-  return getAddress(candidate);
+  if (candidate.length === 0) return null;
+  if (!isAddress(candidate, { strict: false })) return { error: "not-an-address" };
+  // Strict mode accepts all-lowercase hex or a correctly checksummed address.
+  if (!isAddress(candidate)) return { error: "bad-checksum" };
+  return { address: getAddress(candidate) };
 }
 
 /** Canonical-order, deduped scope ids from a `?scopes=` value, or null when none are valid. */
@@ -57,10 +68,36 @@ export function presetScopeStates(requested: ScopeId[]): Record<ScopeId, Request
  * operation ran on. The page refuses to prefill when this names a network
  * other than the wallet's — without it, a calibration remediation link
  * approved by a mainnet-connected wallet silently grants scopes on mainnet.
- * Unknown values collapse to null (no network claim, wallet chain wins).
+ * Missing or unknown values collapse to null, and a link without a usable
+ * network is refused: the CLI always sends one, so its absence means a
+ * malformed link, not a request the wallet's chain may satisfy.
  */
 export function parseNetworkParam(value: string | null | undefined): "mainnet" | "calibration" | null {
   if (typeof value !== "string") return null;
   const network = value.trim().toLowerCase();
   return network === "mainnet" || network === "calibration" ? network : null;
+}
+
+export interface AuthorizeLink {
+  address: `0x${string}`;
+  scopes: ScopeId[] | null;
+  network: "mainnet" | "calibration";
+}
+
+/**
+ * The whole pairing request from a page's search params: null when there is
+ * none, an error when any part is unusable, otherwise every field validated.
+ */
+export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
+  if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
+  // Scopes or a network without an address is still a pairing request, just a broken one.
+  const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };
+  if ("error" in requested) return requested;
+  const network = parseNetworkParam(params.get("network"));
+  if (!network) return { error: "no-network" };
+  // The CLI always names scopes; a link without any usable one is malformed,
+  // and reduce-only consent has nothing to reduce to.
+  const scopes = parseScopesParam(params.get("scopes"));
+  if (!scopes) return { error: "no-scopes" };
+  return { address: requested.address, scopes, network };
 }

@@ -108,8 +108,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
 
-  // A link that names scopes locks the rest off (reduce-only consent); a link
-  // that names none leaves every scope selectable, like a manual create.
+  // A link locks off every scope it did not name (reduce-only consent); a
+  // link without scopes is refused before this dialog ever opens.
   const requestPresets = useMemo(
     () => (prefillAddress && prefillScopes?.length ? presetScopeStates(prefillScopes) : null),
     [prefillAddress, prefillScopes],
