@@ -110,11 +110,17 @@ export function hasUniformExpiry(scopes: ScopeId[], scopeExpiries: Partial<Recor
 /** What the consent dialog needs to know about a key this browser already lists. */
 export interface ExistingKeyPrefill {
   name: string;
-  /** Scopes the key holds or held; a renewal pre-checks them so none is left expired by accident. */
+  /** Non-revoked scopes the key holds or held; a renewal pre-checks them so none is left expired by accident. */
   scopes: ScopeId[];
   /** Kept expiry for an active key; null means the owner picks a new one. */
   expirySec: bigint | null;
 }
+
+/** The listed key's fields the prefill is derived from. */
+export type ExistingKeyPrefillInput = Pick<
+  SessionKeyWithStatus,
+  "name" | "scopes" | "scopeExpiries" | "status" | "maxExpiry"
+>;
 
 /**
  * Prefill for re-authorizing a signer the list already knows. The name always
@@ -125,17 +131,7 @@ export interface ExistingKeyPrefill {
  * away on purpose and must not be re-granted by a renewal, so a fully revoked
  * key brings its name and nothing else.
  */
-export function existingKeyPrefill(
-  key:
-    | {
-        name: string;
-        scopes: ScopeId[];
-        scopeExpiries: Partial<Record<ScopeId, bigint>>;
-        status: SessionKeyStatus | "unknown";
-        maxExpiry: bigint;
-      }
-    | undefined,
-): ExistingKeyPrefill | null {
+export function existingKeyPrefill(key: ExistingKeyPrefillInput | undefined): ExistingKeyPrefill | null {
   if (!key) return null;
   const keepExpiry = key.status === "active" && key.maxExpiry > 0n;
   const scopes = key.scopes.filter((id) => (key.scopeExpiries[id] ?? 0n) > 0n);
