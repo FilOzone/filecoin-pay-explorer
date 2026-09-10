@@ -94,6 +94,16 @@ describe("fetchAuthorizationEvents", () => {
     expect(events).toEqual([]);
   });
 
+  it("fails a request that outlives its deadline instead of syncing forever", async () => {
+    vi.stubGlobal(
+      "fetch",
+      (_input: string, init: RequestInit) =>
+        new Promise((_, reject) => init.signal?.addEventListener("abort", () => reject(init.signal?.reason))),
+    );
+
+    await expect(fetchAuthorizationEvents("calibration", registry, OWNER, 10)).rejects.toThrow(/did not answer within/);
+  });
+
   it("skips a row with a null topic instead of aborting the sync", () => {
     const broken = { ...row(OWNER, 7), topics: [topic0, null] } as unknown as BlockscoutLogEntry;
     const events = decodeAuthorizationLogs([broken, row(OWNER, 8)], event, topic0, topicFor(OWNER), 0);
