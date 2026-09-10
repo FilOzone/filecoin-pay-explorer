@@ -8,6 +8,7 @@ import {
   deriveKeyStatus,
   deriveSessionKeys,
   EXPIRY_PRESETS,
+  hasUniformExpiry,
   isScopeActive,
   normalizeKeyName,
   pickRevokeTarget,
@@ -78,6 +79,22 @@ describe("deriveKeyStatus", () => {
     assert.equal(scopeStatusWord(0n, false), "revoked");
     assert.equal(scopeStatusWord(now + 1n, true), null);
     assert.equal(scopeStatusWord(undefined, undefined), null);
+  });
+});
+
+describe("hasUniformExpiry", () => {
+  it("true when every granted scope shares one expiry", () => {
+    assert.equal(hasUniformExpiry(["createDataSet", "addPieces"], { createDataSet: 100n, addPieces: 100n }), true);
+  });
+  it("false once granted scopes carry different expiries", () => {
+    assert.equal(hasUniformExpiry(["createDataSet", "addPieces"], { createDataSet: 100n, addPieces: 200n }), false);
+  });
+  it("missing expiry is treated as 0n, so it diverges from any nonzero peer", () => {
+    assert.equal(hasUniformExpiry(["createDataSet", "addPieces"], { createDataSet: 100n }), false);
+  });
+  it("a single scope and all-zero (revoked) scopes are uniform", () => {
+    assert.equal(hasUniformExpiry(["createDataSet"], { createDataSet: 100n }), true);
+    assert.equal(hasUniformExpiry(["createDataSet", "addPieces"], { createDataSet: 0n, addPieces: 0n }), true);
   });
 });
 

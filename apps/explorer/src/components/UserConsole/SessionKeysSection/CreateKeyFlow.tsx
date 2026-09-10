@@ -12,7 +12,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import clsx from "clsx";
 import { Loader2 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -21,13 +21,13 @@ import { Notice } from "@/components/shared/Notice";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
+import { presetScopeStates } from "@/utils/authorizeParam";
 import { download } from "@/utils/download";
 import { formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   buildLoginArgs,
   EXPIRY_PRESETS,
-  isSameIdentity,
   normalizeKeyName,
   resolveExpiry,
   SCOPE_BY_ID,
@@ -44,6 +44,12 @@ interface CreateKeyFlowProps {
   registry: { address: Hex; abi: Abi };
   /** Block explorer base URL for the transaction link in toasts. */
   explorerUrl?: string;
+  prefillAddress?: Hex | null;
+  prefillScopes?: ScopeId[] | null;
+  /**
+   * Turns the dialog into an add-scopes flow
+   */
+  existingKey?: { name: string; expirySec: bigint | null } | null;
   /** `identity` is the wallet and network at submit time, so a late callback still lands in the right inventory. */
   onCreated: (record: SessionKeyRecord, identity: SessionKeysIdentity) => void;
   /** Fires with the signer when its login tx is confirmed onchain. */
@@ -80,6 +86,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   account,
   registry,
   explorerUrl,
+  prefillAddress,
+  prefillScopes,
+  existingKey,
   onCreated,
   onConfirmed,
   onFailed,
@@ -98,9 +107,16 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
-  // The wallet the dialog is showing now; an attempt only drives the UI while that is still its own wallet.
-  const identityRef = useRef<SessionKeysIdentity>({ network, account });
-  identityRef.current = { network, account };
+
+  // A link that names scopes locks the rest off (reduce-only consent); a link
+  // that names none leaves every scope selectable, like a manual create.
+  const requestPresets = useMemo(
+    () => (prefillAddress && prefillScopes?.length ? presetScopeStates(prefillScopes) : null),
+    [prefillAddress, prefillScopes],
+  );
+  const isExistingKey = prefillAddress != null && existingKey != null;
+  // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
+  const addressLocked = prefillAddress != null;
 
   const { execute } = useContractTransaction({
     contractAddress: registry.address,
@@ -110,7 +126,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
-  const expiryChoice = () => resolveExpiry(presetIndex, customDate, Date.now());
+  const inheritExpiry = existingKey?.expirySec ?? null;
+  const existingKeyName = existingKey?.name ?? null;
+
+  const expiryChoice = () => inheritExpiry ?? resolveExpiry(presetIndex, customDate, Date.now());
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
@@ -123,6 +142,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // characters and cap the length once, here, before any of those sinks.
   const cleanName = normalizeKeyName(name);
   const displayName = cleanName || "(unnamed)";
+  const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
   const handleCreate = async () => {
     const expiry = expiryChoice();
@@ -145,18 +165,32 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setExpirySec(expiry);
     const attempt = {};
     shownAttemptRef.current = attempt;
-    const shown = () => shownAttemptRef.current === attempt && isSameIdentity(identityRef.current, identity);
+    // The dialog follows its attempt even after a wallet switch: the banner
+    // and the reveal describe this login, and a rejection under any wallet
+    // must bring the form back rather than leave "Waiting" on screen.
+    const shown = () => shownAttemptRef.current === attempt;
     setTxState("pending");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway. The BYO path
     // has no secret, so it stays on the form until the login confirms.
     if (key) setStep("reveal");
+    // A new signer is listed at submission, so the row is there while the
+    // secret is on screen, and removed if the login reverts. A key the list
+    // already holds gets its new scopes only once the login confirms: a
+    // revert then changes nothing, and the live key is never dropped.
+    let txHash: Hex | undefined;
+    const commitRow = () =>
+      onCreated(
+        { name: cleanName, sessionKeyPublic: signerAddress, scopes: selectedScopes, createdAt: Date.now(), txHash },
+        identity,
+      );
     try {
-      const txHash = await execute({
+      txHash = await execute({
         functionName: "login",
         args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
-        metadata: { type: "createSessionKey", keyName: cleanName },
+        metadata: { type: isExistingKey ? "authorizeSessionKey" : "createSessionKey", keyName: cleanName },
         onConfirmed: () => {
+          if (isExistingKey) commitRow();
           if (shown()) {
             setTxState("confirmed");
             setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
@@ -164,21 +198,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
           onConfirmed?.(signerAddress);
         },
         onReverted: () => {
-          // receipt-level failure: authorization never happened — drop the optimistic row
-          onFailed?.(signerAddress, identity);
+          if (!isExistingKey) onFailed?.(signerAddress, identity);
           if (shown()) setTxState("failed");
         },
       });
-      onCreated(
-        {
-          name: cleanName,
-          sessionKeyPublic: signerAddress,
-          scopes: selectedScopes,
-          createdAt: Date.now(),
-          txHash,
-        },
-        identity,
-      );
+      if (!isExistingKey) commitRow();
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.
@@ -219,6 +243,25 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     if (open) resetFormState();
   }, [open, resetFormState]);
 
+  // Declared AFTER the fresh-attempt
+  // reset effect: both fire on the open transition and run in declaration
+  // order, so the reset must never clobber the request's prefill.
+  useEffect(() => {
+    if (open && prefillAddress) {
+      setSignerMode("own");
+      setOwnAddress(prefillAddress);
+      if (existingKeyName != null) setName(existingKeyName);
+      if (requestPresets) {
+        setCheckedScopes(
+          Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
+            ScopeId,
+            boolean
+          >,
+        );
+      }
+    }
+  }, [open, prefillAddress, existingKeyName, requestPresets]);
+
   const closeDialog = () => {
     reset();
     onOpenChange(false);
@@ -247,7 +290,6 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
-  const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
 
   const txBanners: Partial<Record<TxState, ReactNode>> = {
     pending: (
@@ -270,6 +312,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       ✓ <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
     </Notice>
   );
+  function submitLabel(): string {
+    if (isExistingKey) return "Authorize scopes";
+    if (prefillAddress) return "Review & authorize";
+    return "Create session key";
+  }
+
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
   return (
@@ -278,8 +326,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         {step === "form" && (
           <>
             <DialogHeader>
-              <DialogTitle>New session key</DialogTitle>
-              <DialogDescription>One wallet transaction. All selected scopes share the same expiry.</DialogDescription>
+              <DialogTitle>{isExistingKey ? "Add scopes to session key" : "New session key"}</DialogTitle>
+              <DialogDescription>
+                {isExistingKey
+                  ? "Newly selected scopes are added to this key."
+                  : "All selected scopes share the same expiry."}
+              </DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
             {txState === "failed" && txBanner}
@@ -287,107 +339,143 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-name'>
-                  Name <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
+                  Name{" "}
+                  {!isExistingKey && (
+                    <span className='text-zinc-500 font-normal'>(optional — what is this key for?)</span>
+                  )}
                 </Label>
                 <Input
                   id='sk-name'
                   placeholder='e.g. ci-uploader'
                   value={name}
                   onChange={setName}
-                  disabled={formLocked}
+                  disabled={isExistingKey || formLocked}
                 />
-                <p className='text-xs text-zinc-500'>
-                  Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
-                </p>
+                {isExistingKey ? (
+                  <p className='text-xs text-zinc-500'>Existing key name.</p>
+                ) : (
+                  <p className='text-xs text-zinc-500'>
+                    Saved on chain with the key, so it is <b>public and permanent</b>. Don't put secrets in it.
+                  </p>
+                )}
               </div>
 
               <div className='flex flex-col gap-2'>
                 <Label>Scopes</Label>
-                {SESSION_KEY_SCOPES.map((scope) => (
-                  <label
-                    key={scope.id}
-                    className={clsx(
-                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer",
-                      scope.destructive
-                        ? "border-amber-300 dark:border-amber-800"
-                        : "border-zinc-200 dark:border-zinc-700",
-                    )}
-                  >
-                    <input
-                      type='checkbox'
-                      disabled={formLocked}
-                      className='mt-1'
-                      checked={checkedScopes[scope.id]}
-                      onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
-                    />
-                    <span>
-                      <span className='block text-sm font-medium'>
-                        {scope.label}
-                        {scope.destructive && (
-                          <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
-                            destructive
+                {SESSION_KEY_SCOPES.map((scope) => {
+                  const preset = requestPresets?.[scope.id] ?? null;
+                  const lockedOff = preset === "locked-off";
+                  return (
+                    <label
+                      key={scope.id}
+                      className={clsx(
+                        "flex items-start gap-3 rounded-lg border p-3",
+                        lockedOff ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                        scope.destructive
+                          ? "border-amber-300 dark:border-amber-800"
+                          : "border-zinc-200 dark:border-zinc-700",
+                      )}
+                    >
+                      <input
+                        type='checkbox'
+                        className='mt-1'
+                        disabled={lockedOff || formLocked}
+                        checked={checkedScopes[scope.id]}
+                        onChange={(e) => setCheckedScopes((prev) => ({ ...prev, [scope.id]: e.target.checked }))}
+                      />
+                      <span>
+                        <span className='block text-sm font-medium'>
+                          {scope.label}
+                          {scope.destructive && (
+                            <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
+                              destructive
+                            </span>
+                          )}
+                          {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
+                        </span>
+                        <span className='block text-xs text-zinc-500'>{scope.description}</span>
+                        {preset === "requested-unchecked" && !checkedScopes[scope.id] && (
+                          <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
+                            Requested, check to include
                           </span>
                         )}
                       </span>
-                      <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                    </span>
-                  </label>
-                ))}
-                <p className='text-xs text-zinc-500'>
-                  Pick only what the key holder needs. Uploads need "Create data set" and "Add pieces". The two marked
-                  destructive let the holder remove data or end service.
-                </p>
+                    </label>
+                  );
+                })}
+                {requestPresets && prefillScopes ? (
+                  prefillScopes.some((id) => !checkedScopes[id]) && (
+                    <p className='text-xs text-amber-700 dark:text-amber-400'>
+                      Granting fewer scopes than requested — some operations may fail.
+                    </p>
+                  )
+                ) : (
+                  <p className='text-xs text-zinc-500'>
+                    Pick only what the key holder needs. Uploads need "Create data set" and "Add pieces". The two marked
+                    destructive let the holder remove data or end service.
+                  </p>
+                )}
               </div>
 
               <div className='flex flex-col gap-1.5'>
                 <Label htmlFor='sk-expiry'>Expiration</Label>
-                <select
-                  disabled={formLocked}
-                  id='sk-expiry'
-                  className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                  value={presetIndex}
-                  onChange={(e) => setPresetIndex(e.target.value)}
-                >
-                  {EXPIRY_PRESETS.map((preset, i) => (
-                    <option key={preset.label} value={String(i)}>
-                      {preset.label}
-                    </option>
-                  ))}
-                  <option value='custom'>Custom date…</option>
-                </select>
-                {presetIndex === "custom" && (
-                  <input
-                    type='date'
-                    disabled={formLocked}
-                    aria-label='Custom expiry date'
-                    className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                  />
+                {inheritExpiry != null ? (
+                  <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
+                ) : (
+                  <>
+                    <select
+                      disabled={formLocked}
+                      id='sk-expiry'
+                      className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
+                      value={presetIndex}
+                      onChange={(e) => setPresetIndex(e.target.value)}
+                    >
+                      {EXPIRY_PRESETS.map((preset, i) => (
+                        <option key={preset.label} value={String(i)}>
+                          {preset.label}
+                        </option>
+                      ))}
+                      <option value='custom'>Custom date…</option>
+                    </select>
+                    {presetIndex === "custom" && (
+                      <input
+                        type='date'
+                        disabled={formLocked}
+                        aria-label='Custom expiry date'
+                        className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                      />
+                    )}
+                    <p className='text-xs text-zinc-500'>
+                      The key stops working on this date. Every key has to expire.
+                    </p>
+                  </>
                 )}
-                <p className='text-xs text-zinc-500'>The key stops working on this date. Every key has to expire.</p>
               </div>
 
               <div className='flex flex-col gap-2'>
                 <Label>Session signer</Label>
-                <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
-                  <input
-                    type='radio'
-                    disabled={formLocked}
-                    name='sk-signer'
-                    className='mt-1'
-                    checked={signerMode === "generate"}
-                    onChange={() => setSignerMode("generate")}
-                  />
-                  <span>
-                    <span className='block text-sm font-medium'>Generate for me (default)</span>
-                    <span className='block text-xs text-zinc-500'>
-                      Creates a <b>private key + public address keypair</b> in your browser. The private key is revealed
-                      on the next screen but is never stored, so <b>make sure you save it somewhere safe immediately</b>
-                      .
+                {!isExistingKey && (
+                  <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
+                    <input
+                      type='radio'
+                      disabled={formLocked}
+                      name='sk-signer'
+                      className='mt-1'
+                      checked={signerMode === "generate"}
+                      onChange={() => setSignerMode("generate")}
+                    />
+                    <span>
+                      <span className='block text-sm font-medium'>Generate for me (default)</span>
+                      <span className='block text-xs text-zinc-500'>
+                        Creates a <b>private key + public address keypair</b> in your browser. The private key is
+                        revealed on the next screen but is never stored, so{" "}
+                        <b>make sure you save it somewhere safe immediately</b>.
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                )}
                 <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
                   <input
                     type='radio'
@@ -403,7 +491,13 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                       Generate the keypair yourself and paste <b>only</b> the session key's <b>public address</b> — the
                       private key should never touch this console.
                     </span>
-                    {signerMode === "own" && (
+                    {signerMode === "own" && addressLocked && (
+                      <span className='mt-2 flex items-center gap-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2'>
+                        <code className='flex-1 text-sm font-mono break-all'>{ownAddress}</code>
+                        <CopyButton value={ownAddress} tooltipText='Copy address' successMessage='Address copied' />
+                      </span>
+                    )}
+                    {signerMode === "own" && !addressLocked && (
                       <input
                         type='text'
                         disabled={formLocked}
@@ -415,6 +509,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     )}
                     {signerMode === "own" && ownAddress.length > 0 && !isAddress(ownAddress) && (
                       <span className='block text-xs text-red-600 mt-1'>Not a valid address.</span>
+                    )}
+                    {signerMode === "own" && addressLocked && (
+                      <span className='block text-xs text-amber-700 dark:text-amber-400 mt-1'>
+                        This address came from the link. If it is not the one you expect, do not approve it.
+                      </span>
                     )}
                   </span>
                 </label>
@@ -428,7 +527,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
                 ) : (
-                  "Create session key"
+                  submitLabel()
                 )}
               </Button>
             </DialogFooter>
