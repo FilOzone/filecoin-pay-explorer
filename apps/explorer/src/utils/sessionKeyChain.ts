@@ -28,6 +28,21 @@ export interface BlockscoutLogEntry {
 /** Blockscout returns at most this many logs per request and ignores page/offset. */
 const PAGE_SIZE = 1000;
 
+/** How long one Blockscout request may take before the sync gives up instead of hanging. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/** Blockscout `getLogs` with a deadline; a request that outlives it fails with a message that says so. */
+async function fetchLogsPage(url: string, timeoutMs: number): Promise<Response> {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if ((err as { name?: string })?.name === "TimeoutError") {
+      throw new Error(`Blockscout did not answer within ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw err;
+  }
+}
+
 /**
  * Fetches and decodes every `AuthorizationsUpdated` log for one wallet from
  * the network's default block explorer (Blockscout's Etherscan-compatible
@@ -39,6 +54,7 @@ export async function fetchAuthorizationEvents(
   network: Network,
   registry: Chain["contracts"]["sessionKeyRegistry"],
   account: Hex,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<DecodedAuthorizationEvent[]> {
   const event = getAbiItem({ abi: registry.abi, name: "AuthorizationsUpdated" });
   if (event?.type !== "event") throw new Error("SessionKeyRegistry ABI is missing AuthorizationsUpdated");
@@ -62,7 +78,7 @@ export async function fetchAuthorizationEvents(
   let fromBlock = REGISTRY_DEPLOY_BLOCK[network];
   for (;;) {
     url.searchParams.set("fromBlock", fromBlock.toString());
-    const response = await fetch(url.toString());
+    const response = await fetchLogsPage(url.toString(), timeoutMs);
     if (!response.ok) throw new Error(`Blockscout request failed (${response.status})`);
     const body = (await response.json()) as { status: string; message: string; result: unknown };
     if (!Array.isArray(body.result) && body.status !== "1") {

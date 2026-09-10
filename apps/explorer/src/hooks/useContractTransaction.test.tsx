@@ -7,9 +7,15 @@ vi.mock("sonner", () => ({ toast: { loading: vi.fn(() => "toast-id"), success: v
 
 // One deferred receipt per hash, resolved by the test in whatever order it wants.
 const receipts = new Map<string, { resolve: (r: TransactionReceipt) => void }>();
-const wagmi = vi.hoisted(() => ({ nextHash: "0x0" }));
+const wagmi = vi.hoisted(() => ({ nextHash: "0x0", submitFailure: undefined as unknown }));
 vi.mock("wagmi", () => ({
-  useWriteContract: () => ({ writeContractAsync: async () => wagmi.nextHash, isPending: false }),
+  useWriteContract: () => ({
+    writeContractAsync: async () => {
+      if (wagmi.submitFailure !== undefined) throw wagmi.submitFailure;
+      return wagmi.nextHash;
+    },
+    isPending: false,
+  }),
   usePublicClient: () => ({
     waitForTransactionReceipt: ({ hash }: { hash: string }) =>
       new Promise<TransactionReceipt>((resolve) => receipts.set(hash, { resolve })),
@@ -39,6 +45,22 @@ describe("useContractTransaction", () => {
   afterEach(() => {
     for (const renderer of mounted.splice(0)) act(() => renderer.unmount());
     receipts.clear();
+    wagmi.submitFailure = undefined;
+  });
+
+  it("hands a submission failure to the caller as an Error whatever the wallet threw", async () => {
+    const hook = mount();
+    const onError = vi.fn();
+    wagmi.submitFailure = "user rejected";
+
+    await act(async () => {
+      await expect(
+        hook().execute({ functionName: "login", args: [], metadata: { type: "createSessionKey" }, onError }),
+      ).rejects.toThrow("user rejected");
+    });
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(onError.mock.calls[0][0].message).toBe("user rejected");
   });
 
   it("reports each receipt to the execute call that submitted it, in whatever order receipts land", async () => {
