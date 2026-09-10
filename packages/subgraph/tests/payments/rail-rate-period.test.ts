@@ -22,10 +22,13 @@ import {
 } from "./events";
 import {
   assertAccountOperatorState,
+  assertOperatorApprovalState,
+  assertOperatorTokenState,
   assertRailRatePeriodState,
   setupDeposit,
   setupOperatorApproval,
   TEST_ADDRESSES,
+  TEST_ALLOWANCES,
   TEST_AMOUNTS,
 } from "./fixtures";
 
@@ -173,6 +176,41 @@ describe("RailRatePeriod projection", () => {
     );
     assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalRateChanges", "1");
     assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "1", "1", "1");
+  });
+
+  test("ignores an exact replay of the event that opened the current period", () => {
+    const railId = GraphBN.fromI32(21);
+    createRailAt(railId, 10, 1);
+    const firstRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const secondRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, firstRate);
+    const rateChange = createRailRateModifiedEvent(railId, firstRate, secondRate);
+    setEventPosition(activation, 20, 2);
+    setEventPosition(rateChange, 30, 3);
+
+    handleRailRateModified(activation);
+    handleRailRateModified(rateChange);
+    handleRailRateModified(rateChange);
+
+    const currentPeriodId = getEventId(rateChange);
+    assert.entityCount("RailRatePeriod", 3);
+    assert.entityCount("RateChangeQueue", 1);
+    assertRailRatePeriodState(currentPeriodId, railId, secondRate, GraphBN.fromI32(30), "");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "paymentRate", secondRate.toString());
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalRateChanges", "1");
+    assertOperatorApprovalState(
+      TEST_ADDRESSES.ACCOUNT,
+      TEST_ADDRESSES.OPERATOR,
+      TEST_ADDRESSES.TOKEN,
+      "true",
+      TEST_ALLOWANCES.RATE,
+      TEST_ALLOWANCES.LOCKUP,
+      TEST_ALLOWANCES.MAX_LOCKUP_PERIOD,
+      "0",
+      secondRate.toString(),
+    );
+    assertOperatorTokenState(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN, "0", secondRate.toString());
+    assert.fieldEquals("Token", TEST_ADDRESSES.TOKEN.toHexString(), "lockupRate", secondRate.toString());
   });
 
   test("coalesces several changes after closing an established period in the same block", () => {

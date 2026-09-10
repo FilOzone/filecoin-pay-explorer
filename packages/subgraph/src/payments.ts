@@ -394,6 +394,23 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
       );
       return;
     }
+
+    const eventRatePeriodId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
+    const isExactAppliedReplay =
+      currentRatePeriod.id.equals(eventRatePeriodId) &&
+      currentRatePeriod.rate.equals(newRate) &&
+      currentRatePeriod.startEpoch.equals(event.block.number) &&
+      rail.paymentRate.equals(newRate);
+
+    if (isExactAppliedReplay) {
+      log.warning("[handleRailRateModified] Ignoring already applied event railId={} txHash={} logIndex={}", [
+        railId.toString(),
+        event.transaction.hash.toHexString(),
+        event.logIndex.toString(),
+      ]);
+      return;
+    }
+
     if (currentRatePeriod.rate.notEqual(oldRate)) {
       failRatePeriodInvariant(
         "[handleRailRateModified] Current rate period does not match oldRate",
