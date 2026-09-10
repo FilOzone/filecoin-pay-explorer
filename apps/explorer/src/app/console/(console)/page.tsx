@@ -35,6 +35,33 @@ function toDialogPrefill(link: DepositLink): AddServicePrefill {
   };
 }
 
+/** Shown when the link carried deposit fields the page could not parse. */
+const UnreadableFundingLinkNotice = () => (
+  <Notice tone='warn' role='alert' title='This funding link could not be read' className='p-4'>
+    <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
+  </Notice>
+);
+
+/** Shown when the link names a network other than the one the wallet is on. */
+const OtherNetworkFundingLinkNotice = ({
+  linkNetwork,
+  walletNetwork,
+}: {
+  linkNetwork: Network;
+  walletNetwork: Network;
+}) => (
+  <Notice tone='warn' role='alert' className='p-4'>
+    <p className='font-semibold'>
+      This funding link is for <span className='capitalize'>{linkNetwork}</span>, but your wallet is connected to{" "}
+      <span className='capitalize'>{walletNetwork}</span>.
+    </p>
+    <p className='text-xs mt-1'>
+      Nothing was filled in. Switch your wallet to <span className='capitalize'>{linkNetwork}</span> and open the link
+      again.
+    </p>
+  </Notice>
+);
+
 type AccountSectionsProps = {
   account: Account | null | undefined;
   // React Query guarantees error is non-null exactly when the query has failed,
@@ -136,35 +163,25 @@ const UserConsole = () => {
   const fundingLink = useConsumedSearchParams(["deposit", "operator", "network"]);
   const depositLink = useMemo(() => (fundingLink ? parseDepositLink(fundingLink) : null), [fundingLink]);
   const [dialogDismissed, setDialogDismissed] = useState(false);
+  // A funding link ends in exactly one of three states: unreadable, for another
+  // network, or opening the deposit dialog on this one.
+  const asksToFund = fundingLink !== null && (fundingLink.has("deposit") || fundingLink.has("operator"));
+  const hasUnreadableFundingLink = asksToFund && depositLink === null;
   // A link for another network prefills nothing: approving it here would fund the wrong chain's operator.
-  const isLinkNetworkMismatch = depositLink !== null && isFilecoinChain && depositLink.network !== walletNetwork;
+  const isFundingLinkForOtherNetwork = depositLink !== null && isFilecoinChain && depositLink.network !== walletNetwork;
+  const isFundingLinkForWallet = depositLink !== null && isFilecoinChain && depositLink.network === walletNetwork;
+  const shouldOpenFundingDialog = isFundingLinkForWallet && !dialogDismissed;
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const depositPrefill = useMemo(
-    () =>
-      depositLink && !dialogDismissed && isFilecoinChain && depositLink.network === walletNetwork
-        ? toDialogPrefill(depositLink)
-        : null,
-    [depositLink, dialogDismissed, isFilecoinChain, walletNetwork],
+    () => (shouldOpenFundingDialog && depositLink ? toDialogPrefill(depositLink) : null),
+    [shouldOpenFundingDialog, depositLink],
   );
 
   return (
     <div className='flex flex-col gap-15'>
-      {fundingLink && !depositLink && (fundingLink.has("deposit") || fundingLink.has("operator")) && (
-        <Notice tone='warn' role='alert' title='This funding link could not be read' className='p-4'>
-          <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
-        </Notice>
-      )}
-      {isLinkNetworkMismatch && (
-        <Notice tone='warn' role='alert' className='p-4'>
-          <p className='font-semibold'>
-            This funding link is for <span className='capitalize'>{depositLink?.network}</span>, but your wallet is
-            connected to <span className='capitalize'>{walletNetwork}</span>.
-          </p>
-          <p className='text-xs mt-1'>
-            Nothing was filled in. Switch your wallet to <span className='capitalize'>{depositLink?.network}</span> and
-            open the link again.
-          </p>
-        </Notice>
+      {hasUnreadableFundingLink && <UnreadableFundingLinkNotice />}
+      {isFundingLinkForOtherNetwork && (
+        <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} walletNetwork={walletNetwork} />
       )}
       {depositPrefill && (
         <AddServiceDialog
