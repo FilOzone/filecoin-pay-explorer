@@ -25,6 +25,7 @@ dataSources:
         - Settlement
         - RateChangeQueue
         - RailRatePeriod
+        - ProcessedRailRateModification
         - UserToken
         - Token
         - Account
