@@ -36,6 +36,7 @@ import {
   createRailSettledEvent,
   createRailTerminatedEvent,
   createWithdrawRecordedEvent,
+  resetEventLogIndex,
 } from "./events";
 import {
   assertAccountState,
@@ -85,6 +86,7 @@ describe("Payments", () => {
 
   afterEach(() => {
     clearStore();
+    resetEventLogIndex();
   });
 
   test("should handle deposit recorded properly", () => {
@@ -457,6 +459,8 @@ describe("Payments", () => {
     assert.entityCount("OneTimePayment", 1);
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "totalAmount", totalAmount.toString());
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "rail", rail!.id.toHex());
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "payer", rail!.payer.toHex());
+    assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "operator", rail!.operator.toHex());
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "token", rail!.token.toHex());
     assert.fieldEquals("OneTimePayment", oneTimePaymentEntityIdStr, "networkFee", networkFee.toString());
     assert.fieldEquals(

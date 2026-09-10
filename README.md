@@ -1,211 +1,263 @@
 # Filecoin Pay Explorer
 
-Monorepo for the Filecoin Pay ecosystem: subgraph, shared types/configs, UI library, and frontend apps.
+This repository contains the user-facing tools and data services for [Filecoin Pay](https://github.com/FilOzone/filecoin-pay). Its primary product is the Explorer at [pay.filecoin.cloud](https://pay.filecoin.cloud): a web application for inspecting payment activity and managing a Filecoin Pay account.
 
-## Monorepo layout
+The monorepo also contains the subgraph that turns contract events into queryable data, a Cloudflare Workers service for solvency notifications, shared generated types and UI code, and a separate Metrics dashboard used only for local development.
 
-- **apps/**
-  - `explorer/` — Explorer app ([README](apps/explorer/README.md))
-  - `metrics/` — Metrics dashboard ([README](apps/metrics/README.md))
-- **packages/**
-  - `ui/` — Shared UI library (Tailwind v4, shadcn, theming) ([README](packages/ui/README.md))
-  - `subgraph/` — The Graph subgraph ([README](packages/subgraph/README.md))
-  - `types/` — Shared TypeScript types ([README](packages/types/README.md))
-  - `configs/` — Shared TS/base configs
+## What Runs Here
 
-## Prerequisites
+### Explorer
 
-- Node >= 22
-- pnpm >= 9
+[`apps/explorer`](apps/explorer/README.md) is the main Next.js and React application. It has two user-facing areas:
 
-## Getting Started
+- The public explorer shows Filecoin Pay rails, accounts, operators, tokens, settlements, and network statistics on mainnet and calibration.
+- The wallet-connected console lets a user inspect funds and runway, deposit or withdraw tokens, manage operator approvals and rails, top up through Squid, and configure email alerts.
 
-Follow these steps to set up and run the applications:
+Most public data comes from the hosted GraphQL subgraphs. Wallet actions and live account operations use wagmi, viem, and the Synapse SDK. A small Next.js server route proxies Squid’s token catalog.
 
-### 1. Install Dependencies
+Production runs at [pay.filecoin.cloud](https://pay.filecoin.cloud).
 
-Install all dependencies for the monorepo:
+### Notification service
 
-```sh
-pnpm install
+[`apps/notification-service`](apps/notification-service/README.md) is the backend for Filecoin Pay solvency alerts. Users register and verify an email from the Explorer; the service watches subscribed accounts and sends tiered warnings when their funded runway falls below configured thresholds.
+
+It is split into three Cloudflare Workers:
+
+| Worker | Trigger | Responsibility |
+| --- | --- | --- |
+| API | HTTP via Hono | Registration, email verification, subscription status, and unsubscribe |
+| Alert scheduler | Cron every 12 hours | Page through subscribed wallets and publish bounded queue batches |
+| Alert processor | Queue consumer | Read account state through Filecoin RPC, derive alert tiers, deduplicate, send email, and record the result |
+
+The service uses D1 for subscriptions and the durable notification log, KV for fast deduplication checks, Cloudflare Queues for fan-out and retries, and an email binding for delivery. Staging is isolated on Filecoin calibration; production uses Filecoin mainnet.
+
+### Subgraph
+
+[`packages/subgraph`](packages/subgraph/README.md) is the Explorer’s indexed read model. Its AssemblyScript handlers process Filecoin Pay contract events and maintain GraphQL entities for rails, accounts, operators, tokens, settlements, and aggregate metrics.
+
+Goldsky hosts separate mainnet and calibration deployments. The Explorer queries those GraphQL endpoints instead of scanning chain history in the browser. The schema at `packages/subgraph/schemas/schema.v1.graphql` also generates [`@filecoin-pay/types`](packages/types/README.md), which keeps frontend query results aligned with the indexed data model.
+
+A schema change normally spans three layers:
+
+```text
+subgraph schema and handlers
+  → generated @filecoin-pay/types
+  → Explorer GraphQL queries, hooks, and UI
 ```
 
-### 2. Configure Environment Variables
+### Metrics
 
-Set up environment variables for the apps you want to run. You'll need the subgraph URLs for your **Filecoin Payments Subgraph**. If you need to deploy your own subgraph, see the [subgraph deployment guide](packages/subgraph/README.md).
-
-**For Explorer app:**
-
-```sh
-cd apps/explorer
-cp .env.example .env
-```
-
-Edit `apps/explorer/.env` and configure:
-
-```bash
-NEXT_PUBLIC_SUBGRAPH_URL_MAINNET=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-mainnet/version/gn
-NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=https://api.goldsky.com/api/public/project_xxx/subgraphs/filecoin-pay-calibration/version/gn
-```
-
-Replace the placeholder URL with your actual **Filecoin Payments Subgraph** endpoint.
-
-**⚠️ Note:** Both `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET` and `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` are required for the Explorer app to function.
-
-**For Metrics app:**
-
-```sh
-cd apps/metrics
-cp .env.example .env
-```
-
-Edit `apps/metrics/.env` and configure:
-
-```bash
-VITE_GRAPHQL_ENDPOINT=https://api.thegraph.com/subgraphs/name/your-username/filecoin-payments
-```
-
-Replace the placeholder URL with your actual **Filecoin Payments Subgraph** endpoint.
-
-**Note:** `VITE_GRAPHQL_ENDPOINT` has a default fallback (`http://localhost:8000/subgraphs/name/filecoin-payments`) but should be configured for production use.
-
-**Return to root directory:**
-
-```sh
-cd ../..
-```
-
-### 3. Build Shared Packages
-
-**⚠️ Important:** You must build the required shared packages before running any app:
-
-- **Explorer app** depends on: `@filecoin-pay/types` and `@filecoin-pay/ui`
-- **Metrics app** depends on: `@filecoin-pay/types`
-
-Build all shared packages (recommended):
-
-```sh
-pnpm build --filter @filecoin-pay/types --filter @filecoin-pay/ui
-```
-
-Or build only what you need:
-
-```sh
-# For Explorer only
-pnpm build --filter @filecoin-pay/types --filter @filecoin-pay/ui
-
-# For Metrics only
-pnpm build --filter @filecoin-pay/types
-```
-
-This step is **required for both development and production** environments.
-
-### 4. Run the Applications
-
-#### Development Mode
-
-**Run all apps:**
-
-```sh
-pnpm dev
-```
-
-**Run Explorer only:**
-
-```sh
-pnpm dev --filter @filecoin-pay/explorer
-```
-
-**Run Metrics only:**
-
-```sh
-pnpm dev --filter @filecoin-pay/metrics
-```
-
-#### Production Mode
-
-**1. Build the application(s):**
-
-```sh
-# Build everything (recommended)
-pnpm build
-
-# Or build specific apps
-pnpm build --filter @filecoin-pay/explorer
-pnpm build --filter @filecoin-pay/metrics
-```
-
-**2. Start the production server(s):**
-
-```sh
-# Start Explorer (runs on http://localhost:3000)
-pnpm start --filter @filecoin-pay/explorer
-
-# Start Metrics (runs on http://localhost:4173)
-cd apps/metrics
-pnpm preview
-cd ../..
-```
-
-## Common Scripts
-
-- **Build all:** `pnpm build`
-- **Build specific app:** `pnpm build --filter @filecoin-pay/explorer` or `pnpm build --filter @filecoin-pay/metrics`
-- **Lint:** `pnpm lint`
-- **Format:** `pnpm format`
-- **Type check:** `pnpm type-check`
-- **Test:** `pnpm test`
-- **Clean:** `pnpm clean` (removes build artifacts and node_modules)
+[`apps/metrics`](apps/metrics/README.md) is a separate Vite dashboard for visualizing Filecoin Pay statistics. It consumes the generated types and a GraphQL endpoint, but it is not deployed and is not part of the staging-to-production promotion flow. Run it locally when working on that dashboard.
 
 ## Architecture
 
-### Components
+### Indexed data and wallet operations
 
-- **[`apps/explorer/`](apps/explorer/)** — The Explorer app: a statically-built Next.js frontend for browsing Filecoin Pay rails, accounts, and deal activity. This is the primary focus of the repo.
-- **[`apps/metrics/`](apps/metrics/)** — A Vite-based metrics dashboard. Not a current focus.
-- **[`packages/subgraph/`](packages/subgraph/)** — A [The Graph](https://thegraph.com/) subgraph hosted on [Goldsky](https://goldsky.com/) that indexes Filecoin Pay contract events on mainnet and Filecoin calibration testnet.
-- **[`packages/ui/`](packages/ui/), [`packages/types/`](packages/types/), [`packages/configs/`](packages/configs/)** — Shared libraries consumed by the apps.
+```text
+Filecoin Pay contracts
+  │
+  ├── events ──> Subgraph handlers ──> Goldsky GraphQL ──> Explorer public views
+  │                                      │
+  │                                      └──────────────> Metrics (local only)
+  │
+  └── reads and writes <── Filecoin RPC / Synapse / wagmi <── Explorer console
 
-### Hosting
+Subgraph schema ──> GraphQL Code Generator ──> @filecoin-pay/types ──> Explorer + Metrics
+```
 
-- **Static site** — The Explorer is statically built and deployed to [Vercel](https://vercel.com/). Vercel is used for convenience; there is no server-side logic that requires it.
-- **Subgraph** — Hosted publicly on Goldsky with no proxy layer. It is intended to be consumed only by the deployed static frontend.
+The subgraph is optimized for historical and aggregate reads. It is not in the transaction path: wallet writes go to Filecoin contracts, and the resulting events are indexed afterward.
 
-### Deployments
+### Notification pipeline
 
-Static site and subgraph deployments are separate. See the [release checklist](.github/ISSUE_TEMPLATE/release.md) for post-deploy verification and production promotion.
+```text
+Explorer notification UI
+  → API Worker
+  → D1 subscription + verification email
 
-- Static site changes deploy automatically via the Vercel GitHub App on merge to `main`.
-- Subgraph releases run through the [Release Please workflow](.github/workflows/release-please.yml). Merging its Release PR creates the tag and GitHub Release, deploys both Goldsky networks, and opens a tracking issue.
+Scheduled Worker
+  → paged D1 subscriptions
+  → Cloudflare Queue
+  → Processor Worker
+  → Filecoin RPC account check
+  → tier and deduplication rules
+  → alert email + D1 audit record
+```
 
-### Monitoring
+## Workspace Map
 
-Uptime monitoring for the static site and subgraph is managed via [FilOzone/infra](https://github.com/FilOzone/infra) and visible at [status.filoz.org](https://status.filoz.org).
+| Path | Package | Used by |
+| --- | --- | --- |
+| `apps/explorer` | `@filecoin-pay/explorer` | Primary deployed web application |
+| `apps/notification-service` | `@filecoin-pay/notification-service` | Explorer notification UI and operational alert pipeline |
+| `apps/metrics` | `@filecoin-pay/metrics` | Local-only metrics dashboard |
+| `packages/subgraph` | `@filecoin-pay/subgraph` | Goldsky deployments and generated types |
+| `packages/types` | `@filecoin-pay/types` | Explorer and Metrics |
+| `packages/ui` | `@filecoin-pay/ui` | Explorer; exports source directly and has no build step |
+| `packages/configs` | `@filecoin-pay/configs` | Shared Biome and TypeScript configuration |
 
-## Releasing
+pnpm workspaces manage package dependencies, and Turbo orchestrates builds, tests, type checks, linting, and development tasks.
 
-Subgraph releases are automated with [Release Please](https://github.com/googleapis/release-please):
+## Run the Explorer
 
-1. Give every PR a [Conventional Commit](https://www.conventionalcommits.org/) title, such as `feat:`, `fix:`, or `chore:`. The [PR title check](.github/workflows/pr-title.yml) enforces this because squash merges use the PR title as the commit on `staging`.
-2. When releasable subgraph changes reach `staging`, Release Please opens or updates a Release PR targeting `staging`. That PR bumps the subgraph version and updates `packages/subgraph/CHANGELOG.md`.
-3. Merge the Release PR to create the tag and GitHub Release, deploy calibration and mainnet to Goldsky, tag both as `staging`, and open a [release tracking issue](.github/ISSUE_TEMPLATE/release.md). Do not create the release tag manually.
-4. Use the tracking issue to confirm indexing and smoke-test the Explorer on staging.
-5. Merge the promotion PR (`staging → main`). This applies the `prod` tag on Goldsky automatically, switching pay.filecoin.cloud to the new fully-indexed subgraph.
+### Prerequisites
 
-See [`release-please-config.json`](release-please-config.json) and [`.release-please-manifest.json`](.release-please-manifest.json) for version tracking configuration.
+- Node.js 22 or newer
+- pnpm 9 or newer; the repository pins pnpm 9.15.2
 
-## Contributing
+Install dependencies from the repository root:
 
-- Use Node/pnpm versions from root `package.json` engines.
-- Use [Conventional Commits](https://www.conventionalcommits.org/) for PR titles (e.g., `feat:`, `fix:`, `chore:`).
-- Run `pnpm lint`, `pnpm format`, and `pnpm type-check` before committing.
-- See per-package READMEs for details.
+```bash
+pnpm install
+```
 
-## Related repositories
+### Configure the Explorer
 
-- Contracts: https://github.com/FilOzone/filecoin-pay
-- Explorer: https://github.com/FilOzone/filecoin-pay-explorer
+Copy the example configuration:
+
+```bash
+cp apps/explorer/.env.example apps/explorer/.env
+```
+
+Set the two required GraphQL endpoints in `apps/explorer/.env`:
+
+```bash
+NEXT_PUBLIC_SUBGRAPH_URL_MAINNET=<mainnet Goldsky GraphQL URL>
+NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION=<calibration Goldsky GraphQL URL>
+```
+
+Optional Explorer configuration:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_SQUID_INTEGRATOR_ID` | Overrides the default public Squid integrator ID |
+| `NEXT_PUBLIC_NOTIFICATIONS_API_URL` | Enables notification registration and settings against a matching notification API |
+| `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS` | Selects the Filecoin network where notification UI is available; defaults to `mainnet` |
+
+Build the generated types, then start the Explorer:
+
+```bash
+pnpm build --filter @filecoin-pay/types
+pnpm dev --filter @filecoin-pay/explorer
+```
+
+Open [http://localhost:3000](http://localhost:3000). A local subgraph is not required when the environment variables point to hosted Goldsky endpoints.
+
+### Run notifications locally
+
+For local notification development, run the API Worker with local D1 and KV storage rather than pointing localhost at a deployed notification API:
+
+```bash
+pnpm --filter @filecoin-pay/notification-service run db:migrate:local
+pnpm --filter @filecoin-pay/notification-service run dev:api
+```
+
+Use the API URL printed by Wrangler as `NEXT_PUBLIC_NOTIFICATIONS_API_URL`. The API checks `FRONTEND_ORIGIN` exactly, so its local value must match the Explorer origin, normally `http://localhost:3000`.
+
+The local service uses the staging binding shape and Filecoin calibration. Configure the Explorer accordingly:
+
+```bash
+NEXT_PUBLIC_NOTIFICATIONS_API_URL=<URL printed by Wrangler>
+NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS=calibration
+```
+
+Override the local Worker's `FRONTEND_ORIGIN` in `apps/notification-service/api/.dev.vars` (beside the api worker's `wrangler.jsonc`; `dev:api` loads it automatically and it is gitignored):
+
+```bash
+FRONTEND_ORIGIN=http://localhost:3000
+```
+
+Do not change the checked-in staging or production origin for local development. Connect the Explorer wallet to calibration when testing the notification flow.
+
+The scheduler and processor have separate local commands:
+
+```bash
+pnpm --filter @filecoin-pay/notification-service run dev:scheduler
+pnpm --filter @filecoin-pay/notification-service run dev:processor
+```
+
+See the [notification-service README](apps/notification-service/README.md) and [agent/developer notes](apps/notification-service/AGENTS.md) before changing bindings, environments, migrations, or Worker commands. Every Wrangler command must select a worker config and an environment.
+
+### Run Metrics locally
+
+Metrics is not deployed. To run it:
+
+```bash
+cp apps/metrics/.env.example apps/metrics/.env
+pnpm build --filter @filecoin-pay/types
+pnpm dev --filter @filecoin-pay/metrics
+```
+
+Set `VITE_GRAPHQL_ENDPOINT` in `apps/metrics/.env`, then open [http://localhost:5173](http://localhost:5173).
+
+### Work on the subgraph
+
+The package build generates its network manifest and AssemblyScript types before compiling:
+
+```bash
+pnpm build --filter @filecoin-pay/subgraph
+pnpm --filter @filecoin-pay/subgraph test
+```
+
+See the [subgraph guide](packages/subgraph/README.md) for local Graph Node and Goldsky deployment details. Remote deployment requires credentials and should follow the repository release process.
+
+## Checks
+
+Run focused checks while developing:
+
+```bash
+pnpm --filter @filecoin-pay/explorer test
+pnpm --filter @filecoin-pay/explorer type-check
+
+pnpm --filter @filecoin-pay/notification-service type-check
+pnpm --filter @filecoin-pay/notification-service test
+```
+
+Run repository checks before opening or updating a pull request:
+
+```bash
+pnpm build
+pnpm test
+pnpm type-check
+pnpm lint
+pnpm format
+```
+
+`pnpm lint` and `pnpm format` write changes. Inspect the diff after running them. Metrics and `packages/ui` currently have no test script, so the root test command does not cover them.
+
+## Release and Promotion
+
+All feature pull requests target `staging`. Production is promoted through a reviewed `staging → main` pull request:
+
+```text
+feature branch → staging → main
+                   │          │
+                   │          ├── production Explorer on Vercel
+                   │          └── production notification Workers
+                   │
+                   ├── staging Explorer on Vercel
+                   └── staging notification Workers
+```
+
+Subgraph changes add a release step: Release Please creates a release PR on `staging`, then Goldsky deploys and indexes both networks before the promotion PR is merged. Metrics has no deployment.
+
+Read [docs/RELEASE.md](docs/RELEASE.md) before preparing or reviewing a promotion. It explains branch roles, CI, merge strategy, hotfix back-merges, notification Worker deployments, subgraph versioning, Goldsky indexing, and the production tag switch.
+
+## Developer Documentation
+
+- [Explorer README](apps/explorer/README.md)
+- [Notification service README](apps/notification-service/README.md)
+- [Subgraph guide](packages/subgraph/README.md)
+- [Release and promotion](docs/RELEASE.md)
+- [Code practices](docs/code-best-practices.md)
+- [Component guidelines](docs/component-guidelines.md)
+- [Git instructions](docs/git-instructions.md)
+
+Coding agents should read the nearest `AGENTS.md` before changing a package.
+
+## Related Repository
+
+- [Filecoin Pay contracts](https://github.com/FilOzone/filecoin-pay)
 
 ## License
 
-Dual-licensed: [MIT](https://github.com/FilOzone/synapse-sdk/blob/master/LICENSE.md), [Apache Software License v2](https://github.com/FilOzone/synapse-sdk/blob/master/LICENSE.md) by way of the [Permissive License Stack](https://protocol.ai/blog/announcing-the-permissive-license-stack/).
+Dual-licensed under MIT and Apache License 2.0 through the [Permissive License Stack](https://protocol.ai/blog/announcing-the-permissive-license-stack/).
