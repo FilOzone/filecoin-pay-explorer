@@ -462,6 +462,9 @@ describe("SquidQuoteReview quote summary", () => {
     };
     vi.clearAllMocks();
     fetchSourceTokens.mockResolvedValue([usdc]);
+    publicClient.readContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === "balanceOf" ? 3_000_000n : 1n,
+    );
     readSourceTokenBalances.mockResolvedValue(balances([[usdc.token, 2n]]));
     planSquidTopUp.mockResolvedValue(plan);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

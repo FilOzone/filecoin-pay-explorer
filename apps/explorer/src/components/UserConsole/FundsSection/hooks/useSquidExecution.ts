@@ -42,6 +42,42 @@ export type UseSquidExecutionOptions = {
   };
 };
 
+type ExecutionInputCheck = {
+  executionInputs: SquidExecutionInputs;
+  isNativeSource: boolean;
+  networkGasMaximum: bigint;
+  plan: SquidFundingPlan;
+  requiredNativeBalance: bigint;
+  sourceAmount: bigint;
+  sourceNativeCurrencySymbol?: string;
+  sourceSymbol: string;
+};
+
+export function getExecutionInputError({
+  executionInputs,
+  isNativeSource,
+  networkGasMaximum,
+  plan,
+  requiredNativeBalance,
+  sourceAmount,
+  sourceNativeCurrencySymbol,
+  sourceSymbol,
+}: ExecutionInputCheck): string | null {
+  if (sourceAmount > executionInputs.sourceBalance) {
+    return `Your ${sourceSymbol} balance no longer covers the quote. Refresh the quote.`;
+  }
+  if (!isNativeSource && executionInputs.allowance === undefined) {
+    return "Could not refresh your source-token allowance. Try again before confirming.";
+  }
+  if (!isNativeSource && getPlanNetworkGas(plan, executionInputs.allowance).maximum !== networkGasMaximum) {
+    return "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.";
+  }
+  if (executionInputs.nativeBalance < requiredNativeBalance) {
+    return `Your ${sourceNativeCurrencySymbol ?? "source-network native-token"} balance does not cover the reviewed maximum native requirement.`;
+  }
+  return null;
+}
+
 export function useSquidExecution({
   integratorId,
   lifecycle: { state: acquisitionState, onAcquired, onBlocked, onRejected, onStarted },
@@ -140,25 +176,21 @@ export function useSquidExecution({
       finishAcquisition();
       return;
     }
-    if (quote.sourceAmount > executionInputs.sourceBalance)
-      return failAcquisition(`Your ${source.symbol} balance no longer covers the quote. Refresh the quote.`);
-
     if (networkGasMaximum === 0n)
       return failAcquisition("The reviewed source-network gas maximum is unavailable. Refresh the quote.");
     if (networkGasMaximum === null)
       return failAcquisition("Your source-token allowance is still loading. Try again shortly.");
-    if (!isNativeSource) {
-      if (executionInputs.allowance === undefined)
-        return failAcquisition("Could not refresh your source-token allowance. Try again before confirming.");
-      if (getPlanNetworkGas(plan, executionInputs.allowance).maximum !== networkGasMaximum)
-        return failAcquisition(
-          "Your source-token allowance changed. Review the updated network-gas maximum before acquiring.",
-        );
-    }
-    if (executionInputs.nativeBalance < requiredNativeBalance)
-      return failAcquisition(
-        `Your ${sourceNativeCurrencySymbol ?? "source-network native-token"} balance does not cover the reviewed maximum native requirement.`,
-      );
+    const executionInputError = getExecutionInputError({
+      executionInputs,
+      isNativeSource,
+      networkGasMaximum,
+      plan,
+      requiredNativeBalance,
+      sourceAmount: quote.sourceAmount,
+      sourceNativeCurrencySymbol,
+      sourceSymbol: source.symbol,
+    });
+    if (executionInputError) return failAcquisition(executionInputError);
 
     const publicClient =
       source.chainId === 10 || source.chainId === 8453

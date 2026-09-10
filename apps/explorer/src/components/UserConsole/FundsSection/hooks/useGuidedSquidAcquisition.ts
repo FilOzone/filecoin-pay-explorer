@@ -51,6 +51,45 @@ export type SquidRecoveryPanelState =
     }
   | { acquisition: DepositingSquidAcquisition; kind: "deposit-recovery" };
 
+type RecoveryPanelInputs = {
+  acquisitionState: SquidAcquisitionState;
+  automaticErrorMessage: string | null;
+  coordinationError: string | null;
+  hasInvalidAcquisition: boolean;
+  isAutomaticEligible: boolean;
+  isAutomaticFetching: boolean;
+  isAutomaticPermanentError: boolean;
+  savedAcquisition: SquidAcquisition | null;
+  sourceChainName?: string;
+};
+
+export function deriveRecoveryPanelState({
+  acquisitionState,
+  automaticErrorMessage,
+  coordinationError,
+  hasInvalidAcquisition,
+  isAutomaticEligible,
+  isAutomaticFetching,
+  isAutomaticPermanentError,
+  savedAcquisition,
+  sourceChainName,
+}: RecoveryPanelInputs): SquidRecoveryPanelState | null {
+  if (acquisitionState !== "blocked") return null;
+  if (hasInvalidAcquisition) return { kind: "invalid-storage" };
+  if (savedAcquisition?.status === "depositing") {
+    return { acquisition: savedAcquisition, kind: "deposit-recovery" };
+  }
+  if (savedAcquisition?.status !== "processing") return { kind: "storage-unavailable" };
+  if (!isAutomaticEligible) {
+    return { acquisition: savedAcquisition, coordinationError, kind: "manual-verification", sourceChainName };
+  }
+  if (!automaticErrorMessage) {
+    return { acquisition: savedAcquisition, isFetching: isAutomaticFetching, kind: "automatic-check", sourceChainName };
+  }
+  const kind = isAutomaticPermanentError ? "automatic-permanent-error" : "automatic-retryable-error";
+  return { acquisition: savedAcquisition, kind, message: automaticErrorMessage, sourceChainName };
+}
+
 export function useGuidedSquidAcquisition({
   address,
   destinationClient,
@@ -270,37 +309,17 @@ export function useGuidedSquidAcquisition({
       : automaticRecovery.error
         ? "Automatic recovery could not continue"
         : null);
-  let recoveryPanelState: SquidRecoveryPanelState | null = null;
-  if (acquisitionState === "blocked") {
-    if (hasInvalidAcquisition) {
-      recoveryPanelState = { kind: "invalid-storage" };
-    } else if (savedAcquisition?.status === "depositing") {
-      recoveryPanelState = { acquisition: savedAcquisition, kind: "deposit-recovery" };
-    } else if (savedAcquisition?.status === "processing") {
-      recoveryPanelState = automaticRecovery.isEligible
-        ? automaticErrorMessage
-          ? {
-              acquisition: savedAcquisition,
-              kind: automaticRecovery.isPermanentError ? "automatic-permanent-error" : "automatic-retryable-error",
-              message: automaticErrorMessage,
-              sourceChainName,
-            }
-          : {
-              acquisition: savedAcquisition,
-              isFetching: automaticRecovery.isFetching,
-              kind: "automatic-check",
-              sourceChainName,
-            }
-        : {
-            acquisition: savedAcquisition,
-            coordinationError,
-            kind: "manual-verification",
-            sourceChainName,
-          };
-    } else {
-      recoveryPanelState = { kind: "storage-unavailable" };
-    }
-  }
+  const recoveryPanelState = deriveRecoveryPanelState({
+    acquisitionState,
+    automaticErrorMessage,
+    coordinationError,
+    hasInvalidAcquisition,
+    isAutomaticEligible: automaticRecovery.isEligible,
+    isAutomaticFetching: automaticRecovery.isFetching,
+    isAutomaticPermanentError: automaticRecovery.isPermanentError,
+    savedAcquisition,
+    sourceChainName,
+  });
 
   return {
     acquiredAmount,

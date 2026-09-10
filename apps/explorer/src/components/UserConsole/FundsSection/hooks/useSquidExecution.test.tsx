@@ -4,7 +4,7 @@ import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getPlanNetworkGas } from "../data/guided-top-up";
 import type { SquidAcquisition } from "../data/squid-acquisition";
-import { useSquidExecution } from "./useSquidExecution";
+import { getExecutionInputError, useSquidExecution } from "./useSquidExecution";
 
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as `0x${string}`,
@@ -78,6 +78,34 @@ function plan(): SquidFundingPlan {
     source: source(8453),
   };
 }
+
+describe("getExecutionInputError", () => {
+  it("checks refreshed source balance, allowance, and native fees", () => {
+    const fundingPlan = plan();
+    const networkGasMaximum = getPlanNetworkGas(fundingPlan, 0n).maximum;
+    if (networkGasMaximum === null) throw new Error("Expected a network gas maximum");
+    const check = {
+      executionInputs: { allowance: 0n, nativeBalance: 1_000n, sourceBalance: 100n },
+      isNativeSource: false,
+      networkGasMaximum,
+      plan: fundingPlan,
+      requiredNativeBalance: 1n,
+      sourceAmount: 100n,
+      sourceSymbol: "TEST",
+    };
+
+    expect(
+      getExecutionInputError({ ...check, executionInputs: { ...check.executionInputs, sourceBalance: 99n } }),
+    ).toContain("balance no longer covers the quote");
+    expect(
+      getExecutionInputError({ ...check, executionInputs: { ...check.executionInputs, allowance: 100n } }),
+    ).toContain("allowance changed");
+    expect(
+      getExecutionInputError({ ...check, executionInputs: { ...check.executionInputs, nativeBalance: 0n } }),
+    ).toContain("maximum native requirement");
+    expect(getExecutionInputError(check)).toBeNull();
+  });
+});
 
 let execution!: ReturnType<typeof useSquidExecution>;
 let callbacks: {

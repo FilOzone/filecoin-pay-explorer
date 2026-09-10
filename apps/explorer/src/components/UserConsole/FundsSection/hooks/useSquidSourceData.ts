@@ -20,6 +20,27 @@ export type SquidExecutionInputs = {
   sourceBalance: bigint;
 };
 
+type BalanceQuery = {
+  data: bigint | undefined;
+  isError: boolean;
+  isFetching: boolean;
+  refetch: () => Promise<unknown>;
+};
+
+function networkFundState(required: boolean, query: BalanceQuery) {
+  if (!required) return { status: "not-required" } as const;
+  if (query.isError) return { retry: query.refetch, status: "error" } as const;
+  if (query.data === undefined) return { status: "loading" } as const;
+  return { value: query.data, status: "ready" } as const;
+}
+
+function selectedBalanceState(query: BalanceQuery) {
+  const shared = { isRefreshing: query.isFetching, retry: query.refetch };
+  if (query.isError) return { ...shared, status: "error" } as const;
+  if (query.data === undefined) return { ...shared, status: "loading" } as const;
+  return { ...shared, status: "ready", value: query.data } as const;
+}
+
 export function excludeDestinationUsdfc<T extends { token: string }>(tokens: readonly T[], sourceChainId: number) {
   return sourceChainId === mainnet.id
     ? tokens.filter((token) => token.token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase())
@@ -130,6 +151,7 @@ export function useSquidSourceData({
       sourceBalance: sourceResult.data,
     };
   };
+  const requiresSeparateNetworkFunds = !!source && !isNativeSource;
 
   return {
     catalog: {
@@ -149,39 +171,12 @@ export function useSquidSourceData({
       visibleTokens,
     },
     networkFunds: {
-      allowance:
-        !source || isNativeSource
-          ? ({ status: "not-required" } as const)
-          : allowanceQuery.isError
-            ? ({ retry: allowanceQuery.refetch, status: "error" } as const)
-            : allowanceQuery.data === undefined
-              ? ({ status: "loading" } as const)
-              : ({ value: allowanceQuery.data, status: "ready" } as const),
-      nativeBalance:
-        !source || isNativeSource
-          ? ({ status: "not-required" } as const)
-          : nativeBalanceQuery.isError
-            ? ({ retry: nativeBalanceQuery.refetch, status: "error" } as const)
-            : nativeBalanceQuery.data === undefined
-              ? ({ status: "loading" } as const)
-              : ({ value: nativeBalanceQuery.data, status: "ready" } as const),
+      allowance: networkFundState(requiresSeparateNetworkFunds, allowanceQuery),
+      nativeBalance: networkFundState(requiresSeparateNetworkFunds, nativeBalanceQuery),
     },
     refreshExecutionInputs,
     selectedToken: {
-      balance: sourceBalanceQuery.isError
-        ? ({ isRefreshing: sourceBalanceQuery.isFetching, retry: sourceBalanceQuery.refetch, status: "error" } as const)
-        : sourceBalanceQuery.data === undefined
-          ? ({
-              isRefreshing: sourceBalanceQuery.isFetching,
-              retry: sourceBalanceQuery.refetch,
-              status: "loading",
-            } as const)
-          : ({
-              isRefreshing: sourceBalanceQuery.isFetching,
-              retry: sourceBalanceQuery.refetch,
-              status: "ready",
-              value: sourceBalanceQuery.data,
-            } as const),
+      balance: selectedBalanceState(sourceBalanceQuery),
       isNative: isNativeSource,
       token: source,
     },
