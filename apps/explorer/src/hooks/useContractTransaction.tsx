@@ -116,8 +116,10 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
       return txHash;
     } catch (err) {
+      // Wallets and RPC shims reject with strings and plain objects too; callers get one shape.
+      const submitError = err instanceof Error ? err : new Error(String(err));
       console.error("[Transaction Rejected]:", {
-        error: err instanceof Error ? err.message : "Transaction failed",
+        error: submitError.message,
         metadata,
         fullError: err,
       });
@@ -127,8 +129,8 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
         duration: 4000,
       });
 
-      onSubmitError?.(err as Error);
-      throw err;
+      onSubmitError?.(submitError);
+      throw submitError;
     }
   };
 
