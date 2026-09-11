@@ -27,10 +27,6 @@ export function getPendingSquidDepositKey(owner: Address): string {
   return `${STORAGE_PREFIX}:${owner.toLowerCase()}`;
 }
 
-export function hasPendingSquidDeposit(storage: StorageLike, owner: Address): boolean {
-  return storage.getItem(getPendingSquidDepositKey(owner)) !== null;
-}
-
 export function savePendingSquidDeposit(storage: StorageLike, pending: PendingSquidDeposit): PendingSquidDeposit {
   storage.setItem(
     getPendingSquidDepositKey(pending.owner),
@@ -45,19 +41,19 @@ export function savePendingSquidDeposit(storage: StorageLike, pending: PendingSq
   return pending;
 }
 
-export function loadPendingSquidDeposit(
-  storage: StorageLike,
-  owner: Address,
-  recipient: Address,
-): PendingSquidDeposit | null {
-  const value = storage.getItem(getPendingSquidDepositKey(owner));
+export function loadPendingSquidDeposit(storage: StorageLike, owner: Address): PendingSquidDeposit | null {
+  const key = getPendingSquidDepositKey(owner);
+  const value = storage.getItem(key);
   if (value === null) return null;
+  const discard = () => {
+    storage.removeItem(key);
+    return null;
+  };
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (
       typeof parsed.recipient !== "string" ||
       !isAddress(parsed.recipient) ||
-      parsed.recipient.toLowerCase() !== recipient.toLowerCase() ||
       typeof parsed.owner !== "string" ||
       !isAddress(parsed.owner) ||
       parsed.owner.toLowerCase() !== owner.toLowerCase() ||
@@ -79,14 +75,14 @@ export function loadPendingSquidDeposit(
       (parsed.sourceSymbol !== undefined && typeof parsed.sourceSymbol !== "string") ||
       (parsed.sourceDecimals !== undefined && !isDecimals(parsed.sourceDecimals))
     ) {
-      return null;
+      return discard();
     }
     const executionStage = parsed.executionStage ?? "swap-broadcast";
     if (
       (executionStage === "swap-requested" && parsed.transactionHash !== undefined) ||
       (executionStage === "swap-broadcast" && parsed.transactionHash === undefined)
     ) {
-      return null;
+      return discard();
     }
     return {
       recipient: parsed.recipient,
@@ -104,7 +100,7 @@ export function loadPendingSquidDeposit(
       ...(typeof parsed.sourceDecimals === "number" ? { sourceDecimals: parsed.sourceDecimals } : {}),
     };
   } catch {
-    return null;
+    return discard();
   }
 }
 
