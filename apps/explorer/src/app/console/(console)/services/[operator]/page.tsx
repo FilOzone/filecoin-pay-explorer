@@ -16,7 +16,8 @@ const ServicePage = () => {
   const { operator } = useParams<{ operator: string }>();
   const { address, chainId } = useConnection();
 
-  if (!isAddress(operator)) {
+  // the console renders lowercase addresses, so a strict check would reject a value copied out of the service list.
+  if (!isAddress(operator, { strict: false })) {
     return <ServiceNotFoundState />;
   }
 
