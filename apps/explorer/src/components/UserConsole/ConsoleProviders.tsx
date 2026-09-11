@@ -3,8 +3,6 @@
 import { Alert } from "@filecoin-foundation/ui-filecoin/Alert";
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "@/components/shared/Providers";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config, walletChains } from "@/services/wagmi/config";
@@ -39,13 +37,11 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
-      <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
-          <SynapseProvider>
-            <TopUpActivityProvider>{children}</TopUpActivityProvider>
-          </SynapseProvider>
-        </WagmiProvider>
-      </QueryClientProvider>
+      <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
+        <SynapseProvider>
+          <TopUpActivityProvider>{children}</TopUpActivityProvider>
+        </SynapseProvider>
+      </WagmiProvider>
     </PrivyProvider>
   );
 };
