@@ -23,7 +23,7 @@ import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import { presetScopeStates } from "@/utils/authorizeParam";
 import { download } from "@/utils/download";
-import { formatDateTime } from "@/utils/formatter";
+import { formatAddress, formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   buildLoginArgs,
@@ -104,6 +104,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
   const [expirySec, setExpirySec] = useState<bigint>(0n);
+  // The wallet that signed the submitted login, pinned at submit time so the
+  // success screen names the actual grantor even if the wallet switches while
+  // the transaction confirms.
+  const [grantedBy, setGrantedBy] = useState<Hex | null>(null);
   // The attempt the dialog is showing. Cleared on close, so a receipt from
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
@@ -172,6 +176,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     }
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
+    setGrantedBy(account);
     setExpirySec(expiry);
     const attempt = {};
     shownAttemptRef.current = attempt;
@@ -239,6 +244,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setOwnAddress("");
     setGenerated(null);
     setExpirySec(0n);
+    setGrantedBy(null);
   }, []);
 
   const reset = () => {
@@ -344,9 +350,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     new: {
       title: "New session key",
       description: "All selected scopes share the same expiry.",
-      submit: prefillAddress ? "Review & authorize" : "Create session key",
+      submit: "Create session key",
     },
   }[createMode()];
+  // On the link flow the button names the signing account, so it is the last
+  // thing read before the wallet prompt.
+  const submitLabel = addressLocked ? `Authorize as ${formatAddress(account)}` : formCopy.submit;
 
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
@@ -361,6 +370,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
             {txState === "failed" && txBanner}
+            {addressLocked && (
+              <Notice tone='info' className='p-3'>
+                Authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. The session key
+                will act on behalf of this wallet.
+              </Notice>
+            )}
 
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
@@ -553,7 +568,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
                 ) : (
-                  formCopy.submit
+                  submitLabel
                 )}
               </Button>
             </DialogFooter>
@@ -618,7 +633,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
-              <span className='font-mono break-all'>{ownAddress}</span> is now authorized.
+              <span className='font-mono break-all'>{ownAddress}</span> is now authorized
+              {addressLocked && grantedBy && (
+                <>
+                  {" "}
+                  to act for <span className='font-mono break-all'>{grantedBy}</span>
+                </>
+              )}
+              .
             </div>
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={() => handleOpenChange(false)}>
