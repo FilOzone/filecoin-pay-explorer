@@ -7,6 +7,7 @@ import {
   captureReviewedSquidDepositCaps,
   estimateDepositNetworkFeeMaximum,
   FIL_GAS_TOP_UP_AMOUNT,
+  getDepositExchangeRate,
   getDepositRequiredNativeBalance,
   getDepositTransactionKinds,
   getSourceNativeCosts,
@@ -247,6 +248,39 @@ describe("source-native accounting", () => {
     ]);
     expect(getDepositTransactionKinds(USDC, request.sourceAmount, request.sourceAmount)).toEqual(["route"]);
     expect(getDepositTransactionKinds(NATIVE_TOKEN_ADDRESS, request.sourceAmount, 0n)).toEqual(["route"]);
+  });
+});
+
+describe("getDepositExchangeRate", () => {
+  it("reads the rate in whole units of the source token and USDFC, both ways round", () => {
+    const rate = getDepositExchangeRate(
+      { sourceAmount: 100_000_000n, destinationAmount: 94_000_000_000_000_000_000n },
+      6,
+    );
+    expect(rate?.usdfcPerSource).toBeCloseTo(0.94, 10);
+    expect(rate?.sourcePerUsdfc).toBeCloseTo(1 / 0.94, 10);
+
+    expect(getDepositExchangeRate({ sourceAmount: 10n ** 18n, destinationAmount: 3_000n * 10n ** 18n }, 18)).toEqual({
+      usdfcPerSource: 3000,
+      sourcePerUsdfc: 1 / 3000,
+    });
+  });
+
+  it("adds the FIL top-up spend back so the rate reflects the swap, not the deduction", () => {
+    const rate = getDepositExchangeRate(
+      {
+        sourceAmount: 100_000_000n,
+        destinationAmount: 98_000_000_000_000_000_000n,
+        filGasTopUp: { spendUsdfc: 1_000_000_000_000_000_000n, minimumFil: FIL_GAS_TOP_UP_AMOUNT, deadline: 1n },
+      },
+      6,
+    );
+    expect(rate?.usdfcPerSource).toBeCloseTo(0.99, 10);
+  });
+
+  it("has no rate without a positive spend and output", () => {
+    expect(getDepositExchangeRate({ sourceAmount: 0n, destinationAmount: 1n }, 6)).toBeNull();
+    expect(getDepositExchangeRate({ sourceAmount: 1n, destinationAmount: 0n }, 6)).toBeNull();
   });
 });
 

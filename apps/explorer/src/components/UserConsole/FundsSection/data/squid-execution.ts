@@ -134,7 +134,18 @@ export function isUserRejectedRequest(error: unknown): boolean {
   return false;
 }
 
+const MAX_ERROR_MESSAGE_LENGTH = 240;
+
+/**
+ * What the dialog shows for a failure. viem errors carry the whole request
+ * (calldata included) in `message`; their `shortMessage` and `details` say
+ * what happened, which is all a reader needs.
+ */
 export function walletErrorMessage(error: unknown, fallback: string): string {
   if (isUserRejectedRequest(error)) return "Transaction cancelled in your wallet.";
-  return error instanceof Error ? error.message : fallback;
+  if (!(error instanceof Error)) return fallback;
+  const short = "shortMessage" in error && typeof error.shortMessage === "string" ? error.shortMessage : undefined;
+  const details = "details" in error && typeof error.details === "string" ? error.details.trim() : "";
+  const message = short ? (details && !short.includes(details) ? `${short} ${details}` : short) : error.message;
+  return message.length > MAX_ERROR_MESSAGE_LENGTH ? `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH - 1)}…` : message;
 }
