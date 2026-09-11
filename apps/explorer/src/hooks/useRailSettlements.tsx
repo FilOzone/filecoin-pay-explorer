@@ -1,10 +1,12 @@
 import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Abi, Hex, TransactionReceipt } from "viem";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import type { TransactionMetadata } from "@/types";
 import { formatToken } from "@/utils/formatter";
+import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { getToastContent } from "@/utils/toast";
 
 interface RailSettlementState {
@@ -35,6 +37,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
 
   const [settlements, setSettlements] = useState<Map<string, RailSettlementState>>(new Map());
   const [pendingTxHashes, setPendingTxHashes] = useState<Set<Hex>>(new Set());
+  const queryClient = useQueryClient();
 
   const { writeContractAsync } = useWriteContract();
 
@@ -81,6 +84,8 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
           ) : null,
         });
 
+        // A settlement moves funds for payer and payee and rewrites the rail.
+        void invalidateAccountQueries(queryClient, receiptData.from);
         onSettlementSuccess?.(settlement.railId, receiptData);
       } else if (errorData) {
         const content = getToastContent(settlement.metadata, "error");
@@ -111,7 +116,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         return next;
       });
     },
-    [explorerUrl, onSettlementSuccess, onSettlementError],
+    [explorerUrl, onSettlementSuccess, onSettlementError, queryClient],
   );
 
   // Effect to handle transaction status changes
