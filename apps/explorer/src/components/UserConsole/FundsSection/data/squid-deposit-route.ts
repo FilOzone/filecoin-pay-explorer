@@ -1,13 +1,12 @@
 import {
   NATIVE_TOKEN_ADDRESS,
-  type SourceToken,
   SQUID_ROUTER_ADDRESS,
   type SquidClientOptions,
 } from "@filecoin-project/squid-evm-funding";
 import { type Address, encodeFunctionData, type Hash, type Hex, parseAbi } from "viem";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
-const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
+export const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
 
 export const FILECOIN_CHAIN_ID = 314;
 export const SQUID_API_BASE_URL = "https://v2.api.squidrouter.com/v2";
@@ -36,7 +35,7 @@ export interface SquidDepositTarget {
 }
 
 export interface SquidDepositRouteRequest extends SquidDepositTarget {
-  /** Wallet that pays the USDC and signs on the source network. */
+  /** Wallet that pays the source token and signs on the source network. */
   owner: Address;
   sourceChainId: number;
   sourceToken: Address;
@@ -121,17 +120,6 @@ export function buildDepositPostHook({ payments, usdfc, recipient }: SquidDeposi
   };
 }
 
-export function isUsdcLikeSymbol(symbol: string): boolean {
-  return /usdc/i.test(symbol);
-}
-
-/** USDC variants Squid lists for a network, plain USDC first. */
-export function selectUsdcTokens(tokens: readonly SourceToken[]): SourceToken[] {
-  return tokens
-    .filter((token) => isUsdcLikeSymbol(token.symbol) && !isNativeToken(token.token))
-    .sort((a, b) => Number(b.symbol.toUpperCase() === "USDC") - Number(a.symbol.toUpperCase() === "USDC"));
-}
-
 /** Native-token gas and route fees the paying wallet owes on the source network. */
 export function getSourceNativeCosts(
   quote: Pick<SquidDepositQuote, "fees" | "gasCosts">,
@@ -157,11 +145,16 @@ function getCostCaps(costs: readonly SquidDepositCost[]): Record<string, bigint>
   }, {});
 }
 
-export function captureReviewedSquidDepositCaps(quote: SquidDepositQuote): ReviewedSquidDepositCaps {
+export function captureReviewedSquidDepositCaps(
+  quote: SquidDepositQuote,
+  sourceToken: Address,
+): ReviewedSquidDepositCaps {
+  const sourceNative = isNativeToken(sourceToken);
   return {
     sourceAmount: quote.sourceAmount,
     minimumDestinationAmount: quote.minimumDestinationAmount,
-    maxTransactionValue: getSourceNativeCosts(quote, quote.sourceChainId).fees,
+    maxTransactionValue:
+      getSourceNativeCosts(quote, quote.sourceChainId).fees + (sourceNative ? quote.sourceAmount : 0n),
     fees: getCostCaps(quote.fees),
     gasCosts: getCostCaps(quote.gasCosts),
   };
@@ -194,21 +187,28 @@ export function assertExecutableQuoteWithinReview(
  * measured fee drift between quote and execution.
  */
 export function getDepositRequiredNativeBalance(
-  quote: Pick<SquidDepositQuote, "fees" | "gasCosts">,
+  quote: Pick<SquidDepositQuote, "fees" | "gasCosts" | "sourceAmount">,
   sourceChainId: number,
+  sourceToken: Address,
   maximumNetworkFee: bigint,
 ): bigint {
-  return getSourceNativeCosts(quote, sourceChainId).fees + maximumNetworkFee;
+  return (
+    getSourceNativeCosts(quote, sourceChainId).fees +
+    maximumNetworkFee +
+    (isNativeToken(sourceToken) ? quote.sourceAmount : 0n)
+  );
 }
 
 /** Mirrors the existing guided flow: one buffered route estimate per transaction the wallet may sign. */
 export function getDepositNetworkFeeMaximum(
   quote: Pick<SquidDepositQuote, "gasCosts" | "sourceAmount">,
   sourceChainId: number,
+  sourceToken: Address,
   allowance: bigint,
 ): bigint {
   const routeFee = getSourceNativeCosts({ fees: [], gasCosts: quote.gasCosts }, sourceChainId).gas;
-  const transactionCount = allowance === quote.sourceAmount ? 1n : allowance > 0n ? 3n : 2n;
+  const transactionCount =
+    isNativeToken(sourceToken) || allowance === quote.sourceAmount ? 1n : allowance > 0n ? 3n : 2n;
   return applyNetworkFeeExecutionBuffer(sourceChainId, routeFee) * transactionCount;
 }
 
@@ -217,7 +217,7 @@ export async function requestSquidDepositRoute(
   client: SquidClient,
   options: { quoteOnly: boolean },
 ): Promise<SquidDepositQuote> {
-  if (request.sourceAmount <= 0n) throw new Error("Enter a USDC amount greater than zero");
+  if (request.sourceAmount <= 0n) throw new Error("Enter a source amount greater than zero");
   if (client.integratorId.trim() === "") throw new Error("Squid integrator ID is required");
   const slippage = request.slippage ?? DEFAULT_SQUID_SLIPPAGE;
   const fetcher = client.fetch ?? globalThis.fetch.bind(globalThis);
