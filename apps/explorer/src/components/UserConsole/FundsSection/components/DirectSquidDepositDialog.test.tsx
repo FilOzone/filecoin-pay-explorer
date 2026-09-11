@@ -1,7 +1,11 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStorage } from "@/test-utils/memory-storage";
-import { type ExecuteSquidDepositInput, SquidDepositError } from "../data/squid-deposit-execution";
+import {
+  type ExecuteSquidDepositInput,
+  SquidDepositBudgetError,
+  SquidDepositError,
+} from "../data/squid-deposit-execution";
 import { getPendingSquidDepositKey, type PendingSquidDeposit } from "../data/squid-deposit-tracker";
 import { DirectSquidDepositDialog } from "./DirectSquidDepositDialog";
 
@@ -13,15 +17,22 @@ const USDT = "0x5555555555555555555555555555555555555555" as const;
 const ROUTE_HASH = `0x${"b".repeat(64)}` as const;
 
 const state = vi.hoisted(() => ({
+  estimateBudget: vi.fn(),
   execute: vi.fn(),
   liveRecipient: "0x2222222222222222222222222222222222222222" as `0x${string}` | undefined,
+  refetchBalances: vi.fn(),
   requestRoute: vi.fn(),
 }));
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as const,
-  getEthereumProvider: vi.fn(async () => ({
-    request: vi.fn(async () => ["0x1111111111111111111111111111111111111111"]),
-  })),
+  getEthereumProvider: vi.fn(
+    async (): Promise<{ request: (args: { method: string }) => Promise<unknown> }> => ({
+      // The fake provider is already on Base, the dialog's default source network.
+      request: vi.fn(async ({ method }: { method: string }) =>
+        method === "eth_chainId" ? "0x2105" : ["0x1111111111111111111111111111111111111111"],
+      ),
+    }),
+  ),
   switchChain: vi.fn(async () => undefined),
 }));
 const connectedWallets = vi.hoisted(() => ({
@@ -31,6 +42,14 @@ const topUp = vi.hoisted(() => ({ setActive: vi.fn() }));
 const query = vi.hoisted(() => ({
   allowance: 100_000_000n,
   balanceIsError: false,
+  budget: {
+    maximum: 9_000_000_000_000n,
+    transactions: [
+      { kind: "approve" as const, fee: 3_000_000_000_000n },
+      { kind: "route" as const, fee: 6_000_000_000_000n },
+    ],
+  },
+  budgetIsError: false,
   inventory: {} as Record<string, bigint | null>,
   nativeBalance: 10n ** 18n,
   recipientFil: 0n,
@@ -112,6 +131,15 @@ vi.mock("@tanstack/react-query", () => ({
       return {
         data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
         isError: query.balanceIsError,
+        refetch: state.refetchBalances,
+      };
+    }
+    if (queryKey[0] === "direct-squid-deposit-gas-budget") {
+      return {
+        data: query.budgetIsError ? undefined : query.budget,
+        error: query.budgetIsError ? new Error("HTTP request failed. Details: 429 Too Many Requests") : null,
+        isError: query.budgetIsError,
+        isFetching: false,
         refetch: vi.fn(),
       };
     }
@@ -137,12 +165,23 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 vi.mock("../data/squid-deposit-route", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../data/squid-deposit-route")>();
-  return { ...actual, requestSquidDepositRoute: state.requestRoute };
+  return {
+    ...actual,
+    estimateDepositNetworkFeeMaximum: state.estimateBudget,
+    requestSquidDepositRoute: state.requestRoute,
+  };
 });
 vi.mock("../data/squid-deposit-execution", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../data/squid-deposit-execution")>();
   return { ...actual, executeSquidDeposit: state.execute };
 });
+vi.mock("@filecoin-foundation/ui-filecoin/Alert", () => ({
+  Alert: ({ description, title }: { description: string; title: string }) => (
+    <div role='status'>
+      {title}: {description}
+    </div>
+  ),
+}));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} type='button'>
@@ -230,10 +269,15 @@ describe("DirectSquidDepositDialog safety integration", () => {
     listeners = {};
     storage = createMemoryStorage();
     state.liveRecipient = RECIPIENT;
+    state.estimateBudget.mockReset().mockResolvedValue(query.budget);
     state.execute.mockReset();
+    state.refetchBalances.mockReset().mockImplementation(async () => ({
+      data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
+    }));
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
     query.allowance = 100_000_000n;
     query.balanceIsError = false;
+    query.budgetIsError = false;
     query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
     query.nativeBalance = 10n ** 18n;
     query.recipientFil = 0n;
@@ -618,6 +662,128 @@ describe("DirectSquidDepositDialog safety integration", () => {
     );
   });
 
+  it("reviews the live-estimated gas maximum and passes it to execution", async () => {
+    query.allowance = 0n;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => {
+      button(renderer, "Review")?.props.onClick();
+    });
+
+    const gasLabel = renderer.root
+      .findAllByType("span")
+      .find((node) => node.children.join("") === "Network gas maximum:");
+    const gasLine = gasLabel?.parent?.children.map((child) => (typeof child === "string" ? child : "")).join("");
+    expect(gasLine).toContain("0.000009 ETH");
+    expect(renderer.root.findAllByType("span").map((node) => node.children.join(""))).toContain(
+      "Covers the approval and Squid transaction at current network fees plus 50% headroom.",
+    );
+
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+      await vi.waitFor(() => expect(state.execute).toHaveBeenCalledOnce());
+    });
+    expect(state.execute.mock.calls[0]?.[0]).toMatchObject({
+      approvalRequired: true,
+      approvalResetRequired: false,
+      maxNativeFee: 9_000_000_000_000n,
+    });
+  });
+
+  it("cannot review while the gas budget is unavailable", async () => {
+    query.budgetIsError = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+
+    expect(button(renderer, "Review")?.props.disabled).toBe(true);
+    expect(renderer.root.findAllByType("span").map((node) => node.children.join(""))).toContain(
+      "Network fees could not be estimated. HTTP request failed. Details: 429 Too Many Requests",
+    );
+  });
+
+  it("re-reviews with a fresh maximum after the approval executed and the route breached the cap", async () => {
+    query.allowance = 0n;
+    state.execute.mockImplementationOnce(async () => {
+      // The approval went through under the reviewed cap; the wallet now holds the exact allowance.
+      query.allowance = 100_000_000n;
+      throw new SquidDepositBudgetError({
+        completed: ["approve"],
+        remaining: ["route"],
+        feeSoFar: 3_000_000_000_000n,
+        requiredFee: 10_000_000_000_000n,
+        maxNativeFee: 9_000_000_000_000n,
+      });
+    });
+    // Execution's own price for the route (10e12) plus headroom outranks the fresh estimate (12e12).
+    const freshBudget = {
+      maximum: 12_000_000_000_000n,
+      transactions: [{ kind: "route" as const, fee: 12_000_000_000_000n }],
+    };
+    state.estimateBudget.mockResolvedValueOnce(freshBudget);
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    expect(state.estimateBudget).toHaveBeenCalledWith(
+      expect.objectContaining({ allowance: 100_000_000n, sourceAmount: 100_000_000n, sourceToken: USDC }),
+    );
+    expect(renderer.root.findByProps({ role: "status" }).children.join("")).toBe(
+      "Review the updated gas maximum: Network gas rose above the reviewed maximum before the Squid transaction. The approval already went through and will not be repeated. Check the updated maximum and confirm to send the Squid transaction.",
+    );
+    const gasLabel = renderer.root
+      .findAllByType("span")
+      .find((node) => node.children.join("") === "Network gas maximum:");
+    expect(gasLabel?.parent?.children.map((child) => (typeof child === "string" ? child : "")).join("")).toContain(
+      "0.000015 ETH",
+    );
+    expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+    expect(button(renderer, "Pay 100 USDC")?.props.disabled).toBe(false);
+
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+      await vi.waitFor(() => expect(state.execute).toHaveBeenCalledTimes(2));
+    });
+    expect(state.execute.mock.calls[1]?.[0]).toMatchObject({
+      approvalRequired: false,
+      approvalResetRequired: false,
+      maxNativeFee: 15_000_000_000_000n,
+    });
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
+  });
+
+  it("keeps the dead end when the re-review itself cannot price the remaining transactions", async () => {
+    state.execute.mockRejectedValueOnce(
+      new SquidDepositBudgetError({
+        completed: [],
+        remaining: ["route"],
+        feeSoFar: 0n,
+        requiredFee: 1n,
+        maxNativeFee: 0n,
+      }),
+    );
+    state.estimateBudget.mockRejectedValueOnce(new Error("Live network fee data is unavailable"));
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe("Live network fee data is unavailable");
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
+  });
+
   it("executes once when Pay is clicked twice", async () => {
     let finishExecution!: () => void;
     state.execute.mockImplementationOnce(
@@ -643,8 +809,8 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   it("keeps the route links visible when USDFC landed but the deposit step failed", async () => {
     state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
-      input.onSwapAttempt?.(5n);
-      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      input.onSwapAttempt?.(5n, input.quote);
+      input.onBroadcast?.({ fundsBefore: 5n, quote: input.quote, transactionHash: ROUTE_HASH });
       throw new SquidDepositError(
         "USDFC reached your wallet but the Filecoin Pay deposit step failed.",
         "hook-failed",
@@ -665,8 +831,8 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
   it("keeps NEEDS_GAS recoverable with the route link", async () => {
     state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
-      input.onSwapAttempt?.(5n);
-      input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
+      input.onSwapAttempt?.(5n, input.quote);
+      input.onBroadcast?.({ fundsBefore: 5n, quote: input.quote, transactionHash: ROUTE_HASH });
       throw new SquidDepositError("Add gas from the Squid route link, then check again.", "needs-gas", ROUTE_HASH);
     });
     let renderer!: ReactTestRenderer;
@@ -678,6 +844,22 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     expect(storage.getItem(getPendingSquidDepositKey(OWNER))).not.toBeNull();
     expect(JSON.stringify(renderer.toJSON())).toContain("Squid route / add gas");
+  });
+
+  it("hands execution a route refresher that re-checks the reviewed caps", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    const input = state.execute.mock.calls[0]?.[0] as ExecuteSquidDepositInput;
+
+    state.requestRoute.mockResolvedValueOnce({ ...query.quote, quoteId: "quote-2", filGasTopUp: query.filGasTopUp });
+    await expect(input.refreshQuote?.()).resolves.toMatchObject({ quoteId: "quote-2" });
+    expect(state.requestRoute).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), { quoteOnly: false });
+
+    state.requestRoute.mockResolvedValueOnce({ ...query.quote, sourceAmount: 1n });
+    await expect(input.refreshQuote?.()).rejects.toThrow("The source spend changed after review");
   });
 
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
