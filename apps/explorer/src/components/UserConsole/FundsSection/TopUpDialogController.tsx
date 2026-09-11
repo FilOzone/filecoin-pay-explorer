@@ -1,10 +1,9 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { getChain } from "@/constants/chains";
-import useSynapse from "@/hooks/useSynapse";
+import useAccountSummary from "@/hooks/useAccountSummary";
 import { useTopUpActivity } from "../TopUpActivityContext";
 import { GuidedTopUpDialog } from "./components";
 import { withoutTopUpSearchParam } from "./data/guided-top-up";
@@ -23,15 +22,14 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
   const didAutoOpenSavedAcquisition = useRef(false);
   const { setTopUpActive } = useTopUpActivity();
   const { address } = useConnection();
-  const { synapse } = useSynapse();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetChain = getChain("mainnet");
-  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useQuery({
-    enabled: open && !!address && synapse?.chain.id === targetChain.id,
-    queryFn: synapse ? () => synapse.payments.accountSummary() : undefined,
-    queryKey: ["payments", "account-summary", targetChain.id, address],
+  const { data: accountSummary, isFetching: isAccountSummaryLoading } = useAccountSummary({
+    address,
+    chainId: targetChain.id,
+    enabled: open,
   });
 
   const openTopUp = useCallback(() => {
