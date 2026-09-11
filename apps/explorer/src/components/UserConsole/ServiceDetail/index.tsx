@@ -63,6 +63,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
       {profile.pricing ? <ServicePricing pricing={profile.pricing} /> : null}
 
       <RailsSection
+        key={`${network}:${accountId}:${operatorId}`}
         accountId={accountId}
         network={network}
         operatorAddress={operatorId}
