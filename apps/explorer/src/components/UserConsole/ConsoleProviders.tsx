@@ -1,6 +1,5 @@
 "use client";
 
-import { Alert } from "@filecoin-foundation/ui-filecoin/Alert";
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
@@ -22,19 +21,8 @@ export const PRIVY_CONFIG = {
 } satisfies PrivyClientConfig;
 
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
-
-  if (!appId || !clientId) {
-    return (
-      <div className='m-6'>
-        <Alert
-          title='Console wallet login is not configured'
-          description='Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID for this deployment.'
-        />
-      </div>
-    );
-  }
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmtkfb83p04du0bk0kofldq4e";
+  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID || "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf";
 
   return (
     <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
