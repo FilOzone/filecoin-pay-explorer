@@ -353,9 +353,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       submit: "Create session key",
     },
   }[createMode()];
-  // On the link flow the identity signing the grant goes into the action
-  // itself: the last thing read before the wallet prompt names the account,
-  // so a grant can never land under a wallet the user did not notice.
+  // On the link flow the button names the signing account, so it is the last
+  // thing read before the wallet prompt.
   const submitLabel = addressLocked ? `Authorize as ${formatAddress(account)}` : formCopy.submit;
 
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
@@ -373,8 +372,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             {txState === "failed" && txBanner}
             {addressLocked && (
               <Notice tone='info' className='p-3'>
-                Granting as <span className='font-mono break-all font-semibold'>{account}</span> — the connected wallet
-                signs and owns this authorization.
+                Authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. The session key
+                will act on behalf of this wallet.
               </Notice>
             )}
 

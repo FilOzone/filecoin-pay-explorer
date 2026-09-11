@@ -206,9 +206,8 @@ const ConnectedSessionKeys = ({
               )}
             </p>
             <p className='text-sm mt-2'>
-              You are granting as <span className='font-mono break-all font-semibold'>{account}</span>. The
-              authorization lands under this wallet — if that is not the account you mean, switch wallets before
-              authorizing.
+              You are authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. If that is
+              not the wallet you mean, switch wallets before you continue.
             </p>
           </div>
           {prefillUnreadable ? (
