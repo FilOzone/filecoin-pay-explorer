@@ -87,18 +87,18 @@ const Balance = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline' className='w-full justify-start md:w-fit'>
-          <div className='flex items-center gap-3'>
-            <Wallet className='size-4 text-zinc-500' />
+        <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <Wallet className='size-4 text-muted-foreground' />
             {isLoading ? (
               "Loading..."
             ) : (
               <>
-                <span className='text-sm font-mono'>{address && formatAddress(address)}</span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='truncate text-sm font-mono'>{address && formatAddress(address)}</span>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
                 </span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
                 </span>
               </>
@@ -107,6 +107,17 @@ const Balance = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className='w-64' align='start'>
+        {/* The trigger hides these figures below `sm` to fit the phone header, so the menu carries them instead. */}
+        <DropdownMenuLabel className='text-zinc-600 py-2 sm:hidden'>Balances</DropdownMenuLabel>
+        <div className='flex flex-col gap-1 px-2 pb-2 text-sm text-zinc-950 sm:hidden'>
+          <span className='flex items-center gap-1.5'>
+            <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
+          </span>
+          <span className='flex items-center gap-1.5'>
+            <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
+          </span>
+        </div>
+        <DropdownMenuSeparator className='sm:hidden' />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}

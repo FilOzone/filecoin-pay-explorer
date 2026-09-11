@@ -44,7 +44,10 @@ const CopyableText = ({
       {to ? (
         <Link
           href={external ? to : `/${network}${to}`}
-          className={cn("text-link inline-block text-pretty whitespace-nowrap", linkClassName)}
+          className={cn(
+            "text-link inline-flex items-center text-pretty whitespace-nowrap pointer-coarse:min-h-11",
+            linkClassName,
+          )}
           title={value}
           target={external ? "_blank" : "_self"}
           rel={external ? "noopener noreferrer" : undefined}
@@ -59,7 +62,7 @@ const CopyableText = ({
       )}
       <CopyButton
         value={value}
-        className='opacity-0 group-hover:opacity-100 transition-opacity ml-1'
+        className='opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100 transition-opacity ml-1'
         successMessage={`${label} copied to clipboard`}
       />
     </div>
