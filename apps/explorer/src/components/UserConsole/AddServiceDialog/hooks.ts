@@ -7,6 +7,7 @@ import { type ApprovableService, useApprovableServices } from "@/hooks/useApprov
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
+import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -282,6 +283,10 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
           return;
         }
 
+        // Privy resolves the signature while its sign dialog is still animating
+        // closed; a transaction sent inside that window crashes the dialog's
+        // screen. See `waitForPrivyModalToClose`.
+        await waitForPrivyModalToClose();
         await execute({
           functionName: "depositWithPermitAndApproveOperator",
           args: [

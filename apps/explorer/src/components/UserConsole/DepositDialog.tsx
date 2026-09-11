@@ -31,6 +31,7 @@ import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
+import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
 const PERMIT_DEADLINE_SECONDS = 3600;
 
@@ -336,6 +337,12 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       );
 
       console.log("[Deposit] Permit signature obtained, submitting transaction...");
+
+      // Privy resolves the signature while its sign dialog is still animating
+      // closed. Sending the transaction inside that window swaps the dialog's
+      // data under the screen it is still showing, which throws and takes the
+      // console down with it. See `waitForPrivyModalToClose`.
+      await waitForPrivyModalToClose();
 
       await execute({
         functionName: "depositWithPermit",
