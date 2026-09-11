@@ -25,6 +25,7 @@ export interface TransactionMetadata {
 export interface FaucetProvider {
   name: string;
   url: string;
+  asset: "FIL" | "USDFC";
 }
 
 export type ChainConstants = {

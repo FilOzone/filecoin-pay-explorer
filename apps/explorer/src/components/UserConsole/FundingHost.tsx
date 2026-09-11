@@ -24,7 +24,6 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
-  const [isSquidOpen, setSquidOpen] = useState(false);
   const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
   const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
@@ -47,8 +46,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     contextKey: `${address}:${chainId ?? getChain(network).id}`,
     onPurchased: (amount) => {
       setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
-      launch.closeAddFunds();
-      setSquidOpen(true);
+      launch.openSquid();
     },
   });
 
@@ -57,6 +55,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     setDepositOpen(false);
     launch.closeAddFunds();
   }, [chainId, launch.closeAddFunds]);
+
+  // FundingDialogs remounts per address (see the key above), so a Squid dialog left open
+  // by the previous wallet must not carry over into the new one.
+  useEffect(() => launch.closeSquid(), [launch.closeSquid]);
 
   const handleDepositOpenChange = (open: boolean) => {
     setDepositOpen(open);
@@ -72,7 +74,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
             return;
           }
           launch.closeAddFunds();
-          if (method === "squid") setSquidOpen(true);
+          if (method === "squid") launch.openSquid();
           else setDepositOpen(true);
         };
 
@@ -102,10 +104,13 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
               accountId={address.toLowerCase()}
               initialSource={cardSource}
               onOpenChange={(open) => {
-                setSquidOpen(open);
-                if (!open) setCardSource(undefined);
+                if (open) launch.openSquid();
+                else {
+                  launch.closeSquid();
+                  setCardSource(undefined);
+                }
               }}
-              open={isSquidOpen}
+              open={launch.isSquidOpen}
             />
           </>
         );

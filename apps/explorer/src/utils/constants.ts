@@ -29,10 +29,12 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
       {
         name: "Get FIL",
         url: "https://faucet.calibnet.chainsafe-fil.io/funds.html",
+        asset: "FIL",
       },
       {
         name: "Get USDFC",
         url: "https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc",
+        asset: "USDFC",
       },
     ],
   },
