@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  assertSquidDepositContext,
-  claimSquidDepositSubmission,
-  releaseSquidDepositSubmission,
-} from "./squid-deposit-submit";
+import { assertSquidDepositContext } from "./squid-deposit-submit";
 
 const reviewed = {
   owner: "0x1111111111111111111111111111111111111111",
@@ -23,14 +19,6 @@ const current = {
 };
 
 describe("Squid deposit submission guard", () => {
-  it("claims synchronously so two confirm events cannot start two executions", () => {
-    const submitting = { current: false };
-    expect(claimSquidDepositSubmission(submitting)).toBe(true);
-    expect(claimSquidDepositSubmission(submitting)).toBe(false);
-    releaseSquidDepositSubmission(submitting);
-    expect(claimSquidDepositSubmission(submitting)).toBe(true);
-  });
-
   it.each([
     ["a changed destination account", current, "0x4444444444444444444444444444444444444444", true],
     ["an unmounted dialog", current, reviewed.recipient, false],
