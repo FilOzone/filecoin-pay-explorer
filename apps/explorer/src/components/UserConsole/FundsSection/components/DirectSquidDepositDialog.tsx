@@ -58,14 +58,11 @@ import {
 } from "../data/squid-deposit-route";
 import {
   assertSquidDepositContext,
-  claimSquidDepositSubmission,
-  releaseSquidDepositSubmission,
   type SquidDepositContextSnapshot,
   type SquidDepositLiveContext,
 } from "../data/squid-deposit-submit";
 import {
   clearPendingSquidDeposit,
-  hasPendingSquidDeposit,
   loadPendingSquidDeposit,
   type PendingSquidDeposit,
   savePendingSquidDeposit,
@@ -240,7 +237,7 @@ export function DirectSquidDepositDialog({
       const saved = wallets
         .map((wallet) => {
           try {
-            return loadPendingSquidDeposit(window.localStorage, getAddress(wallet.address), recipient);
+            return loadPendingSquidDeposit(window.localStorage, getAddress(wallet.address));
           } catch {
             // Unreadable storage means no marker to resume; the on-chain result stays authoritative.
             return null;
@@ -322,17 +319,18 @@ export function DirectSquidDepositDialog({
   };
 
   const resume = async () => {
-    if (!pending || !recipient || !destinationClient || !claimSquidDepositSubmission(isSubmitting)) return;
+    if (!pending || !recipient || !destinationClient || isSubmitting.current) return;
+    isSubmitting.current = true;
     const pendingHash = pending.transactionHash;
     if (!pendingHash) {
       setError("The wallet may have submitted this route. Check its activity before dismissing and trying again.");
-      releaseSquidDepositSubmission(isSubmitting);
+      isSubmitting.current = false;
       return;
     }
     const walletStillConnected = wallets.some((wallet) => wallet.address.toLowerCase() === pending.owner.toLowerCase());
     if (!walletStillConnected || recipient.toLowerCase() !== pending.recipient.toLowerCase()) {
       setError("Reconnect the original paying wallet and Filecoin Pay account before resuming.");
-      releaseSquidDepositSubmission(isSubmitting);
+      isSubmitting.current = false;
       return;
     }
     setError(null);
@@ -357,12 +355,13 @@ export function DirectSquidDepositDialog({
     } catch (failure) {
       fail(failure, pending.owner);
     } finally {
-      releaseSquidDepositSubmission(isSubmitting);
+      isSubmitting.current = false;
     }
   };
 
   const confirm = async () => {
-    if (!claimSquidDepositSubmission(isSubmitting)) return;
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setError(null);
     try {
       if (!payingWallet || !sourceChain || !sourceClient || !destinationClient || !reviewed) {
@@ -377,7 +376,7 @@ export function DirectSquidDepositDialog({
       const reviewedCaps = captureReviewedSquidDepositCaps(reviewed.quote);
 
       await withSquidAcquisitionLock(globalThis.navigator?.locks, snapshot.owner, async () => {
-        if (hasPendingSquidDeposit(window.localStorage, snapshot.owner)) {
+        if (loadPendingSquidDeposit(window.localStorage, snapshot.owner)) {
           throw new Error("A Squid deposit from this wallet is already pending.");
         }
         assertContext(snapshot);
@@ -464,7 +463,7 @@ export function DirectSquidDepositDialog({
     } catch (failure) {
       fail(failure, reviewed?.context.owner ?? (payingWallet ? getAddress(payingWallet.address) : undefined));
     } finally {
-      releaseSquidDepositSubmission(isSubmitting);
+      isSubmitting.current = false;
     }
   };
 

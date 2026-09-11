@@ -4,7 +4,6 @@ import { createMemoryStorage } from "@/test-utils/memory-storage";
 import {
   clearPendingSquidDeposit,
   getPendingSquidDepositKey,
-  hasPendingSquidDeposit,
   loadPendingSquidDeposit,
   PENDING_SQUID_DEPOSIT_EVENT,
   type PendingSquidDeposit,
@@ -43,9 +42,9 @@ describe("pending Squid deposit tracker", () => {
   it("round-trips a pending deposit keyed by the paying owner", () => {
     savePendingSquidDeposit(storage, pending);
     expect(storage.items.has(getPendingSquidDepositKey(OWNER))).toBe(true);
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toEqual(pending);
+    expect(loadPendingSquidDeposit(storage, OWNER)).toEqual(pending);
     clearPendingSquidDeposit(storage, OWNER);
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
   });
 
   it("survives reload before a provider returns the broadcast hash and blocks a second tab", () => {
@@ -63,10 +62,9 @@ describe("pending Squid deposit tracker", () => {
       transactionHash: undefined,
     };
     savePendingSquidDeposit(storage, requested);
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toEqual(requested);
-    expect(hasPendingSquidDeposit(storage, OWNER)).toBe(true);
+    expect(loadPendingSquidDeposit(storage, OWNER)).toEqual(requested);
 
-    const secondTabRefresh = vi.fn(() => loadPendingSquidDeposit(storage, OWNER, RECIPIENT));
+    const secondTabRefresh = vi.fn(() => loadPendingSquidDeposit(storage, OWNER));
     subscribeToPendingSquidDeposit(OWNER, secondTabRefresh);
     listeners.storage?.({ key: getPendingSquidDepositKey(OWNER) });
     expect(secondTabRefresh).toHaveReturnedWith(requested);
@@ -74,22 +72,29 @@ describe("pending Squid deposit tracker", () => {
 
   it("ignores entries that are corrupt or belong to another account", () => {
     storage.setItem(getPendingSquidDepositKey(OWNER), "{not json");
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
+    expect(storage.items.has(getPendingSquidDepositKey(OWNER))).toBe(false);
 
     savePendingSquidDeposit(storage, { ...pending, transactionHash: "0x1234" as Hash });
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
+    expect(storage.items.has(getPendingSquidDepositKey(OWNER))).toBe(false);
 
     savePendingSquidDeposit(storage, { ...pending, executionStage: "swap-requested" });
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
+    expect(storage.items.has(getPendingSquidDepositKey(OWNER))).toBe(false);
 
     savePendingSquidDeposit(storage, pending);
-    expect(loadPendingSquidDeposit(storage, OWNER, "0x9999999999999999999999999999999999999999")).toBeNull();
-    expect(loadPendingSquidDeposit(storage, "0x9999999999999999999999999999999999999999", RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, "0x9999999999999999999999999999999999999999")).toBeNull();
+  });
+
+  it("keeps a valid marker when the active destination account changes", () => {
+    savePendingSquidDeposit(storage, pending);
+    expect(loadPendingSquidDeposit(storage, OWNER)).toEqual(pending);
   });
 
   it("keeps the paid token's symbol and decimals when they were recorded", () => {
     savePendingSquidDeposit(storage, { ...pending, sourceSymbol: "USDC", sourceDecimals: 6 });
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toEqual({
+    expect(loadPendingSquidDeposit(storage, OWNER)).toEqual({
       ...pending,
       sourceSymbol: "USDC",
       sourceDecimals: 6,
@@ -97,7 +102,8 @@ describe("pending Squid deposit tracker", () => {
 
     const stored = JSON.parse(storage.getItem(getPendingSquidDepositKey(OWNER)) ?? "{}") as Record<string, unknown>;
     storage.setItem(getPendingSquidDepositKey(OWNER), JSON.stringify({ ...stored, sourceDecimals: "6" }));
-    expect(loadPendingSquidDeposit(storage, OWNER, RECIPIENT)).toBeNull();
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
+    expect(storage.items.has(getPendingSquidDepositKey(OWNER))).toBe(false);
   });
 
   it("announces saves and clears in this tab and relays changes from any tab", () => {
