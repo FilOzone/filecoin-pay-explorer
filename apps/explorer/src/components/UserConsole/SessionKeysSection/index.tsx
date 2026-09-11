@@ -205,6 +205,11 @@ const ConnectedSessionKeys = ({
                 </>
               )}
             </p>
+            <p className='text-sm mt-2'>
+              You are granting as <span className='font-mono break-all font-semibold'>{account}</span>. The
+              authorization lands under this wallet — if that is not the account you mean, switch wallets before
+              authorizing.
+            </p>
           </div>
           {prefillUnreadable ? (
             <Button variant='primary' size='compact' onClick={() => refetchStatuses()}>
