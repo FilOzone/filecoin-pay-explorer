@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
-import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
+import {
+  DirectSquidDepositDialog,
+  type SquidDepositInitialSource,
+} from "./FundsSection/components/DirectSquidDepositDialog";
+import { CARD_CHAIN_ID, CARD_USDC, CARD_USDC_DECIMALS, useCardPurchase } from "./FundsSection/hooks/useCardPurchase";
 import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
 
 export function FundingHost() {
@@ -20,6 +25,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [isSquidOpen, setSquidOpen] = useState(false);
+  const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
   const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
   const network = getNetworkFromChainId(chainId);
@@ -34,6 +40,16 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     enabled: isFilecoinChain,
     networkOverride: network,
     pageSize: CONSOLE_TOKEN_PAGE_SIZE,
+  });
+  const card = useCardPurchase({
+    address,
+    // A reconnecting wallet reports no chain id for a moment; that is not a network change.
+    contextKey: `${address}:${chainId ?? getChain(network).id}`,
+    onPurchased: (amount) => {
+      setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
+      launch.closeAddFunds();
+      setSquidOpen(true);
+    },
   });
 
   useEffect(() => {
@@ -51,6 +67,10 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     <TopUpDialogController accountId={address.toLowerCase()}>
       {() => {
         const chooseMethod = (method: AddFundsMethod) => {
+          if (method === "card") {
+            void card.buyWithCard();
+            return;
+          }
           launch.closeAddFunds();
           if (method === "squid") setSquidOpen(true);
           else setDepositOpen(true);
@@ -60,6 +80,9 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
           <>
             {isMainnet ? (
               <AddFundsDialog
+                cardLabel={card.label}
+                cardStatus={card.statusMessage}
+                isBusy={card.isBusy}
                 onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
                 onSelect={chooseMethod}
                 open={!chainChanged && launch.isAddFundsOpen}
@@ -77,7 +100,11 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
             ) : null}
             <DirectSquidDepositDialog
               accountId={address.toLowerCase()}
-              onOpenChange={setSquidOpen}
+              initialSource={cardSource}
+              onOpenChange={(open) => {
+                setSquidOpen(open);
+                if (!open) setCardSource(undefined);
+              }}
               open={isSquidOpen}
             />
           </>

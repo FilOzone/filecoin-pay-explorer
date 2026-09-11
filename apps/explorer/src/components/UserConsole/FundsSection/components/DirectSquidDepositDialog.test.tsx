@@ -265,6 +265,92 @@ describe("DirectSquidDepositDialog safety integration", () => {
     vi.unstubAllGlobals();
   });
 
+  it("prefills the verified purchased source token and amount", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT.toLowerCase()}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+          onOpenChange={() => undefined}
+          open
+        />,
+      );
+    });
+
+    expect(amountInput(renderer).props.value).toBe("12.5");
+    expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
+  });
+
+  it("keeps the user's edits when a pending marker appears and clears", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT.toLowerCase()}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+          onOpenChange={() => undefined}
+          open
+        />,
+      );
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+
+    const pending: PendingSquidDeposit = {
+      executionStage: "swap-requested",
+      fundsBefore: 5n,
+      minimumDestinationAmount: 92n,
+      owner: OWNER,
+      quoteId: "quote-1",
+      recipient: RECIPIENT,
+      sourceAmount: 100_000_000n,
+      sourceChainId: 8453,
+      sourceToken: USDC,
+      startedAt: 1_700_000_000_000,
+    };
+    storage.setItem(
+      getPendingSquidDepositKey(OWNER),
+      JSON.stringify({
+        ...pending,
+        fundsBefore: pending.fundsBefore.toString(),
+        minimumDestinationAmount: pending.minimumDestinationAmount.toString(),
+        sourceAmount: pending.sourceAmount.toString(),
+      }),
+    );
+    await act(async () => {
+      for (const listener of listeners.storage ?? []) listener({ key: getPendingSquidDepositKey(OWNER) });
+    });
+    storage.removeItem(getPendingSquidDepositKey(OWNER));
+    await act(async () => {
+      for (const listener of listeners.storage ?? []) listener({ key: getPendingSquidDepositKey(OWNER) });
+    });
+
+    expect(amountInput(renderer).props.value).toBe("100");
+  });
+
+  it("does not reapply an equivalent purchase prefill after the user edits it", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = () => (
+      <DirectSquidDepositDialog
+        accountId={RECIPIENT.toLowerCase()}
+        initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+        onOpenChange={() => undefined}
+        open
+      />
+    );
+    await act(async () => {
+      renderer = create(render());
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "10" } });
+      renderer.update(render());
+    });
+
+    expect(amountInput(renderer).props.value).toBe("10");
+  });
+
   it.each([
     "destination account switch",
     "dialog unmount",
