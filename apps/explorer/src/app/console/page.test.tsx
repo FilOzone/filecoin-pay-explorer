@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import UserConsole from "./(console)/page";
 
@@ -18,10 +16,7 @@ const accountState = vi.hoisted(() => ({
   requestedNetwork: "" as string,
 }));
 const topUpState = vi.hoisted(() => ({
-  close: undefined as (() => void) | undefined,
   isTopUpActive: false,
-  mounts: 0,
-  unmounts: 0,
 }));
 const sectionNetworks = vi.hoisted(() => ({
   approvals: "" as string,
@@ -43,9 +38,6 @@ vi.mock("@/components/UserConsole/ConsoleProviders", () => ({
 vi.mock("@/components/UserConsole/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({
     isTopUpActive: topUpState.isTopUpActive,
-    setTopUpActive: (active: boolean) => {
-      topUpState.isTopUpActive = active;
-    },
   }),
 }));
 vi.mock("@/components/UserConsole/States", () => ({
@@ -57,26 +49,9 @@ vi.mock("@/components/UserConsole/States", () => ({
 vi.mock("@/components/UserConsole", () => ({
   AlertsBanner: () => null,
   BetaWarning: () => null,
-  FundsSection: ({
-    account,
-    network,
-    onGuidedTopUp,
-  }: {
-    account: { id: string };
-    network: string;
-    onGuidedTopUp?: () => void;
-  }) => {
+  FundsSection: ({ account, network }: { account: { id: string }; network: string }) => {
     sectionNetworks.funds = network;
-    return (
-      <div data-account-id={account.id}>
-        Funds
-        {onGuidedTopUp ? (
-          <button data-open-top-up onClick={onGuidedTopUp} type='button'>
-            Open top-up
-          </button>
-        ) : null}
-      </div>
-    );
+    return <div data-account-id={account.id}>Funds</div>;
   },
   OperatorApprovalsSection: ({ network }: { network: string }) => {
     sectionNetworks.approvals = network;
@@ -86,19 +61,6 @@ vi.mock("@/components/UserConsole", () => ({
     sectionNetworks.rails = network;
     return <div>Rails</div>;
   },
-  TopUpDialogController: ({
-    accountId,
-    children,
-    showTrigger,
-  }: {
-    accountId: string;
-    children?: (openTopUp: () => void, isOpen: boolean) => React.ReactNode;
-    showTrigger?: boolean;
-  }) => (
-    <MockTopUpDialogController accountId={accountId} showTrigger={showTrigger}>
-      {children}
-    </MockTopUpDialogController>
-  ),
 }));
 vi.mock("@/hooks/useAccountDetails", () => ({
   useAccountDetails: (address: string, options: { networkOverride: string }) => {
@@ -108,42 +70,6 @@ vi.mock("@/hooks/useAccountDetails", () => ({
   },
 }));
 
-function MockTopUpDialogController({
-  accountId,
-  children,
-  showTrigger,
-}: {
-  accountId: string;
-  children?: (openTopUp: () => void, isOpen: boolean) => React.ReactNode;
-  showTrigger?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    topUpState.mounts += 1;
-    return () => {
-      topUpState.unmounts += 1;
-    };
-  }, []);
-  const openTopUp = () => {
-    topUpState.isTopUpActive = true;
-    setOpen(true);
-  };
-  topUpState.close = () => {
-    topUpState.isTopUpActive = false;
-    setOpen(false);
-  };
-
-  return (
-    <div data-top-up-account-id={accountId} data-top-up-open={open}>
-      {children?.(openTopUp, open)}
-      {showTrigger ? (
-        <button data-open-top-up onClick={openTopUp} type='button'>
-          Fund with another token
-        </button>
-      ) : null}
-    </div>
-  );
-}
 vi.mock("@/hooks/useNotificationStatus", () => ({
   useNotificationStatus: () => ({ data: undefined, isError: false }),
 }));
@@ -157,10 +83,7 @@ describe("UserConsole", () => {
     accountState.isLoading = false;
     accountState.requestedAddress = "";
     accountState.requestedNetwork = "";
-    topUpState.close = undefined;
     topUpState.isTopUpActive = false;
-    topUpState.mounts = 0;
-    topUpState.unmounts = 0;
     sectionNetworks.approvals = "";
     sectionNetworks.funds = "";
     sectionNetworks.rails = "";
@@ -170,8 +93,6 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Unsupported network");
-    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
-    expect(markup).not.toContain("Fund with another token");
     expect(markup).not.toContain("Funds");
     expect(markup).not.toContain("Filecoin balance");
     expect(markup).not.toContain("Approvals");
@@ -183,7 +104,6 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Funds");
-    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
     expect(markup).toContain("Approvals");
     expect(markup).toContain("Rails");
   });
@@ -193,7 +113,6 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Funds");
-    expect(markup).toContain('data-top-up-account-id="0x1111111111111111111111111111111111111111"');
   });
 
   it("keeps direct deposit funding on Calibration", () => {
@@ -210,25 +129,12 @@ describe("UserConsole", () => {
     const filecoinMarkup = renderToStaticMarkup(<UserConsole />);
 
     expect(filecoinMarkup).toContain("Account not found");
-    expect(filecoinMarkup).toContain("Fund with another token");
   });
 
-  it("keeps one open controller and Filecoin mainnet data mounted across a Squid network switch", () => {
-    wallet.chainId = 314;
-    let renderer!: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(<UserConsole />);
-    });
-    const openButton = renderer.root.findByProps({ "data-open-top-up": true });
-    act(() => openButton.props.onClick());
-
+  it("keeps Filecoin mainnet data visible on a Squid network while top-up is active", () => {
+    topUpState.isTopUpActive = true;
     wallet.chainId = 8453;
-    act(() => {
-      renderer.update(<UserConsole />);
-    });
-    const sourceMarkup = JSON.stringify(renderer.toJSON());
-    expect(topUpState.mounts).toBe(1);
-    expect(topUpState.unmounts).toBe(0);
+    const sourceMarkup = renderToStaticMarkup(<UserConsole />);
     expect(sourceMarkup).toContain("Funds");
     expect(sourceMarkup).toContain("Approvals");
     expect(sourceMarkup).toContain("Rails");
@@ -236,14 +142,6 @@ describe("UserConsole", () => {
     expect(accountState.requestedAddress).toBe(wallet.address);
     expect(accountState.requestedNetwork).toBe("mainnet");
     expect(sectionNetworks).toEqual({ approvals: "mainnet", funds: "mainnet", rails: "mainnet" });
-
-    act(() => topUpState.close?.());
-    act(() => {
-      renderer.update(<UserConsole />);
-    });
-    const closedMarkup = JSON.stringify(renderer.toJSON());
-    expect(closedMarkup).toContain("Unsupported network");
-    expect(closedMarkup).not.toContain("Funds");
   });
 
   it("does not let an active flag bypass an unrelated unsupported chain", () => {
@@ -253,7 +151,6 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).not.toContain("Funds");
-    expect(markup).not.toContain("data-top-up-account-id");
     expect(accountState.requestedAddress).toBe("");
   });
 });

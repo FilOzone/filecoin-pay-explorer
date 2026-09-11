@@ -1,14 +1,12 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DepositDialog } from "@/components/UserConsole/DepositDialog";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
-import { useAccountTokens } from "@/hooks/useAccountDetails";
+import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
 import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
 import {
-  AddFundsDialog,
-  type AddFundsMethod,
   FundsEmptyState,
   FundsErrorState,
   FundsLoadingState,
@@ -20,19 +18,7 @@ import {
 type FundsSectionProps = {
   account: Account;
   network: Network;
-  onGuidedTopUp?: () => void;
 };
-
-/**
- * Temporary bounded fetch, not an exhaustive one. The console shows one token at
- * a time but must be able to select any of them, and the subgraph orders by
- * balance descending, so the default page of ten would drop a zero-balance USDFC
- * off the end and silently default the overview to the wrong token. A wider
- * single page makes that unreachable in practice; an account holding more than
- * this many tokens still truncates. Replace with paging driven by
- * `account.totalTokens` when that becomes realistic.
- */
-const TOKEN_SELECTOR_PAGE_SIZE = 100;
 
 /**
  * Picks the token the overview opens on: USDFC matched by contract address, so a
@@ -43,10 +29,8 @@ const findDefaultToken = (userTokens: UserToken[], usdfcAddress: string): UserTo
   return usdfc ?? userTokens[0];
 };
 
-export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionProps) => {
-  const [addFundsOpen, setAddFundsOpen] = useState(false);
-  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
-  const [depositToken, setDepositToken] = useState<UserToken | null>(null);
+export const FundsSection = ({ account, network }: FundsSectionProps) => {
+  const { openAddFunds } = useFundingLaunch();
 
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawToken, setWithdrawToken] = useState<UserToken | null>(null);
@@ -64,10 +48,9 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
     return () => window.clearInterval(intervalId);
   }, []);
 
-  // Fetch up to 100 tokens for this account (single page, no pagination for console view)
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
     networkOverride: network,
-    pageSize: TOKEN_SELECTOR_PAGE_SIZE,
+    pageSize: CONSOLE_TOKEN_PAGE_SIZE,
   });
 
   const userTokens = data?.userTokens;
@@ -82,36 +65,7 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
     return selected ?? findDefaultToken(userTokens, constants.contracts.usdfc);
   }, [userTokens, selectedTokenId, constants.contracts.usdfc]);
 
-  // Snapshot each transaction token when its dialog opens so query and selector
-  // updates cannot change a part-filled form's target. Keep the snapshots after
-  // close so WithdrawDialog remains mounted while tracking its receipt and both
-  // dialogs retain a consistent lifecycle. The next open replaces the snapshot.
-  const openDirectDeposit = useCallback(() => {
-    setDepositToken(selectedToken);
-    setDepositDialogOpen(true);
-  }, [selectedToken]);
-
-  const canUseGuidedTopUp = network === "mainnet" && Boolean(onGuidedTopUp);
-
-  const handleOpenDeposit = useCallback(() => {
-    if (canUseGuidedTopUp) {
-      setAddFundsOpen(true);
-      return;
-    }
-    openDirectDeposit();
-  }, [canUseGuidedTopUp, openDirectDeposit]);
-
-  const handleChooseMethod = useCallback(
-    (method: AddFundsMethod) => {
-      setAddFundsOpen(false);
-      if (method === "deposit") {
-        openDirectDeposit();
-        return;
-      }
-      onGuidedTopUp?.();
-    },
-    [onGuidedTopUp, openDirectDeposit],
-  );
+  const handleOpenDeposit = useCallback(() => openAddFunds(selectedToken), [openAddFunds, selectedToken]);
 
   const handleOpenWithdraw = useCallback(() => {
     if (!selectedToken) return;
@@ -147,23 +101,6 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
   return (
     <>
       {renderSection()}
-
-      {canUseGuidedTopUp ? (
-        <AddFundsDialog
-          onOpenChange={setAddFundsOpen}
-          onSelect={handleChooseMethod}
-          open={addFundsOpen}
-          squidAvailable
-        />
-      ) : null}
-
-      {/* A null token opens the picker expanded, the first-deposit path for an empty account. */}
-      <DepositDialog
-        depositToken={depositToken}
-        tokens={userTokens ?? []}
-        open={depositDialogOpen}
-        onOpenChange={setDepositDialogOpen}
-      />
 
       {/* Mounted only once a token is captured, so WithdrawDialog keeps a non-nullable prop. */}
       {withdrawToken ? (

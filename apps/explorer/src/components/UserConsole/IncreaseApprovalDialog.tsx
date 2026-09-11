@@ -14,6 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { maxUint256, parseUnits } from "viem";
+import { useAccount } from "wagmi";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
@@ -30,12 +31,15 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   const [maxLockupPeriodIncrease, setMaxLockupPeriodIncrease] = useState("");
   const [isUnlimited, setIsUnlimited] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { address: userAddress } = useAccount();
 
   const { synapse, constants } = useSynapse();
 
   const { execute, isExecuting } = useContractTransaction({
+    account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
+    chainId: constants.chain.id,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
 
