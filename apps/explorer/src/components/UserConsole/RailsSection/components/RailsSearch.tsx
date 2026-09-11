@@ -1,34 +1,37 @@
-import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Search, X } from "lucide-react";
 import { useState } from "react";
+import { describeServiceRailsFilter, isSearchable, toServiceRailsFilter } from "../rails-filter";
 
 interface RailsSearchProps {
-  onSearch: (railId: string) => void;
+  appliedQuery: string;
+  onSearch: (query: string) => void;
   onClear: () => void;
 }
 
 /**
- * Rail ID is the only useful filter on the service page: the payer, the payee's
- * counterparty column, and the operator are all fixed by the route.
+ * The draft text and the applied filter are separate: typing does not search,
+ * and the applied filter stays visible as a chip so the list is never narrowed
+ * by something the reader cannot see or undo.
  */
-export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) => {
+export const RailsSearch: React.FC<RailsSearchProps> = ({ appliedQuery, onSearch, onClear }) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [isActive, setIsActive] = useState(false);
+
+  // Exact matching means a partial value can only ever return nothing, so the
+  // control stays disabled rather than reporting an empty result.
+  const canSearch = isSearchable(searchQuery);
+  const applied = appliedQuery ? describeServiceRailsFilter(toServiceRailsFilter(appliedQuery)) : undefined;
 
   const handleSearch = () => {
-    const railId = searchQuery.trim();
-    if (!railId) {
+    if (!canSearch) {
       return;
     }
 
-    setIsActive(true);
-    onSearch(railId);
+    onSearch(searchQuery.trim());
   };
 
   const handleClear = () => {
     setSearchQuery("");
-    setIsActive(false);
     onClear();
   };
 
@@ -39,37 +42,45 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ onSearch, onClear }) =
   };
 
   return (
-    <div className='flex flex-1 items-center gap-2'>
+    <div className='flex flex-col gap-3'>
       <div className='relative flex-1'>
-        {/* `py-2` and `pr-10` land after the Input's own `p-3`, so they win:
-            Tailwind orders `p-*` before the axis and side utilities. */}
         <Input
-          placeholder='Search by Rail ID (e.g., 123)'
+          placeholder='Search by rail ID or payee address'
           value={searchQuery}
           onChange={setSearchQuery}
           onKeyDown={handleKeyDown}
           className='py-2 pr-10'
         />
 
-        {/* The icon is the submit control, so it carries a label of its own —
-            there is no visible button text to name it. */}
         <button
           type='button'
           onClick={handleSearch}
-          disabled={!searchQuery.trim()}
-          aria-label='Search rails by ID'
+          disabled={!canSearch}
+          aria-label='Search rails by rail ID or payee address'
           className='absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded-sm p-1 text-muted-foreground transition-colors hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:pointer-events-none disabled:opacity-50'
         >
-          <Search className='size-4' />
+          <Search className='size-5' />
         </button>
       </div>
 
-      {isActive && (
-        <Button variant='tertiary' onClick={handleClear} className='gap-2' size='compact'>
-          <X className='h-4 w-4' />
-          Clear
-        </Button>
-      )}
+      {applied ? (
+        <div className='flex items-center gap-2 text-sm'>
+          <span className='text-muted-foreground'>Filtered by</span>
+          <span className='flex items-center gap-2 rounded-full border py-1 pr-1 pl-3'>
+            <span>
+              {applied.label}: <span className='font-mono'>{applied.value}</span>
+            </span>
+            <button
+              type='button'
+              onClick={handleClear}
+              aria-label={`Clear ${applied.label} filter`}
+              className='cursor-pointer rounded-full p-1 text-muted-foreground transition-colors hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400'
+            >
+              <X className='size-4' />
+            </button>
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 };

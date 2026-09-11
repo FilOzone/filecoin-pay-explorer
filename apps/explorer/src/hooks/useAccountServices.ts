@@ -57,12 +57,17 @@ export const useAccountServices = (accountId: string, options?: AccountServicesO
   useGraphQLInfiniteQuery<AccountOperatorsResponse, AccountServicesPage, string>({
     queryKey: ["account", accountId, "services"],
     query: GET_ACCOUNT_OPERATORS,
-    getVariables: (cursor) => ({ accountId, cursor, first: SERVICES_PAGE_SIZE }),
+    // One more than a page: asking for exactly a page cannot tell a full page
+    // apart from a full page with nothing after it, which would offer a Load
+    // more that fetches nothing.
+    getVariables: (cursor) => ({ accountId, cursor, first: SERVICES_PAGE_SIZE + 1 }),
     select: (data) => {
-      const services = data.accountOperators;
-      const isFullPage = services.length === SERVICES_PAGE_SIZE;
+      const services = data.accountOperators.slice(0, SERVICES_PAGE_SIZE);
+      const hasMore = data.accountOperators.length > SERVICES_PAGE_SIZE;
 
-      return { services, nextCursor: isFullPage ? services.at(-1)?.id : undefined };
+      // The cursor is the last id shown, never the extra row: the next page has
+      // to resume from where this one visibly ended.
+      return { services, nextCursor: hasMore ? services.at(-1)?.id : undefined };
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: accountId,
@@ -84,22 +89,48 @@ export const useAccountService = (accountId: string, operatorAddress: string, op
     networkOverride: options?.networkOverride,
   });
 
+/** Narrows a pair's rails. Both are exact matches, never partial. */
+export type ServiceRailsFilter = {
+  railId?: string;
+  payee?: string;
+};
+
+export type ServiceRailsPage = {
+  rails: Rail[];
+  /** A full page came back, so there may be another. */
+  hasMore: boolean;
+};
+
 export const useAccountServiceRails = (
   accountId: string,
   operatorAddress: string,
   page: number = 1,
+  filter: ServiceRailsFilter = {},
   options?: AccountServicesOptions,
-) =>
-  useGraphQLQuery<AccountOperatorRailsResponse, Rail[]>({
-    queryKey: ["account", accountId, "services", operatorAddress, "rails", page],
+) => {
+  // The payer and operator are always pinned; the filter only narrows further,
+  // so it can never widen the query beyond this payer's own rails.
+  const where: Record<string, string> = { payer: accountId, operator: operatorAddress.toLowerCase() };
+  if (filter.railId) {
+    where.railId = filter.railId;
+  }
+  if (filter.payee) {
+    where.payee = filter.payee.toLowerCase();
+  }
+
+  return useGraphQLQuery<AccountOperatorRailsResponse, ServiceRailsPage>({
+    queryKey: ["account", accountId, "services", operatorAddress, "rails", page, where],
     query: GET_ACCOUNT_OPERATOR_RAILS,
     variables: {
-      accountId,
-      operatorId: operatorAddress.toLowerCase(),
-      first: ACCOUNT_SERVICE_RAILS_PAGE_SIZE,
+      where,
+      first: ACCOUNT_SERVICE_RAILS_PAGE_SIZE + 1,
       skip: (page - 1) * ACCOUNT_SERVICE_RAILS_PAGE_SIZE,
     },
-    select: (data) => data.rails,
+    select: (data) => ({
+      rails: data.rails.slice(0, ACCOUNT_SERVICE_RAILS_PAGE_SIZE),
+      hasMore: data.rails.length > ACCOUNT_SERVICE_RAILS_PAGE_SIZE,
+    }),
     enabled: !!accountId && !!operatorAddress,
     networkOverride: options?.networkOverride,
   });
+};

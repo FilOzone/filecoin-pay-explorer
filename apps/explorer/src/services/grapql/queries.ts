@@ -612,19 +612,14 @@ export const GET_ACCOUNT_OPERATOR = gql`
 `;
 
 /**
- * Rails for one payer/operator pair. Payer-side only: the console shows the
- * connected account as the payer, never the payee.
+ * Rails for one payer/operator pair, optionally narrowed further. The caller
+ * composes `where`, but always pins the payer: the console shows the connected
+ * account as the payer, never the payee.
  */
 export const GET_ACCOUNT_OPERATOR_RAILS = gql`
   ${RAIL_ROW_FIELDS}
-  query GetAccountOperatorRails($accountId: Bytes!, $operatorId: Bytes!, $first: Int!, $skip: Int!) {
-    rails(
-      where: { payer: $accountId, operator: $operatorId }
-      first: $first
-      skip: $skip
-      orderBy: createdAt
-      orderDirection: desc
-    ) {
+  query GetAccountOperatorRails($where: Rail_filter!, $first: Int!, $skip: Int!) {
+    rails(where: $where, first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
       ...RailRowFields
     }
   }
