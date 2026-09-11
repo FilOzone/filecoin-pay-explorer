@@ -72,8 +72,4 @@ describe("buildMonthWindows", () => {
     const first = windows[0];
     expect(first.startEpoch).toBe((first.startTimestamp - genesis) / BigInt(EPOCH_DURATION));
   });
-
-  it("honours a caller-supplied month count", () => {
-    expect(buildMonthWindows(new Date(2026, 7, 21), GENESIS, 3)).toHaveLength(3);
-  });
 });

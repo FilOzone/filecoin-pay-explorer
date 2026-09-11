@@ -66,7 +66,28 @@ describe("fetchAllPages", () => {
 
     expect(result.items).toHaveLength(3 * PAGE_SIZE);
     expect(result.reachedPageLimit).toBe(true);
-    expect(pager.calls).toBe(3);
+    // Three pages plus the read that confirms there is more behind them.
+    expect(pager.calls).toBe(4);
+  });
+
+  it("does not report the cap when the data ends exactly at maxPages full pages", async () => {
+    // Every page is full, so the walk cannot tell a complete history from a
+    // truncated one without looking past the cap. Without that read this reports
+    // a complete history as possibly incomplete.
+    const pager = makePager(3 * PAGE_SIZE);
+    const result = await fetchAllPages(pager.fetchPage, 3);
+
+    expect(result.items).toHaveLength(3 * PAGE_SIZE);
+    expect(result.reachedPageLimit).toBe(false);
+    expect(pager.calls).toBe(4);
+  });
+
+  it("drops rows found beyond the cap rather than moving the boundary", async () => {
+    const pager = makePager(3 * PAGE_SIZE + 500);
+    const result = await fetchAllPages(pager.fetchPage, 3);
+
+    expect(result.items).toHaveLength(3 * PAGE_SIZE);
+    expect(result.reachedPageLimit).toBe(true);
   });
 
   it("throws instead of spinning when the cursor does not advance", async () => {

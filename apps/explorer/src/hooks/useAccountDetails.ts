@@ -207,7 +207,14 @@ export async function fetchAllPages<T extends { id: string }>(
     cursor = nextCursor;
   }
 
-  return { items, reachedPageLimit: true };
+  // Reaching here means every page was full, which data ending exactly on the
+  // cap looks identical to. One more read tells them apart, and without it a
+  // complete history reports itself as possibly truncated. Only accounts already
+  // at the cap pay for it, and its rows are dropped: they fall outside the pages
+  // the cap allows, so keeping them would move the boundary rather than raise it.
+  const beyondCap = await fetchPage(cursor);
+
+  return { items, reachedPageLimit: beyondCap.length > 0 };
 }
 
 /**

@@ -7,6 +7,13 @@ import { formatAddress } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import type { SpendSeriesRow } from "../types";
 
+/*
+ * Every amount on this card rounds up, unlike the balances on the funds cards.
+ * `formatTokenAmount` truncates by default because rounding a balance up
+ * overstates what the holder can act on; here the figures are costs, and the
+ * same rule points the other way.
+ */
+
 /**
  * A service's name where the app knows one, its truncated address otherwise.
  */
@@ -96,12 +103,12 @@ const SpendTooltip = ({ datum, tokenDecimals, tokenSymbol }: SpendTooltipProps) 
     </p>
     <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-1'>
       <dt className='text-muted-foreground'>Streaming (max)</dt>
-      <dd className='text-right text-foreground'>{formatTokenAmount(datum.streaming, tokenDecimals)}</dd>
+      <dd className='text-right text-foreground'>{formatTokenAmount(datum.streaming, tokenDecimals, "up")}</dd>
       <dt className='text-muted-foreground'>One-time</dt>
-      <dd className='text-right text-foreground'>{formatTokenAmount(datum.oneTime, tokenDecimals)}</dd>
+      <dd className='text-right text-foreground'>{formatTokenAmount(datum.oneTime, tokenDecimals, "up")}</dd>
       <dt className='font-medium text-foreground'>Up to</dt>
       <dd className='text-right font-medium text-foreground'>
-        {formatTokenAmount(datum.total, tokenDecimals)} {tokenSymbol}
+        {formatTokenAmount(datum.total, tokenDecimals, "up")} {tokenSymbol}
       </dd>
     </dl>
     {/*
@@ -114,7 +121,7 @@ const SpendTooltip = ({ datum, tokenDecimals, tokenSymbol }: SpendTooltipProps) 
         {datum.byOperator.map((operator) => (
           <Fragment key={operator.address}>
             <dt className='truncate text-muted-foreground'>{operatorLabel(operator.address)}</dt>
-            <dd className='text-right text-foreground'>{formatTokenAmount(operator.amount, tokenDecimals)}</dd>
+            <dd className='text-right text-foreground'>{formatTokenAmount(operator.amount, tokenDecimals, "up")}</dd>
           </Fragment>
         ))}
       </dl>
@@ -159,13 +166,16 @@ const SpendDataTable = ({ rows, tokenDecimals, tokenSymbol }: SpendSeriesProps) 
             {row.fullLabel}
             {row.isPartial ? " (to date)" : ""}
           </th>
-          <td>{formatTokenAmount(row.streaming, tokenDecimals)}</td>
-          <td>{formatTokenAmount(row.oneTime, tokenDecimals)}</td>
-          <td>{formatTokenAmount(row.total, tokenDecimals)}</td>
+          <td>{formatTokenAmount(row.streaming, tokenDecimals, "up")}</td>
+          <td>{formatTokenAmount(row.oneTime, tokenDecimals, "up")}</td>
+          <td>{formatTokenAmount(row.total, tokenDecimals, "up")}</td>
           <td>
             {row.byOperator.length > 0
               ? row.byOperator
-                  .map((entry) => `${operatorLabel(entry.address)} ${formatTokenAmount(entry.amount, tokenDecimals)}`)
+                  .map((entry) => {
+                    const amount = formatTokenAmount(entry.amount, tokenDecimals, "up");
+                    return `${operatorLabel(entry.address)} ${amount}`;
+                  })
                   .join(", ")
               : "None"}
           </td>
