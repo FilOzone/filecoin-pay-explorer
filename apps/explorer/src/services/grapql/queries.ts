@@ -570,3 +570,104 @@ export const GET_STATS_DASHBOARD = gql`
     }
   }
 `;
+
+/**
+ * The three reads behind the spend chart: one for the block to pin to, then two
+ * cursor-paged collections that integrate into monthly totals.
+ *
+ * The epoch the history is read at. Every page below pins to it, so a walk
+ * spanning many requests sees one immutable snapshot rather than a moving target.
+ */
+export const GET_SUBGRAPH_BLOCK = gql`
+  query GetSubgraphBlock {
+    _meta {
+      block {
+        number
+      }
+    }
+  }
+`;
+
+export const GET_ACCOUNT_RATE_PERIODS = gql`
+  query GetAccountRatePeriods(
+    $accountId: Bytes!
+    $tokenId: Bytes!
+    $windowStartEpoch: BigInt!
+    $first: Int!
+    $cursor: Bytes!
+    $block: Int!
+  ) {
+    # The rate timeline, not the settlement work queue. Every period a rail
+    # charged at is recorded, so nothing has to be reconstructed. An open period
+    # has a null untilEpoch.
+    #
+    # Pinned to $block. Cursor paging needs a fixed snapshot to be sound: ids are
+    # transaction hash plus log index, so an entity written mid-walk can land
+    # below the cursor and never be returned.
+    #
+    # Two branches because a comparison filter never matches null: the first
+    # keeps periods still running, the second those that ended inside the charted
+    # range. Without this the newest page of a busy account covers hours, and
+    # every month before it renders as zero.
+    #
+    # rate_gt: 0 because a rail opens a zero-rate period at creation that runs
+    # until it is activated. Those contribute nothing and, on a real account,
+    # outnumber the periods that do.
+    #
+    # untilEpoch_gt, not _gte: a period ending exactly at the window's
+    # exclusive start has no overlap with it.
+    #
+    # Ordered by id, not startEpoch, because id is the pagination cursor and has
+    # to be unique — many periods share a start epoch.
+    railRatePeriods(
+      block: { number: $block }
+      where: {
+        or: [
+          { payer: $accountId, token: $tokenId, rate_gt: "0", untilEpoch: null, id_gt: $cursor }
+          { payer: $accountId, token: $tokenId, rate_gt: "0", untilEpoch_gt: $windowStartEpoch, id_gt: $cursor }
+        ]
+      }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      id
+      rate
+      startEpoch
+      untilEpoch
+      operator {
+        address
+      }
+    }
+  }
+`;
+
+export const GET_ACCOUNT_ONE_TIME_PAYMENTS = gql`
+  query GetAccountOneTimePayments(
+    $accountId: Bytes!
+    $tokenId: Bytes!
+    $windowStartTimestamp: BigInt!
+    $first: Int!
+    $cursor: Bytes!
+    $block: Int!
+  ) {
+    # A payment is a point in time, so a single lower bound is enough — no null
+    # case to fold in, unlike the rate periods above. Pinned to the same block,
+    # so a payment landing mid-walk cannot appear against streaming totals that
+    # stop earlier.
+    oneTimePayments(
+      block: { number: $block }
+      where: { payer: $accountId, token: $tokenId, createdAt_gte: $windowStartTimestamp, id_gt: $cursor }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      id
+      totalAmount
+      createdAt
+      operator {
+        address
+      }
+    }
+  }
+`;
