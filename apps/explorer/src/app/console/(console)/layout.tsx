@@ -18,8 +18,10 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
     case "not-connected":
       return <NotConnected />;
     case "unsupported-chain":
-      return <UnsupportedChain />;
+    // A Squid source chain only reaches here with no top-up in progress:
+    // getConsoleDisplayAccessState reports an active one as "ready".
     case "squid-source":
+      return <UnsupportedChain />;
     case "ready":
       return children;
   }

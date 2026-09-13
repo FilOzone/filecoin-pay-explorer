@@ -1,4 +1,4 @@
-import type { Account, Rail } from "@filecoin-pay/types";
+import type { Rail } from "@filecoin-pay/types";
 import {
   Pagination,
   PaginationContent,
@@ -9,32 +9,112 @@ import {
 } from "@filecoin-pay/ui/components/pagination";
 import { useCallback, useMemo, useState } from "react";
 import { getChain } from "@/constants/chains";
-import { useAccountRails } from "@/hooks/useAccountDetails";
+import { ACCOUNT_SERVICE_RAILS_PAGE_SIZE, useAccountServiceRails } from "@/hooks/useAccountServices";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
 import type { Network } from "@/types";
-import { RailsSearch, type SearchFilterType } from "../RailsSearch";
 import { SettleRailDialog } from "../SettleRailDialog";
-import { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState, RailsTable } from "./components";
+import {
+  RailsEmptyInitial,
+  RailsEmptyNoResults,
+  RailsErrorState,
+  RailsLoadingState,
+  RailsSearch,
+  RailsSectionLayout,
+  RailsTable,
+} from "./components";
 import { SettleRailProvider } from "./context/SettleRailContext";
+import { parseServiceRailsSearch } from "./rails-filter";
 import type { RailTableRow } from "./types";
 
+/**
+ * Rails page two ways, and only the total distinguishes them. The unfiltered
+ * list knows how many pages there are, because the pair carries a rail count.
+ * A filtered list has no count, so it can only say whether another page came
+ * back and must step rather than number.
+ */
+type RailsPaginationProps = {
+  page: number;
+  onPageChange: (page: number) => void;
+} & ({ kind: "counted"; totalPages: number } | { kind: "stepped"; hasMore: boolean });
+
+/** How many numbered links to offer before falling back to stepping. */
+const MAX_PAGE_LINKS = 5;
+
+const stepClass = (isDisabled: boolean) => (isDisabled ? "pointer-events-none opacity-50" : "cursor-pointer");
+
+function RailsPagination(props: RailsPaginationProps) {
+  const { page, onPageChange } = props;
+
+  const isFirst = page === 1;
+  const isLast = props.kind === "counted" ? page >= props.totalPages : !props.hasMore;
+  const nextPage = props.kind === "counted" ? Math.min(props.totalPages, page + 1) : page + 1;
+
+  return (
+    <Pagination>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious onClick={() => onPageChange(Math.max(1, page - 1))} className={stepClass(isFirst)} />
+        </PaginationItem>
+
+        {props.kind === "counted"
+          ? Array.from({ length: Math.min(MAX_PAGE_LINKS, props.totalPages) }, (_, index) => index + 1).map(
+              (pageNumber) => (
+                <PaginationItem key={pageNumber}>
+                  <PaginationLink
+                    onClick={() => onPageChange(pageNumber)}
+                    isActive={page === pageNumber}
+                    className='cursor-pointer'
+                  >
+                    {pageNumber}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )
+          : null}
+
+        <PaginationItem>
+          <PaginationNext onClick={() => onPageChange(nextPage)} className={stepClass(isLast)} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
+
+/** Stable identity so the table memo survives a render with no data yet. */
+const NO_RAILS: Rail[] = [];
+
 interface RailsSectionProps {
-  account: Account;
+  /** The connected payer. Every rail listed here has this account as its payer. */
+  accountId: string;
   network: Network;
+  operatorAddress: string;
+  /** `AccountOperator.totalRails` for this pair — not the account-wide count. */
+  totalRails: bigint;
   userAddress: string;
 }
 
-export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, userAddress }) => {
+export const RailsSection: React.FC<RailsSectionProps> = ({
+  accountId,
+  network,
+  operatorAddress,
+  totalRails,
+  userAddress,
+}) => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchFilter, setSearchFilter] = useState<SearchFilterType>("railId");
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
   const [currentEpoch, setCurrentEpoch] = useState<bigint>();
 
   const chain = useMemo(() => getChain(network), [network]);
 
-  const { data, isLoading, isError } = useAccountRails(account.id, page, { networkOverride: network });
+  const { filter, summary } = useMemo(() => parseServiceRailsSearch(searchQuery), [searchQuery]);
+  const isFiltering = Boolean(summary);
+
+  const { data, isLoading, isError } = useAccountServiceRails(accountId, operatorAddress, page, filter, {
+    networkOverride: network,
+  });
+  const rails = data?.rails ?? NO_RAILS;
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,
@@ -48,121 +128,75 @@ export const RailsSection: React.FC<RailsSectionProps> = ({ account, network, us
     setSettleDialogOpen(true);
   }, []);
 
-  const handleSearch = (query: string, filterType: SearchFilterType) => {
-    setSearchQuery(query.toLowerCase());
-    setSearchFilter(filterType);
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
     setPage(1);
   };
 
-  const handleClearSearch = () => {
-    setSearchQuery("");
-    setPage(1);
-  };
-
-  // Filter rails based on search
-  const filteredRails = useMemo(() => {
-    if (!data || !searchQuery) return data?.rails || [];
-
-    return data.rails.filter((rail) => {
-      switch (searchFilter) {
-        case "railId":
-          return rail.railId.toString().includes(searchQuery);
-        case "operator":
-          return rail.operator.address.toLowerCase().includes(searchQuery);
-        case "payer":
-          return rail.payer.address.toLowerCase().includes(searchQuery);
-        case "payee":
-          return rail.payee.address.toLowerCase().includes(searchQuery);
-        default:
-          return true;
-      }
-    });
-  }, [data, searchQuery, searchFilter]);
-
-  // Prepare table data with settlement state and the user's role.
   const tableData = useMemo<RailTableRow[]>(
     () =>
-      filteredRails.map((rail) => ({
+      rails.map((rail) => ({
         ...rail,
-        isPayer: rail.payer.address.toLowerCase() === userAddress.toLowerCase(),
         isSettling: settlements.has(rail.railId.toString()),
       })),
-    [filteredRails, userAddress, settlements],
+    [rails, settlements],
   );
 
-  const totalPages = account.totalRails ? Math.ceil(Number(account.totalRails) / 10) : 1;
+  const totalPages = Math.max(1, Math.ceil(Number(totalRails) / ACCOUNT_SERVICE_RAILS_PAGE_SIZE));
 
-  if (isLoading) {
-    return <RailsLoadingState />;
+  // Derived from the pair's lifetime total, not the current page, so the search
+  // box does not appear and vanish as pages and filters change.
+  const hasRails = totalRails > 0n;
+
+  function renderResults() {
+    if (isLoading) {
+      return <RailsLoadingState />;
+    }
+
+    if (isError) {
+      return <RailsErrorState />;
+    }
+
+    if (rails.length === 0) {
+      return isFiltering ? <RailsEmptyNoResults /> : <RailsEmptyInitial />;
+    }
+
+    return (
+      <>
+        <SettleRailProvider chainId={chain.id} onSettle={handleSettle}>
+          <RailsTable data={tableData} />
+        </SettleRailProvider>
+
+        {renderPagination()}
+      </>
+    );
   }
 
-  if (isError) {
-    return <RailsErrorState />;
-  }
+  function renderPagination() {
+    // A filtered set has no total, so it steps on hasMore alone.
+    if (isFiltering) {
+      if (page === 1 && !data?.hasMore) {
+        return null;
+      }
 
-  if (!data || data.rails.length === 0) {
-    return <RailsEmptyInitial />;
+      return <RailsPagination kind='stepped' page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />;
+    }
+
+    if (totalPages <= 1) {
+      return null;
+    }
+
+    return <RailsPagination kind='counted' page={page} totalPages={totalPages} onPageChange={setPage} />;
   }
 
   return (
     <>
-      <div className='flex flex-col gap-4'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
-          <h3 className='text-2xl font-medium'>Payment Rails</h3>
-        </div>
+      <RailsSectionLayout>
+        {hasRails ? <RailsSearch appliedQuery={searchQuery} onSearch={handleSearch} /> : null}
 
-        {/* Search */}
-        <RailsSearch onSearch={handleSearch} onClear={handleClearSearch} />
+        {renderResults()}
+      </RailsSectionLayout>
 
-        {/* Results */}
-        {filteredRails.length === 0 ? (
-          <RailsEmptyNoResults searchFilter={searchFilter} />
-        ) : (
-          <>
-            <SettleRailProvider chainId={chain.id} onSettle={handleSettle}>
-              <RailsTable data={tableData} />
-            </SettleRailProvider>
-
-            {/* Pagination - only show if not searching */}
-            {!searchQuery && totalPages > 1 && (
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-
-                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <PaginationItem key={pageNum}>
-                        <PaginationLink
-                          onClick={() => setPage(pageNum)}
-                          isActive={page === pageNum}
-                          className='cursor-pointer'
-                        >
-                          {pageNum}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Settle Dialog */}
       {selectedRail && (
         <SettleRailDialog
           rail={selectedRail}
