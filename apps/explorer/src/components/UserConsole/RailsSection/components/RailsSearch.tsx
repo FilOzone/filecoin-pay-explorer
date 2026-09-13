@@ -1,7 +1,7 @@
 import { Input } from "@filecoin-foundation/ui-filecoin/Input";
 import { Search, X } from "lucide-react";
 import { useState } from "react";
-import { describeServiceRailsFilter, isSearchable, toServiceRailsFilter } from "../rails-filter";
+import { parseServiceRailsSearch } from "../rails-filter";
 
 interface RailsSearchProps {
   appliedQuery: string;
@@ -19,8 +19,8 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ appliedQuery, onSearch
 
   // Exact matching means a partial value can only ever return nothing, so the
   // control stays disabled rather than reporting an empty result.
-  const canSearch = isSearchable(searchQuery);
-  const applied = appliedQuery ? describeServiceRailsFilter(toServiceRailsFilter(appliedQuery)) : undefined;
+  const canSearch = Boolean(parseServiceRailsSearch(searchQuery).summary);
+  const applied = parseServiceRailsSearch(appliedQuery).summary;
 
   const handleSearch = () => {
     if (!canSearch) {

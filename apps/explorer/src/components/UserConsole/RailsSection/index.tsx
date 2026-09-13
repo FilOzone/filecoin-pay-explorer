@@ -23,7 +23,7 @@ import {
   RailsTable,
 } from "./components";
 import { SettleRailProvider } from "./context/SettleRailContext";
-import { toServiceRailsFilter } from "./rails-filter";
+import { parseServiceRailsSearch } from "./rails-filter";
 import type { RailTableRow } from "./types";
 
 /**
@@ -80,6 +80,9 @@ function RailsPagination(props: RailsPaginationProps) {
   );
 }
 
+/** Stable identity so the table memo survives a render with no data yet. */
+const NO_RAILS: Rail[] = [];
+
 interface RailsSectionProps {
   /** The connected payer. Every rail listed here has this account as its payer. */
   accountId: string;
@@ -105,13 +108,13 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
 
   const chain = useMemo(() => getChain(network), [network]);
 
-  const filter = useMemo(() => toServiceRailsFilter(searchQuery), [searchQuery]);
-  const isFiltering = Boolean(filter.railId || filter.payee);
+  const { filter, summary } = useMemo(() => parseServiceRailsSearch(searchQuery), [searchQuery]);
+  const isFiltering = Boolean(summary);
 
   const { data, isLoading, isError } = useAccountServiceRails(accountId, operatorAddress, page, filter, {
     networkOverride: network,
   });
-  const rails = data?.rails ?? [];
+  const rails = data?.rails ?? NO_RAILS;
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
     contractAddress: chain.contracts.payments.address,

@@ -16,7 +16,8 @@ const ServicePage = () => {
   const { operator } = useParams<{ operator: string }>();
   const { address, chainId } = useConnection();
 
-  // the console renders lowercase addresses, so a strict check would reject a value copied out of the service list.
+  // Checksums are not enforced: a strict check rejects mixed case whose
+  // checksum does not validate, and a wrong address simply finds no service.
   if (!isAddress(operator, { strict: false })) {
     return <ServiceNotFoundState />;
   }

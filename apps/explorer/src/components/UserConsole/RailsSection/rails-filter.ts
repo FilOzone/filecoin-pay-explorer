@@ -2,43 +2,42 @@ import { isAddress } from "viem";
 import type { ServiceRailsFilter } from "@/hooks/useAccountServices";
 import { formatAddress } from "@/utils/formatter";
 
-/**
- * Classifies one search box by the shape of what was typed: an address filters
- * on payee, anything else on rail ID. Both are exact — the subgraph does the
- * filtering, so a partial value would simply match nothing.
- *
- * Checksum is not enforced: the payee column renders lowercase addresses, so a
- * pasted value would fail a strict check.
- */
-export function toServiceRailsFilter(query: string): ServiceRailsFilter {
-  const trimmed = query.trim();
+/** Rail IDs are unsigned integers; the subgraph filters them as BigInt. */
+const RAIL_ID_PATTERN = /^\d+$/;
 
-  if (!trimmed) {
-    return {};
-  }
+export type ServiceRailsSearch = {
+  /** What to narrow the query by. Empty when nothing in the box can match. */
+  filter: ServiceRailsFilter;
+  /**
+   * How the filter reads back to the user, and the only thing to test to know
+   * whether the box holds something searchable. Absent when `filter` is empty.
+   */
+  summary?: { label: string; value: string };
+};
+
+const NOTHING: ServiceRailsSearch = { filter: {} };
+
+/**
+ * Reads one search box by the shape of what was typed: an address narrows on
+ * payee, digits on rail ID, and anything else narrows on nothing. Both are
+ * exact — the subgraph does the matching, so a partial value would match
+ * nothing rather than narrow the list.
+ *
+ * Checksums are not enforced. A lowercase address passes a strict check
+ * already; what it rejects is mixed case whose checksum does not validate,
+ * which is easy to produce by hand and means nothing here, since a wrong
+ * address simply finds no rails.
+ */
+export function parseServiceRailsSearch(query: string): ServiceRailsSearch {
+  const trimmed = query.trim();
 
   if (isAddress(trimmed, { strict: false })) {
-    return { payee: trimmed };
+    return { filter: { payee: trimmed }, summary: { label: "Payee", value: formatAddress(trimmed) } };
   }
 
-  return { railId: trimmed };
-}
-
-/** Rail IDs are integers; anything else can only have been meant as an address. */
-export function isSearchable(query: string): boolean {
-  const trimmed = query.trim();
-  return isAddress(trimmed, { strict: false }) || /^\d+$/.test(trimmed);
-}
-
-/** How an applied filter reads back to the user. */
-export function describeServiceRailsFilter(filter: ServiceRailsFilter): { label: string; value: string } | undefined {
-  if (filter.payee) {
-    return { label: "Payee", value: formatAddress(filter.payee) };
+  if (RAIL_ID_PATTERN.test(trimmed)) {
+    return { filter: { railId: trimmed }, summary: { label: "Rail ID", value: trimmed } };
   }
 
-  if (filter.railId) {
-    return { label: "Rail ID", value: filter.railId };
-  }
-
-  return undefined;
+  return NOTHING;
 }

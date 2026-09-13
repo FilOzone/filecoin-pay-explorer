@@ -97,7 +97,7 @@ export type ServiceRailsFilter = {
 
 export type ServiceRailsPage = {
   rails: Rail[];
-  /** A full page came back, so there may be another. */
+  /** A row beyond this page came back, so the next page has at least one. */
   hasMore: boolean;
 };
 
@@ -110,7 +110,10 @@ export const useAccountServiceRails = (
 ) => {
   // The payer and operator are always pinned; the filter only narrows further,
   // so it can never widen the query beyond this payer's own rails.
-  const where: Record<string, string> = { payer: accountId, operator: operatorAddress.toLowerCase() };
+  const where: Record<string, string> = {
+    payer: accountId.toLowerCase(),
+    operator: operatorAddress.toLowerCase(),
+  };
   if (filter.railId) {
     where.railId = filter.railId;
   }
