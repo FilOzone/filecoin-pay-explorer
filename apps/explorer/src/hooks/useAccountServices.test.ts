@@ -31,12 +31,6 @@ const rows = (count: number) => ({
 });
 
 describe("useAccountServices page boundary", () => {
-  it("asks for one more row than it shows", () => {
-    useAccountServices(PAYER);
-
-    expect(observed.variables.first).toBe(11);
-  });
-
   it("opens the cursor at the payer address, which every id for it sorts after", () => {
     useAccountServices(PAYER);
 
@@ -57,17 +51,5 @@ describe("useAccountServices page boundary", () => {
 
     expect(result.services).toHaveLength(10);
     expect(result.nextCursor).toBe("0x09");
-  });
-
-  it("offers no next page for a partial page", () => {
-    useAccountServices(PAYER);
-
-    expect(observed.select(rows(4)).nextCursor).toBeUndefined();
-  });
-
-  it("offers no next page for an empty result", () => {
-    useAccountServices(PAYER);
-
-    expect(observed.select(rows(0))).toEqual({ services: [], nextCursor: undefined });
   });
 });

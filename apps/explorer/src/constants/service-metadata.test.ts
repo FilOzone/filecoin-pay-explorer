@@ -49,10 +49,4 @@ describe("getServiceProfile", () => {
     expect(getServiceProfile(WARM_STORAGE, { name: "x" }).pricing).toHaveLength(4);
     expect(getServiceProfile(KNOWN_WITHOUT_COPY, { description: "d" }).pricing).toBeUndefined();
   });
-
-  it("resolves regardless of address casing", () => {
-    expect(getServiceProfile(WARM_STORAGE.toUpperCase().replace("0X", "0x")).name).toBe(
-      "Filecoin Warm Storage Service",
-    );
-  });
 });

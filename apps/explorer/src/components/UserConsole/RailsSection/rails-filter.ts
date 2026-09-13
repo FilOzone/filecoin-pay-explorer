@@ -23,10 +23,6 @@ const NOTHING: ServiceRailsSearch = { filter: {} };
  * exact — the subgraph does the matching, so a partial value would match
  * nothing rather than narrow the list.
  *
- * Checksums are not enforced. A lowercase address passes a strict check
- * already; what it rejects is mixed case whose checksum does not validate,
- * which is easy to produce by hand and means nothing here, since a wrong
- * address simply finds no rails.
  */
 export function parseServiceRailsSearch(query: string): ServiceRailsSearch {
   const trimmed = query.trim();

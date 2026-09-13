@@ -59,13 +59,6 @@ export type OnchainServiceMetadata = {
 /**
  * Everything the console needs to present one operator as a service, from the
  * contract's own metadata where it publishes any and local copy otherwise.
- * Always resolves: an operator with neither still gets a name, the truncated
- * address.
- *
- * A curated `knownAddresses` label outranks the contract's `name()`. Contract
- * text is untrusted and any operator can claim any name, so for the addresses
- * we have vetted the vetted label wins. Unvetted operators still get their
- * onchain name, shown next to their address.
  *
  * Prices are local only: IFilecoinServiceMetadata does not carry them.
  */

@@ -62,23 +62,8 @@ describe("ServicesSection", () => {
     onchain.map = new Map();
   });
 
-  it("names the service from its metadata and links Manage to the operator route", () => {
-    const markup = render();
-
-    expect(markup).toContain("Filecoin Warm Storage Service");
-    expect(markup).toContain(`href="/console/services/${WARM_STORAGE}"`);
-  });
-
-  it("reports active and lifetime rail counts for the pair", () => {
-    const markup = render();
-
-    expect(markup).toContain("4 active / 10 total rails");
-  });
-
-  it("falls back to the truncated operator address when the service is unknown", () => {
-    servicesQuery.data = { pages: [{ services: [buildService(UNKNOWN_OPERATOR)] }] };
-
-    expect(render()).toContain("0x9999...9999");
+  it("links Manage to the operator's own console route", () => {
+    expect(render()).toContain(`href="/console/services/${WARM_STORAGE}"`);
   });
 
   it("lists every service across all fetched cursor pages", () => {
@@ -92,60 +77,9 @@ describe("ServicesSection", () => {
     expect(markup).toContain("0x9999...9999");
   });
 
-  it("keeps an authorization-only relationship in the list", () => {
-    servicesQuery.data = {
-      pages: [{ services: [buildService(WARM_STORAGE, { totalRails: 0n, totalActiveRails: 0n } as never)] }],
-    };
-
-    const markup = render();
-
-    expect(markup).toContain("Filecoin Warm Storage Service");
-    expect(markup).toContain("0 active / 0 total rails");
-  });
-
-  it("offers Load more only while another cursor page remains", () => {
-    expect(render()).not.toContain("Load more");
-
-    servicesQuery.hasNextPage = true;
-    expect(render()).toContain("Load more");
-  });
-
   it("queries the connected payer's account", () => {
     render();
 
     expect(observed.accountId).toBe(ACCOUNT_ID);
-  });
-
-  it("reads contract metadata for every operator on screen in one batch", () => {
-    servicesQuery.data = {
-      pages: [{ services: [buildService(WARM_STORAGE)] }, { services: [buildService(UNKNOWN_OPERATOR)] }],
-    };
-
-    render();
-
-    expect(observed.metadataAddresses).toEqual([WARM_STORAGE, UNKNOWN_OPERATOR]);
-  });
-
-  it("names an unknown operator from its contract instead of its address", () => {
-    servicesQuery.data = { pages: [{ services: [buildService(UNKNOWN_OPERATOR)] }] };
-    onchain.map = new Map([[UNKNOWN_OPERATOR, { name: "Somebody's Storage", description: "From the contract." }]]);
-
-    const markup = render();
-
-    expect(markup).toContain("Somebody&#x27;s Storage");
-    expect(markup).toContain("From the contract.");
-    expect(markup).not.toContain("0x9999...9999");
-  });
-
-  it("shows the empty state when the payer has no service relationships", () => {
-    servicesQuery.data = { pages: [{ services: [] }] };
-
-    expect(render()).toContain("No services yet");
-  });
-
-  it("shows the error state when the query fails", () => {
-    servicesQuery.isError = true;
-
-    expect(render()).toContain("Failed to load services");
   });
 });

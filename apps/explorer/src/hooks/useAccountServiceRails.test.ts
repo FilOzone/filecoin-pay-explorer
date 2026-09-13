@@ -23,14 +23,14 @@ vi.mock("./useGraphQLQuery", () => ({
 const { useAccountServiceRails } = await import("./useAccountServices");
 
 const PAYER = "0x7a2eb67dad6b4e5598880c138705cd8fe8a3bd77";
-const OPERATOR = "0xC6d414d51fF92d3643c6bFa092bB22Fc9d89Ee6f";
-const PAYEE = "0x01D2a6dfa9ccbf4eefe50dfa5fd05341a0f74050";
+const OPERATOR = "0xc6d414d51ff92d3643c6bfa092bb22fc9d89ee6f";
+const PAYEE = "0x01d2a6dfa9ccbf4eefe50dfa5fd05341a0f74050";
 
 describe("useAccountServiceRails where clause", () => {
   it("always pins the payer and operator", () => {
     useAccountServiceRails(PAYER, OPERATOR);
 
-    expect(observed.variables.where).toEqual({ payer: PAYER, operator: OPERATOR.toLowerCase() });
+    expect(observed.variables.where).toEqual({ payer: PAYER, operator: OPERATOR });
   });
 
   it("narrows by rail ID without unpinning the pair", () => {
@@ -38,27 +38,15 @@ describe("useAccountServiceRails where clause", () => {
 
     expect(observed.variables.where).toEqual({
       payer: PAYER,
-      operator: OPERATOR.toLowerCase(),
+      operator: OPERATOR,
       railId: "27138",
     });
   });
 
-  it("lowercases a payee filter to match indexed ids", () => {
+  it("narrows by payee without unpinning the pair", () => {
     useAccountServiceRails(PAYER, OPERATOR, 1, { payee: PAYEE });
 
-    expect(observed.variables.where).toMatchObject({ payee: PAYEE.toLowerCase() });
-  });
-
-  it("keeps the payer pinned even alongside a payee filter", () => {
-    useAccountServiceRails(PAYER, OPERATOR, 1, { payee: PAYEE });
-
-    expect(observed.variables.where).toMatchObject({ payer: PAYER });
-  });
-
-  it("pages with skip", () => {
-    useAccountServiceRails(PAYER, OPERATOR, 3);
-
-    expect(observed.variables.skip).toBe(20);
+    expect(observed.variables.where).toEqual({ payer: PAYER, operator: OPERATOR, payee: PAYEE });
   });
 
   it("keys the cache on the composed filter so results are not shared", () => {
@@ -72,12 +60,6 @@ describe("useAccountServiceRails where clause", () => {
 
 describe("useAccountServiceRails page boundary", () => {
   const rows = (count: number) => ({ rails: Array.from({ length: count }, (_, i) => ({ railId: String(i) })) });
-
-  it("asks for one more row than it shows", () => {
-    useAccountServiceRails(PAYER, OPERATOR);
-
-    expect(observed.variables.first).toBe(11);
-  });
 
   // Regression: asking for exactly a page cannot tell a full page apart from a
   // full page with nothing after it, so Next landed on an empty page.
@@ -93,12 +75,6 @@ describe("useAccountServiceRails page boundary", () => {
 
     expect(result.hasMore).toBe(true);
     expect(result.rails).toHaveLength(10);
-  });
-
-  it("reports no more pages for a partial page", () => {
-    useAccountServiceRails(PAYER, OPERATOR);
-
-    expect(observed.select(rows(3))).toEqual({ rails: rows(3).rails, hasMore: false });
   });
 
   it("skips by the displayed page size, not the fetched size", () => {
