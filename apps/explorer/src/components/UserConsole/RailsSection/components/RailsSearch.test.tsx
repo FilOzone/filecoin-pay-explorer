@@ -14,14 +14,13 @@ const ADDRESS = "0x01d2a6dfa9ccbf4eefe50dfa5fd05341a0f74050";
 
 function mount(appliedQuery = "") {
   const onSearch = vi.fn();
-  const onClear = vi.fn();
   let tree!: ReturnType<typeof create>;
 
   act(() => {
-    tree = create(<RailsSearch appliedQuery={appliedQuery} onSearch={onSearch} onClear={onClear} />);
+    tree = create(<RailsSearch appliedQuery={appliedQuery} onSearch={onSearch} />);
   });
 
-  return { tree, onSearch, onClear };
+  return { tree, onSearch };
 }
 
 const type = (tree: ReturnType<typeof create>, value: string) =>
@@ -56,12 +55,12 @@ describe("RailsSearch", () => {
   });
 
   it("reports a cleared filter up and empties the draft", () => {
-    const { tree, onClear } = mount("27138");
+    const { tree, onSearch } = mount("27138");
 
     type(tree, "999");
     press(tree, /^Clear Rail ID/);
 
-    expect(onClear).toHaveBeenCalled();
+    expect(onSearch).toHaveBeenCalledWith("");
     expect(tree.root.findByType("input").props.value).toBe("");
   });
 });

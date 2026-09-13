@@ -5,8 +5,8 @@ import { parseServiceRailsSearch } from "../rails-filter";
 
 interface RailsSearchProps {
   appliedQuery: string;
+  /** Called with the query to apply, or an empty string to clear. */
   onSearch: (query: string) => void;
-  onClear: () => void;
 }
 
 /**
@@ -14,7 +14,7 @@ interface RailsSearchProps {
  * and the applied filter stays visible as a chip so the list is never narrowed
  * by something the reader cannot see or undo.
  */
-export const RailsSearch: React.FC<RailsSearchProps> = ({ appliedQuery, onSearch, onClear }) => {
+export const RailsSearch: React.FC<RailsSearchProps> = ({ appliedQuery, onSearch }) => {
   const [searchQuery, setSearchQuery] = useState("");
 
   // Exact matching means a partial value can only ever return nothing, so the
@@ -32,7 +32,7 @@ export const RailsSearch: React.FC<RailsSearchProps> = ({ appliedQuery, onSearch
 
   const handleClear = () => {
     setSearchQuery("");
-    onClear();
+    onSearch("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

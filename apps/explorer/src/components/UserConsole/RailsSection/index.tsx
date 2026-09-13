@@ -133,11 +133,6 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     setPage(1);
   };
 
-  const handleClearSearch = () => {
-    setSearchQuery("");
-    setPage(1);
-  };
-
   const tableData = useMemo<RailTableRow[]>(
     () =>
       rails.map((rail) => ({
@@ -197,9 +192,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
   return (
     <>
       <RailsSectionLayout>
-        {hasRails ? (
-          <RailsSearch appliedQuery={searchQuery} onSearch={handleSearch} onClear={handleClearSearch} />
-        ) : null}
+        {hasRails ? <RailsSearch appliedQuery={searchQuery} onSearch={handleSearch} /> : null}
 
         {renderResults()}
       </RailsSectionLayout>

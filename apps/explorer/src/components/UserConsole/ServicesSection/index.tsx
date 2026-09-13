@@ -1,8 +1,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useMemo } from "react";
-import { getChain } from "@/constants/chains";
 import { useAccountServices } from "@/hooks/useAccountServices";
-import { useServiceMetadata } from "@/hooks/useServiceMetadata";
+import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
 import {
   ServiceCard,
@@ -29,10 +28,10 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ accountId, net
 
   const services = useMemo(() => data?.pages.flatMap((page) => page.services) ?? [], [data]);
 
-  // One batched contract read for every operator on screen. Memoized because
-  // the hook keys its reads off this array's identity.
-  const operatorAddresses = useMemo(() => services.map((service) => service.operator.address), [services]);
-  const { metadata } = useServiceMetadata(operatorAddresses, getChain(network).id);
+  const profileFor = useServiceProfiles(
+    services.map((service) => service.operator.address),
+    network,
+  );
 
   if (isLoading) {
     return <ServicesLoadingState />;
@@ -50,11 +49,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ accountId, net
     <ServicesSectionLayout>
       <div className='flex flex-col gap-4'>
         {services.map((service) => (
-          <ServiceCard
-            key={service.id}
-            service={service}
-            metadata={metadata.get(service.operator.address.toLowerCase())}
-          />
+          <ServiceCard key={service.id} service={service} profile={profileFor(service.operator.address)} />
         ))}
       </div>
 

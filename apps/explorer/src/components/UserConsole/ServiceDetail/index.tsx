@@ -1,8 +1,5 @@
-import { useMemo } from "react";
-import { getChain } from "@/constants/chains";
-import { getServiceProfile } from "@/constants/service-metadata";
 import { useAccountService } from "@/hooks/useAccountServices";
-import { useServiceMetadata } from "@/hooks/useServiceMetadata";
+import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
 import { RailsSection } from "../RailsSection";
 import {
@@ -39,8 +36,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
     networkOverride: network,
   });
 
-  const operatorAddresses = useMemo(() => [operatorId], [operatorId]);
-  const { metadata } = useServiceMetadata(operatorAddresses, getChain(network).id);
+  const profileFor = useServiceProfiles([operatorId], network);
 
   if (isLoading) {
     return <ServiceLoadingState />;
@@ -54,7 +50,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
     return <ServiceNotFoundState />;
   }
 
-  const profile = getServiceProfile(operatorId, metadata.get(operatorId));
+  const profile = profileFor(operatorId);
 
   return (
     <div className='flex flex-col gap-10'>

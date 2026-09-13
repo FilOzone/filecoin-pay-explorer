@@ -8,21 +8,15 @@ const RAIL_ID_PATTERN = /^\d+$/;
 export type ServiceRailsSearch = {
   /** What to narrow the query by. Empty when nothing in the box can match. */
   filter: ServiceRailsFilter;
-  /**
-   * How the filter reads back to the user, and the only thing to test to know
-   * whether the box holds something searchable. Absent when `filter` is empty.
-   */
+  /** How it reads back to the user. Present exactly when `filter` narrows. */
   summary?: { label: string; value: string };
 };
-
-const NOTHING: ServiceRailsSearch = { filter: {} };
 
 /**
  * Reads one search box by the shape of what was typed: an address narrows on
  * payee, digits on rail ID, and anything else narrows on nothing. Both are
  * exact — the subgraph does the matching, so a partial value would match
  * nothing rather than narrow the list.
- *
  */
 export function parseServiceRailsSearch(query: string): ServiceRailsSearch {
   const trimmed = query.trim();
@@ -35,5 +29,5 @@ export function parseServiceRailsSearch(query: string): ServiceRailsSearch {
     return { filter: { railId: trimmed }, summary: { label: "Rail ID", value: trimmed } };
   }
 
-  return NOTHING;
+  return { filter: {} };
 }
