@@ -130,17 +130,11 @@ const ConnectedSessionKeys = ({
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  // A `?revoke=` link names a key by address; the dialog needs the inventory
-  // row. Held in state, not read from the prop, because the dialog is opened
-  // once and must not reopen when the list re-renders.
-  const [revokeRequest, setRevokeRequest] = useState<Hex | null>(null);
-  // One sync attempt per link: a key the chain does not know must not loop.
-  const revokeSyncedRef = useRef(false);
-  // The link arrives a render after mount (the params hook reads them in an
-  // effect), and only counts on the network it names.
-  useEffect(() => {
-    if (revokeAddress != null && revokeNetwork === network) setRevokeRequest(revokeAddress);
-  }, [revokeAddress, revokeNetwork, network]);
+  // How far the `?revoke=` link has got: "synced" means the one chain read it
+  // is allowed has already run, "done" means the dialog opened or the key was
+  // reported missing. Both stop the effect below from acting twice, so closing
+  // the dialog does not reopen it.
+  const revokeLinkRef = useRef<"idle" | "synced" | "done">("idle");
 
   // Newest first; unknown createdAt (sanitize-coerced 0) sinks to the bottom.
   // Deterministic order matters once sync interleaves imported and local keys.
@@ -189,25 +183,27 @@ const ConnectedSessionKeys = ({
   // Open the revoke dialog on the key a link named. A key this browser created
   // is already listed; one from another machine is not, so a single sync is
   // attempted before giving up, the same read the "Sync from chain" button does.
+  // The link arrives a render after mount, and only counts on its own network.
   useEffect(() => {
+    if (revokeAddress == null || revokeNetwork !== network) return;
     // A sync in flight decides this; re-run when it settles.
-    if (revokeRequest == null || statusReadsPending || syncing) return;
-    const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeRequest.toLowerCase());
+    if (revokeLinkRef.current === "done" || statusReadsPending || syncing) return;
+    const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
+      revokeLinkRef.current = "done";
       setRevoke({ target: listed, identity: { network, account } });
-      setRevokeRequest(null);
       return;
     }
-    if (revokeSyncedRef.current) {
+    if (revokeLinkRef.current === "synced") {
+      revokeLinkRef.current = "done";
       toast.error("That session key is not in this wallet's list", {
         description: "It may belong to another wallet, or to a different network.",
       });
-      setRevokeRequest(null);
       return;
     }
-    revokeSyncedRef.current = true;
+    revokeLinkRef.current = "synced";
     void handleSync();
-  }, [revokeRequest, keys, statusReadsPending, syncing, handleSync, network, account]);
+  }, [revokeAddress, revokeNetwork, keys, statusReadsPending, syncing, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
   const syncButton = (
