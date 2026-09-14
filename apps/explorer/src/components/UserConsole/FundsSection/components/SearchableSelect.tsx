@@ -62,12 +62,17 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const listId = useId();
   const errorId = `${id}-error`;
-  const [frozenOptions, setFrozenOptions] = useState(options);
+  const [frozenOptionValues, setFrozenOptionValues] = useState(() => options.map((option) => option.value));
   const [query, setQuery] = useState(() => options.find((option) => option.value === value)?.label ?? "");
   const [isOpen, setIsOpen] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const displayedOptions = isOpen ? frozenOptions : options;
+  const displayedOptions = isOpen
+    ? frozenOptionValues.flatMap((frozenValue) => {
+        const option = options.find((candidate) => candidate.value.toLowerCase() === frozenValue.toLowerCase());
+        return option ? [option] : [];
+      })
+    : options;
   const selected = displayedOptions.find((option) => option.value.toLowerCase() === value.toLowerCase());
   const filteredOptions = filterSearchableOptions(displayedOptions, query);
   const activeOption = filteredOptions[activeIndex];
@@ -79,7 +84,7 @@ export function SearchableSelect({
 
   const open = () => {
     if (isOpen) return;
-    setFrozenOptions(options);
+    setFrozenOptionValues(options.map((option) => option.value));
     setActiveIndex(0);
     setIsOpen(true);
   };

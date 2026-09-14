@@ -457,6 +457,7 @@ export async function executeSquidDeposit({
   const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
   const isNativeSource = isNativeToken(request.sourceToken);
   let totalNativeFee = 0n;
+  let nativeFeeSinceBalanceRead = 0n;
   {
     let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
@@ -482,7 +483,7 @@ export async function executeSquidDeposit({
           value: 0n,
         });
         assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee);
-        assertNativeBalance(nativeBalance, totalNativeFee + approval.fee, 0n);
+        assertNativeBalance(nativeBalance, nativeFeeSinceBalanceRead + approval.fee, 0n);
         await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
         const approvalHash = await walletClient.sendTransaction({
           ...approval.request,
@@ -490,6 +491,7 @@ export async function executeSquidDeposit({
           chain: undefined,
         });
         totalNativeFee += approval.fee;
+        nativeFeeSinceBalanceRead += approval.fee;
         const approvalReceipt = await sourceClient.waitForTransactionReceipt({ hash: approvalHash });
         if (approvalReceipt.status !== "success") {
           throw new SquidDepositError("The source-token approval transaction reverted", "reverted", approvalHash);
@@ -506,6 +508,7 @@ export async function executeSquidDeposit({
           }));
           if (allowance !== 0n)
             throw new Error("Source-token allowance changed after reset. Review the payment again.");
+          nativeFeeSinceBalanceRead = 0n;
         }
       }
     }
