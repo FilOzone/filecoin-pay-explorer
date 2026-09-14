@@ -1,15 +1,15 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { Abi, Hex, TransactionReceipt } from "viem";
+import type { Abi, Address, Hex, TransactionReceipt } from "viem";
 import { useConfig, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
 interface UseContractTransactionOptions {
-  account?: Hex;
-  contractAddress: Hex;
+  account?: Address;
+  contractAddress: Address;
   abi: Abi;
   chainId?: number;
   explorerUrl?: string;
