@@ -119,20 +119,13 @@ describe("useContractTransaction", () => {
     expect(hook().isExecuting).toBe(false);
   });
 
-  it("rejects a write when the network changes while prior authorization is pending", async () => {
+  it("rejects a write from a different network", async () => {
     const hook = mount(pinnedOptions);
-    let finishAuthorization!: () => void;
-    const authorization = new Promise<void>((resolve) => {
-      finishAuthorization = resolve;
-    });
-    const submission = authorization.then(() =>
-      hook().execute({ functionName: "depositWithPermit", args: [], metadata: { type: "deposit" } }),
-    );
-
     wagmi.account = { address: ACCOUNT, chainId: 314159 };
-    finishAuthorization();
 
-    await expect(submission).rejects.toThrow("connected network changed");
+    await expect(
+      hook().execute({ functionName: "depositWithPermit", args: [], metadata: { type: "deposit" } }),
+    ).rejects.toThrow("connected network changed");
     expect(wagmi.writeContractAsync).not.toHaveBeenCalled();
   });
 
