@@ -46,11 +46,14 @@ describe("CustomConnectButton", () => {
   });
 
   it("shows an actionable Privy initialization error instead of loading forever", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const markup = renderToStaticMarkup(<CustomConnectButton />);
 
     expect(markup).toContain('role="alert"');
-    expect(markup).toContain("Wallet login could not start");
+    expect(markup).toContain("Wallet login is temporarily unavailable");
+    expect(markup).not.toContain("Privy configuration");
     expect(markup).not.toContain("Loading wallet");
+    expect(consoleError).toHaveBeenCalledWith("Privy failed to initialize", mocks.privy.error);
   });
 
   it("pauses wallet auto-selection before leaving an authenticated session that is still preparing", async () => {

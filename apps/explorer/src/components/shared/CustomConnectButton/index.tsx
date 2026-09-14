@@ -29,12 +29,10 @@ const CustomConnectButton = () => {
   const { exit } = useWalletExit();
   const state = getWalletEntryState({ ready, walletsReady, authenticated, isConnected });
 
-  if (error)
-    return (
-      <p role='alert'>
-        Wallet login could not start. Check this deployment&apos;s Privy configuration, then reload the page.
-      </p>
-    );
+  if (error) {
+    console.error("Privy failed to initialize", error);
+    return <p role='alert'>Wallet login is temporarily unavailable. Reload the page and try again.</p>;
+  }
   if (state === "connected") return null;
   if (state === "loading") return <p role='status'>Loading wallet…</p>;
   if (state === "preparing")
