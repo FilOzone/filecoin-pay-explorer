@@ -5,7 +5,10 @@ import {
   erc20Abi,
   type Hash,
   type Hex,
+  isHash,
   type PublicClient,
+  parseEventLogs,
+  type TransactionReceipt,
   type WalletClient,
 } from "viem";
 import {
@@ -59,12 +62,11 @@ export type SquidDepositSourceClient = Pick<
     gasPrice?: bigint;
   }) => Promise<bigint>;
 };
-export type SquidDepositDestinationClient = Pick<PublicClient, "readContract">;
+export type SquidDepositDestinationClient = Pick<PublicClient, "readContract" | "waitForTransactionReceipt">;
 
 export interface SquidDepositResult {
   transactionHash: Hash;
-  fundsBefore: bigint;
-  fundsAfter: bigint;
+  destinationTransactionHash: Hash;
   depositedAmount: bigint;
 }
 
@@ -75,7 +77,7 @@ interface PollingOptions {
   maxStatusAttempts?: number;
   /** Consecutive failed status requests tolerated before the outage is reported. */
   maxStatusFailures?: number;
-  /** Filecoin balance reads after Squid reports success. */
+  /** Filecoin receipt wait periods after Squid reports success. */
   maxVerifyAttempts?: number;
 }
 
@@ -241,7 +243,7 @@ export function readFilecoinPayFunds(
 export async function fetchSquidDepositStatus(
   input: SquidDepositRef,
   client: SquidClient,
-): Promise<SquidDepositStatus> {
+): Promise<{ status: SquidDepositStatus; destinationTransactionHash?: Hash }> {
   const fetcher = client.fetch ?? globalThis.fetch.bind(globalThis);
   const query = new URLSearchParams({
     transactionId: input.transactionHash,
@@ -253,28 +255,36 @@ export async function fetchSquidDepositStatus(
     headers: { "x-integrator-id": client.integratorId },
   });
   // Squid answers 404 until its indexer sees the source transaction.
-  if (response.status === 404) return "pending";
+  if (response.status === 404) return { status: "pending" };
   if (!response.ok) throw new Error(`Squid status request failed (${response.status})`);
-  const body = (await response.json()) as { squidTransactionStatus?: unknown; status?: unknown };
+  const body = (await response.json()) as {
+    squidTransactionStatus?: unknown;
+    status?: unknown;
+    toChain?: { transactionId?: unknown };
+  };
   const status = body.squidTransactionStatus ?? body.status;
   if (typeof status !== "string") throw new Error("Invalid Squid status response");
   const normalized = status.toLowerCase();
-  if (normalized === "success") return "success";
+  if (normalized === "success") {
+    const destinationTransactionHash = body.toChain?.transactionId;
+    if (typeof destinationTransactionHash !== "string" || !isHash(destinationTransactionHash)) {
+      throw new Error("Invalid Squid destination transaction hash");
+    }
+    return { status: "success", destinationTransactionHash };
+  }
   // Squid delivers the swapped USDFC to `toAddress` when the post-hook fails.
-  if (normalized === "partial_success") return "hook-failed";
-  if (normalized === "needs_gas") return "needs-gas";
-  if (["failed", "refund"].includes(normalized)) return "failed";
-  return "pending";
+  if (normalized === "partial_success") return { status: "hook-failed" };
+  if (normalized === "needs_gas") return { status: "needs-gas" };
+  if (["failed", "refund"].includes(normalized)) return { status: "failed" };
+  return { status: "pending" };
 }
 
 /**
- * Follows a broadcast route to its Filecoin Pay credit: Squid's status for
- * cross-chain routes, then the account balance on Filecoin. Same-chain routes
- * settle atomically, so only the balance check applies.
+ * Follows a broadcast route to its exact Filecoin transaction, then verifies
+ * the expected Filecoin Pay deposit event from that receipt.
  */
 export async function awaitSquidDepositSettlement({
   destinationClient,
-  fundsBefore,
   minimumDestinationAmount,
   maxStatusAttempts = 90,
   maxStatusFailures = 6,
@@ -288,13 +298,16 @@ export async function awaitSquidDepositSettlement({
   target,
   transactionHash,
 }: AwaitSquidDepositInput): Promise<SquidDepositResult> {
+  let destinationTransactionHash = transactionHash;
   if (sourceChainId !== FILECOIN_CHAIN_ID) {
     onStage?.("bridging", transactionHash);
     let status: SquidDepositStatus = "pending";
     let consecutiveFailures = 0;
     for (let attempt = 0; attempt < maxStatusAttempts && status === "pending"; attempt += 1) {
       try {
-        status = await fetchSquidDepositStatus({ transactionHash, sourceChainId, quoteId }, squid);
+        const result = await fetchSquidDepositStatus({ transactionHash, sourceChainId, quoteId }, squid);
+        status = result.status;
+        if (result.destinationTransactionHash) destinationTransactionHash = result.destinationTransactionHash;
         consecutiveFailures = 0;
       } catch (statusError) {
         // One failed status request is noise; a run of them is an outage the user should hear about.
@@ -342,18 +355,52 @@ export async function awaitSquidDepositSettlement({
   }
 
   onStage?.("verifying", transactionHash);
-  for (let attempt = 0; attempt < maxVerifyAttempts; attempt += 1) {
-    const fundsAfter = await readFilecoinPayFunds(destinationClient, target);
-    if (fundsAfter >= fundsBefore + minimumDestinationAmount) {
-      return { transactionHash, fundsBefore, fundsAfter, depositedAmount: fundsAfter - fundsBefore };
-    }
-    await sleep(pollIntervalMs);
+  let receipt: TransactionReceipt;
+  try {
+    receipt = await destinationClient.waitForTransactionReceipt({
+      hash: destinationTransactionHash,
+      timeout: maxVerifyAttempts * pollIntervalMs,
+    });
+  } catch {
+    throw new SquidDepositError(
+      "The Filecoin destination transaction has not been indexed yet. Keep this page open or check back later.",
+      "timeout",
+      transactionHash,
+    );
   }
-  throw new SquidDepositError(
-    "Your Filecoin Pay balance has not updated yet. The deposit may still be settling.",
-    "timeout",
-    transactionHash,
+  if (receipt.status !== "success") {
+    throw new SquidDepositError(
+      "Squid's Filecoin destination transaction reverted. The USDFC may remain in your wallet.",
+      "hook-failed",
+      transactionHash,
+    );
+  }
+  const deposit = parseEventLogs({
+    abi: squidDepositAbi,
+    eventName: "DepositRecorded",
+    logs: receipt.logs,
+    strict: true,
+  }).find(
+    (log) =>
+      log.address.toLowerCase() === target.payments.toLowerCase() &&
+      log.args.token.toLowerCase() === target.usdfc.toLowerCase() &&
+      log.args.to.toLowerCase() === target.recipient.toLowerCase(),
   );
+  if (!deposit) {
+    throw new SquidDepositError(
+      "Squid completed without the expected Filecoin Pay deposit event. The USDFC may remain in your wallet.",
+      "hook-failed",
+      transactionHash,
+    );
+  }
+  if (deposit.args.amount < minimumDestinationAmount) {
+    throw new SquidDepositError(
+      "The Filecoin Pay deposit was smaller than the reviewed minimum.",
+      "failed",
+      transactionHash,
+    );
+  }
+  return { transactionHash, destinationTransactionHash, depositedAmount: deposit.args.amount };
 }
 
 /**

@@ -1,5 +1,14 @@
 import { SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { type Address, decodeFunctionData, erc20Abi, getAddress, type Hash, type Hex } from "viem";
+import {
+  type Address,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeEventTopics,
+  erc20Abi,
+  getAddress,
+  type Hash,
+  type Hex,
+} from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
   awaitSquidDepositSettlement,
@@ -11,7 +20,7 @@ import {
   type SquidDepositStage,
   type SquidDepositWalletClient,
 } from "./squid-deposit-execution";
-import type { ExecutableSquidDepositQuote } from "./squid-deposit-route";
+import { type ExecutableSquidDepositQuote, squidDepositAbi } from "./squid-deposit-route";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
 const OWNER = "0x1111111111111111111111111111111111111111" as const;
@@ -21,6 +30,7 @@ const USDFC = "0x4444444444444444444444444444444444444444" as const;
 const PAYMENTS = "0x5555555555555555555555555555555555555555" as const;
 const APPROVAL_HASH = `0x${"a".repeat(64)}` as Hash;
 const ROUTE_HASH = `0x${"b".repeat(64)}` as Hash;
+const DESTINATION_HASH = `0x${"c".repeat(64)}` as Hash;
 
 const request = {
   owner: OWNER,
@@ -44,12 +54,45 @@ const quote: ExecutableSquidDepositQuote = {
 };
 
 const statusResponse = (status: string | null, httpStatus = 200) =>
-  new Response(status === null ? "" : JSON.stringify({ squidTransactionStatus: status }), { status: httpStatus });
+  new Response(
+    status === null
+      ? ""
+      : JSON.stringify({
+          squidTransactionStatus: status,
+          ...(status === "success" ? { toChain: { transactionId: DESTINATION_HASH } } : {}),
+        }),
+    { status: httpStatus },
+  );
 
-function fakeDestination(fundsSequence: bigint[]): SquidDepositDestinationClient {
-  const funds = [...fundsSequence];
+function fakeDestination({
+  amount = 95n,
+  payments = PAYMENTS,
+  recipient = RECIPIENT,
+  receiptStatus = "success" as "success" | "reverted",
+  token = USDFC,
+}: {
+  amount?: bigint;
+  payments?: Address;
+  recipient?: Address;
+  receiptStatus?: "success" | "reverted";
+  token?: Address;
+} = {}): SquidDepositDestinationClient {
   return {
-    readContract: vi.fn(async () => [funds.length > 1 ? (funds.shift() as bigint) : funds[0], 0n, 0n, 0n]),
+    readContract: vi.fn(async () => [100n, 0n, 0n, 0n]),
+    waitForTransactionReceipt: vi.fn(async () => ({
+      logs: [
+        {
+          address: payments,
+          data: encodeAbiParameters([{ type: "uint256" }], [amount]),
+          topics: encodeEventTopics({
+            abi: squidDepositAbi,
+            args: { from: OWNER, to: recipient, token },
+            eventName: "DepositRecorded",
+          }),
+        },
+      ],
+      status: receiptStatus,
+    })),
   } as unknown as SquidDepositDestinationClient;
 }
 
@@ -122,12 +165,12 @@ const signingChecks = {
 
 describe("fetchSquidDepositStatus", () => {
   it.each([
-    ["pending", null, 404],
-    ["success", "success", 200],
-    ["hook-failed", "partial_success", 200],
-    ["failed", "refund", 200],
-    ["needs-gas", "needs_gas", 200],
-    ["pending", "ongoing", 200],
+    [{ status: "pending" }, null, 404],
+    [{ destinationTransactionHash: DESTINATION_HASH, status: "success" }, "success", 200],
+    [{ status: "hook-failed" }, "partial_success", 200],
+    [{ status: "failed" }, "refund", 200],
+    [{ status: "needs-gas" }, "needs_gas", 200],
+    [{ status: "pending" }, "ongoing", 200],
   ])("maps Squid's answer to %s", async (expected, status, httpStatus) => {
     const fetch = vi.fn(async () => statusResponse(status, httpStatus));
     await expect(
@@ -135,7 +178,7 @@ describe("fetchSquidDepositStatus", () => {
         { transactionHash: ROUTE_HASH, sourceChainId: 8453, quoteId: "quote-1" },
         { integratorId: "id", fetch },
       ),
-    ).resolves.toBe(expected);
+    ).resolves.toEqual(expected);
     const [url] = fetch.mock.calls[0] as unknown as [string];
     expect(url).toBe(
       `https://v2.api.squidrouter.com/v2/status?transactionId=${ROUTE_HASH}&fromChainId=8453&toChainId=314&quoteId=quote-1`,
@@ -156,13 +199,13 @@ describe("fetchSquidDepositStatus", () => {
 describe("awaitSquidDepositSettlement", () => {
   const target = { payments: PAYMENTS, usdfc: USDFC, recipient: RECIPIENT };
 
-  it("waits for Squid, then for the Filecoin Pay balance to grow", async () => {
+  it("verifies the exact destination receipt after Squid succeeds", async () => {
     const responses = [statusResponse(null, 404), statusResponse("ongoing"), statusResponse("success")];
     const fetch = vi.fn(async () => responses.shift() as Response);
     const stages: SquidDepositStage[] = [];
 
     const result = await awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([100n, 100n, 192n]),
+      destinationClient: fakeDestination({ amount: 92n }),
       fundsBefore: 100n,
       minimumDestinationAmount: 92n,
       onStage: (stage) => stages.push(stage),
@@ -174,7 +217,11 @@ describe("awaitSquidDepositSettlement", () => {
       transactionHash: ROUTE_HASH,
     });
 
-    expect(result).toEqual({ transactionHash: ROUTE_HASH, fundsBefore: 100n, fundsAfter: 192n, depositedAmount: 92n });
+    expect(result).toEqual({
+      depositedAmount: 92n,
+      destinationTransactionHash: DESTINATION_HASH,
+      transactionHash: ROUTE_HASH,
+    });
     expect(stages).toEqual(["bridging", "verifying"]);
     expect(fetch).toHaveBeenCalledTimes(3);
   });
@@ -182,7 +229,7 @@ describe("awaitSquidDepositSettlement", () => {
   it("skips Squid status for same-chain routes", async () => {
     const fetch = vi.fn();
     const result = await awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([150n]),
+      destinationClient: fakeDestination({ amount: 50n }),
       fundsBefore: 100n,
       minimumDestinationAmount: 50n,
       quoteId: "quote-1",
@@ -202,7 +249,7 @@ describe("awaitSquidDepositSettlement", () => {
   ])("reports %s as a %s failure", async (status, reason, message) => {
     const fetch = vi.fn(async () => statusResponse(status));
     const attempt = awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([100n]),
+      destinationClient: fakeDestination(),
       fundsBefore: 100n,
       minimumDestinationAmount: 1n,
       quoteId: "quote-1",
@@ -218,7 +265,7 @@ describe("awaitSquidDepositSettlement", () => {
 
   it("keeps NEEDS_GAS distinct and actionable for later recovery", async () => {
     const attempt = awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([100n]),
+      destinationClient: fakeDestination(),
       fundsBefore: 100n,
       minimumDestinationAmount: 1n,
       quoteId: "quote-1",
@@ -236,7 +283,7 @@ describe("awaitSquidDepositSettlement", () => {
     const responses = [statusResponse(null, 500), statusResponse("success")];
     const fetch = vi.fn(async () => responses.shift() as Response);
     const result = await awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([192n]),
+      destinationClient: fakeDestination({ amount: 92n }),
       fundsBefore: 100n,
       minimumDestinationAmount: 92n,
       quoteId: "quote-1",
@@ -246,14 +293,18 @@ describe("awaitSquidDepositSettlement", () => {
       target,
       transactionHash: ROUTE_HASH,
     });
-    expect(result).toEqual({ transactionHash: ROUTE_HASH, fundsBefore: 100n, fundsAfter: 192n, depositedAmount: 92n });
+    expect(result).toEqual({
+      depositedAmount: 92n,
+      destinationTransactionHash: DESTINATION_HASH,
+      transactionHash: ROUTE_HASH,
+    });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("reports a status service outage after repeated failures without dropping the hash", async () => {
     const fetch = vi.fn(async () => statusResponse(null, 500));
     const attempt = awaitSquidDepositSettlement({
-      destinationClient: fakeDestination([100n]),
+      destinationClient: fakeDestination(),
       fundsBefore: 100n,
       minimumDestinationAmount: 1n,
       maxStatusFailures: 3,
@@ -279,7 +330,7 @@ describe("awaitSquidDepositSettlement", () => {
     const fetch = vi.fn(async () => statusResponse(null, 404));
     await expect(
       awaitSquidDepositSettlement({
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         fundsBefore: 100n,
         minimumDestinationAmount: 1n,
         maxStatusAttempts: 2,
@@ -294,10 +345,10 @@ describe("awaitSquidDepositSettlement", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("does not treat an unrelated credit below the reviewed minimum as settlement", async () => {
+  it("does not treat another contract's deposit event as settlement", async () => {
     await expect(
       awaitSquidDepositSettlement({
-        destinationClient: fakeDestination([101n]),
+        destinationClient: fakeDestination({ payments: OWNER }),
         fundsBefore: 100n,
         maxVerifyAttempts: 2,
         minimumDestinationAmount: 92n,
@@ -308,7 +359,23 @@ describe("awaitSquidDepositSettlement", () => {
         target,
         transactionHash: ROUTE_HASH,
       }),
-    ).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+    ).rejects.toMatchObject({ reason: "hook-failed", transactionHash: ROUTE_HASH });
+  });
+
+  it("rejects a matching deposit below the reviewed minimum", async () => {
+    await expect(
+      awaitSquidDepositSettlement({
+        destinationClient: fakeDestination({ amount: 91n }),
+        fundsBefore: 100n,
+        minimumDestinationAmount: 92n,
+        quoteId: "quote-1",
+        sleep: noSleep,
+        sourceChainId: 314,
+        squid: { integratorId: "id" },
+        target,
+        transactionHash: ROUTE_HASH,
+      }),
+    ).rejects.toMatchObject({ reason: "failed", transactionHash: ROUTE_HASH });
   });
 });
 
@@ -321,7 +388,7 @@ describe("executeSquidDeposit", () => {
     const broadcasts: { transactionHash: Hash; fundsBefore: bigint }[] = [];
 
     const result = await executeSquidDeposit({
-      destinationClient: fakeDestination([100n, 100n, 195n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       onBroadcast: (broadcast) => broadcasts.push(broadcast),
       onStage: (stage, hash) => stages.push([stage, hash]),
@@ -333,7 +400,11 @@ describe("executeSquidDeposit", () => {
       walletClient: wallet,
     });
 
-    expect(result).toEqual({ transactionHash: ROUTE_HASH, fundsBefore: 100n, fundsAfter: 195n, depositedAmount: 95n });
+    expect(result).toEqual({
+      depositedAmount: 95n,
+      destinationTransactionHash: DESTINATION_HASH,
+      transactionHash: ROUTE_HASH,
+    });
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
     expect(source.estimateTotalFee).toHaveBeenCalledTimes(2);
     const [approval, route] = wallet.sendTransaction.mock.calls as unknown as [
@@ -366,7 +437,7 @@ describe("executeSquidDeposit", () => {
   it("skips the approval only when the allowance exactly matches the amount", async () => {
     const wallet = fakeWallet();
     await executeSquidDeposit({
-      destinationClient: fakeDestination([100n, 195n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       quote,
       request,
@@ -381,7 +452,7 @@ describe("executeSquidDeposit", () => {
   it("zeros an oversized allowance before approving the exact amount", async () => {
     const wallet = fakeWallet();
     await executeSquidDeposit({
-      destinationClient: fakeDestination([100n, 195n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       quote,
       request,
@@ -404,7 +475,7 @@ describe("executeSquidDeposit", () => {
     const wallet = { ...fakeWallet(), getChainId: vi.fn(async () => 1) };
     await expect(
       executeSquidDeposit({
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         ...signingChecks,
         quote,
         request,
@@ -418,7 +489,7 @@ describe("executeSquidDeposit", () => {
 
   it("reports a reverted route with its hash", async () => {
     const attempt = executeSquidDeposit({
-      destinationClient: fakeDestination([100n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       quote,
       request,
@@ -436,7 +507,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         getCurrentOwner: vi.fn(async () => RECIPIENT),
         quote,
         request,
@@ -453,7 +524,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         maxNativeFee: 1n,
         quote,
         request,
@@ -471,7 +542,7 @@ describe("executeSquidDeposit", () => {
       executeSquidDeposit({
         ...signingChecks,
         approvalRequired: false,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         maxNativeFee: 700_000_000_000_000n,
         quote,
         request,
@@ -489,7 +560,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({ allowance: request.sourceAmount, nativeBalance: routeGas + 9n }),
@@ -507,7 +578,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n, 195n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({
@@ -527,7 +598,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         onBroadcast,
         quote,
         request,
@@ -548,7 +619,7 @@ describe("executeSquidDeposit", () => {
       executeSquidDeposit({
         ...signingChecks,
         approvalRequired: false,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         onBroadcast,
         onSwapAttempt,
         quote,
@@ -584,7 +655,7 @@ describe("executeSquidDeposit", () => {
         ...signingChecks,
         approvalRequired: false,
         assertCurrentContext,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({ allowance: request.sourceAmount }),
@@ -605,7 +676,7 @@ describe("executeSquidDeposit", () => {
       executeSquidDeposit({
         ...signingChecks,
         approvalRequired: false,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({ allowance: request.sourceAmount, ...sourceOptions }),
@@ -623,7 +694,7 @@ describe("executeSquidDeposit", () => {
       await expect(
         executeSquidDeposit({
           ...signingChecks,
-          destinationClient: fakeDestination([100n]),
+          destinationClient: fakeDestination(),
           quote: { ...quote, transaction: { ...quote.transaction, expiresAt: 1_500 } },
           request,
           sourceClient: fakeSource(),
@@ -642,7 +713,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({ tokenBalance: 1n }),
@@ -656,7 +727,7 @@ describe("executeSquidDeposit", () => {
     await expect(
       executeSquidDeposit({
         ...signingChecks,
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         quote,
         request,
         sourceClient: fakeSource({ approvalUpdatesAllowance: false }),

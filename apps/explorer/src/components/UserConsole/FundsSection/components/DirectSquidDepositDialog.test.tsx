@@ -306,8 +306,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
     state.execute.mockResolvedValueOnce({
       depositedAmount: 92n,
-      fundsAfter: 97n,
-      fundsBefore: 5n,
+      destinationTransactionHash: ROUTE_HASH,
       transactionHash: ROUTE_HASH,
     });
     const onOpenChange = vi.fn();
