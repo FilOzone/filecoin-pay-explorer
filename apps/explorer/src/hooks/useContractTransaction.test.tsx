@@ -57,20 +57,13 @@ describe("useContractTransaction", () => {
     });
   });
 
-  it("rejects a write when the network changes while prior authorization is pending", async () => {
+  it("rejects a write from a different network", async () => {
     const getHook = renderHook();
-    let finishAuthorization!: () => void;
-    const authorization = new Promise<void>((resolve) => {
-      finishAuthorization = resolve;
-    });
-    const submission = authorization.then(() =>
-      getHook().execute({ functionName: "depositWithPermit", args: [], metadata: { type: "deposit" } }),
-    );
-
     mocks.account = { address: ACCOUNT, chainId: 314159 };
-    finishAuthorization();
 
-    await expect(submission).rejects.toThrow("connected network changed");
+    await expect(
+      getHook().execute({ functionName: "depositWithPermit", args: [], metadata: { type: "deposit" } }),
+    ).rejects.toThrow("connected network changed");
     expect(mocks.writeContractAsync).not.toHaveBeenCalled();
   });
 
