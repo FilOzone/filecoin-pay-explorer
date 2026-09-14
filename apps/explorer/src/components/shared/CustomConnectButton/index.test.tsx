@@ -66,8 +66,12 @@ describe("CustomConnectButton", () => {
       renderer = create(<CustomConnectButton />);
     });
 
+    const buttons = renderer.root.findAllByType("button");
+    expect(buttons.some((button) => button.children.includes("Reload"))).toBe(true);
+    const logoutButton = buttons.find((button) => button.children.includes("Log out"));
+    expect(logoutButton).toBeDefined();
     await act(async () => {
-      renderer.root.findByType("button").props.onClick();
+      logoutButton?.props.onClick();
     });
 
     expect(mocks.pause).toHaveBeenCalledOnce();

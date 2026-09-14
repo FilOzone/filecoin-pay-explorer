@@ -39,18 +39,23 @@ const CustomConnectButton = () => {
     return (
       <div className='flex flex-col items-center gap-2'>
         <p role='status'>Preparing wallet…</p>
-        <Button
-          variant='ghost'
-          size='compact'
-          type='button'
-          onClick={() =>
-            void exit().catch((error: unknown) =>
-              toast.error("Unable to log out", { description: describeError(error) }),
-            )
-          }
-        >
-          Log out and try again
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button variant='ghost' size='compact' type='button' onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+          <Button
+            variant='ghost'
+            size='compact'
+            type='button'
+            onClick={() =>
+              void exit().catch((error: unknown) =>
+                toast.error("Unable to log out", { description: describeError(error) }),
+              )
+            }
+          >
+            Log out
+          </Button>
+        </div>
       </div>
     );
 
