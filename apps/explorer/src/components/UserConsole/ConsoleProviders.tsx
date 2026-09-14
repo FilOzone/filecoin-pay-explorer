@@ -25,12 +25,14 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
   const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 
   if (!appId || !clientId) {
+    const missingVariables = [!appId && "NEXT_PUBLIC_PRIVY_APP_ID", !clientId && "NEXT_PUBLIC_PRIVY_CLIENT_ID"].filter(
+      Boolean,
+    );
+    console.error("Wallet login is unavailable: missing environment variables", missingVariables);
+
     return (
       <div className='m-6'>
-        <Alert
-          title='Console wallet login is not configured'
-          description='Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID for this deployment.'
-        />
+        <Alert title='Wallet login is temporarily unavailable' description='Please try again later.' />
       </div>
     );
   }
