@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingHost } from "./FundingHost";
@@ -9,6 +10,7 @@ const wallet = vi.hoisted(() => ({
 }));
 const dialogs = vi.hoisted(() => ({
   accountId: "",
+  controllerMounts: 0,
   openTopUp: vi.fn(),
   onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
   onSelect: undefined as ((method: "deposit" | "squid") => void) | undefined,
@@ -27,6 +29,9 @@ vi.mock("./FundsSection/TopUpDialogController", () => ({
     accountId: string;
     children: (openTopUp: () => void, isOpen: boolean) => React.ReactNode;
   }) => {
+    useEffect(() => {
+      dialogs.controllerMounts += 1;
+    }, []);
     dialogs.accountId = accountId;
     return <div data-controller>{children(dialogs.openTopUp, false)}</div>;
   },
@@ -109,6 +114,7 @@ beforeEach(() => {
   wallet.address = "0xABCDEF0000000000000000000000000000000001";
   wallet.chainId = 314;
   dialogs.accountId = "";
+  dialogs.controllerMounts = 0;
   dialogs.openTopUp.mockClear();
 });
 
@@ -148,6 +154,7 @@ describe("FundingHost", () => {
     wallet.chainId = 8453;
     await rerenderHost(renderer);
 
+    expect(dialogs.controllerMounts).toBe(1);
     expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
     expect(renderer.root.findAll((node) => node.type === "button" && "data-deposit-open" in node.props)).toHaveLength(
       0,
