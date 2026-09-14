@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
+import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
@@ -23,6 +24,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const network = getNetworkFromChainId(chainId);
   const isMainnet = isFilecoinChain && network === "mainnet";
   const isCalibration = isFilecoinChain && network === "calibration";
+  const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
   // The effect below closes every dialog after a chain change, but that runs one
   // render late. Comparing against the last committed chain id keeps the dialogs
   // closed during that render so nothing reopens on the new network.
@@ -45,6 +47,19 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     if (!open) launch.closeAddFunds();
   };
 
+  const depositDialog =
+    isMainnet || isCalibration ? (
+      <DepositDialog
+        depositToken={launch.depositToken}
+        key={network}
+        onOpenChange={handleDepositOpenChange}
+        open={!chainChanged && (isDepositOpen || (isCalibration && launch.isAddFundsOpen))}
+        tokens={data?.userTokens ?? []}
+      />
+    ) : null;
+
+  if (!isMainnet && !isSquidSourceChain) return depositDialog;
+
   return (
     <TopUpDialogController accountId={address.toLowerCase()}>
       {(openTopUp) => {
@@ -64,15 +79,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
                 squidAvailable
               />
             ) : null}
-            {isMainnet || isCalibration ? (
-              <DepositDialog
-                depositToken={launch.depositToken}
-                key={network}
-                onOpenChange={handleDepositOpenChange}
-                open={!chainChanged && (isDepositOpen || (isCalibration && launch.isAddFundsOpen))}
-                tokens={data?.userTokens ?? []}
-              />
-            ) : null}
+            {depositDialog}
           </>
         );
       }}
