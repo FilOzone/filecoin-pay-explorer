@@ -67,17 +67,16 @@ const CustomConnectButton = () => {
       >
         Log in
       </Button>
-      <Button
-        variant='ghost'
-        size='compact'
+      <button
+        className='text-sm text-primary hover:underline'
         type='button'
         onClick={() => {
           consoleWalletSelector.resume();
           connectWallet();
         }}
       >
-        Just connect a wallet
-      </Button>
+        Connect a wallet without an account
+      </button>
     </div>
   );
 };
