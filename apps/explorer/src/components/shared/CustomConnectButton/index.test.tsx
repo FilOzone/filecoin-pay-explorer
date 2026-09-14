@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomConnectButton from ".";
 
 const mocks = vi.hoisted(() => ({
+  connectWallet: vi.fn(),
+  login: vi.fn(),
   logout: vi.fn<() => Promise<void>>(),
   pause: vi.fn(),
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
@@ -23,10 +25,10 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   ),
 }));
 vi.mock("@privy-io/react-auth", () => ({
-  useConnectWallet: () => ({ connectWallet: vi.fn() }),
+  useConnectWallet: () => ({ connectWallet: mocks.connectWallet }),
   useLogin: ({ onError }: { onError: (code: string) => void }) => {
     mocks.loginOnError = onError;
-    return { login: vi.fn() };
+    return { login: mocks.login };
   },
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => mocks.privy,
@@ -72,6 +74,23 @@ describe("CustomConnectButton", () => {
     expect(mocks.logout).toHaveBeenCalledOnce();
     expect(mocks.pause.mock.invocationCallOrder[0]).toBeLessThan(mocks.logout.mock.invocationCallOrder[0]);
     expect(mocks.resume).not.toHaveBeenCalled();
+  });
+
+  it("resumes wallet auto-selection before opening either wallet flow", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    const [loginButton, connectButton] = renderer.root.findAllByType("button");
+    await act(async () => loginButton.props.onClick());
+    await act(async () => connectButton.props.onClick());
+
+    expect(mocks.resume).toHaveBeenCalledTimes(2);
+    expect(mocks.resume.mock.invocationCallOrder[0]).toBeLessThan(mocks.login.mock.invocationCallOrder[0]);
+    expect(mocks.resume.mock.invocationCallOrder[1]).toBeLessThan(mocks.connectWallet.mock.invocationCallOrder[0]);
   });
 });
 
