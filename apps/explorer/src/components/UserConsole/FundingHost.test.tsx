@@ -141,6 +141,7 @@ describe("FundingHost", () => {
   it("opens direct deposit without a one-choice picker on Calibration", async () => {
     wallet.chainId = 314159;
     const renderer = await renderHost();
+    expect(renderer.root.findAllByProps({ "data-controller": true }, { deep: false })).toHaveLength(0);
     expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(true);
