@@ -210,15 +210,12 @@ async function prepareTransaction(
   return { fee: applyNetworkFeeExecutionBuffer(sourceChainId, totalFee), request };
 }
 
-function assertFeeWithinReview(
-  feeSoFar: bigint,
-  fee: bigint,
-  maxNativeFee: bigint,
-  nativeBalance: bigint,
-  value: bigint,
-) {
+function assertFeeWithinReview(feeSoFar: bigint, fee: bigint, maxNativeFee: bigint) {
   if (feeSoFar + fee > maxNativeFee) throw new Error("Native gas exceeded the reviewed maximum");
-  if (nativeBalance < feeSoFar + fee + value) throw new Error("Native balance no longer covers gas and route fees");
+}
+
+function assertNativeBalance(nativeBalance: bigint, fee: bigint, value: bigint) {
+  if (nativeBalance < fee + value) throw new Error("Native balance no longer covers gas and route fees");
 }
 
 export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef {
@@ -409,7 +406,8 @@ export async function executeSquidDeposit({
           data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
           value: 0n,
         });
-        assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee, nativeBalance, 0n);
+        assertFeeWithinReview(totalNativeFee, approval.fee, maxNativeFee);
+        assertNativeBalance(nativeBalance, totalNativeFee + approval.fee, 0n);
         await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
         const approvalHash = await walletClient.sendTransaction({
           ...approval.request,
@@ -425,7 +423,7 @@ export async function executeSquidDeposit({
     }
   }
 
-  const { nativeBalance } = await assertFreshSigningState({
+  await assertFreshSigningState({
     assertCurrentContext,
     getCurrentOwner,
     quote,
@@ -440,8 +438,17 @@ export async function executeSquidDeposit({
     data: quote.transaction.data,
     value: quote.transaction.value,
   });
-  assertFeeWithinReview(totalNativeFee, route.fee, maxNativeFee, nativeBalance, quote.transaction.value);
-  await assertCurrentWallet({ assertCurrentContext, getCurrentOwner, request, walletClient });
+  assertFeeWithinReview(totalNativeFee, route.fee, maxNativeFee);
+  const { nativeBalance } = await assertFreshSigningState({
+    assertCurrentContext,
+    getCurrentOwner,
+    quote,
+    request,
+    requireAllowance: true,
+    sourceClient,
+    walletClient,
+  });
+  assertNativeBalance(nativeBalance, route.fee, quote.transaction.value);
   if (quote.transaction.expiresAt !== undefined && quote.transaction.expiresAt <= Math.floor(Date.now() / 1000)) {
     throw new Error("The Squid route expired. Refresh the quote.");
   }
