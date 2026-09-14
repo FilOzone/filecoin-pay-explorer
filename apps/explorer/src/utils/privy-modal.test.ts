@@ -1,5 +1,17 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { waitForPrivyModalToClose } from "./privy-modal";
+
+it("matches Privy's installed dialog id", () => {
+  const distDirectory = dirname(createRequire(import.meta.url).resolve("@privy-io/react-auth"));
+  const hasDialogId = readdirSync(distDirectory)
+    .filter((file) => file.endsWith(".js"))
+    .some((file) => readFileSync(join(distDirectory, file), "utf8").includes('id:"privy-dialog"'));
+
+  expect(hasDialogId).toBe(true);
+});
 
 describe("waitForPrivyModalToClose", () => {
   beforeEach(() => {
