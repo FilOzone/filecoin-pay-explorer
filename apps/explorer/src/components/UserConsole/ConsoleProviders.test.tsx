@@ -2,25 +2,36 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ConsoleProviders from "./ConsoleProviders";
 
+const privy = vi.hoisted(() => ({ appId: "", clientId: "" }));
+
+vi.mock("@privy-io/react-auth", () => ({
+  PrivyProvider: ({ appId, clientId }: { appId: string; clientId: string }) => {
+    privy.appId = appId;
+    privy.clientId = clientId;
+    return null;
+  },
+}));
+
 afterEach(() => {
-  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
 describe("ConsoleProviders", () => {
-  it("keeps deployment details out of the missing-configuration message", () => {
-    vi.stubEnv("NEXT_PUBLIC_PRIVY_APP_ID", "");
-    vi.stubEnv("NEXT_PUBLIC_PRIVY_CLIENT_ID", "");
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  it.each([
+    [
+      "development fallbacks",
+      "",
+      "",
+      "cmtkfb83p04du0bk0kofldq4e",
+      "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf",
+    ],
+    ["deployment overrides", "app-override", "client-override", "app-override", "client-override"],
+  ])("uses %s", (_, appId, clientId, expectedAppId, expectedClientId) => {
+    vi.stubEnv("NEXT_PUBLIC_PRIVY_APP_ID", appId);
+    vi.stubEnv("NEXT_PUBLIC_PRIVY_CLIENT_ID", clientId);
 
-    const markup = renderToStaticMarkup(<ConsoleProviders>{null}</ConsoleProviders>);
+    renderToStaticMarkup(<ConsoleProviders>{null}</ConsoleProviders>);
 
-    expect(markup).toContain("Wallet login is temporarily unavailable");
-    expect(markup).toContain("Please try again later");
-    expect(markup).not.toContain("NEXT_PUBLIC_PRIVY");
-    expect(consoleError).toHaveBeenCalledWith("Wallet login is unavailable: missing environment variables", [
-      "NEXT_PUBLIC_PRIVY_APP_ID",
-      "NEXT_PUBLIC_PRIVY_CLIENT_ID",
-    ]);
+    expect(privy).toEqual({ appId: expectedAppId, clientId: expectedClientId });
   });
 });
