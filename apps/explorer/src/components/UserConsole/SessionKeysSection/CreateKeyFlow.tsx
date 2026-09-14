@@ -68,6 +68,28 @@ interface GeneratedKey {
 
 type TxState = "idle" | "pending" | "confirmed" | "failed";
 
+type CreateMode = "renew" | "add" | "new";
+
+/**
+ * A submission's story, captured in handleCreate so the success screens
+ * describe what was actually sent onchain rather than the live form.
+ */
+interface SubmittedLogin {
+  mode: CreateMode;
+  name: string;
+  signer: Hex;
+  /** The connected wallet that signed the grant; it may switch before the transaction confirms. */
+  grantor: Hex;
+  scopes: ScopeId[];
+}
+
+/** Success-state title per submission mode: an existing key gaining scopes was never "registered". */
+const SUCCESS_TITLES: Record<CreateMode, string> = {
+  new: "Session key registered",
+  add: "Scopes added",
+  renew: "Session key renewed",
+};
+
 // Nothing is pre-selected: the owner ticks each scope the key holder needs.
 const EMPTY_SELECTION = Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, false])) as Record<ScopeId, boolean>;
 
@@ -104,10 +126,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
   const [expirySec, setExpirySec] = useState<bigint>(0n);
-  // The wallet that signed the submitted login, pinned at submit time so the
-  // success screen names the actual grantor even if the wallet switches while
-  // the transaction confirms.
-  const [grantedBy, setGrantedBy] = useState<Hex | null>(null);
+  // What this attempt sent onchain, frozen at submit. The success screens
+  // read only this, never the live form (see submittedScopeLabels below).
+  const [submitted, setSubmitted] = useState<SubmittedLogin | null>(null);
   // The attempt the dialog is showing. Cleared on close, so a receipt from
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
@@ -155,8 +176,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
   const cleanName = normalizeKeyName(name);
-  const displayName = cleanName || "(unnamed)";
-  const scopeLabels = selectedScopes.map((id) => SCOPE_BY_ID[id].label).join(", ");
+  // What the form is doing, in order of precedence: a renewal is an existing
+  // key too, and a link-supplied address is still a new key.
+  function resolveCreateMode(): CreateMode {
+    if (isRenewal) return "renew";
+    if (isExistingKey) return "add";
+    return "new";
+  }
+  const createMode = resolveCreateMode();
 
   const handleCreate = async () => {
     const expiry = expiryChoice();
@@ -176,8 +203,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     }
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
-    setGrantedBy(account);
     setExpirySec(expiry);
+    setSubmitted({
+      mode: createMode,
+      name: cleanName,
+      signer: signerAddress,
+      grantor: account,
+      scopes: selectedScopes,
+    });
     const attempt = {};
     shownAttemptRef.current = attempt;
     // The dialog follows its attempt even after a wallet switch: the banner
@@ -244,7 +277,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setOwnAddress("");
     setGenerated(null);
     setExpirySec(0n);
-    setGrantedBy(null);
+    setSubmitted(null);
   }, []);
 
   const reset = () => {
@@ -307,6 +340,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
 
+  // Success copy comes from `submitted`, not the checkboxes. Once the login
+  // confirms, the parent passes the updated key back as `existingKey`, the
+  // prefill effect runs again, and it unchecks destructive scopes (Delete
+  // data set, Terminate service). Reading the checkboxes here showed an
+  // empty scope list on the success screen.
+  const submittedScopeLabels = (submitted?.scopes ?? []).map((id) => SCOPE_BY_ID[id].label).join(", ");
+  const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
+
   const txBanners: Partial<Record<TxState, ReactNode>> = {
     pending: (
       <Notice tone='info' className='flex items-center gap-2'>
@@ -325,16 +366,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
   const txBanner = txBanners[txState] ?? (
     <Notice tone='ok'>
-      ✓ <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
+      ✓ <b>{submittedKeyLabel}</b> is now authorized with <b>{submittedScopeLabels}</b> · active until {expiryLabel}
     </Notice>
   );
-  // What the form is doing, in order of precedence: a renewal is an existing
-  // key too, and a link-supplied address is still a new key.
-  function createMode(): "renew" | "add" | "new" {
-    if (isRenewal) return "renew";
-    if (isExistingKey) return "add";
-    return "new";
-  }
   const formCopy = {
     renew: {
       title: "Renew session key",
@@ -352,7 +386,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       description: "All selected scopes share the same expiry.",
       submit: "Create session key",
     },
-  }[createMode()];
+  }[createMode];
   // On the link flow the button names the signing account, so it is the last
   // thing read before the wallet prompt.
   const submitLabel = addressLocked ? `Authorize as ${formatAddress(account)}` : formCopy.submit;
@@ -624,23 +658,23 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
           </>
         )}
 
-        {step === "registered" && (
+        {step === "registered" && submitted && (
           <>
             <DialogHeader>
-              <DialogTitle>Session key registered</DialogTitle>
+              <DialogTitle>{SUCCESS_TITLES[submitted.mode]}</DialogTitle>
               <DialogDescription>
-                <b>{displayName}</b> is active until {expiryLabel} · scopes: {scopeLabels}
+                <b>{submittedKeyLabel}</b> is active until {expiryLabel}
               </DialogDescription>
             </DialogHeader>
             <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
-              <span className='font-mono break-all'>{ownAddress}</span> is now authorized
-              {addressLocked && grantedBy && (
+              <span className='font-mono break-all'>{submitted.signer}</span> is now authorized
+              {addressLocked && (
                 <>
                   {" "}
-                  to act for <span className='font-mono break-all'>{grantedBy}</span>
+                  to act for <span className='font-mono break-all'>{submitted.grantor}</span>
                 </>
-              )}
-              .
+              )}{" "}
+              with <b>{submittedScopeLabels}</b>.
             </div>
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={() => handleOpenChange(false)}>
