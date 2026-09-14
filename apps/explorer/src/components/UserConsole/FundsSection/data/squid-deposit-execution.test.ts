@@ -484,11 +484,34 @@ describe("executeSquidDeposit", () => {
     });
   });
 
+  it("does not count reset gas against the refreshed balance before approval", async () => {
+    const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
+    const fee = applyNetworkFeeExecutionBuffer(request.sourceChainId, 100n);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        approvalResetRequired: true,
+        quote,
+        request,
+        sleep: noSleep,
+        sourceClient: fakeSource({
+          allowanceSequence: [1n, 0n, request.sourceAmount, request.sourceAmount],
+          nativeBalanceSequence: [fee, fee, fee + quote.transaction.value, fee + quote.transaction.value],
+          totalFee: 100n,
+        }),
+        squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+        walletClient: wallet,
+      }),
+    ).resolves.toMatchObject({ transactionHash: ROUTE_HASH });
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(3);
+  });
+
   it("does not add an unreviewed allowance reset before the route", async () => {
     const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
     await expect(
       executeSquidDeposit({
-        destinationClient: fakeDestination([100n]),
+        destinationClient: fakeDestination(),
         ...signingChecks,
         quote,
         request,
@@ -503,7 +526,7 @@ describe("executeSquidDeposit", () => {
   it("zeros an oversized allowance before approving the exact amount", async () => {
     const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
     await executeSquidDeposit({
-      destinationClient: fakeDestination([100n, 195n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       approvalResetRequired: true,
       quote,
@@ -528,7 +551,7 @@ describe("executeSquidDeposit", () => {
     wallet.sendTransaction.mockResolvedValue(ROUTE_HASH);
     const source = fakeSource({ nativeBalance: 10n ** 18n });
     await executeSquidDeposit({
-      destinationClient: fakeDestination([100n, 195n]),
+      destinationClient: fakeDestination(),
       ...signingChecks,
       approvalRequired: false,
       quote: { ...quote, transaction: { ...quote.transaction, value: request.sourceAmount + 10n } },
@@ -738,7 +761,11 @@ describe("executeSquidDeposit", () => {
   });
 
   it.each([
-    ["token balance", { tokenBalanceSequence: [request.sourceAmount, request.sourceAmount, 1n] }, "USDC balance"],
+    [
+      "token balance",
+      { tokenBalanceSequence: [request.sourceAmount, request.sourceAmount, 1n] },
+      "Source-token balance",
+    ],
     ["allowance", { allowanceSequence: [request.sourceAmount, request.sourceAmount, 0n] }, "allowance does not match"],
     ["native balance", { nativeBalanceSequence: [10n ** 18n, 10n ** 18n, 0n] }, "Native balance"],
   ])("rechecks the %s after route preparation", async (_, sourceOptions, message) => {

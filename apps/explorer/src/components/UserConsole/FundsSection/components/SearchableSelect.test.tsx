@@ -24,6 +24,10 @@ const options = [
 function Harness() {
   const [value, setValue] = useState("");
   const [reversed, setReversed] = useState(false);
+  const [usdcBalance, setUsdcBalance] = useState("1.25 USDC");
+  const currentOptions = options.map((option) =>
+    option.value === "0x123" ? { ...option, detail: usdcBalance } : option,
+  );
   return (
     <>
       <button id='select-eth' onClick={() => setValue("0xeee")} type='button'>
@@ -32,6 +36,9 @@ function Harness() {
       <button id='reverse' onClick={() => setReversed(true)} type='button'>
         Reverse
       </button>
+      <button id='refresh-balance' onClick={() => setUsdcBalance("2.5 USDC")} type='button'>
+        Refresh balance
+      </button>
       <output>{value}</output>
       <SearchableSelect
         emptyMessage='No matching tokens.'
@@ -39,7 +46,7 @@ function Harness() {
         invalidMessage='Choose a token.'
         listLabel='Tokens'
         onValueChange={setValue}
-        options={reversed ? [...options].reverse() : options}
+        options={reversed ? [...currentOptions].reverse() : currentOptions}
         placeholder='Search tokens'
         value={value}
       />
@@ -70,6 +77,8 @@ describe("SearchableSelect", () => {
 
     await act(async () => renderer.root.findByProps({ id: "reverse" }).props.onClick());
     expect(text(renderer.root.findAllByProps({ role: "option" })[0])).toContain("USDC");
+    await act(async () => renderer.root.findByProps({ id: "refresh-balance" }).props.onClick());
+    expect(text(renderer.root.findAllByProps({ role: "option" })[0])).toContain("2.5 USDC");
     await act(async () => input.props.onClick());
     expect(text(renderer.root.findAllByProps({ role: "option" })[0])).toContain("USDC");
 
