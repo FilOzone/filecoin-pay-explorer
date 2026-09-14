@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { initUIConfig } from "@/app/config-initializer";
 import { NetworkProvider } from "@/context/Network";
 import { DEFAULT_TOAST_POSITION } from "@/utils/constants";
-import { TOAST_OPTIONS } from "@/utils/toast";
 
 const queryClient = new QueryClient();
 
@@ -20,7 +19,18 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
         <TooltipProvider>
           <ProgressBar />
           {children}
-          <Toaster position={DEFAULT_TOAST_POSITION} toastOptions={TOAST_OPTIONS} />
+          <Toaster
+            theme='light'
+            position={DEFAULT_TOAST_POSITION}
+            toastOptions={{
+              style: {
+                "--normal-bg": "var(--color-card-background-hover)",
+                "--normal-text": "var(--color-text-base)",
+                "--normal-border": "var(--color-border-base)",
+                "--border-radius": "var(--radius)",
+              } as React.CSSProperties,
+            }}
+          />
         </TooltipProvider>
       </QueryClientProvider>
     </NetworkProvider>
