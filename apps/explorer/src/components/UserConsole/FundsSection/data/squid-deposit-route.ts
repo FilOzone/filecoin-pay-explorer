@@ -26,6 +26,7 @@ export const squidDepositAbi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
   "function deposit(address token, address to, uint256 amount)",
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
+  "event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)",
 ]);
 
 export interface SquidDepositTarget {
