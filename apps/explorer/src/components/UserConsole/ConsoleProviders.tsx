@@ -20,12 +20,21 @@ export const PRIVY_CONFIG = {
   appearance: { walletChainType: "ethereum-only" },
 } satisfies PrivyClientConfig;
 
+export const PRIVY_DEVELOPMENT_APP = {
+  appId: "cmtkfb83p04du0bk0kofldq4e",
+  clientId: "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf",
+} as const;
+
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmtkfb83p04du0bk0kofldq4e";
-  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID || "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf";
+  const configuredAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
+  const configuredClientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID?.trim();
+  const privyApp =
+    configuredAppId && configuredClientId
+      ? { appId: configuredAppId, clientId: configuredClientId }
+      : PRIVY_DEVELOPMENT_APP;
 
   return (
-    <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
+    <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
       <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
         <SynapseProvider>
           <TopUpActivityProvider>
