@@ -5,7 +5,7 @@ import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
-import { config, walletChains } from "@/services/wagmi/config";
+import { config } from "@/services/wagmi/config";
 import { consoleWalletSelector } from "./console-wallet";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
@@ -16,7 +16,7 @@ export const PRIVY_CONFIG = {
     ethereum: { createOnLogin: "users-without-wallets" },
   },
   defaultChain: mainnet,
-  supportedChains: [...walletChains],
+  supportedChains: [...config.chains],
   appearance: { walletChainType: "ethereum-only" },
 } satisfies PrivyClientConfig;
 
