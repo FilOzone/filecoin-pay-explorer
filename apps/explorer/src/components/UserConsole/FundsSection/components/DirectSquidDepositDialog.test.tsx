@@ -1012,7 +1012,11 @@ describe("DirectSquidDepositDialog safety integration", () => {
         new Promise((resolve) => {
           input.onStage?.("verifying", ROUTE_HASH);
           settle = () =>
-            resolve({ depositedAmount: 92n, fundsAfter: 97n, fundsBefore: 5n, transactionHash: ROUTE_HASH });
+            resolve({
+              depositedAmount: 92n,
+              destinationTransactionHash: ROUTE_HASH,
+              transactionHash: ROUTE_HASH,
+            });
         }),
     );
     // The return to Filecoin takes a real round trip, during which React paints whatever state is current.
