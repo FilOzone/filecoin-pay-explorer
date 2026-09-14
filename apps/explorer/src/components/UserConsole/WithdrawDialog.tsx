@@ -68,6 +68,27 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
     },
   });
 
+  // Determine current token to display
+  const currentToken = {
+    symbol: userToken.token.symbol,
+    decimals: Number(userToken.token.decimals),
+    address: userToken.token.id,
+    name: userToken.token.name,
+  };
+
+  const lockupRate = accountInfo ? (accountInfo as AccountInfo)[3] : 0n;
+
+  // viem rejects an empty or malformed amount, and <input type=number> accepts
+  // values it rejects (such as 1e5), so parse once and treat failures as "no amount".
+  const parsedAmount = (() => {
+    if (!amount.trim()) return null;
+    try {
+      return parseUnits(amount.trim(), currentToken.decimals);
+    } catch {
+      return null;
+    }
+  })();
+
   const handleWithdraw = async () => {
     // Determine which token to use
     const token = {
@@ -134,26 +155,6 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
     }
   };
 
-  // Determine current token to display
-  const currentToken = {
-    symbol: userToken.token.symbol,
-    decimals: Number(userToken.token.decimals),
-    address: userToken.token.id,
-    name: userToken.token.name,
-  };
-
-  const lockupRate = accountInfo ? (accountInfo as AccountInfo)[3] : 0n;
-
-  // viem rejects an empty or malformed amount, and <input type=number> accepts
-  // values it rejects (such as 1e5), so parse once and treat failures as "no amount".
-  const parsedAmount = (() => {
-    if (!amount.trim()) return null;
-    try {
-      return parseUnits(amount.trim(), currentToken.decimals);
-    } catch {
-      return null;
-    }
-  })();
   const hasAvailableFunds = !!accountInfo && (parsedAmount === null || parsedAmount <= (accountInfo as AccountInfo)[2]);
   const canWithdraw = hasAvailableFunds && parsedAmount !== null && parsedAmount > 0n;
   const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
