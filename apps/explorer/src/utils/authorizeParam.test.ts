@@ -5,6 +5,7 @@ import {
   parseAuthorizeLink,
   parseAuthorizeParam,
   parseNetworkParam,
+  parseRevokeLink,
   parseScopesParam,
   presetScopeStates,
 } from "./authorizeParam";
@@ -176,5 +177,54 @@ describe("parseAuthorizeLink", () => {
   it("reports the address error first, and nothing when there is no request", () => {
     assert.deepEqual(link("authorize=0xnope&network=mainnet"), { error: "not-an-address" });
     assert.equal(link("deposit=2"), null);
+  });
+});
+
+describe("parseRevokeLink", () => {
+  it("reads a revoke request with its network", () => {
+    assert.deepEqual(parseRevokeLink(new URLSearchParams(`revoke=${LOWERCASE}&network=calibration`)), {
+      address: CHECKSUMMED,
+      network: "calibration",
+    });
+  });
+
+  it("returns null when the link carries no revoke param", () => {
+    assert.equal(parseRevokeLink(new URLSearchParams("network=calibration")), null);
+    assert.equal(parseRevokeLink(new URLSearchParams(`authorize=${LOWERCASE}&network=mainnet`)), null);
+  });
+
+  it("refuses a revoke request that names no network", () => {
+    assert.deepEqual(parseRevokeLink(new URLSearchParams(`revoke=${LOWERCASE}`)), { error: "no-network" });
+    assert.deepEqual(parseRevokeLink(new URLSearchParams(`revoke=${LOWERCASE}&network=devnet`)), {
+      error: "no-network",
+    });
+  });
+
+  it("refuses an address it cannot trust, as the pairing link does", () => {
+    assert.deepEqual(parseRevokeLink(new URLSearchParams("revoke=nope&network=mainnet")), {
+      error: "not-an-address",
+    });
+    assert.deepEqual(
+      parseRevokeLink(new URLSearchParams(`revoke=0x${LOWERCASE.slice(2).toUpperCase()}&network=mainnet`)),
+      { error: "bad-checksum" },
+    );
+  });
+
+  it("never throws on hostile input", () => {
+    for (const input of ["<script>alert(1)</script>", "%%%", "0x", "../../etc/passwd"]) {
+      assert.doesNotThrow(() => parseRevokeLink(new URLSearchParams(`revoke=${encodeURIComponent(input)}`)));
+    }
+  });
+
+  // The other half of this contract lives in filecoin-pin's buildRevokeUrl
+  // (src/core/session/console-url.ts); these are the strings it emits.
+  it("reads the link filecoin-pin logout prints", () => {
+    for (const network of ["mainnet", "calibration"]) {
+      const url = `https://pay.filecoin.cloud/console/session-keys?revoke=0xabc0000000000000000000000000000000000001&network=${network}`;
+      assert.deepEqual(parseRevokeLink(new URLSearchParams(new URL(url).search)), {
+        address: "0xABC0000000000000000000000000000000000001",
+        network,
+      });
+    }
   });
 });

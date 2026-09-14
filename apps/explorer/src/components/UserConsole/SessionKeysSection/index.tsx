@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { ArrowSquareOutIcon, KeyIcon, WalletIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
@@ -33,8 +33,11 @@ interface SessionKeysSectionProps {
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
   prefillNetwork?: Network | null;
-  /** Set when the link carried an `authorize` value that could not be used. */
+  /** Set when the link carried an `authorize` or `revoke` value that could not be used. */
   prefillError?: AuthorizeParamError | null;
+  /** Session key a `?revoke=` link names, from `filecoin-pin logout`. */
+  revokeAddress?: Hex | null;
+  revokeNetwork?: Network | null;
 }
 
 type ConnectedProps = SessionKeysSectionProps & { account: Hex };
@@ -94,6 +97,8 @@ const ConnectedSessionKeys = ({
   prefillScopes,
   prefillNetwork,
   prefillError,
+  revokeAddress,
+  revokeNetwork,
 }: ConnectedProps) => {
   const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsPending, markConfirmed, registry } =
     useSessionKeys(network, account);
@@ -125,6 +130,17 @@ const ConnectedSessionKeys = ({
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // A `?revoke=` link names a key by address; the dialog needs the inventory
+  // row. Held in state, not read from the prop, because the dialog is opened
+  // once and must not reopen when the list re-renders.
+  const [revokeRequest, setRevokeRequest] = useState<Hex | null>(null);
+  // One sync attempt per link: a key the chain does not know must not loop.
+  const revokeSyncedRef = useRef(false);
+  // The link arrives a render after mount (the params hook reads them in an
+  // effect), and only counts on the network it names.
+  useEffect(() => {
+    if (revokeAddress != null && revokeNetwork === network) setRevokeRequest(revokeAddress);
+  }, [revokeAddress, revokeNetwork, network]);
 
   // Newest first; unknown createdAt (sanitize-coerced 0) sinks to the bottom.
   // Deterministic order matters once sync interleaves imported and local keys.
@@ -148,7 +164,7 @@ const ConnectedSessionKeys = ({
   const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
     setSyncing(true);
     try {
       const { addedCount, updatedCount, skippedUnrecognized } = await syncFromChain();
@@ -168,7 +184,30 @@ const ConnectedSessionKeys = ({
     } finally {
       setSyncing(false);
     }
-  };
+  }, [syncFromChain]);
+
+  // Open the revoke dialog on the key a link named. A key this browser created
+  // is already listed; one from another machine is not, so a single sync is
+  // attempted before giving up, the same read the "Sync from chain" button does.
+  useEffect(() => {
+    // A sync in flight decides this; re-run when it settles.
+    if (revokeRequest == null || statusReadsPending || syncing) return;
+    const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeRequest.toLowerCase());
+    if (listed) {
+      setRevoke({ target: listed, identity: { network, account } });
+      setRevokeRequest(null);
+      return;
+    }
+    if (revokeSyncedRef.current) {
+      toast.error("That session key is not in this wallet's list", {
+        description: "It may belong to another wallet, or to a different network.",
+      });
+      setRevokeRequest(null);
+      return;
+    }
+    revokeSyncedRef.current = true;
+    void handleSync();
+  }, [revokeRequest, keys, statusReadsPending, syncing, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
   const syncButton = (

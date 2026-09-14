@@ -78,6 +78,27 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
+export interface RevokeLink {
+  address: `0x${string}`;
+  network: "mainnet" | "calibration";
+}
+
+/**
+ * The revoke request from a page's search params (`?revoke=&network=`), which
+ * `filecoin-pin logout` builds so the key it just dropped locally can be
+ * revoked onchain. Same address and network rules as the pairing link: the
+ * network is required, because a calibration key must never be hunted for
+ * under a mainnet wallet.
+ */
+export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: AuthorizeParamError } | null {
+  if (!params.has("revoke")) return null;
+  const requested = parseAuthorizeParam(params.get("revoke")) ?? { error: "not-an-address" as const };
+  if ("error" in requested) return requested;
+  const network = parseNetworkParam(params.get("network"));
+  if (!network) return { error: "no-network" };
+  return { address: requested.address, network };
+}
+
 export interface AuthorizeLink {
   address: `0x${string}`;
   scopes: ScopeId[] | null;
