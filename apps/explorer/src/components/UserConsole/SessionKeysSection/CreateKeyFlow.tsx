@@ -78,6 +78,8 @@ interface SubmittedLogin {
   mode: CreateMode;
   name: string;
   signer: Hex;
+  /** The connected wallet that signed the grant; it may switch before the transaction confirms. */
+  grantor: Hex;
   scopes: ScopeId[];
 }
 
@@ -124,9 +126,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
   const [expirySec, setExpirySec] = useState<bigint>(0n);
-  // What this attempt asked for, frozen at submit: success copy must not
-  // reword itself when later renders rewrite the checkboxes (see the
-  // submittedScopeLabels comment below).
+  // What this attempt sent onchain, frozen at submit. The success screens
+  // read only this, never the live form (see submittedScopeLabels below).
   const [submitted, setSubmitted] = useState<SubmittedLogin | null>(null);
   // The attempt the dialog is showing. Cleared on close, so a receipt from
   // an earlier submission cannot touch a fresh form; the row callbacks run
@@ -198,7 +199,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     // Captured now: the wallet may switch before the submission resolves.
     const identity: SessionKeysIdentity = { network, account };
     setExpirySec(expiry);
-    setSubmitted({ mode: createMode, name: cleanName, signer: signerAddress, scopes: selectedScopes });
+    setSubmitted({ mode: createMode, name: cleanName, signer: signerAddress, grantor: account, scopes: selectedScopes });
     const attempt = {};
     shownAttemptRef.current = attempt;
     // The dialog follows its attempt even after a wallet switch: the banner
@@ -372,9 +373,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     new: {
       title: "New session key",
       description: "All selected scopes share the same expiry.",
-      submit: prefillAddress ? "Review & authorize" : "Create session key",
+      submit: "Create session key",
     },
   }[createMode];
+  // On the link flow the button names the signing account, so it is the last
+  // thing read before the wallet prompt.
+  const submitLabel = addressLocked ? `Authorize as ${formatAddress(account)}` : formCopy.submit;
 
   const snippet = generated ? buildEnvSnippet(generated.privateKey, generated.address, generated.walletAddress) : "";
 
@@ -389,6 +393,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
             {txState === "failed" && txBanner}
+            {addressLocked && (
+              <Notice tone='info' className='p-3'>
+                Authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. The session key
+                will act on behalf of this wallet.
+              </Notice>
+            )}
 
             <div className='flex flex-col gap-5'>
               <div className='flex flex-col gap-1.5'>
@@ -581,7 +591,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                     <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
                   </span>
                 ) : (
-                  formCopy.submit
+                  submitLabel
                 )}
               </Button>
             </DialogFooter>
@@ -646,8 +656,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </DialogDescription>
             </DialogHeader>
             <div className='rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-900 p-4 text-sm text-green-900 dark:text-green-200'>
-              <span className='font-mono break-all'>{submitted?.signer ?? ownAddress}</span> is now authorized with{" "}
-              <b>{submittedScopeLabels}</b>.
+              <span className='font-mono break-all'>{submitted?.signer ?? ownAddress}</span> is now authorized
+              {addressLocked && submitted && (
+                <>
+                  {" "}
+                  to act for <span className='font-mono break-all'>{submitted.grantor}</span>
+                </>
+              )}{" "}
+              with <b>{submittedScopeLabels}</b>.
             </div>
             <DialogFooter>
               <Button variant='primary' size='compact' onClick={() => handleOpenChange(false)}>

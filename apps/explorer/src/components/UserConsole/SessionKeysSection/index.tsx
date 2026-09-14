@@ -205,6 +205,10 @@ const ConnectedSessionKeys = ({
                 </>
               )}
             </p>
+            <p className='text-sm mt-2'>
+              You are authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. If that is
+              not the wallet you mean, switch wallets before you continue.
+            </p>
           </div>
           {prefillUnreadable ? (
             <Button variant='primary' size='compact' onClick={() => refetchStatuses()}>
