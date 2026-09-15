@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.2.1...v1.2.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* avoid loading rail rate queues ([#453](https://github.com/FilOzone/filecoin-pay-explorer/issues/453)) ([ad53397](https://github.com/FilOzone/filecoin-pay-explorer/commit/ad53397e9a27fe8343d52a00b5c20271f873a70b))
+
 ## [1.2.1](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.2.0...v1.2.1) (2026-09-10)
 
 
