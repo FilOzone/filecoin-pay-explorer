@@ -316,6 +316,9 @@ export function DirectSquidDepositDialog({
   useEffect(() => {
     if (!open) {
       appliedInitialSource.current = "";
+      // A wallet picked in an earlier session must not pay for the next one; the
+      // fallback selects the recipient's own wallet again.
+      setPayingAddress("");
       return;
     }
     if (
