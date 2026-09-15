@@ -12,6 +12,7 @@ import { useSwitchChain } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
+import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
 import type { AuthorizeParamError } from "@/utils/authorizeParam";
@@ -196,11 +197,14 @@ const ConnectedSessionKeys = ({
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
       revokeLinkRef.current = "done";
+      // Acted on, so it leaves the address bar: a reload should not reopen it.
+      dropSearchParams(["revoke", "network"]);
       setRevoke({ target: listed, identity: { network, account } });
       return;
     }
     if (revokeLinkRef.current === "synced") {
       revokeLinkRef.current = "done";
+      dropSearchParams(["revoke", "network"]);
       toast.error("That session key is not in this wallet's list", {
         description: "It may belong to another wallet, or to a different network.",
       });
