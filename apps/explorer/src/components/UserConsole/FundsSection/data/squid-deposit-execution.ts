@@ -451,6 +451,9 @@ export async function executeSquidDeposit({
     if (allowance !== request.sourceAmount) {
       if (!approvalRequired) throw new Error("USDC allowance changed after review. Review the payment again.");
       onStage?.("approving");
+      // USDC accepts a direct overwrite, but USDT-style tokens revert unless a
+      // non-zero allowance is zeroed first; one path keeps the plan the same for
+      // every source token at the price of a third signature on a stale allowance.
       for (const amount of allowance > 0n ? [0n, request.sourceAmount] : [request.sourceAmount]) {
         const approval = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
           to: request.sourceToken,
