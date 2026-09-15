@@ -9,34 +9,8 @@ const PINNED_FIRST_COLUMN = [
   "[&_tbody_tr:nth-child(odd)_td:first-child]:bg-(--color-table-row-striped)",
 ];
 
-/** Keeps a wide table usable on narrow screens: pinned first column, edge fade, scroll hint. */
+/** Pins the first column of a wide table. */
 export function ResponsiveTable({ children }: { children: ReactNode }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    const table = container?.querySelector("table");
-    // The library table scrolls inside its own container, so that element owns the scroll position.
-    const scroller = table?.parentElement ?? container;
-    if (!container || !table || !scroller || typeof ResizeObserver === "undefined") return;
-
-    const measure = () => {
-      const overflows = table.scrollWidth > container.clientWidth + 1;
-      setIsOverflowing(overflows);
-      setCanScrollRight(overflows && scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(container);
-    observer.observe(table);
-    scroller.addEventListener("scroll", measure, { passive: true });
-    return () => {
-      observer.disconnect();
-      scroller.removeEventListener("scroll", measure);
-    };
-  }, []);
 
   return (
     <div className='grid min-w-0 gap-2'>
