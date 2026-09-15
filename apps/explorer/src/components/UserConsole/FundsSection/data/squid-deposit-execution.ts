@@ -619,7 +619,6 @@ export async function executeSquidDeposit({
     if (routeQuote.sourceChainId !== request.sourceChainId || routeQuote.sourceAmount !== request.sourceAmount) {
       throw new Error("The refreshed Squid route does not match the reviewed payment");
     }
-    if (isRouteExpiring(routeQuote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
     assertCurrentContext();
   }
   const route = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
