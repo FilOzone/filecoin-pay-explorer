@@ -15,6 +15,7 @@ import {
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
   parseSquidDepositRoute,
   planFilGasTopUp,
+  readSourceFeesPerGas,
   requestSquidDepositRoute,
   type SquidDepositFeeClient,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
@@ -395,11 +396,13 @@ describe("estimateDepositNetworkFeeMaximum", () => {
     expect(transactions[1]).toEqual({ kind: "approve", fee: withHeadroom(46_000n * 2n * GWEI) });
   });
 
-  it("uses Squid's own estimate when it is higher or when no gas limit is reported", async () => {
+  it("uses Squid's own estimate when it is higher", async () => {
     const lowFeeClient = fakeFeeClient({ feePerGas: 1n });
     const { transactions } = await estimate(lowFeeClient, request.sourceAmount);
     expect(transactions).toEqual([{ kind: "route", fee: withHeadroom(3_596_394_000_000n) }]);
+  });
 
+  it("uses Squid's own estimate when no gas limit is reported", async () => {
     const withoutLimit = parseSquidDepositRoute(
       fakeRoute({ params: { fromChain: "1" }, estimate: { gasCosts: [ethereumGasCost()] } }),
       ethereumRequest,
@@ -419,6 +422,10 @@ describe("estimateDepositNetworkFeeMaximum", () => {
       { kind: "approve", fee: withHeadroom(46_000n * 3n * GWEI) },
       { kind: "route", fee: withHeadroom(599_399n * 3n * GWEI) },
     ]);
+  });
+
+  it("falls back to the legacy gas price when maxFeePerGas is zero", async () => {
+    await expect(readSourceFeesPerGas(fakeFeeClient({ feePerGas: 0n }))).resolves.toEqual({ gasPrice: 3n * GWEI });
   });
 
   it("prices OP Stack transactions with the buffered total fee, as execution will", async () => {
@@ -449,6 +456,19 @@ describe("estimateDepositNetworkFeeMaximum", () => {
     });
     expect(client.estimateTotalFee).toHaveBeenCalledWith(
       expect.objectContaining({ to: SQUID_ROUTER_ADDRESS, data: "0x", gas: 599_399n }),
+    );
+  });
+
+  it("fails closed when OP Stack total-fee accounting is unavailable", async () => {
+    const baseRoute = parseSquidDepositRoute(
+      fakeRoute({
+        estimate: {
+          gasCosts: [{ ...ethereumGasCost("599399"), token: { ...ethereumGasCost().token, chainId: 8453 } }],
+        },
+      }),
+      request,
+      true,
+      now,
     );
     await expect(estimate(fakeFeeClient(), 0n, { quote: baseRoute, sourceChainId: 8453 })).rejects.toThrow(
       "OP Stack total-fee accounting is unavailable",

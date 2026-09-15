@@ -61,13 +61,11 @@ export interface SquidDepositBudgetBreach {
   completed: readonly SquidDepositTransactionKind[];
   /** Transactions still to send, first one next. */
   remaining: readonly SquidDepositTransactionKind[];
-  feeSoFar: bigint;
   /**
    * What execution priced at current fees, buffered as it charges them: every remaining
    * transaction before the first signature, the next send mid-run.
    */
   requiredFee: bigint;
-  maxNativeFee: bigint;
 }
 
 /**
@@ -248,7 +246,7 @@ function assertFeeWithinReview(
 ) {
   const { completed, feeSoFar, remaining } = progress;
   if (feeSoFar + fee > maxNativeFee) {
-    throw new SquidDepositBudgetError({ completed, feeSoFar, maxNativeFee, remaining, requiredFee: fee });
+    throw new SquidDepositBudgetError({ completed, remaining, requiredFee: fee });
   }
 }
 
@@ -310,7 +308,7 @@ async function assertPlanWithinReview({
   const priced = await Promise.all(remaining.map(price));
   const requiredFee = priced.reduce((total, { fee }) => total + fee, 0n);
   if (requiredFee > maxNativeFee) {
-    throw new SquidDepositBudgetError({ completed: [], feeSoFar: 0n, maxNativeFee, remaining, requiredFee });
+    throw new SquidDepositBudgetError({ completed: [], remaining, requiredFee });
   }
 }
 

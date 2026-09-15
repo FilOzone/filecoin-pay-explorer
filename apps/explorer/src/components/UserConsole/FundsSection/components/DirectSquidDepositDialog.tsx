@@ -524,18 +524,29 @@ export function DirectSquidDepositDialog({
     if (await restoreFilecoin()) onOpenChange(false);
   };
 
-  const fail = (failure: unknown, owner?: Address) => {
+  const fail = async (failure: unknown, owner?: Address) => {
     setStage(null);
-    if (failure instanceof SquidDepositError) {
-      setError(failure.message);
+    let reportedFailure = failure;
+    if (reportedFailure instanceof SquidDepositBudgetError && reviewed) {
+      try {
+        await reReview(reportedFailure, reviewed);
+        return;
+      } catch (reviewFailure) {
+        reportedFailure = reviewFailure;
+      }
+    }
+    if (reportedFailure instanceof SquidDepositError) {
+      setError(reportedFailure.message);
       // Keep the marker, and with it the explorer and Squid links, while the route can still be
       // followed up: a stalled status, a route waiting for gas, or USDFC that landed in the wallet.
       const isFollowUp =
-        failure.reason === "timeout" || failure.reason === "needs-gas" || failure.reason === "hook-failed";
+        reportedFailure.reason === "timeout" ||
+        reportedFailure.reason === "needs-gas" ||
+        reportedFailure.reason === "hook-failed";
       if (!isFollowUp && owner) clearSaved(owner);
     } else {
-      if (owner && isUserRejectedRequest(failure)) clearSaved(owner);
-      setError(walletErrorMessage(failure, "The Squid deposit could not be completed."));
+      if (owner && isUserRejectedRequest(reportedFailure)) clearSaved(owner);
+      setError(walletErrorMessage(reportedFailure, "The Squid deposit could not be completed."));
     }
   };
 
@@ -574,7 +585,7 @@ export function DirectSquidDepositDialog({
         await finish(pending.owner, pending.recipient, result.depositedAmount);
       });
     } catch (failure) {
-      fail(failure, pending.owner);
+      await fail(failure, pending.owner);
     } finally {
       isSubmitting.current = false;
     }
@@ -731,16 +742,7 @@ export function DirectSquidDepositDialog({
       });
     } catch (failure) {
       const owner = reviewed?.context.owner ?? (payingWallet ? getAddress(payingWallet.address) : undefined);
-      if (failure instanceof SquidDepositBudgetError && reviewed) {
-        setStage(null);
-        try {
-          await reReview(failure, reviewed);
-        } catch (reviewFailure) {
-          fail(reviewFailure, owner);
-        }
-      } else {
-        fail(failure, owner);
-      }
+      await fail(failure, owner);
     } finally {
       isSubmitting.current = false;
     }

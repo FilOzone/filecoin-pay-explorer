@@ -50,6 +50,7 @@ const query = vi.hoisted(() => ({
     ],
   },
   budgetIsError: false,
+  budgetIsFetching: false,
   inventory: {} as Record<string, bigint | null>,
   nativeBalance: 10n ** 18n,
   recipientFil: 0n,
@@ -136,10 +137,10 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (queryKey[0] === "direct-squid-deposit-gas-budget") {
       return {
-        data: query.budgetIsError ? undefined : query.budget,
+        data: query.budgetIsError || query.budgetIsFetching ? undefined : query.budget,
         error: query.budgetIsError ? new Error("HTTP request failed. Details: 429 Too Many Requests") : null,
         isError: query.budgetIsError,
-        isFetching: false,
+        isFetching: query.budgetIsFetching,
         refetch: vi.fn(),
       };
     }
@@ -278,6 +279,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.allowance = 100_000_000n;
     query.balanceIsError = false;
     query.budgetIsError = false;
+    query.budgetIsFetching = false;
     query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
     query.nativeBalance = 10n ** 18n;
     query.recipientFil = 0n;
@@ -724,6 +726,19 @@ describe("DirectSquidDepositDialog safety integration", () => {
     );
   });
 
+  it("shows when network fees are being estimated", async () => {
+    query.budgetIsFetching = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("Estimating network fees");
+  });
+
   it("re-reviews with a fresh maximum after the approval executed and the route breached the cap", async () => {
     query.allowance = 0n;
     state.execute.mockImplementationOnce(async () => {
@@ -732,9 +747,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       throw new SquidDepositBudgetError({
         completed: ["approve"],
         remaining: ["route"],
-        feeSoFar: 3_000_000_000_000n,
         requiredFee: 10_000_000_000_000n,
-        maxNativeFee: 9_000_000_000_000n,
       });
     });
     // Execution's own price for the route (10e12) plus headroom outranks the fresh estimate (12e12).
@@ -781,9 +794,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       new SquidDepositBudgetError({
         completed: [],
         remaining: ["route"],
-        feeSoFar: 0n,
         requiredFee: 1n,
-        maxNativeFee: 0n,
       }),
     );
     state.estimateBudget.mockRejectedValueOnce(new Error("Live network fee data is unavailable"));
