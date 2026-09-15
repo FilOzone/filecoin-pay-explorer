@@ -556,6 +556,19 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(text.includes("+ 0.05 FIL for network fees")).toBe(checked);
   });
 
+  it("keeps a funded wallet funded while the FIL balance refetches in the background", async () => {
+    query.recipientFil = 250_000_000_000_000_000n;
+    query.recipientFilIsFetching = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("You already have FIL for fees.");
+    expect(text).not.toContain("does not have enough FIL");
+  });
+
   it("waits for a fresh destination balance before defaulting from cached data", async () => {
     query.recipientFil = 0n;
     query.recipientFilIsFetching = true;
