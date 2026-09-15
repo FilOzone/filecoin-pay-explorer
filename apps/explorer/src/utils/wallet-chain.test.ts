@@ -37,6 +37,16 @@ describe("waitForWalletChain", () => {
     await expect(waitForWalletChain(provider, 1, { sleep, timeoutMs: 250 })).resolves.toBe(false);
     expect(sleep).toHaveBeenCalledTimes(3);
   });
+
+  it("gives up when the provider request never settles", async () => {
+    const provider = { request: vi.fn(() => new Promise<never>(() => undefined)) };
+    const result = waitForWalletChain(provider, 1, { timeoutMs: 250 });
+
+    await vi.advanceTimersByTimeAsync(250);
+
+    await expect(result).resolves.toBe(false);
+    expect(provider.request).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("ensureWalletChain", () => {
