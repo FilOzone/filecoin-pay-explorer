@@ -68,6 +68,8 @@ describe("CustomConnectButton", () => {
 
     const buttons = renderer.root.findAllByType("button");
     expect(buttons.some((button) => button.children.includes("Reload"))).toBe(true);
+    // The card around the button already says the wallet is preparing.
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
     const logoutButton = buttons.find((button) => button.children.includes("Log out"));
     expect(logoutButton).toBeDefined();
     await act(async () => {

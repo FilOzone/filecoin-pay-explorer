@@ -35,27 +35,25 @@ const CustomConnectButton = () => {
   }
   if (state === "connected") return null;
   if (state === "loading") return <p role='status'>Loading wallet…</p>;
+  // The NotConnected card already titles this state, so the button offers only the exits.
   if (state === "preparing")
     return (
-      <div className='flex flex-col items-center gap-2'>
-        <p role='status'>Preparing wallet…</p>
-        <div className='flex items-center gap-2'>
-          <Button variant='ghost' size='compact' type='button' onClick={() => window.location.reload()}>
-            Reload
-          </Button>
-          <Button
-            variant='ghost'
-            size='compact'
-            type='button'
-            onClick={() =>
-              void exit().catch((error: unknown) =>
-                toast.error("Unable to log out", { description: describeError(error) }),
-              )
-            }
-          >
-            Log out
-          </Button>
-        </div>
+      <div className='flex items-center gap-2'>
+        <Button variant='ghost' size='compact' type='button' onClick={() => window.location.reload()}>
+          Reload
+        </Button>
+        <Button
+          variant='ghost'
+          size='compact'
+          type='button'
+          onClick={() =>
+            void exit().catch((error: unknown) =>
+              toast.error("Unable to log out", { description: describeError(error) }),
+            )
+          }
+        >
+          Log out
+        </Button>
       </div>
     );
 
