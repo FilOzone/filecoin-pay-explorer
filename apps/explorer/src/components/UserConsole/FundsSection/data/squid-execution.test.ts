@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyNetworkFeeExecutionBuffer,
   canClearSquidAcquisitionAfterError,
+  estimateOpStackTotalFee,
   executeSquidTopUp,
   isUserRejectedRequest,
   walletErrorMessage,
 } from "./squid-execution";
 
+const opStack = vi.hoisted(() => ({ estimateL1Fee: vi.fn(async () => 7_000n) }));
+vi.mock("viem/op-stack", () => ({ estimateL1Fee: opStack.estimateL1Fee }));
 vi.mock("@filecoin-project/squid-evm-funding", () => ({
   executeSquidFunding: vi.fn(),
   SQUID_ROUTER_ADDRESS: "0x1111111111111111111111111111111111111111",
@@ -148,5 +151,41 @@ describe("executeSquidTopUp", () => {
     expect(walletErrorMessage({ cause: { code: 4001 } }, "fallback")).toBe("Transaction cancelled in your wallet.");
     expect(walletErrorMessage(new Error("response lost"), "fallback")).toBe("response lost");
     expect(walletErrorMessage(null, "fallback")).toBe("fallback");
+  });
+});
+
+describe("estimateOpStackTotalFee", () => {
+  const client = { chain: undefined, readContract: vi.fn() };
+  const request = {
+    account: "0x1111111111111111111111111111111111111111" as const,
+    to: "0x2222222222222222222222222222222222222222" as const,
+    data: "0xabcdef" as const,
+    value: 5n,
+    gas: 60_000n,
+    maxFeePerGas: 3n,
+    gasPrice: 99n,
+  };
+
+  it("adds the oracle's L1 data fee to EIP-1559 gas without simulating", async () => {
+    await expect(estimateOpStackTotalFee(client, request)).resolves.toBe(7_000n + 60_000n * 3n);
+    expect(opStack.estimateL1Fee).toHaveBeenCalledWith(client, {
+      account: request.account,
+      to: request.to,
+      data: request.data,
+      value: request.value,
+      chain: undefined,
+    });
+  });
+
+  it("adds the oracle's L1 data fee to legacy gas without simulating", async () => {
+    await expect(estimateOpStackTotalFee(client, { ...request, maxFeePerGas: undefined })).resolves.toBe(
+      7_000n + 60_000n * 99n,
+    );
+  });
+
+  it("fails closed without a complete execution fee", async () => {
+    await expect(
+      estimateOpStackTotalFee(client, { ...request, gasPrice: undefined, maxFeePerGas: undefined }),
+    ).rejects.toThrow("Complete execution fee is unavailable");
   });
 });
