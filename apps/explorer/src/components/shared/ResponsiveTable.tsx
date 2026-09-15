@@ -1,7 +1,5 @@
-"use client";
-
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 // TanstackTable stripes odd rows on the <tr>, so the pinned first cell has to
 // repeat the row colour or the row looks cut where the cell overlaps it.
