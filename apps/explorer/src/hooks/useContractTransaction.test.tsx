@@ -15,6 +15,7 @@ const wagmi = vi.hoisted(() => ({
     address: "0x1111111111111111111111111111111111111111" as `0x${string}` | undefined,
     chainId: 314 as number | undefined,
   },
+  invalidateAccountQueries: vi.fn(async () => undefined),
   nextHash: "0x0",
   submitFailure: undefined as unknown,
   usePublicClient: vi.fn(),
@@ -23,6 +24,9 @@ const wagmi = vi.hoisted(() => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+}));
+vi.mock("@/utils/query-invalidation", () => ({
+  invalidateAccountQueries: wagmi.invalidateAccountQueries,
 }));
 vi.mock("wagmi", () => ({
   useConfig: () => ({}),
@@ -49,12 +53,13 @@ function mount(options: Options = { contractAddress: "0x1", abi: [] }) {
 
 const pinnedOptions = { account: ACCOUNT, abi: [], chainId: CHAIN_ID, contractAddress: CONTRACT };
 const receipt = (hash: string, status: "success" | "reverted") =>
-  ({ transactionHash: hash, status }) as TransactionReceipt;
+  ({ from: ACCOUNT, transactionHash: hash, status }) as unknown as TransactionReceipt;
 const flush = () => act(async () => {});
 
 describe("useContractTransaction", () => {
   beforeEach(() => {
     wagmi.account = { address: ACCOUNT, chainId: CHAIN_ID };
+    wagmi.invalidateAccountQueries.mockClear();
     wagmi.nextHash = "0x0";
     wagmi.submitFailure = undefined;
     wagmi.usePublicClient.mockReset().mockReturnValue({
@@ -155,5 +160,21 @@ describe("useContractTransaction", () => {
       args: [1n],
       value: undefined,
     });
+  });
+
+  it("refreshes the account only after a successful receipt", async () => {
+    const hook = mount(pinnedOptions);
+    wagmi.nextHash = "0xrefresh";
+
+    await act(async () => {
+      await hook().execute({ functionName: "deposit", args: [1n], metadata: { type: "deposit" } });
+    });
+    expect(wagmi.invalidateAccountQueries).not.toHaveBeenCalled();
+
+    receipts.get("0xrefresh")?.resolve(receipt("0xrefresh", "success"));
+    await flush();
+
+    expect(wagmi.invalidateAccountQueries).toHaveBeenCalledOnce();
+    expect(wagmi.invalidateAccountQueries).toHaveBeenCalledWith(expect.anything(), ACCOUNT);
   });
 });
