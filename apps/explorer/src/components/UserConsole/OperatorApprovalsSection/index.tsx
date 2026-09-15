@@ -2,7 +2,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { Account, OperatorApproval } from "@filecoin-pay/types";
 import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { ApproveOperatorDialog } from "@/components/UserConsole/ApproveOperatorDialog";
+import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
 import { useAccountApprovals } from "@/hooks/useAccountDetails";
 import type { Network } from "@/types";
@@ -47,7 +47,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     return (
       <>
         <ApprovalsEmptyState onApprove={handleOpenApprove} />
-        <ApproveOperatorDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+        <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       </>
     );
   }
@@ -60,7 +60,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
           <Button variant='primary' onClick={handleOpenApprove} className='py-2'>
             <span className='flex items-center gap-2'>
               <Plus className='h-4 w-4' />
-              Approve Service
+              Add Service
             </span>
           </Button>
         </div>
@@ -69,12 +69,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
       </div>
 
       {/* Dialogs */}
-      <ApproveOperatorDialog
-        open={approveDialogOpen}
-        operators={data.operatorApprovals.map((approval) => approval.operator)}
-        tokens={data.operatorApprovals.map((approval) => approval.token)}
-        onOpenChange={setApproveDialogOpen}
-      />
+      <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       {selectedApproval && (
         <IncreaseApprovalDialog
           approval={selectedApproval}

@@ -1,59 +1,30 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
-import { ArrowDownCircle, Shield } from "lucide-react";
+import { ArrowDownCircle } from "lucide-react";
 import { useState } from "react";
-import { ApproveOperatorDialog } from "../ApproveOperatorDialog";
-import DepositAndApproveDialog from "../DepositAndApproveDialog";
-import { DepositDialog } from "../DepositDialog";
+import AddServiceDialog from "../AddServiceDialog";
 
 const AccountNotFound = () => {
-  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
-  const [depositAndApproveDialogOpen, setDepositAndApproveDialogOpen] = useState(false);
+  const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false);
 
   return (
     <EmptyStateCard
       titleTag='h2'
       icon={WalletIcon}
       title='Welcome to Filecoin Pay'
-      description="Your account hasn't been indexed yet. Get started by depositing funds or approving an service."
+      description='Add a service and deposit funds to get started — your account activity will show up here.'
     >
-      <div className='flex flex-col gap-4 mt-6'>
-        <div className='flex flex-col sm:flex-row gap-3'>
-          <Button onClick={() => setDepositDialogOpen(true)} variant='ghost' size='compact'>
-            <span className='flex items-center gap-2'>
-              <ArrowDownCircle className='h-5 w-5' />
-              Deposit Funds
-            </span>
-          </Button>
-          <Button onClick={() => setApproveDialogOpen(true)} variant='ghost' size='compact'>
-            <span className='flex items-center gap-2'>
-              <Shield className='h-5 w-5' />
-              Approve Service
-            </span>
-          </Button>
-          <Button onClick={() => setDepositAndApproveDialogOpen(true)} size='compact' variant='primary'>
-            <span className='flex items-center gap-2'>
-              <ArrowDownCircle className='h-5 w-5' />
-              Deposit and Approve Service
-            </span>
-          </Button>
-        </div>
-        <p className='text-xs text-muted-foreground text-center'>
-          Start by depositing funds or approving a service to get started
-        </p>
+      <div className='flex justify-center mt-6'>
+        <Button onClick={() => setAddServiceDialogOpen(true)} size='compact' variant='primary'>
+          <span className='flex items-center gap-2'>
+            <ArrowDownCircle className='h-5 w-5' />
+            Deposit and Add Service
+          </span>
+        </Button>
       </div>
 
-      {/* Deposit Dialog */}
-      {/* This account has no indexed tokens by definition, so the picker only offers address entry. */}
-      <DepositDialog tokens={[]} open={depositDialogOpen} onOpenChange={setDepositDialogOpen} />
-
-      {/* Deposit and Approve Dialog */}
-      <DepositAndApproveDialog open={depositAndApproveDialogOpen} onOpenChange={setDepositAndApproveDialogOpen} />
-
-      {/* Approve Operator Dialog */}
-      <ApproveOperatorDialog operators={[]} tokens={[]} open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+      <AddServiceDialog open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen} />
     </EmptyStateCard>
   );
 };

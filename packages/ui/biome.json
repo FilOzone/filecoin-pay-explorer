@@ -12,5 +12,17 @@
         "noRedundantRoles": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/components/theme-toggle.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNestedTernary": "off"
+          }
+        }
+      }
+    }
+  ]
 }

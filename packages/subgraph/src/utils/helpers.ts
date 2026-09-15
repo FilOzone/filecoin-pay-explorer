@@ -4,11 +4,13 @@ import { erc20 } from "../../generated/Payments/erc20";
 import { RailOneTimePaymentProcessed } from "../../generated/Payments/Payments";
 import {
   Account,
+  AccountOperator,
   OneTimePayment,
   Operator,
   OperatorApproval,
   OperatorToken,
   Rail,
+  RailRatePeriod,
   RateChangeQueue,
   Token,
   UserToken,
@@ -21,6 +23,7 @@ import {
   NATIVE_TOKEN_SYMBOL,
 } from "./constants";
 import {
+  getAccountOperatorEntityId,
   getIdFromTxHashAndLogIndex,
   getOperatorApprovalEntityId,
   getOperatorTokenEntityId,
@@ -63,16 +66,16 @@ class OperatorWithIsNew {
   ) {}
 }
 
-class OperatorTokenWithIsNew {
+class AccountOperatorWithIsNew {
   constructor(
-    public operatorToken: OperatorToken,
+    public accountOperator: AccountOperator,
     public isNew: boolean,
   ) {}
 }
 
-class RateChangeQueueWithIsNew {
+class OperatorTokenWithIsNew {
   constructor(
-    public rateChangeQueue: RateChangeQueue,
+    public operatorToken: OperatorToken,
     public isNew: boolean,
   ) {}
 }
@@ -191,6 +194,25 @@ export const createOrLoadOperator = (address: Address): OperatorWithIsNew => {
   return new OperatorWithIsNew(operator, false);
 };
 
+export const createOrLoadAccountOperator = (account: Bytes, operator: Bytes): AccountOperatorWithIsNew => {
+  const id = getAccountOperatorEntityId(account, operator);
+  let accountOperator = AccountOperator.load(id);
+
+  if (!accountOperator) {
+    accountOperator = new AccountOperator(id);
+    accountOperator.account = account;
+    accountOperator.operator = operator;
+    accountOperator.totalRails = ZERO_BIG_INT;
+    accountOperator.totalActiveRails = ZERO_BIG_INT;
+    accountOperator.totalApprovals = ZERO_BIG_INT;
+    accountOperator.totalActiveApprovals = ZERO_BIG_INT;
+    accountOperator.save();
+    return new AccountOperatorWithIsNew(accountOperator, true);
+  }
+
+  return new AccountOperatorWithIsNew(accountOperator, false);
+};
+
 // OperatorApproval entity functions
 export const createOperatorApproval = (
   client: Address,
@@ -223,8 +245,6 @@ export const createOrLoadOperatorToken = (operator: Bytes, token: Bytes): Operat
     operatorToken.token = token;
     operatorToken.commissionEarned = ZERO_BIG_INT;
     operatorToken.volume = ZERO_BIG_INT;
-    operatorToken.lockupAllowance = ZERO_BIG_INT;
-    operatorToken.rateAllowance = ZERO_BIG_INT;
     operatorToken.lockupUsage = ZERO_BIG_INT;
     operatorToken.rateUsage = ZERO_BIG_INT;
     operatorToken.settledAmount = ZERO_BIG_INT;
@@ -246,11 +266,14 @@ export const createRail = (
   operator: Address,
   token: Address,
   validator: Address,
-  settledUpTo: GraphBN,
+  createdAtEpoch: GraphBN,
   commissionRateBps: GraphBN,
   serviceFeeRecipient: Address,
   timestamp: GraphBN,
+  currentRatePeriod: Bytes,
 ): Rail => {
+  // The caller saves after creating the initial rate period so the required
+  // currentRatePeriod pointer is present when the rail is first persisted.
   const rail = new Rail(getRailEntityId(railId));
   rail.railId = railId;
   rail.payer = payer;
@@ -262,7 +285,7 @@ export const createRail = (
   rail.paymentRate = ZERO_BIG_INT;
   rail.lockupFixed = ZERO_BIG_INT;
   rail.lockupPeriod = ZERO_BIG_INT;
-  rail.settledUpto = settledUpTo;
+  rail.settledUpto = createdAtEpoch;
   rail.state = "ZERORATE";
   rail.endEpoch = ZERO_BIG_INT;
   rail.validator = validator;
@@ -271,16 +294,38 @@ export const createRail = (
   rail.totalOneTimePayments = ZERO_BIG_INT;
   rail.totalSettlements = ZERO_BIG_INT;
   rail.totalRateChanges = ZERO_BIG_INT;
+  rail.latestRateChangeUntilEpoch = createdAtEpoch;
+  rail.unsettledRateChangeStartEpoch = createdAtEpoch;
   rail.createdAt = timestamp;
-  rail.save();
+  rail.createdAtEpoch = createdAtEpoch;
+  rail.currentRatePeriod = currentRatePeriod;
 
   return rail;
 };
 
+export const createRailRatePeriod = (
+  id: Bytes,
+  rail: Rail,
+  rate: GraphBN,
+  startEpoch: GraphBN,
+  untilEpoch: GraphBN | null = null,
+): RailRatePeriod => {
+  const ratePeriod = new RailRatePeriod(id);
+  ratePeriod.rail = rail.id;
+  ratePeriod.payer = rail.payer;
+  ratePeriod.operator = rail.operator;
+  ratePeriod.token = rail.token;
+  ratePeriod.rate = rate;
+  ratePeriod.startEpoch = startEpoch;
+  if (untilEpoch !== null) ratePeriod.untilEpoch = untilEpoch;
+  ratePeriod.save();
+
+  return ratePeriod;
+};
+
 export const createOneTimePayment = (
   event: RailOneTimePaymentProcessed,
-  railId: Bytes,
-  token: Bytes,
+  rail: Rail,
   totalAmount: GraphBN,
   networkFee: GraphBN,
   operatorCommission: GraphBN,
@@ -289,8 +334,10 @@ export const createOneTimePayment = (
   const entityId = getIdFromTxHashAndLogIndex(event.transaction.hash, event.logIndex);
 
   const oneTimePayment = new OneTimePayment(entityId);
-  oneTimePayment.rail = railId;
-  oneTimePayment.token = token;
+  oneTimePayment.rail = rail.id;
+  oneTimePayment.payer = rail.payer;
+  oneTimePayment.operator = rail.operator;
+  oneTimePayment.token = rail.token;
   oneTimePayment.totalAmount = totalAmount;
   oneTimePayment.networkFee = networkFee;
   oneTimePayment.operatorCommission = operatorCommission;
@@ -304,26 +351,22 @@ export const createOneTimePayment = (
 };
 
 // RateChangeQueue entity functions
+// Callers must provide a unique (railId, startEpoch); saving a duplicate immutable entity aborts indexing.
 export const createRateChangeQueue = (
   rail: Rail,
   startEpoch: GraphBN,
   untilEpoch: GraphBN,
   rate: GraphBN,
-): RateChangeQueueWithIsNew => {
+): RateChangeQueue => {
   const id = getRateChangeQueueEntityId(rail.railId, startEpoch);
-  let rateChangeQueue = RateChangeQueue.load(id);
-  const isNew = !rateChangeQueue;
-
-  if (!rateChangeQueue) {
-    rateChangeQueue = new RateChangeQueue(id);
-  }
+  const rateChangeQueue = new RateChangeQueue(id);
   rateChangeQueue.rail = rail.id;
   rateChangeQueue.startEpoch = startEpoch;
   rateChangeQueue.untilEpoch = untilEpoch;
   rateChangeQueue.rate = rate;
   rateChangeQueue.save();
 
-  return new RateChangeQueueWithIsNew(rateChangeQueue, isNew);
+  return rateChangeQueue;
 };
 
 export function updateOperatorLockup(
