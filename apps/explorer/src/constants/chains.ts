@@ -1,4 +1,5 @@
 import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
+import type { Address } from "viem";
 import { arbitrum, avalanche, base, bsc, mainnet as ethereum, optimism, polygon } from "viem/chains";
 
 import type { Network } from "@/types";
@@ -19,10 +20,12 @@ export interface Chain extends SynapseChain {
   slug: Network;
   contracts: SynapseChain["contracts"] & {
     payments: SynapseChain["contracts"]["filecoinPay"];
+    /** Mainnet only. The direct Squid deposit's FIL top-up swaps USDFC to WFIL through this pool. */
+    sushi?: { router: Address; wfil: Address; wfilUsdfcPoolFee: number };
   };
 }
 
-export const mainnet: Chain = {
+export const mainnet = {
   ...synapseMainnet,
   label: "Mainnet",
   slug: "mainnet",
@@ -53,8 +56,13 @@ export const mainnet: Chain = {
   contracts: {
     ...synapseMainnet.contracts,
     payments: synapseMainnet.contracts.filecoinPay,
+    sushi: {
+      router: "0x0389879e0156033202C44BF784ac18fC02edeE4f",
+      wfil: "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A",
+      wfilUsdfcPoolFee: 500,
+    },
   },
-};
+} satisfies Chain;
 
 export const calibration: Chain = {
   ...synapseCalibration,

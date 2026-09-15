@@ -4,6 +4,7 @@ import {
   type SquidClientOptions,
 } from "@filecoin-project/squid-evm-funding";
 import { type Address, encodeFunctionData, formatEther, type Hash, type Hex, parseAbi } from "viem";
+import { mainnet } from "@/constants/chains";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
 export const isNativeToken = (address: string) => address.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase();
@@ -22,9 +23,11 @@ const APPROVE_ESTIMATED_GAS = "15000000";
 const DEPOSIT_ESTIMATED_GAS = "60000000";
 const FIL_SWAP_ESTIMATED_GAS = "250000000";
 
-export const SUSHI_V3_SWAP_ROUTER_ADDRESS: Address = "0x0389879e0156033202C44BF784ac18fC02edeE4f";
-export const WFIL_ADDRESS: Address = "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A";
-export const WFIL_USDFC_POOL_FEE = 500;
+export const {
+  router: SUSHI_V3_SWAP_ROUTER_ADDRESS,
+  wfil: WFIL_ADDRESS,
+  wfilUsdfcPoolFee: WFIL_USDFC_POOL_FEE,
+} = mainnet.contracts.sushi;
 /** Fixed FIL delivered to the wallet by the top-up; enough for a typical month of client-paid fees. */
 export const FIL_GAS_TOP_UP_AMOUNT = 50_000_000_000_000_000n;
 const FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT = 25n;
