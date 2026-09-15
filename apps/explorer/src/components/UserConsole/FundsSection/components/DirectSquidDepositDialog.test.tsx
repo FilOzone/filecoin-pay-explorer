@@ -269,7 +269,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       input.onSwapAttempt?.(5n);
       input.onBroadcast?.({ fundsBefore: 5n, transactionHash: ROUTE_HASH });
       throw new SquidDepositError(
-        "USDFC reached your wallet but the Filecoin Pay deposit step failed.",
+        "USDFC reached the Pay account's address 0x1234...5678 but the Filecoin Pay deposit step failed.",
         "hook-failed",
         ROUTE_HASH,
       );

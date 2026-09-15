@@ -244,7 +244,7 @@ describe("awaitSquidDepositSettlement", () => {
   });
 
   it.each([
-    ["partial_success", "hook-failed", "USDFC reached your wallet"],
+    ["partial_success", "hook-failed", "USDFC reached the Pay account's address"],
     ["failed", "failed", "could not complete the route"],
   ])("reports %s as a %s failure", async (status, reason, message) => {
     const fetch = vi.fn(async () => statusResponse(status));
