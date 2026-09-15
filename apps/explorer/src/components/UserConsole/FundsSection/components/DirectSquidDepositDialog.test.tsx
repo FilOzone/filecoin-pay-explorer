@@ -702,4 +702,33 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
     expect(topUp.setActive).toHaveBeenCalledWith(false);
   });
+
+  it("forgets a paying wallet picked in an earlier session when the dialog closes", async () => {
+    const other = { ...wallet, address: OTHER } as unknown as typeof wallet;
+    connectedWallets.current.push(other);
+    try {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      const walletSelect = () =>
+        renderer.root.findAll(
+          (candidate) => candidate.props.value === wallet.address || candidate.props.value === other.address,
+        )[0];
+      expect(walletSelect().props.value).toBe(wallet.address);
+
+      await act(async () => walletSelect().props.onValueChange(other.address));
+      expect(walletSelect().props.value).toBe(other.address);
+
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open={false} />);
+      });
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      expect(walletSelect().props.value).toBe(wallet.address);
+    } finally {
+      connectedWallets.current.pop();
+    }
+  });
 });
