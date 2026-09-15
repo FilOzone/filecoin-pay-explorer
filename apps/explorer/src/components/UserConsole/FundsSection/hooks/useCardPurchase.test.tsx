@@ -160,7 +160,7 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(2n);
   });
 
-  it("does not continue login after the initiating network context changes", async () => {
+  it("does not continue login after the wallet changes", async () => {
     privy.authenticated = false;
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
