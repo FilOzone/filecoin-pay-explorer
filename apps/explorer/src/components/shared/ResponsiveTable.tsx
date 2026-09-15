@@ -11,6 +11,5 @@ const PINNED_FIRST_COLUMN = [
 
 /** Pins the first column of a wide table. */
 export function ResponsiveTable({ children }: { children: ReactNode }) {
-
   return <div className={cn("relative w-full min-w-0", ...PINNED_FIRST_COLUMN)}>{children}</div>;
 }
