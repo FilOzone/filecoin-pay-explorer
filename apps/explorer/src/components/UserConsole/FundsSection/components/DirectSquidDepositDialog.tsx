@@ -246,10 +246,12 @@ export function DirectSquidDepositDialog({
     retry: 1,
   });
   // Defaults the top-up on for any wallet below the fee reserve, matching the Add Service guard.
+  // A background refetch of a known balance is not loading, or the hint would tell a
+  // funded wallet it has no FIL every 30 s.
   const recipientFilStatus = getFilecoinGasBalanceStatus({
     balance: recipientFilQuery.data,
     isError: recipientFilQuery.isError,
-    isLoading: recipientFilQuery.isFetching,
+    isLoading: recipientFilQuery.isFetching && recipientFilQuery.data === undefined,
   });
   const quoteQuery = useQuery({
     enabled:
@@ -308,10 +310,11 @@ export function DirectSquidDepositDialog({
       setFilGasDefaultRecipient("");
       return;
     }
-    if (!recipient || recipientFilStatus === "loading" || filGasDefaultRecipient === recipient) return;
+    // The default waits for the fresh read that every open triggers, not the cached balance.
+    if (!recipient || recipientFilQuery.isFetching || filGasDefaultRecipient === recipient) return;
     setFilGasDefaultRecipient(recipient);
     setFilGasTopUpEnabled(recipientFilStatus !== "funded");
-  }, [filGasDefaultRecipient, open, recipient, recipientFilStatus]);
+  }, [filGasDefaultRecipient, open, recipient, recipientFilQuery.isFetching, recipientFilStatus]);
 
   useEffect(() => {
     if (!open) {
