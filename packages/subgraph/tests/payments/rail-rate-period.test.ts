@@ -1,7 +1,7 @@
-import { Bytes, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { Bytes, ethereum, BigInt as GraphBN, store } from "@graphprotocol/graph-ts";
 import { afterEach, assert, beforeAll, clearStore, describe, test } from "matchstick-as";
 
-import { Rail, RailRatePeriod } from "../../generated/schema";
+import { Rail, RailRatePeriod, RateChangeQueue } from "../../generated/schema";
 import {
   handleRailCreated,
   handleRailFinalized,
@@ -177,6 +177,135 @@ describe("RailRatePeriod projection", () => {
     assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalRateChanges", "1");
     assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "1", "1", "1");
   });
+
+  test("settles only pending queue entries while preserving rate history", () => {
+    const railId = GraphBN.fromI32(25);
+    createRailAt(railId, 10, 1);
+    const lowRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const mediumRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    const highRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, lowRate);
+    const firstChange = createRailRateModifiedEvent(railId, lowRate, mediumRate);
+    const secondChange = createRailRateModifiedEvent(railId, mediumRate, highRate);
+    setEventPosition(activation, 20, 2);
+    setEventPosition(firstChange, 30, 3);
+    setEventPosition(secondChange, 40, 4);
+    handleRailRateModified(activation);
+    handleRailRateModified(firstChange);
+    handleRailRateModified(secondChange);
+
+    const partial = createRailSettledEvent(
+      railId,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      GraphBN.fromI32(35),
+    );
+    setEventPosition(partial, 45, 5);
+    handleRailSettled(partial);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "30");
+
+    const complete = createRailSettledEvent(
+      railId,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      GraphBN.fromI32(45),
+    );
+    setEventPosition(complete, 50, 6);
+    handleRailSettled(complete);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "45");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalRateChanges", "2");
+    assert.entityCount("RateChangeQueue", 2);
+
+    const nextChange = createRailRateModifiedEvent(railId, highRate, lowRate);
+    setEventPosition(nextChange, 60, 7);
+    handleRailRateModified(nextChange);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "45");
+    assert.entityCount("RateChangeQueue", 3);
+  });
+
+  test("continues settlement when an unsettled queue entry is missing", () => {
+    const railId = GraphBN.fromI32(26);
+    createRailAt(railId, 10, 1);
+    const lowRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const mediumRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    const highRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, lowRate);
+    const firstChange = createRailRateModifiedEvent(railId, lowRate, mediumRate);
+    const secondChange = createRailRateModifiedEvent(railId, mediumRate, highRate);
+    setEventPosition(activation, 20, 2);
+    setEventPosition(firstChange, 30, 3);
+    setEventPosition(secondChange, 40, 4);
+    handleRailRateModified(activation);
+    handleRailRateModified(firstChange);
+    handleRailRateModified(secondChange);
+
+    const rail = Rail.load(getRailEntityId(railId))!;
+    const rateChanges = rail.rateChangeQueue.load();
+    let firstRateChange = rateChanges[0];
+    for (let i = 1; i < rateChanges.length; i++) {
+      if (rateChanges[i].startEpoch.lt(firstRateChange.startEpoch)) firstRateChange = rateChanges[i];
+    }
+    store.remove("RateChangeQueue", firstRateChange.id.toHexString());
+
+    const settlement = createRailSettledEvent(
+      railId,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      GraphBN.fromI32(35),
+    );
+    setEventPosition(settlement, 45, 5);
+    handleRailSettled(settlement);
+
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "settledUpto", "35");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "40");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalSettlements", "1");
+    assert.entityCount("Settlement", 1);
+  });
+
+  test(
+    "fails settlement when a queue entry does not advance",
+    () => {
+      const railId = GraphBN.fromI32(27);
+      createRailAt(railId, 10, 1);
+      const lowRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+      const mediumRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+      const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, lowRate);
+      const rateChange = createRailRateModifiedEvent(railId, lowRate, mediumRate);
+      setEventPosition(activation, 20, 2);
+      setEventPosition(rateChange, 30, 3);
+      handleRailRateModified(activation);
+      handleRailRateModified(rateChange);
+
+      const rail = Rail.load(getRailEntityId(railId))!;
+      const storedRateChange = rail.rateChangeQueue.load()[0];
+      store.remove("RateChangeQueue", storedRateChange.id.toHexString());
+
+      const brokenRateChange = new RateChangeQueue(storedRateChange.id);
+      brokenRateChange.rail = storedRateChange.rail;
+      brokenRateChange.startEpoch = storedRateChange.startEpoch;
+      brokenRateChange.untilEpoch = storedRateChange.startEpoch;
+      brokenRateChange.rate = storedRateChange.rate;
+      brokenRateChange.save();
+
+      const settlement = createRailSettledEvent(
+        railId,
+        ZERO_BIG_INT,
+        ZERO_BIG_INT,
+        ZERO_BIG_INT,
+        ZERO_BIG_INT,
+        GraphBN.fromI32(35),
+      );
+      setEventPosition(settlement, 40, 4);
+      handleRailSettled(settlement);
+    },
+    true,
+  );
 
   test("ignores an exact replay of the event that opened the current period", () => {
     const railId = GraphBN.fromI32(21);
