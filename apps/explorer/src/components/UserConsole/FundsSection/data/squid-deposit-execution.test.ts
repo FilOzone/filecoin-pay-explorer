@@ -643,9 +643,7 @@ describe("executeSquidDeposit", () => {
       breach: {
         completed: [],
         remaining: ["approve", "route"],
-        feeSoFar: 0n,
         requiredFee,
-        maxNativeFee: requiredFee - 1n,
       },
     });
     expect(wallet.sendTransaction).not.toHaveBeenCalled();
@@ -684,17 +682,17 @@ describe("executeSquidDeposit", () => {
     expect((failure as SquidDepositBudgetError).breach).toEqual({
       completed: ["reset", "approve"],
       remaining: ["route"],
-      feeSoFar: resetFee + approveFee,
       requiredFee: routeFee + 12n,
-      maxNativeFee: resetFee + approveFee + routeFee,
     });
     expect((failure as Error).message).toBe(
       "Network gas rose above the reviewed maximum before the Squid transaction. The allowance reset and approval already went through and will not be repeated.",
     );
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
     expect(wallet.sendTransaction.mock.calls.map((call) => (call as [{ to: string }])[0].to)).toEqual([USDC, USDC]);
+  });
 
-    // The re-reviewed run sees the granted allowance and sends only the route.
+  it("sends only the route after re-review sees the granted allowance", async () => {
+    const routeFee = 719_278_800_000_000n;
     const secondWallet = fakeWallet();
     const fetch = vi.fn(async () => statusResponse("success"));
     await executeSquidDeposit({
