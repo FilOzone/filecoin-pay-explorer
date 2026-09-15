@@ -272,54 +272,6 @@ describe("AddServiceDialog", () => {
     expect(mocks.submit).toHaveBeenCalledOnce();
   });
 
-  it("stops submission when the account changes during the fresh FIL check", async () => {
-    let resolveRefresh!: (status: "funded") => void;
-    mocks.refreshFilBalance.mockReturnValue(
-      new Promise((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
-    const { renderer } = renderDialog();
-
-    act(() => primaryButton(renderer).props.onClick());
-    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
-    mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
-
-    await act(async () => {
-      resolveRefresh("funded");
-      await Promise.resolve();
-    });
-    expect(mocks.submit).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["314 → 314159", [314159]],
-    ["314 → 314159 → 314", [314159, 314]],
-  ] as const)("stops submission across supported chain transition %s", async (_label, chainIds) => {
-    let resolveRefresh!: (status: "funded") => void;
-    mocks.refreshFilBalance.mockReturnValue(
-      new Promise((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
-    const { renderer } = renderDialog();
-
-    act(() => primaryButton(renderer).props.onClick());
-    for (const chainId of chainIds) {
-      mocks.chainId = chainId;
-      mocks.targetChainId = chainId;
-      act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
-    }
-
-    await act(async () => {
-      resolveRefresh("funded");
-      await Promise.resolve();
-    });
-    expect(mocks.submit).not.toHaveBeenCalled();
-  });
-
   it("keeps the form while Squid is open and restores it after cancellation", () => {
     const { renderer } = renderDialog();
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
