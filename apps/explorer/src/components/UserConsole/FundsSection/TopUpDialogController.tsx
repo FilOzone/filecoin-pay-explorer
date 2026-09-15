@@ -12,10 +12,9 @@ import { getSquidAcquisitionStorageKey, hasSavedSquidAcquisition } from "./data/
 interface TopUpDialogControllerProps {
   accountId: string;
   children?: (openTopUp: () => void, isOpen: boolean) => ReactNode;
-  showTrigger?: boolean;
 }
 
-export function TopUpDialogController({ accountId, children, showTrigger = false }: TopUpDialogControllerProps) {
+export function TopUpDialogController({ accountId, children }: TopUpDialogControllerProps) {
   const [open, setOpen] = useState(false);
   const [hasSavedAcquisition, setHasSavedAcquisition] = useState(false);
   const [recoveryRevision, setRecoveryRevision] = useState(0);
@@ -115,13 +114,6 @@ export function TopUpDialogController({ accountId, children, showTrigger = false
         </div>
       )}
       {children?.(openTopUp, open)}
-      {showTrigger && (
-        <div className='flex justify-center'>
-          <Button onClick={openTopUp} variant='primary'>
-            Fund with another token
-          </Button>
-        </div>
-      )}
       <GuidedTopUpDialog
         accountId={accountId}
         accountSummary={accountSummary}

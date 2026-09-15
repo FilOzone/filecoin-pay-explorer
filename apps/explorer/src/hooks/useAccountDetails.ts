@@ -36,9 +36,21 @@ interface AccountTokensOptions extends AccountDetailsOptions {
    * outside the response. It raises the cap; it does not remove it.
    */
   pageSize?: number;
+  enabled?: boolean;
 }
 
 const PAGE_SIZE = 10;
+
+/**
+ * Temporary bounded fetch for the console, not an exhaustive one. The console
+ * shows one token at a time but must be able to select any of them, and the
+ * subgraph orders by balance descending, so the default page of ten would drop
+ * a zero-balance USDFC off the end and silently default the overview to the
+ * wrong token. A wider single page makes that unreachable in practice; an
+ * account holding more than this many tokens still truncates. Replace with
+ * paging driven by `account.totalTokens` when that becomes realistic.
+ */
+export const CONSOLE_TOKEN_PAGE_SIZE = 100;
 
 export const useAccountDetails = (address: string, options?: AccountDetailsOptions) =>
   useGraphQLQuery<AccountDetailsResponse, Account | null>({
@@ -67,7 +79,7 @@ export const useAccountTokens = (accountId: string, page: number = 1, options?: 
       userTokens: data.userTokens,
       hasMore: data.userTokens.length === pageSize,
     }),
-    enabled: !!accountId,
+    enabled: !!accountId && (options?.enabled ?? true),
     networkOverride: options?.networkOverride,
   });
 };
