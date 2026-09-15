@@ -140,6 +140,40 @@ describe("revoke deep link", () => {
     expect(toastError.mock.calls[0]?.[0]).toBe("That session key is not in this wallet's list");
   });
 
+  it("waits for the sync to settle, whatever re-renders meanwhile", async () => {
+    // Live, wagmi's store forced a render between starting the sync and the
+    // `syncing` state landing; the effect then reported the key missing while
+    // the chain read was still in flight, and the dialog never opened.
+    let finishSync!: () => void;
+    hooks.syncFromChain.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSync = () => {
+            hooks.keys = [listed];
+            resolve({ addedCount: 1, updatedCount: 0, skippedUnrecognized: 0 });
+          };
+        }),
+    );
+
+    const rendered = await renderWithLink(KEY);
+    // A fresh list reference is what the store's render brings; the effect re-runs on it.
+    hooks.keys = [];
+    await act(async () => {
+      rendered.update(
+        <SessionKeysSection network='calibration' account={OWNER} revokeAddress={KEY} revokeNetwork='calibration' />,
+      );
+    });
+
+    expect(hooks.syncFromChain).toHaveBeenCalledTimes(1);
+    expect(toastError).not.toHaveBeenCalled();
+    expect(revokeTargets.at(-1)).toBeNull();
+
+    await act(async () => finishSync());
+
+    expect(revokeTargets.at(-1)).toBe(KEY);
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("says so instead of doing nothing when the link is for another network", async () => {
     hooks.keys = [listed];
 

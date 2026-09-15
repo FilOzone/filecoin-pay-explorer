@@ -132,11 +132,14 @@ const ConnectedSessionKeys = ({
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  // How far the `?revoke=` link has got: "synced" means the one chain read it
-  // is allowed has already run, "done" means the dialog opened or the key was
-  // reported missing. Both stop the effect below from acting twice, so closing
-  // the dialog does not reopen it.
-  const revokeLinkRef = useRef<"idle" | "synced" | "done">("idle");
+  // How far the `?revoke=` link has got: "syncing" once the one chain read it
+  // is allowed has started, "done" when the dialog opened or the key was
+  // reported missing. A ref, not state: wagmi's store pushes sync renders that
+  // land before a state update does, and the effect below once read a stale
+  // `syncing` in one of those and reported the key missing mid-read.
+  const revokeLinkRef = useRef<"idle" | "syncing" | "done">("idle");
+  // Set when that read settles, so the effect runs again with what it found.
+  const [revokeLinkSynced, setRevokeLinkSynced] = useState(false);
 
   // Newest first; unknown createdAt (sanitize-coerced 0) sinks to the bottom.
   // Deterministic order matters once sync interleaves imported and local keys.
@@ -192,10 +195,10 @@ const ConnectedSessionKeys = ({
   // The link arrives a render after mount, and only counts on its own network.
   useEffect(() => {
     if (revokeAddress == null || revokeNetworkMismatch) return;
-    // A sync in flight decides this; re-run when it settles. Status reads are
-    // only worth waiting for when there are keys to read, otherwise a browser
-    // that has never seen this wallet waits on a query that never runs.
-    if (revokeLinkRef.current === "done" || syncing) return;
+    if (revokeLinkRef.current === "done") return;
+    // Status reads are only worth waiting for when there are keys to read,
+    // otherwise a browser that has never seen this wallet waits on a query
+    // that never runs.
     if (statusReadsPending && keys.length > 0) return;
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
@@ -205,7 +208,7 @@ const ConnectedSessionKeys = ({
       setRevoke({ target: listed, identity: { network, account } });
       return;
     }
-    if (revokeLinkRef.current === "synced") {
+    if (revokeLinkSynced) {
       revokeLinkRef.current = "done";
       dropSearchParams(["revoke", "network"]);
       toast.error("That session key is not in this wallet's list", {
@@ -213,9 +216,11 @@ const ConnectedSessionKeys = ({
       });
       return;
     }
-    revokeLinkRef.current = "synced";
-    void handleSync();
-  }, [revokeAddress, revokeNetworkMismatch, keys, statusReadsPending, syncing, handleSync, network, account]);
+    if (revokeLinkRef.current === "syncing") return;
+    revokeLinkRef.current = "syncing";
+    // handleSync reports its own failure and never throws.
+    void handleSync().then(() => setRevokeLinkSynced(true));
+  }, [revokeAddress, revokeNetworkMismatch, keys, statusReadsPending, revokeLinkSynced, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
   const syncButton = (
