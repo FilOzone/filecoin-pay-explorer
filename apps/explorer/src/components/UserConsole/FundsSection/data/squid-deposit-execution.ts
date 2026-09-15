@@ -11,6 +11,7 @@ import {
   type TransactionReceipt,
   type WalletClient,
 } from "viem";
+import { formatAddress } from "@/utils/formatter";
 import {
   type ExecutableSquidDepositQuote,
   FILECOIN_CHAIN_ID,
@@ -298,6 +299,9 @@ export async function awaitSquidDepositSettlement({
   target,
   transactionHash,
 }: AwaitSquidDepositInput): Promise<SquidDepositResult> {
+  // Squid delivers to the recipient, which is the Pay account's address and not
+  // always the paying wallet, so failure messages name where the USDFC went.
+  const recipientLabel = formatAddress(target.recipient);
   let destinationTransactionHash = transactionHash;
   if (sourceChainId !== FILECOIN_CHAIN_ID) {
     onStage?.("bridging", transactionHash);
@@ -333,7 +337,7 @@ export async function awaitSquidDepositSettlement({
     }
     if (status === "hook-failed") {
       throw new SquidDepositError(
-        "USDFC reached your wallet but the Filecoin Pay deposit step failed. Deposit it directly from your wallet.",
+        `USDFC reached the Pay account's address ${recipientLabel} but the Filecoin Pay deposit step failed. Deposit it from that wallet.`,
         "hook-failed",
         transactionHash,
       );
@@ -370,7 +374,7 @@ export async function awaitSquidDepositSettlement({
   }
   if (receipt.status !== "success") {
     throw new SquidDepositError(
-      "Squid's Filecoin destination transaction reverted. The USDFC may remain in your wallet.",
+      `Squid's Filecoin destination transaction reverted. The USDFC may remain at the Pay account's address ${recipientLabel}.`,
       "hook-failed",
       transactionHash,
     );
@@ -388,7 +392,7 @@ export async function awaitSquidDepositSettlement({
   );
   if (!deposit) {
     throw new SquidDepositError(
-      "Squid completed without the expected Filecoin Pay deposit event. The USDFC may remain in your wallet.",
+      `Squid completed without the expected Filecoin Pay deposit event. The USDFC may remain at the Pay account's address ${recipientLabel}.`,
       "hook-failed",
       transactionHash,
     );
