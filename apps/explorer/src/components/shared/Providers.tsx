@@ -20,6 +20,7 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
           <ProgressBar />
           {children}
           <Toaster
+            theme='light'
             position={DEFAULT_TOAST_POSITION}
             toastOptions={{
               style: {
