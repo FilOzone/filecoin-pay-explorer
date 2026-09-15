@@ -90,6 +90,17 @@ type ReviewedDeposit = {
   sourceSymbol: string;
 };
 
+function describeWalletConfirmations(reviewed: {
+  approvalRequired: boolean;
+  approvalResetRequired: boolean;
+  context: { sourceToken: string };
+}) {
+  if (isNativeToken(reviewed.context.sourceToken)) return "the Squid transaction.";
+  if (reviewed.approvalResetRequired) return "an allowance reset, an approval, then the Squid transaction.";
+  if (reviewed.approvalRequired) return "an approval, then the Squid transaction.";
+  return "the Squid transaction.";
+}
+
 export function DirectSquidDepositDialog({
   accountId,
   onOpenChange,
@@ -672,16 +683,7 @@ export function DirectSquidDepositDialog({
                 <span className='text-muted-foreground'>Destination:</span> Filecoin Pay account{" "}
                 {formatAddress(reviewed.context.recipient)}
               </p>
-              <p className='text-muted-foreground'>
-                Your wallet will confirm
-                {isNativeToken(reviewed.context.sourceToken)
-                  ? " the Squid transaction."
-                  : reviewed.approvalResetRequired
-                    ? " an allowance reset, an approval, then the Squid transaction."
-                    : reviewed.approvalRequired
-                      ? " an approval, then the Squid transaction."
-                      : " the Squid transaction."}
-              </p>
+              <p className='text-muted-foreground'>Your wallet will confirm {describeWalletConfirmations(reviewed)}</p>
             </section>
           ) : (
             <>
