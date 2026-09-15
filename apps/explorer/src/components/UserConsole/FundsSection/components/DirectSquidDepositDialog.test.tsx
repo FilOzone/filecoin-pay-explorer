@@ -265,6 +265,92 @@ describe("DirectSquidDepositDialog safety integration", () => {
     vi.unstubAllGlobals();
   });
 
+  it("prefills the verified purchased source token and amount", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT.toLowerCase()}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+          onOpenChange={() => undefined}
+          open
+        />,
+      );
+    });
+
+    expect(amountInput(renderer).props.value).toBe("12.5");
+    expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
+  });
+
+  it("keeps the user's edits when a pending marker appears and clears", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <DirectSquidDepositDialog
+          accountId={RECIPIENT.toLowerCase()}
+          initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+          onOpenChange={() => undefined}
+          open
+        />,
+      );
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+
+    const pending: PendingSquidDeposit = {
+      executionStage: "swap-requested",
+      fundsBefore: 5n,
+      minimumDestinationAmount: 92n,
+      owner: OWNER,
+      quoteId: "quote-1",
+      recipient: RECIPIENT,
+      sourceAmount: 100_000_000n,
+      sourceChainId: 8453,
+      sourceToken: USDC,
+      startedAt: 1_700_000_000_000,
+    };
+    storage.setItem(
+      getPendingSquidDepositKey(OWNER),
+      JSON.stringify({
+        ...pending,
+        fundsBefore: pending.fundsBefore.toString(),
+        minimumDestinationAmount: pending.minimumDestinationAmount.toString(),
+        sourceAmount: pending.sourceAmount.toString(),
+      }),
+    );
+    await act(async () => {
+      for (const listener of listeners.storage ?? []) listener({ key: getPendingSquidDepositKey(OWNER) });
+    });
+    storage.removeItem(getPendingSquidDepositKey(OWNER));
+    await act(async () => {
+      for (const listener of listeners.storage ?? []) listener({ key: getPendingSquidDepositKey(OWNER) });
+    });
+
+    expect(amountInput(renderer).props.value).toBe("100");
+  });
+
+  it("does not reapply an equivalent purchase prefill after the user edits it", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = () => (
+      <DirectSquidDepositDialog
+        accountId={RECIPIENT.toLowerCase()}
+        initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: USDC }}
+        onOpenChange={() => undefined}
+        open
+      />
+    );
+    await act(async () => {
+      renderer = create(render());
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "10" } });
+      renderer.update(render());
+    });
+
+    expect(amountInput(renderer).props.value).toBe("10");
+  });
+
   it.each([
     "destination account switch",
     "dialog unmount",
@@ -615,5 +701,34 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open={false} />);
     });
     expect(topUp.setActive).toHaveBeenCalledWith(false);
+  });
+
+  it("forgets a paying wallet picked in an earlier session when the dialog closes", async () => {
+    const other = { ...wallet, address: OTHER } as unknown as typeof wallet;
+    connectedWallets.current.push(other);
+    try {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      const walletSelect = () =>
+        renderer.root.findAll(
+          (candidate) => candidate.props.value === wallet.address || candidate.props.value === other.address,
+        )[0];
+      expect(walletSelect().props.value).toBe(wallet.address);
+
+      await act(async () => walletSelect().props.onValueChange(other.address));
+      expect(walletSelect().props.value).toBe(other.address);
+
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open={false} />);
+      });
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      expect(walletSelect().props.value).toBe(wallet.address);
+    } finally {
+      connectedWallets.current.pop();
+    }
   });
 });
