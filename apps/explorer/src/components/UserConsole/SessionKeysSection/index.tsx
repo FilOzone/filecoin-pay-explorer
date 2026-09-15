@@ -211,9 +211,15 @@ const ConnectedSessionKeys = ({
     if (revokeLinkSynced) {
       revokeLinkRef.current = "done";
       dropSearchParams(["revoke", "network"]);
-      toast.error("That session key is not in this wallet's list", {
-        description: "It may belong to another wallet, or to a different network.",
-      });
+      // Not published from inside the effect: sonner's Toaster re-subscribes
+      // to its store whenever its list changes, and when the sync's own toast
+      // commits together with this render, React has run that cleanup and not
+      // yet the re-subscribe, so a toast published here is dropped unseen.
+      queueMicrotask(() =>
+        toast.error("That session key is not in this wallet's list", {
+          description: "It may belong to another wallet, or to a different network.",
+        }),
+      );
       return;
     }
     if (revokeLinkRef.current === "syncing") return;
