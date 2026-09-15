@@ -1,5 +1,6 @@
-import { NATIVE_TOKEN_ADDRESS, type SourceToken } from "@filecoin-project/squid-evm-funding";
+import type { SourceToken } from "@filecoin-project/squid-evm-funding";
 import { type Address, erc20Abi, type PublicClient } from "viem";
+import { isNativeToken } from "./squid-deposit-route";
 
 const BALANCE_BATCH_SIZE = 100;
 const normalizeAddress = (address: string) => address.toLowerCase();
@@ -37,7 +38,7 @@ export async function readSourceTokenState(
   spender: Address,
 ): Promise<SourceTokenState> {
   const nativePromise = client.getBalance({ address: owner });
-  if (normalizeAddress(tokenAddress) === normalizeAddress(NATIVE_TOKEN_ADDRESS)) {
+  if (isNativeToken(tokenAddress)) {
     const native = await nativePromise;
     return { allowance: 0n, native, token: native };
   }
@@ -60,12 +61,8 @@ export async function readSourceTokenBalances(
   tokens: readonly SourceToken[],
 ): Promise<SourceTokenBalances> {
   const uniqueTokens = [...new Map(tokens.map((token) => [normalizeAddress(token.token), token])).values()];
-  const nativeToken = uniqueTokens.find(
-    (token) => normalizeAddress(token.token) === normalizeAddress(NATIVE_TOKEN_ADDRESS),
-  );
-  const erc20Tokens = uniqueTokens.filter(
-    (token) => normalizeAddress(token.token) !== normalizeAddress(NATIVE_TOKEN_ADDRESS),
-  );
+  const nativeToken = uniqueTokens.find((token) => isNativeToken(token.token));
+  const erc20Tokens = uniqueTokens.filter((token) => !isNativeToken(token.token));
   const balances: Record<string, bigint | null> = {};
   // A failed read stays unknown (null) rather than becoming a false zero; the
   // selector shows it as "Balance unavailable" and ranks it last.
