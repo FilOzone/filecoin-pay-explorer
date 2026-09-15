@@ -8,6 +8,7 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
+import { useSwitchChain } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
@@ -145,6 +146,7 @@ const ConnectedSessionKeys = ({
   // URL request (?authorize=) guards
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
+  const { switchChain } = useSwitchChain();
   // A revoke link is for one chain too: the key it names is authorized there,
   // and this wallet may not even hold it on the chain it is connected to.
   const revokeNetworkMismatch = revokeAddress != null && revokeNetwork !== network;
@@ -294,9 +296,21 @@ const ConnectedSessionKeys = ({
             <span className='capitalize'>{network}</span>.
           </p>
           <p className='text-xs mt-1'>
-            Nothing was opened. Switch your wallet to <span className='capitalize'>{revokeNetwork}</span> to revoke{" "}
+            Nothing was opened. Switch to <span className='capitalize'>{revokeNetwork}</span> to revoke{" "}
             <span className='font-mono break-all'>{revokeAddress}</span>.
           </p>
+          {/* Revoking only removes authority, so a link that lands on the wrong
+              chain is worth one click to fix. The wallet still confirms the
+              switch, and the dialog opens once the network matches. */}
+          <Button
+            variant='primary'
+            size='compact'
+            className='mt-3'
+            aria-label={`Switch to ${revokeNetwork}`}
+            onClick={() => revokeNetwork && switchChain({ chainId: getChain(revokeNetwork).id })}
+          >
+            Switch to <span className='capitalize'>{revokeNetwork}</span>
+          </Button>
         </Notice>
       )}
 

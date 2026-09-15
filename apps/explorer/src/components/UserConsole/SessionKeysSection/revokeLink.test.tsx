@@ -21,6 +21,9 @@ vi.mock("@filecoin-pay/ui/components/tooltip", () => ({
 }));
 vi.mock("@/components/shared/CopyButton", () => ({ default: () => null }));
 
+const switchChain = vi.fn();
+vi.mock("wagmi", () => ({ useSwitchChain: () => ({ switchChain }) }));
+
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) } }));
 
@@ -87,6 +90,7 @@ describe("revoke deep link", () => {
     hooks.keys = [];
     hooks.syncFromChain.mockReset().mockResolvedValue({ addedCount: 0, updatedCount: 0, skippedUnrecognized: 0 });
     toastError.mockReset();
+    switchChain.mockReset();
   });
 
   it("opens the dialog on a key this browser already has, without a chain read", async () => {
@@ -127,5 +131,16 @@ describe("revoke deep link", () => {
     expect(hooks.syncFromChain).not.toHaveBeenCalled();
     // Silence would leave the owner on a page that looks like it ignored them.
     expect(text(rendered.toJSON())).toContain("This revoke link is for mainnet");
+  });
+
+  it("switches to the link's chain on one click, and to that chain, not the connected one", async () => {
+    hooks.keys = [listed];
+
+    const rendered = await renderWithLink(KEY, "mainnet");
+    const button = rendered.root.findByProps({ "aria-label": "Switch to mainnet" });
+    await act(async () => button.props.onClick());
+
+    // 314 is mainnet, the network the link named; calibration (314159) is what the wallet is on.
+    expect(switchChain.mock.calls).toEqual([[{ chainId: 314 }]]);
   });
 });
