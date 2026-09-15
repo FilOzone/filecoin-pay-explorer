@@ -2,8 +2,8 @@ import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
-import { CopyableText, RailStateBadge, RoleIndicator } from "@/components/shared";
-import { formatAddress, formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
+import { CopyableText, RailStateBadge } from "@/components/shared";
+import { formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
 import { RailActions } from "../components";
 import type { RailTableRow } from "../types";
 
@@ -22,43 +22,28 @@ export const columns = [
       );
     },
   }),
-  columnHelper.display({
-    id: "type",
-    header: "Type",
-    cell: (info) => {
-      const { isPayer } = info.row.original;
-
-      return (
-        <div className='flex justify-start'>
-          <RoleIndicator role={isPayer ? "payer" : "payee"} />
-        </div>
-      );
-    },
-  }),
   columnHelper.accessor("createdAt", {
     header: "Date",
     cell: (info) => formatDate(info.getValue()),
   }),
+  // The route fixes the payer and the operator, so the payee is the only
+  // participant worth a column.
   columnHelper.display({
-    id: "counterparty",
-    header: "Counterparty",
+    id: "payee",
+    header: "Payee",
     cell: (info) => {
-      const { isPayer, payee, payer, operator } = info.row.original;
-      const counterparty = isPayer ? payee : payer;
+      const { payee } = info.row.original;
 
       return (
-        <div className='flex flex-col gap-1'>
-          <CopyableText
-            className='text-sm font-medium'
-            value={counterparty.address}
-            to={`/accounts/${counterparty.address}`}
-            monospace={true}
-            label='Account address'
-            truncate={true}
-            truncateLength={8}
-          />
-          <div className='text-xs text-muted-foreground'>Operator: {formatAddress(operator.address)}</div>
-        </div>
+        <CopyableText
+          className='text-sm font-medium'
+          value={payee.address}
+          to={`/accounts/${payee.address}`}
+          monospace={true}
+          label='Account address'
+          truncate={true}
+          truncateLength={8}
+        />
       );
     },
   }),
