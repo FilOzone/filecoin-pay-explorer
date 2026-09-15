@@ -1,6 +1,5 @@
 "use client";
 
-import { Alert } from "@filecoin-foundation/ui-filecoin/Alert";
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
@@ -21,25 +20,21 @@ export const PRIVY_CONFIG = {
   appearance: { walletChainType: "ethereum-only" },
 } satisfies PrivyClientConfig;
 
+export const PRIVY_DEVELOPMENT_APP = {
+  appId: "cmtkfb83p04du0bk0kofldq4e",
+  clientId: "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf",
+} as const;
+
 const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
-
-  if (!appId || !clientId) {
-    const missingVariables = [!appId && "NEXT_PUBLIC_PRIVY_APP_ID", !clientId && "NEXT_PUBLIC_PRIVY_CLIENT_ID"].filter(
-      Boolean,
-    );
-    console.error("Wallet login is unavailable: missing environment variables", missingVariables);
-
-    return (
-      <div className='m-6'>
-        <Alert title='Wallet login is temporarily unavailable' description='Please try again later.' />
-      </div>
-    );
-  }
+  const configuredAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
+  const configuredClientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID?.trim();
+  const privyApp =
+    configuredAppId && configuredClientId
+      ? { appId: configuredAppId, clientId: configuredClientId }
+      : PRIVY_DEVELOPMENT_APP;
 
   return (
-    <PrivyProvider appId={appId} clientId={clientId} config={PRIVY_CONFIG}>
+    <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
       <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
         <SynapseProvider>
           <TopUpActivityProvider>
