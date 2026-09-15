@@ -80,13 +80,6 @@ class OperatorTokenWithIsNew {
   ) {}
 }
 
-class RateChangeQueueWithIsNew {
-  constructor(
-    public rateChangeQueue: RateChangeQueue,
-    public isNew: boolean,
-  ) {}
-}
-
 // Alternative Account entity function for payments-related code
 export const createOrLoadAccountByAddress = (address: Address): AccountWithIsNew => {
   let account = Account.load(address);
@@ -301,6 +294,8 @@ export const createRail = (
   rail.totalOneTimePayments = ZERO_BIG_INT;
   rail.totalSettlements = ZERO_BIG_INT;
   rail.totalRateChanges = ZERO_BIG_INT;
+  rail.latestRateChangeUntilEpoch = createdAtEpoch;
+  rail.unsettledRateChangeStartEpoch = createdAtEpoch;
   rail.createdAt = timestamp;
   rail.createdAtEpoch = createdAtEpoch;
   rail.currentRatePeriod = currentRatePeriod;
@@ -356,35 +351,23 @@ export const createOneTimePayment = (
 };
 
 // RateChangeQueue entity functions
+// Callers must provide a unique (railId, startEpoch); saving a duplicate immutable entity aborts indexing.
 export const createRateChangeQueue = (
   rail: Rail,
   startEpoch: GraphBN,
   untilEpoch: GraphBN,
   rate: GraphBN,
-): RateChangeQueueWithIsNew => {
+): RateChangeQueue => {
   const id = getRateChangeQueueEntityId(rail.railId, startEpoch);
-  let rateChangeQueue = RateChangeQueue.load(id);
-  const isNew = !rateChangeQueue;
-
-  if (!rateChangeQueue) {
-    rateChangeQueue = new RateChangeQueue(id);
-  }
+  const rateChangeQueue = new RateChangeQueue(id);
   rateChangeQueue.rail = rail.id;
   rateChangeQueue.startEpoch = startEpoch;
   rateChangeQueue.untilEpoch = untilEpoch;
   rateChangeQueue.rate = rate;
   rateChangeQueue.save();
 
-  return new RateChangeQueueWithIsNew(rateChangeQueue, isNew);
+  return rateChangeQueue;
 };
-
-export function latestRateChangeEpoch(rateChanges: RateChangeQueue[], fallback: GraphBN): GraphBN {
-  let latest = fallback;
-  for (let i = 0; i < rateChanges.length; i++) {
-    if (rateChanges[i].untilEpoch.gt(latest)) latest = rateChanges[i].untilEpoch;
-  }
-  return latest;
-}
 
 export function updateOperatorLockup(
   operatorApproval: OperatorApproval | null,

@@ -18,6 +18,7 @@ import {
   ProcessedRailRateModification,
   Rail,
   RailRatePeriod,
+  RateChangeQueue,
   Settlement,
   Token,
   UserToken,
@@ -39,14 +40,13 @@ import {
   getLockupLastSettledUntilTimestamp,
   getTokenDetails,
   isNativeToken,
-  latestRateChangeEpoch,
   remainingEpochsForTerminatedRail,
   updateOperatorLockup,
   updateOperatorRate,
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId } from "./utils/keys";
+import { getIdFromTxHashAndLogIndex, getRailEntityId, getRateChangeQueueEntityId } from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 function failRatePeriodInvariant(
@@ -520,16 +520,21 @@ export function handleRailRateModified(event: RailRateModifiedEvent): void {
     );
   }
 
-  const rateChangeQueue = rail.rateChangeQueue.load();
-  const latestRateChange = latestRateChangeEpoch(rateChangeQueue, rail.settledUpto);
+  const queueEnd = rail.latestRateChangeUntilEpoch;
+  const queueCursor = rail.unsettledRateChangeStartEpoch;
+  const latestRateChange = queueEnd.gt(rail.settledUpto) ? queueEnd : rail.settledUpto;
   if (oldRate.notEqual(newRate) && rail.settledUpto.notEqual(event.block.number)) {
-    if (oldRate.equals(ZERO_BIG_INT) && rateChangeQueue.length === 0) {
+    if (oldRate.equals(ZERO_BIG_INT) && rail.totalRateChanges.equals(ZERO_BIG_INT)) {
       rail.settledUpto = event.block.number;
+      rail.latestRateChangeUntilEpoch = event.block.number;
+      rail.unsettledRateChangeStartEpoch = event.block.number;
     } else {
-      if (rateChangeQueue.length === 0 || event.block.number.notEqual(latestRateChange)) {
+      if (rail.totalRateChanges.equals(ZERO_BIG_INT) || event.block.number.notEqual(latestRateChange)) {
         const startEpoch = latestRateChange;
-        const isNew = createRateChangeQueue(rail, startEpoch, event.block.number, oldRate).isNew;
-        rail.totalRateChanges = rail.totalRateChanges.plus(isNew ? ONE_BIG_INT : ZERO_BIG_INT);
+        createRateChangeQueue(rail, startEpoch, event.block.number, oldRate);
+        rail.totalRateChanges = rail.totalRateChanges.plus(ONE_BIG_INT);
+        if (queueCursor.ge(queueEnd)) rail.unsettledRateChangeStartEpoch = startEpoch;
+        rail.latestRateChangeUntilEpoch = event.block.number;
       }
     }
   }
@@ -622,6 +627,52 @@ export function handleRailSettled(event: RailSettledEvent): void {
   // Capture previous settledUpto before updating (needed for lockup calculation)
   const previousSettledUpto = rail.settledUpto;
 
+  const queueEnd = rail.latestRateChangeUntilEpoch;
+  let queueCursor = rail.unsettledRateChangeStartEpoch;
+  let lockupReduction = ZERO_BIG_INT;
+
+  // Queue IDs are railId + startEpoch; each entry's untilEpoch is the next ID's startEpoch.
+  while (queueCursor.lt(event.params.settledUpTo) && queueCursor.lt(queueEnd)) {
+    const rateChange = RateChangeQueue.load(getRateChangeQueueEntityId(rail.railId, queueCursor));
+    if (!rateChange) {
+      log.error(
+        "[handleRailSettled] Missing unsettled rate change; skipping remaining queue railId={} startEpoch={} queueEnd={} settledUpTo={} txHash={} logIndex={}",
+        [
+          railId.toString(),
+          queueCursor.toString(),
+          queueEnd.toString(),
+          event.params.settledUpTo.toString(),
+          event.transaction.hash.toHexString(),
+          event.logIndex.toString(),
+        ],
+      );
+      // The next entry ID depends on the missing entry's untilEpoch, so the
+      // remaining queue cannot be traversed safely. Keep lockup conservative
+      // by skipping to the known end instead of guessing the missing rates.
+      queueCursor = queueEnd;
+      break;
+    }
+
+    const duration = epochsRateChangeApplicable(rateChange, previousSettledUpto, event.params.settledUpTo);
+    lockupReduction = lockupReduction.plus(rateChange.rate.times(duration));
+    assert(rateChange.untilEpoch.gt(queueCursor), "[handleRailSettled] Rate change queue must advance");
+    if (event.params.settledUpTo.lt(rateChange.untilEpoch)) break;
+    queueCursor = rateChange.untilEpoch;
+  }
+  if (queueCursor.ge(queueEnd) && queueCursor.lt(event.params.settledUpTo)) {
+    queueCursor = event.params.settledUpTo;
+  }
+  rail.unsettledRateChangeStartEpoch = queueCursor;
+
+  const currentRateStartEpoch = queueEnd.gt(previousSettledUpto) ? queueEnd : previousSettledUpto;
+  if (currentRateStartEpoch.lt(event.params.settledUpTo)) {
+    const currentRateDuration = event.params.settledUpTo.minus(currentRateStartEpoch);
+    lockupReduction = lockupReduction.plus(rail.paymentRate.times(currentRateDuration));
+  }
+  if (event.params.settledUpTo.gt(queueEnd)) {
+    rail.latestRateChangeUntilEpoch = event.params.settledUpTo;
+  }
+
   // Update rail aggregate data
   rail.totalSettledAmount = rail.totalSettledAmount.plus(totalSettledAmount);
   rail.totalSettlements = rail.totalSettlements.plus(ONE_BIG_INT);
@@ -669,31 +720,7 @@ export function handleRailSettled(event: RailSettledEvent): void {
     if (!isNativeToken(rail.token)) {
       token.accumulatedFees = token.accumulatedFees.plus(networkFee);
     }
-    // Reduce streaming lockup by rate × actualSettledDuration.
-    // Settlement window is (previousSettledUpto, settledUpTo].
-    // RateChangeQueue applies for (startEpoch, untilEpoch], i.e., startEpoch is exclusive.
-    // https://github.com/FilOzone/filecoin-pay/blob/c916dc5cd059c48ca5d7588416af9e6025fa1fc6/src/FilecoinPayV1.sol#L1471-L1472
-    const rateChanges = rail.rateChangeQueue.load();
-    const rateChangeCount = rateChanges.length;
-    let lockupReduction = ZERO_BIG_INT;
-
-    // Calculate lockup reduction from historical rate changes
-    for (let i = 0; i < rateChangeCount; i++) {
-      const rateChange = rateChanges[i];
-      const duration = epochsRateChangeApplicable(rateChange, previousSettledUpto, event.params.settledUpTo);
-      lockupReduction = lockupReduction.plus(rateChange.rate.times(duration));
-    }
-
-    // Calculate lockup reduction from current rate (for epochs not covered by rate change queue)
-    // Start from the later of: latest queue entry's untilEpoch OR previousSettledUpto.
-    // Derived relationship order is unspecified, so find the latest epoch explicitly.
-    // This handles cases where the rail was already settled beyond the last rate change
-    const currentRateStartEpoch = latestRateChangeEpoch(rateChanges, previousSettledUpto);
-    if (currentRateStartEpoch.lt(event.params.settledUpTo)) {
-      const currentRateDuration = event.params.settledUpTo.minus(currentRateStartEpoch);
-      lockupReduction = lockupReduction.plus(rail.paymentRate.times(currentRateDuration));
-    }
-
+    // Reduce streaming lockup over (previousSettledUpto, settledUpTo].
     token.lockupCurrent = token.lockupCurrent.minus(lockupReduction);
     token.save();
   }
