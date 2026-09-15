@@ -106,7 +106,8 @@ function reportBaseClientUnavailable() {
 
 function isFundingExit(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error && error.code === 4001) return true;
-  const message = (error instanceof Error ? error.message : typeof error === "string" ? error : "").trim();
+  const raw = error instanceof Error ? error.message : error;
+  const message = (typeof raw === "string" ? raw : "").trim();
   return (
     /^user exited\b/i.test(message) ||
     /\bcancell?ed$/i.test(message) ||
