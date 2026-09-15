@@ -110,6 +110,10 @@ export interface AuthorizeLink {
  * none, an error when any part is unusable, otherwise every field validated.
  */
 export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
+  // A revoke link carries `network` too, and a bare `network` reads as a broken
+  // pairing request below. A link naming both is malformed; treating it as the
+  // revoke leaves the owner with the request that only removes authority.
+  if (params.has("revoke")) return null;
   if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
   // Scopes or a network without an address is still a pairing request, just a broken one.
   const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };

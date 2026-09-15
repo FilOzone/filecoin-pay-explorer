@@ -180,6 +180,27 @@ describe("parseAuthorizeLink", () => {
   });
 });
 
+describe("a link that is only a revoke request", () => {
+  // The revoke link carries `network`, which on its own reads as a pairing
+  // request with a missing address. A live one showed both the revoke notice
+  // and "this link does not contain a valid address" at once.
+  const revokeOnly = new URLSearchParams(`revoke=${LOWERCASE}&network=calibration`);
+
+  it("is not read as a pairing request", () => {
+    assert.equal(parseAuthorizeLink(revokeOnly), null);
+  });
+
+  it("still reads as a revoke request", () => {
+    assert.deepEqual(parseRevokeLink(revokeOnly), { address: CHECKSUMMED, network: "calibration" });
+  });
+
+  it("wins over an authorize in the same link, since it only removes authority", () => {
+    const both = new URLSearchParams(`authorize=${LOWERCASE}&scopes=createDataSet&revoke=${LOWERCASE}&network=mainnet`);
+    assert.equal(parseAuthorizeLink(both), null);
+    assert.deepEqual(parseRevokeLink(both), { address: CHECKSUMMED, network: "mainnet" });
+  });
+});
+
 describe("parseRevokeLink", () => {
   it("reads a revoke request with its network", () => {
     assert.deepEqual(parseRevokeLink(new URLSearchParams(`revoke=${LOWERCASE}&network=calibration`)), {
