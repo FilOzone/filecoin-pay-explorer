@@ -51,7 +51,7 @@ const listed = {
   maxExpiry: 9_999_999_999n,
 };
 
-const hooks = vi.hoisted(() => ({ keys: [] as unknown[], syncFromChain: vi.fn() }));
+const hooks = vi.hoisted(() => ({ keys: [] as unknown[], syncFromChain: vi.fn(), statusReadsPending: false }));
 vi.mock("@/hooks/useSessionKeys", () => ({
   useSessionKeys: () => ({
     keys: hooks.keys,
@@ -59,7 +59,7 @@ vi.mock("@/hooks/useSessionKeys", () => ({
     removeKey: vi.fn(),
     syncFromChain: hooks.syncFromChain,
     refetchStatuses: vi.fn(),
-    statusReadsPending: false,
+    statusReadsPending: hooks.statusReadsPending,
     markConfirmed: vi.fn(),
     registry: { address: "0x00000000000000000000000000000000000000cc", abi: [] },
   }),
@@ -89,6 +89,7 @@ describe("revoke deep link", () => {
     revokeTargets.length = 0;
     hooks.keys = [];
     hooks.syncFromChain.mockReset().mockResolvedValue({ addedCount: 0, updatedCount: 0, skippedUnrecognized: 0 });
+    hooks.statusReadsPending = false;
     toastError.mockReset();
     switchChain.mockReset();
   });
@@ -105,6 +106,23 @@ describe("revoke deep link", () => {
   it("syncs from chain for a key this browser has never seen, then opens the dialog", async () => {
     hooks.syncFromChain.mockImplementation(async () => {
       hooks.keys = [listed];
+      return { addedCount: 1, updatedCount: 0, skippedUnrecognized: 0 };
+    });
+
+    await renderWithLink(KEY);
+
+    expect(hooks.syncFromChain).toHaveBeenCalledTimes(1);
+    expect(revokeTargets.at(-1)).toBe(KEY);
+  });
+
+  it("syncs for a browser with no keys, where the status query never leaves pending", async () => {
+    // useReadContracts is disabled without records, and a disabled query stays
+    // pending forever. Waiting on it here stranded the link on a fresh browser.
+    hooks.statusReadsPending = true;
+    hooks.syncFromChain.mockImplementation(async () => {
+      // Records arriving enables the status query, which then resolves.
+      hooks.keys = [listed];
+      hooks.statusReadsPending = false;
       return { addedCount: 1, updatedCount: 0, skippedUnrecognized: 0 };
     });
 

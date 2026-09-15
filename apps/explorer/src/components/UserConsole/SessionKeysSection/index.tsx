@@ -192,8 +192,11 @@ const ConnectedSessionKeys = ({
   // The link arrives a render after mount, and only counts on its own network.
   useEffect(() => {
     if (revokeAddress == null || revokeNetworkMismatch) return;
-    // A sync in flight decides this; re-run when it settles.
-    if (revokeLinkRef.current === "done" || statusReadsPending || syncing) return;
+    // A sync in flight decides this; re-run when it settles. Status reads are
+    // only worth waiting for when there are keys to read, otherwise a browser
+    // that has never seen this wallet waits on a query that never runs.
+    if (revokeLinkRef.current === "done" || syncing) return;
+    if (statusReadsPending && keys.length > 0) return;
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
       revokeLinkRef.current = "done";
