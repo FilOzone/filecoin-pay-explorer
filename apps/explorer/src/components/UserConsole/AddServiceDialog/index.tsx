@@ -113,24 +113,6 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
   const gasBalance = useFilecoinGasBalance(open);
   const funding = useFundingLaunch();
   const formOwner = useRef(gasBalance.owner);
-  const currentGasContext = useRef({
-    chainId: gasBalance.chainId,
-    owner: gasBalance.owner,
-    targetChainId: gasBalance.targetChainId,
-    generation: 0,
-  });
-  if (
-    currentGasContext.current.chainId !== gasBalance.chainId ||
-    currentGasContext.current.owner !== gasBalance.owner ||
-    currentGasContext.current.targetChainId !== gasBalance.targetChainId
-  ) {
-    currentGasContext.current = {
-      chainId: gasBalance.chainId,
-      owner: gasBalance.owner,
-      targetChainId: gasBalance.targetChainId,
-      generation: currentGasContext.current.generation + 1,
-    };
-  }
   const wasSquidOpen = useRef(funding.isSquidOpen);
 
   const [depositAmount, setDepositAmount] = useState("");
@@ -261,14 +243,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
 
   const handleSubmit = async () => {
     if (isGasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    // The generation bumps on every owner or chain transition, including one that
-    // returns to the same value, so it alone tells whether the check is still current.
-    const contextGeneration = currentGasContext.current.generation;
     isGasCheckInFlight.current = true;
     setIsCheckingGas(true);
     try {
-      const refreshedStatus = await gasBalance.refresh();
-      if (refreshedStatus !== "funded" || currentGasContext.current.generation !== contextGeneration) return;
+      // A wallet or network change after this point is refused by the pinned write itself.
+      if ((await gasBalance.refresh()) !== "funded") return;
       await submit({
         operatorAddress,
         token,
