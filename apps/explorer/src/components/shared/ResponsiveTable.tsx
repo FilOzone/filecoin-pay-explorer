@@ -12,22 +12,5 @@ const PINNED_FIRST_COLUMN = [
 /** Pins the first column of a wide table. */
 export function ResponsiveTable({ children }: { children: ReactNode }) {
 
-  return (
-    <div className='grid min-w-0 gap-2'>
-      <div className={cn("relative w-full min-w-0", ...PINNED_FIRST_COLUMN)} ref={containerRef}>
-        {children}
-        {canScrollRight ? (
-          <div
-            aria-hidden
-            className='pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-background to-transparent'
-          />
-        ) : null}
-      </div>
-      {isOverflowing ? (
-        <p aria-live='polite' className='text-xs text-muted-foreground md:hidden'>
-          Scroll sideways to see the rest of the table.
-        </p>
-      ) : null}
-    </div>
-  );
+  return <div className={cn("relative w-full min-w-0", ...PINNED_FIRST_COLUMN)}>{children}</div>;
 }
