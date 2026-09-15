@@ -164,6 +164,29 @@ describe("revoke deep link", () => {
     expect(toastError).not.toHaveBeenCalled();
   });
 
+  it("starts over when the wallet changes with a sync in flight", async () => {
+    const OTHER = "0x00000000000000000000000000000000000000cc" as Hex;
+    let finishSync!: () => void;
+    hooks.syncFromChain.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSync = () => resolve({ addedCount: 0, updatedCount: 0, skippedUnrecognized: 0 });
+        }),
+    );
+    const rendered = await renderWithLink(KEY);
+
+    await act(async () => {
+      rendered.update(
+        <SessionKeysSection network='calibration' account={OTHER} revokeAddress={KEY} revokeNetwork='calibration' />,
+      );
+    });
+    await act(async () => finishSync());
+
+    // The first wallet's sync must not speak for the second; the second gets its own.
+    expect(hooks.syncFromChain).toHaveBeenCalledTimes(2);
+    expect(toastError.mock.calls.map((c) => c[0])).toEqual(["That session key is not in this wallet's list"]);
+  });
+
   it("says so instead of doing nothing when the link is for another network", async () => {
     hooks.keys = [listed];
 
