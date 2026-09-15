@@ -1,8 +1,4 @@
-/**
- * The hook decides what survives a mount. A kept param has to, because the
- * owner may need to switch networks before the page can act on it, and a
- * remount mid-switch would otherwise lose the request for good.
- */
+/** What survives a mount: consumed params go, kept ones stay. */
 import assert from "node:assert/strict";
 import { act, create } from "react-test-renderer";
 import { afterEach, describe, it, vi } from "vitest";
@@ -29,8 +25,6 @@ function fakeWindow(search: string) {
 
 /** Mount the hook once and hand back what it read. */
 function mount(keys: string[], keep?: string[]) {
-  // A holder, not a plain local: TypeScript cannot see the closure run and
-  // would narrow a `let` to its initial value.
   const read: { params: URLSearchParams | null } = { params: null };
   const Probe = () => {
     read.params = useConsumedSearchParams(keys, keep);
@@ -58,14 +52,10 @@ describe("useConsumedSearchParams", () => {
     const seen = mount(["authorize", "scopes", "network"], ["revoke"]);
 
     assert.equal(seen?.get("revoke"), "0xabc");
-    // Both survive: a revoke link is useless without the network it names, and
-    // switching networks can remount this page.
     assert.equal(win.location.search, "?revoke=0xabc&network=calibration");
   });
 
   it("reads a kept param even when no consumed one is present, so a bad link can still be reported", () => {
-    // `?revoke=` with no network is malformed. Reading it lets the page say so
-    // rather than render a page that looks like it ignored the click.
     const win = fakeWindow("?revoke=0xabc");
 
     const seen = mount(["authorize", "scopes", "network"], ["revoke"]);

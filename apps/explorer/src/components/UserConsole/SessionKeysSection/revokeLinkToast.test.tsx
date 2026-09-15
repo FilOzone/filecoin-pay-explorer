@@ -1,10 +1,4 @@
-/**
- * The missing-key toast against the real sonner Toaster. sonner's Toaster
- * re-subscribes to its store whenever its toast list changes, and React runs
- * every effect cleanup in a commit before any effect body. A toast published
- * from an effect that commits together with a Toaster update therefore has
- * no subscriber and is never rendered, though `toast.getHistory()` records it.
- */
+/** The missing-key toast against the real sonner Toaster, whose store subscription has a gap on every list change. */
 
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { Toaster, toast } from "sonner";
@@ -43,7 +37,7 @@ vi.mock("@/hooks/useSessionKeys", () => ({
 const OWNER = "0x00000000000000000000000000000000000000aa" as Hex;
 const KEY = "0x00000000000000000000000000000000000000bb" as Hex;
 
-/** Enough of a DOM for the Toaster's effects; the renderer never touches real nodes. */
+/** Enough of a DOM for the Toaster's effects. */
 const noop = () => {};
 const globals = {
   document: {
@@ -73,6 +67,7 @@ describe("revoke deep link, missing-key toast", () => {
   afterEach(async () => {
     await act(async () => renderer.unmount());
     toast.getHistory().splice(0);
+    vi.unstubAllGlobals();
   });
 
   it("renders even when the sync toast and the sync result commit together", async () => {
@@ -94,8 +89,7 @@ describe("revoke deep link, missing-key toast", () => {
     });
     expect(hooks.syncFromChain).toHaveBeenCalledTimes(1);
 
-    // sonner defers its state update behind setTimeout; hold those callbacks so
-    // the "up to date" toast lands in the same commit as `revokeLinkSynced`.
+    // Hold sonner's deferred update so the "up to date" toast lands in the same commit as `revokeLinkSynced`.
     const held: (() => void)[] = [];
     vi.stubGlobal("setTimeout", (cb: () => void) => {
       held.push(cb);

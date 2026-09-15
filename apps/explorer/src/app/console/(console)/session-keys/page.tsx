@@ -6,19 +6,16 @@ import { useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type AuthorizeParamError, parseAuthorizeLink, parseRevokeLink } from "@/utils/authorizeParam";
 import { getNetworkFromChainId } from "@/utils/network";
 
-/** The error a link parser reported, if it reported one. */
 function linkError<T extends object>(link: T | { error: AuthorizeParamError } | null): AuthorizeParamError | null {
   return link !== null && "error" in link ? link.error : null;
 }
 
 const SessionKeysPage = () => {
   const { address, chainId } = useConnection();
-  // `revoke` is kept in the URL until the section acts on it: the owner may
-  // have to switch networks first, and a remount mid-switch would lose it.
+  // `revoke` stays in the URL until acted on: a network switch can remount this page.
   const params = useConsumedSearchParams(["authorize", "scopes", "network"], ["revoke"]);
   const link = useMemo(() => (params ? parseAuthorizeLink(params) : null), [params]);
   const request = link && "address" in link ? link : null;
-  // `logout` sends the owner here to revoke the key it just dropped locally.
   const revokeLink = useMemo(() => (params ? parseRevokeLink(params) : null), [params]);
   const revokeRequest = revokeLink && "address" in revokeLink ? revokeLink : null;
 

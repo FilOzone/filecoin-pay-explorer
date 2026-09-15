@@ -1,8 +1,4 @@
-/**
- * The `?revoke=` deep link `filecoin-pin logout` prints: it opens the revoke
- * dialog on the key it names, and syncs from chain first for a key this
- * browser has never seen.
- */
+/** The `?revoke=` deep link `filecoin-pin logout` prints. */
 import { act, create, type ReactTestRendererNode } from "react-test-renderer";
 import type { Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -116,11 +112,8 @@ describe("revoke deep link", () => {
   });
 
   it("syncs for a browser with no keys, where the status query never leaves pending", async () => {
-    // useReadContracts is disabled without records, and a disabled query stays
-    // pending forever. Waiting on it here stranded the link on a fresh browser.
     hooks.statusReadsPending = true;
     hooks.syncFromChain.mockImplementation(async () => {
-      // Records arriving enables the status query, which then resolves.
       hooks.keys = [listed];
       hooks.statusReadsPending = false;
       return { addedCount: 1, updatedCount: 0, skippedUnrecognized: 0 };
@@ -141,9 +134,6 @@ describe("revoke deep link", () => {
   });
 
   it("waits for the sync to settle, whatever re-renders meanwhile", async () => {
-    // Live, wagmi's store forced a render between starting the sync and the
-    // `syncing` state landing; the effect then reported the key missing while
-    // the chain read was still in flight, and the dialog never opened.
     let finishSync!: () => void;
     hooks.syncFromChain.mockImplementation(
       () =>
@@ -156,7 +146,7 @@ describe("revoke deep link", () => {
     );
 
     const rendered = await renderWithLink(KEY);
-    // A fresh list reference is what the store's render brings; the effect re-runs on it.
+    // A fresh list reference re-runs the effect.
     hooks.keys = [];
     await act(async () => {
       rendered.update(
@@ -181,7 +171,6 @@ describe("revoke deep link", () => {
 
     expect(revokeTargets.at(-1)).toBeNull();
     expect(hooks.syncFromChain).not.toHaveBeenCalled();
-    // Silence would leave the owner on a page that looks like it ignored them.
     expect(text(rendered.toJSON())).toContain("This revoke link is for mainnet");
   });
 
@@ -192,7 +181,7 @@ describe("revoke deep link", () => {
     const button = rendered.root.findByProps({ "aria-label": "Switch to mainnet" });
     await act(async () => button.props.onClick());
 
-    // 314 is mainnet, the network the link named; calibration (314159) is what the wallet is on.
+    // 314 is mainnet, the link's network, not the wallet's 314159.
     expect(switchChain.mock.calls).toEqual([[{ chainId: 314 }]]);
   });
 });

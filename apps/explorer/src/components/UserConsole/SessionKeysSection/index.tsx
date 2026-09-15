@@ -132,13 +132,10 @@ const ConnectedSessionKeys = ({
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  // How far the `?revoke=` link has got: "syncing" once the one chain read it
-  // is allowed has started, "done" when the dialog opened or the key was
-  // reported missing. A ref, not state: wagmi's store pushes sync renders that
-  // land before a state update does, and the effect below once read a stale
-  // `syncing` in one of those and reported the key missing mid-read.
+  // A ref, not state: wagmi pushes sync renders that can land before a state
+  // update, and a stale "syncing" once fired the missing-key path mid-read.
   const revokeLinkRef = useRef<"idle" | "syncing" | "done">("idle");
-  // Set when that read settles, so the effect runs again with what it found.
+  // Flips when the one chain read settles, so the effect runs again.
   const [revokeLinkSynced, setRevokeLinkSynced] = useState(false);
 
   // Newest first; unknown createdAt (sanitize-coerced 0) sinks to the bottom.
@@ -151,8 +148,6 @@ const ConnectedSessionKeys = ({
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
   const { switchChain } = useSwitchChain();
-  // A revoke link is for one chain too: the key it names is authorized there,
-  // and this wallet may not even hold it on the chain it is connected to.
   const revokeNetworkMismatch = revokeAddress != null && revokeNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
@@ -189,21 +184,15 @@ const ConnectedSessionKeys = ({
     }
   }, [syncFromChain]);
 
-  // Open the revoke dialog on the key a link named. A key this browser created
-  // is already listed; one from another machine is not, so a single sync is
-  // attempted before giving up, the same read the "Sync from chain" button does.
-  // The link arrives a render after mount, and only counts on its own network.
+  // ?revoke= link: listed key opens the dialog; unknown key gets one chain sync, then opens or reports.
   useEffect(() => {
     if (revokeAddress == null || revokeNetworkMismatch) return;
     if (revokeLinkRef.current === "done") return;
-    // Status reads are only worth waiting for when there are keys to read,
-    // otherwise a browser that has never seen this wallet waits on a query
-    // that never runs.
+    // A browser with no records never leaves pending: only wait when there is something to read.
     if (statusReadsPending && keys.length > 0) return;
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
       revokeLinkRef.current = "done";
-      // Acted on, so it leaves the address bar: a reload should not reopen it.
       dropSearchParams(["revoke", "network"]);
       setRevoke({ target: listed, identity: { network, account } });
       return;
@@ -211,10 +200,8 @@ const ConnectedSessionKeys = ({
     if (revokeLinkSynced) {
       revokeLinkRef.current = "done";
       dropSearchParams(["revoke", "network"]);
-      // Not published from inside the effect: sonner's Toaster re-subscribes
-      // to its store whenever its list changes, and when the sync's own toast
-      // commits together with this render, React has run that cleanup and not
-      // yet the re-subscribe, so a toast published here is dropped unseen.
+      // After the effect flush: sonner's Toaster re-subscribes on every list
+      // change, and a toast published between its cleanup and re-subscribe is dropped.
       queueMicrotask(() =>
         toast.error("That session key is not in this wallet's list", {
           description: "It may belong to another wallet, or to a different network.",
@@ -317,9 +304,6 @@ const ConnectedSessionKeys = ({
             Nothing was opened. Switch to <span className='capitalize'>{revokeNetwork}</span> to revoke{" "}
             <span className='font-mono break-all'>{revokeAddress}</span>.
           </p>
-          {/* Revoking only removes authority, so a link that lands on the wrong
-              chain is worth one click to fix. The wallet still confirms the
-              switch, and the dialog opens once the network matches. */}
           <Button
             variant='primary'
             size='compact'

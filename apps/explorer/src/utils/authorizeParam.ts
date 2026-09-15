@@ -83,13 +83,7 @@ export interface RevokeLink {
   network: "mainnet" | "calibration";
 }
 
-/**
- * The revoke request from a page's search params (`?revoke=&network=`), which
- * `filecoin-pin logout` builds so the key it just dropped locally can be
- * revoked onchain. Same address and network rules as the pairing link: the
- * network is required, because a calibration key must never be hunted for
- * under a mainnet wallet.
- */
+/** `?revoke=&network=`, as `filecoin-pin logout` prints it. Same rules as the pairing link; network required. */
 export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: AuthorizeParamError } | null {
   if (!params.has("revoke")) return null;
   const requested = parseAuthorizeParam(params.get("revoke")) ?? { error: "not-an-address" as const };
@@ -110,9 +104,7 @@ export interface AuthorizeLink {
  * none, an error when any part is unusable, otherwise every field validated.
  */
 export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
-  // A revoke link carries `network` too, and a bare `network` reads as a broken
-  // pairing request below. A link naming both is malformed; treating it as the
-  // revoke leaves the owner with the request that only removes authority.
+  // A revoke link also carries `network`; it wins, it only removes authority.
   if (params.has("revoke")) return null;
   if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
   // Scopes or a network without an address is still a pairing request, just a broken one.
