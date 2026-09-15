@@ -6,6 +6,7 @@ import {
 } from "@filecoin-project/squid-evm-funding";
 import type { QueryClient } from "@tanstack/react-query";
 import { formatUnits } from "viem";
+import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { parseFundingAmount, USDFC_DECIMALS } from "./funding-runway";
 import { applyNetworkFeeExecutionBuffer } from "./squid-execution";
 
@@ -124,12 +125,8 @@ export function formatNativeFee(value: bigint, currency: { decimals: number; sym
   return `${formatUnits(value, currency.decimals)} ${currency.symbol}`;
 }
 
+/** The subgraph account id is the lowercase address; the owner may be checksummed. */
 export function invalidateTopUpQueries(queryClient: QueryClient, accountId: string, accountOwner: string) {
-  return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["account", accountOwner] }),
-    queryClient.invalidateQueries({ queryKey: ["account", accountId, "tokens"] }),
-    queryClient.invalidateQueries({ queryKey: ["payments", "account-summary"] }),
-    queryClient.invalidateQueries({ queryKey: ["balance"] }),
-    queryClient.invalidateQueries({ queryKey: ["readContract"] }),
-  ]);
+  const addresses = accountOwner.toLowerCase() === accountId.toLowerCase() ? [accountOwner] : [accountOwner, accountId];
+  return Promise.all(addresses.map((address) => invalidateAccountQueries(queryClient, address)));
 }
