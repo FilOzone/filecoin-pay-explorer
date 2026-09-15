@@ -212,7 +212,7 @@ describe("parseRevokeLink", () => {
 
   it("never throws on hostile input", () => {
     for (const input of ["<script>alert(1)</script>", "%%%", "0x", "../../etc/passwd"]) {
-      assert.doesNotThrow(() => parseRevokeLink(new URLSearchParams(`revoke=${encodeURIComponent(input)}`)));
+      assert.doesNotThrow(() => parseRevokeLink(new URLSearchParams(`revoke=${encodeURIComponent(input)}`)), input);
     }
   });
 
@@ -221,10 +221,11 @@ describe("parseRevokeLink", () => {
   it("reads the link filecoin-pin logout prints", () => {
     for (const network of ["mainnet", "calibration"]) {
       const url = `https://pay.filecoin.cloud/console/session-keys?revoke=0xabc0000000000000000000000000000000000001&network=${network}`;
-      assert.deepEqual(parseRevokeLink(new URLSearchParams(new URL(url).search)), {
-        address: "0xABC0000000000000000000000000000000000001",
+      assert.deepEqual(
+        parseRevokeLink(new URLSearchParams(new URL(url).search)),
+        { address: "0xABC0000000000000000000000000000000000001", network },
         network,
-      });
+      );
     }
   });
 });
