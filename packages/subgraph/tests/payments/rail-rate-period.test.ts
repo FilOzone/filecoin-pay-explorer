@@ -227,6 +227,66 @@ describe("RailRatePeriod projection", () => {
     assert.entityCount("RateChangeQueue", 3);
   });
 
+  test("chains a rate change past a partially-settled queue entry without losing the cursor", () => {
+    const railId = GraphBN.fromI32(28);
+    createRailAt(railId, 10, 1);
+    const lowRate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const mediumRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    const highRate = TEST_AMOUNTS.PAYMENT_RATE_HIGH;
+    const activation = createRailRateModifiedEvent(railId, ZERO_BIG_INT, lowRate);
+    const firstChange = createRailRateModifiedEvent(railId, lowRate, mediumRate);
+    const secondChange = createRailRateModifiedEvent(railId, mediumRate, highRate);
+    setEventPosition(activation, 20, 2);
+    setEventPosition(firstChange, 30, 3);
+    setEventPosition(secondChange, 40, 4);
+    handleRailRateModified(activation);
+    handleRailRateModified(firstChange);
+    handleRailRateModified(secondChange);
+
+    // Settling mid-entry stops the walk inside the [30,40) queue entry, so the
+    // cursor is left at its startEpoch (30) rather than at the settlement point (35).
+    const partial = createRailSettledEvent(
+      railId,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      GraphBN.fromI32(35),
+    );
+    setEventPosition(partial, 45, 5);
+    handleRailSettled(partial);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "30");
+
+    // A rate change while still behind must chain the new entry from
+    // latestRateChangeUntilEpoch (40), not from the stale cursor (30), and must
+    // leave the cursor untouched.
+    const thirdChange = createRailRateModifiedEvent(railId, highRate, lowRate);
+    setEventPosition(thirdChange, 50, 6);
+    handleRailRateModified(thirdChange);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "30");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "latestRateChangeUntilEpoch", "50");
+    assert.entityCount("RateChangeQueue", 3);
+
+    // The next settlement re-loads the entry still sitting at the cursor, finishes
+    // it, walks the newly appended entry, and fully catches up to latestRateChangeUntilEpoch.
+    const complete = createRailSettledEvent(
+      railId,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      ZERO_BIG_INT,
+      GraphBN.fromI32(50),
+    );
+    setEventPosition(complete, 55, 7);
+    handleRailSettled(complete);
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "settledUpto", "50");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "unsettledRateChangeStartEpoch", "50");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalRateChanges", "3");
+    assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "totalSettlements", "2");
+    assert.entityCount("RateChangeQueue", 3);
+    assert.entityCount("Settlement", 2);
+  });
+
   test("continues settlement when an unsettled queue entry is missing", () => {
     const railId = GraphBN.fromI32(26);
     createRailAt(railId, 10, 1);
