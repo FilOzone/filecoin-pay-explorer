@@ -33,6 +33,15 @@ const query = vi.hoisted(() => ({
   balanceIsError: false,
   inventory: {} as Record<string, bigint | null>,
   nativeBalance: 10n ** 18n,
+  recipientFil: 0n,
+  recipientFilIsError: false,
+  recipientFilIsFetching: false,
+  quoteEnabled: undefined as boolean | undefined,
+  filGasTopUp: {
+    deadline: 1_700_604_800n,
+    minimumFil: 50_000_000_000_000_000n,
+    spendUsdfc: 125_000_000_000_000_000n,
+  },
   quote: {
     destinationAmount: 93n,
     fees: [],
@@ -87,7 +96,7 @@ vi.mock("../../TopUpActivityContext", () => ({
 }));
 vi.mock("@tanstack/react-query", () => ({
   queryOptions: (options: unknown) => options,
-  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+  useQuery: ({ enabled, queryKey }: { enabled?: boolean; queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "squid-payment-tokens") {
       return {
         data: query.tokens.filter((token) => token.chainId === queryKey[1]),
@@ -104,6 +113,22 @@ vi.mock("@tanstack/react-query", () => ({
         data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
         isError: query.balanceIsError,
         refetch: vi.fn(),
+      };
+    }
+    if (queryKey[0] === "direct-squid-destination-fil") {
+      return {
+        data: query.recipientFil,
+        isError: query.recipientFilIsError,
+        isFetching: query.recipientFilIsFetching,
+        isPending: false,
+      };
+    }
+    if (queryKey[0] === "direct-squid-deposit-quote") {
+      query.quoteEnabled = enabled;
+      return {
+        data: queryKey.at(-1) ? { ...query.quote, filGasTopUp: query.filGasTopUp } : query.quote,
+        error: null,
+        isFetching: false,
       };
     }
     return { data: query.quote, error: null, isFetching: false };
@@ -123,6 +148,11 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     <button {...props} type='button'>
       {children}
     </button>
+  ),
+}));
+vi.mock("@filecoin-foundation/ui-filecoin/Checkbox", () => ({
+  Checkbox: ({ checked, id, onChange }: { checked: boolean; id: string; onChange: (checked: boolean) => void }) => (
+    <input checked={checked} id={id} onChange={(event) => onChange(event.target.checked)} type='checkbox' />
   ),
 }));
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
@@ -175,9 +205,13 @@ function button(renderer: ReactTestRenderer, label: string) {
     .find((candidate) => candidate.children.some((child) => String(child).includes(label)));
 }
 
+function amountInput(renderer: ReactTestRenderer) {
+  return renderer.root.find((node) => node.type === "input" && node.props.id === "direct-squid-amount");
+}
+
 async function reachExecution(renderer: ReactTestRenderer) {
   await act(async () => {
-    renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+    amountInput(renderer).props.onChange({ target: { value: "100" } });
   });
   await act(async () => {
     button(renderer, "Review")?.props.onClick();
@@ -202,6 +236,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.balanceIsError = false;
     query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
     query.nativeBalance = 10n ** 18n;
+    query.recipientFil = 0n;
+    query.recipientFilIsError = false;
+    query.recipientFilIsFetching = false;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
     wallet.switchChain.mockClear();
@@ -308,7 +345,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
     await act(async () => {
       renderer.root.findByProps({ "aria-label": "Source token" }).props.onChange({ target: { value: USDT } });
-      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
     await act(async () => button(renderer, "Review")?.props.onClick());
     await act(async () => {
@@ -388,7 +425,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
     await act(async () => {
-      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance: 200 USDC");
     expect(JSON.stringify(renderer.toJSON())).not.toContain("does not have enough");
@@ -405,10 +442,93 @@ describe("DirectSquidDepositDialog safety integration", () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
     await act(async () => {
-      renderer.root.findByType("input").props.onChange({ target: { value: "100" } });
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
     await act(async () => button(renderer, "Review")?.props.onClick());
     expect(JSON.stringify(renderer.toJSON())).toContain(disclosure);
+  });
+
+  it.each([
+    [0n, false, true, "Your wallet has no FIL."],
+    [1n, false, false, "You already have FIL for fees."],
+    [0n, true, true, "Your wallet has no FIL."],
+  ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked, hint) => {
+    query.recipientFil = balance;
+    query.recipientFilIsError = isError;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    const option = renderer.root.findByProps({ id: "direct-squid-fil-gas" });
+    expect(option.props.checked).toBe(checked);
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("Include 0.05 FIL for transaction fees");
+    expect(text).toContain(hint);
+    expect(text).toContain("The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.");
+    expect(text.includes("+ 0.05 FIL for network fees")).toBe(checked);
+  });
+
+  it("waits for a fresh destination balance before defaulting from cached data", async () => {
+    query.recipientFil = 0n;
+    query.recipientFilIsFetching = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    expect(query.quoteEnabled).toBe(false);
+
+    query.recipientFil = 1n;
+    query.recipientFilIsFetching = false;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
+    expect(query.quoteEnabled).toBe(true);
+
+    query.recipientFilIsFetching = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(query.quoteEnabled).toBe(true);
+  });
+
+  it("preserves the reviewed FIL plan through executable route construction", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    expect(state.requestRoute).toHaveBeenCalledWith(
+      expect.objectContaining({ filGasTopUp: query.filGasTopUp }),
+      expect.anything(),
+      { quoteOnly: false },
+    );
+    const topUpLabel = renderer.root.findAllByType("span").find((node) => node.children.join("") === "Wallet top-up:");
+    expect(topUpLabel?.parent?.children.slice(1).join("")).toContain("0.05 FIL");
+  });
+
+  it("lets the user opt out of the FIL top-up", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.onChange(false);
+    });
+    await reachExecution(renderer);
+
+    expect(state.requestRoute).toHaveBeenCalledWith(
+      expect.not.objectContaining({ filGasTopUp: expect.anything() }),
+      expect.anything(),
+      { quoteOnly: false },
+    );
   });
 
   it("executes once when Pay is clicked twice", async () => {
