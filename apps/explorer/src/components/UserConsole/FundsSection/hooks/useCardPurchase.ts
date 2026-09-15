@@ -274,6 +274,21 @@ export function useCardPurchase({
     },
   });
 
+  // A purchase that never lands would otherwise pin this account on "Check for
+  // purchased USDC" for good; the picker asks for confirmation before calling this.
+  const startOver = () => {
+    const pending = pendingPurchase.current;
+    pendingPurchase.current = null;
+    if (pending) {
+      try {
+        clearPendingCardPurchase(pending.recipient);
+      } catch {
+        // Without storage there is nothing persisted to clear.
+      }
+    }
+    setStatus("idle");
+  };
+
   const buyWithCard = () => {
     if (status === "opening" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
@@ -283,22 +298,19 @@ export function useCardPurchase({
     login();
   };
 
+  const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
+  const statusMessages = {
+    delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
+    idle: null,
+    opening: "Opening card purchase…",
+    waiting: "Waiting for Base USDC to arrive…",
+  };
   return {
     buyWithCard,
+    canStartOver: status === "delayed",
     isBusy: status === "opening" || status === "waiting",
-    label:
-      status === "delayed"
-        ? "Check for purchased USDC"
-        : authenticated
-          ? "Buy USDC with card"
-          : "Log in to buy USDC with card",
-    statusMessage:
-      status === "opening"
-        ? "Opening card purchase…"
-        : status === "waiting"
-          ? "Waiting for Base USDC to arrive…"
-          : status === "delayed"
-            ? "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears."
-            : null,
+    label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
+    startOver,
+    statusMessage: statusMessages[status],
   };
 }

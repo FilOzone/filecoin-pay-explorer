@@ -93,6 +93,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
           cardLabel={card.label}
           cardStatus={card.statusMessage}
           isBusy={card.isBusy}
+          onCardStartOver={card.canStartOver ? card.startOver : undefined}
           onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
           onSelect={chooseMethod}
           open={!chainChanged && launch.isAddFundsOpen}

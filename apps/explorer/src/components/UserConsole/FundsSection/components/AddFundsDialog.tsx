@@ -16,6 +16,8 @@ type AddFundsDialogProps = {
   cardLabel?: string;
   cardStatus?: string | null;
   isBusy?: boolean;
+  /** Present while a card purchase is still being tracked; discards it after a confirmation. */
+  onCardStartOver?: () => void;
   onOpenChange: (open: boolean) => void;
   onSelect: (method: AddFundsMethod) => void;
   open: boolean;
@@ -24,6 +26,7 @@ type AddFundsDialogProps = {
 };
 
 type MethodCardProps = {
+  action?: ReactNode;
   description: ReactNode;
   disabled?: boolean;
   icon: LucideIcon;
@@ -41,6 +44,7 @@ const iconEnabled = "mt-0.5 rounded-md bg-primary/10 p-2 text-primary";
 const iconDisabled = "mt-0.5 rounded-md bg-muted p-2 text-muted-foreground";
 
 function MethodCard({
+  action,
   description,
   disabled = false,
   icon: Icon,
@@ -81,6 +85,7 @@ function MethodCard({
             {status}
           </span>
         ) : null}
+        {action}
       </span>
     </div>
   );
@@ -90,6 +95,7 @@ export function AddFundsDialog({
   cardLabel = "Buy USDC with card",
   cardStatus,
   isBusy = false,
+  onCardStartOver,
   onOpenChange,
   onSelect,
   open,
@@ -105,6 +111,26 @@ export function AddFundsDialog({
         </DialogHeader>
         <div className='grid gap-3'>
           <MethodCard
+            action={
+              onCardStartOver ? (
+                // `relative` lifts the control above the stretched button, like the Squid link below.
+                <button
+                  className='relative mt-1 text-xs underline underline-offset-2'
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Discard the pending card purchase? USDC that still arrives stays in the wallet on Base.",
+                      )
+                    )
+                      onCardStartOver();
+                  }}
+                  type='button'
+                >
+                  Start over
+                </button>
+              ) : null
+            }
             description='Buy USDC on Base, then swap and deposit it into Filecoin Pay.'
             disabled={isBusy}
             icon={CreditCard}
