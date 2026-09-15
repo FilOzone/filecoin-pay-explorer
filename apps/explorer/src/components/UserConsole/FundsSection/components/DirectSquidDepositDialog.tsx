@@ -803,8 +803,7 @@ export function DirectSquidDepositDialog({
                   {walletErrorMessage(quoteQuery.error, "Squid could not quote this amount.")}
                 </p>
               ) : null}
-              {!isSourceNative &&
-              parsedAmount !== null &&
+              {parsedAmount !== null &&
               !balancesQuery.isError &&
               balancesQuery.data &&
               balancesQuery.data.token < parsedAmount ? (
