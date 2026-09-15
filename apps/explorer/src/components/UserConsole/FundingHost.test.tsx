@@ -14,6 +14,7 @@ const dialogs = vi.hoisted(() => ({
   openTopUp: vi.fn(),
   onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
   onSelect: undefined as ((method: "deposit" | "squid") => void) | undefined,
+  squidOpen: false,
 }));
 
 vi.mock("wagmi", () => ({ useConnection: () => wallet }));
@@ -72,6 +73,12 @@ vi.mock("./DepositDialog", () => ({
     />
   ),
 }));
+vi.mock("./FundsSection/components/DirectSquidDepositDialog", () => ({
+  DirectSquidDepositDialog: ({ open }: { open: boolean }) => {
+    dialogs.squidOpen = open;
+    return <div data-squid-open={open} />;
+  },
+}));
 
 function Launcher() {
   const { openAddFunds } = useFundingLaunch();
@@ -116,10 +123,11 @@ beforeEach(() => {
   dialogs.accountId = "";
   dialogs.controllerMounts = 0;
   dialogs.openTopUp.mockClear();
+  dialogs.squidOpen = false;
 });
 
 describe("FundingHost", () => {
-  it("owns one mainnet picker/controller and routes deposit or guided funding", async () => {
+  it("owns one mainnet picker/controller and routes deposit or direct Squid funding", async () => {
     const renderer = await renderHost();
     expect(renderer.root.findAllByProps({ "data-controller": true }, { deep: false })).toHaveLength(1);
     expect(dialogs.accountId).toBe("0xabcdef0000000000000000000000000000000001");
@@ -135,7 +143,8 @@ describe("FundingHost", () => {
     act(() => find(renderer, "data-deposit-open").props.onClick());
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     act(() => dialogs.onSelect?.("squid"));
-    expect(dialogs.openTopUp).toHaveBeenCalledOnce();
+    expect(dialogs.squidOpen).toBe(true);
+    expect(dialogs.openTopUp).not.toHaveBeenCalled();
   });
 
   it("opens direct deposit without a one-choice picker on Calibration", async () => {

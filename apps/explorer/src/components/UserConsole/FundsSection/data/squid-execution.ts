@@ -17,6 +17,10 @@ export function applyNetworkFeeExecutionBuffer(chainId: number, fee: bigint): bi
   return OP_STACK_CHAIN_IDS.has(chainId) ? (fee * OP_STACK_FEE_BUFFER_BPS + BPS - 1n) / BPS : fee;
 }
 
+export function isOpStackChain(chainId: number): boolean {
+  return OP_STACK_CHAIN_IDS.has(chainId);
+}
+
 export async function executeSquidTopUp({
   destinationClient,
   integratorId,
@@ -52,11 +56,11 @@ export async function executeSquidTopUp({
 
   return executeSquidFunding(
     {
-      feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
+      feeMode: isOpStackChain(plan.source.chainId) ? "op-stack" : "standard",
       maxNativeFee,
       maxTotalNativeRouteFee,
       maxPollAttempts: 30,
-      opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
+      opStackFeeBuffer: isOpStackChain(plan.source.chainId)
         ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)
         : undefined,
       plan,
