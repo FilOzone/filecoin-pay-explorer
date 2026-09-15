@@ -3,7 +3,7 @@
  * dialog on the key it names, and syncs from chain first for a key this
  * browser has never seen.
  */
-import { act, create } from "react-test-renderer";
+import { act, create, type ReactTestRendererNode } from "react-test-renderer";
 import type { Hex } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SessionKeysSection from "./index";
@@ -64,11 +64,21 @@ vi.mock("@/hooks/useSessionKeys", () => ({
 
 /** Render the section with a revoke link for `key`, then let effects settle. */
 async function renderWithLink(address: Hex, network: "mainnet" | "calibration" = "calibration") {
+  let renderer!: ReturnType<typeof create>;
   await act(async () => {
-    create(
+    renderer = create(
       <SessionKeysSection network='calibration' account={OWNER} revokeAddress={address} revokeNetwork={network} />,
     );
   });
+  return renderer;
+}
+
+/** The rendered text in document order, so a sentence split across elements can be matched. */
+function text(node: ReactTestRendererNode | ReactTestRendererNode[] | null): string {
+  if (node == null) return "";
+  if (Array.isArray(node)) return node.map(text).join("");
+  if (typeof node === "string") return node;
+  return text(node.children);
 }
 
 describe("revoke deep link", () => {
@@ -108,12 +118,14 @@ describe("revoke deep link", () => {
     expect(toastError.mock.calls[0]?.[0]).toBe("That session key is not in this wallet's list");
   });
 
-  it("ignores a link for another network", async () => {
+  it("says so instead of doing nothing when the link is for another network", async () => {
     hooks.keys = [listed];
 
-    await renderWithLink(KEY, "mainnet");
+    const rendered = await renderWithLink(KEY, "mainnet");
 
     expect(revokeTargets.at(-1)).toBeNull();
     expect(hooks.syncFromChain).not.toHaveBeenCalled();
+    // Silence would leave the owner on a page that looks like it ignored them.
+    expect(text(rendered.toJSON())).toContain("This revoke link is for mainnet");
   });
 });

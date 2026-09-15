@@ -145,6 +145,9 @@ const ConnectedSessionKeys = ({
   // URL request (?authorize=) guards
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
+  // A revoke link is for one chain too: the key it names is authorized there,
+  // and this wallet may not even hold it on the chain it is connected to.
+  const revokeNetworkMismatch = revokeAddress != null && revokeNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
@@ -185,7 +188,7 @@ const ConnectedSessionKeys = ({
   // attempted before giving up, the same read the "Sync from chain" button does.
   // The link arrives a render after mount, and only counts on its own network.
   useEffect(() => {
-    if (revokeAddress == null || revokeNetwork !== network) return;
+    if (revokeAddress == null || revokeNetworkMismatch) return;
     // A sync in flight decides this; re-run when it settles.
     if (revokeLinkRef.current === "done" || statusReadsPending || syncing) return;
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
@@ -203,7 +206,7 @@ const ConnectedSessionKeys = ({
     }
     revokeLinkRef.current = "synced";
     void handleSync();
-  }, [revokeAddress, revokeNetwork, keys, statusReadsPending, syncing, handleSync, network, account]);
+  }, [revokeAddress, revokeNetworkMismatch, keys, statusReadsPending, syncing, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
   const syncButton = (
@@ -281,6 +284,18 @@ const ConnectedSessionKeys = ({
             Nothing was added — approving it here would grant the scopes on{" "}
             <span className='capitalize'>{network}</span> instead. Switch your wallet to{" "}
             <span className='capitalize'>{prefillNetwork}</span> to review the request.
+          </p>
+        </Notice>
+      )}
+      {revokeNetworkMismatch && (
+        <Notice tone='warn' className='p-4'>
+          <p className='font-semibold'>
+            This revoke link is for <span className='capitalize'>{revokeNetwork}</span>, but your wallet is connected to{" "}
+            <span className='capitalize'>{network}</span>.
+          </p>
+          <p className='text-xs mt-1'>
+            Nothing was opened. Switch your wallet to <span className='capitalize'>{revokeNetwork}</span> to revoke{" "}
+            <span className='font-mono break-all'>{revokeAddress}</span>.
           </p>
         </Notice>
       )}
