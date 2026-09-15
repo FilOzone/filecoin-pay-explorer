@@ -9,3 +9,30 @@
   --animate-slide-down: slideDown 300ms ease-out;
   --animate-slide-up: slideUp 300ms ease-out;
 }
+
+/*
+ * Spend chart segments: one blue stepped by lightness, explorer-only.
+ *
+ * Not `--chart-1..5` (identical in both themes) and not the brand ramp's lighter
+ * steps (they swing to cyan, reading as a second colour rather than a step).
+ */
+:root {
+  --spend-streaming: var(--color-brand-700);
+  --spend-one-time: oklch(0.761 0.109 246);
+  /* Ground for the current month's hatch. It must recede, which is a pale blue on
+     a white card but a dark one on a dark card — lightening it would make the
+     unfinished bar the loudest thing on screen. */
+  --spend-partial-base: oklch(0.878 0.054 242);
+}
+
+.dark {
+  --spend-streaming: var(--color-brand-600);
+  --spend-one-time: oklch(0.761 0.109 246);
+  --spend-partial-base: oklch(0.36 0.062 246);
+}
+
+@theme inline {
+  --color-spend-streaming: var(--spend-streaming);
+  --color-spend-one-time: var(--spend-one-time);
+  --color-spend-partial-base: var(--spend-partial-base);
+}
