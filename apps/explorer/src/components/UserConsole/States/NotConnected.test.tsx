@@ -42,17 +42,23 @@ beforeEach(() => {
 });
 
 describe("NotConnected", () => {
-  it("distinguishes Privy loading, embedded-wallet preparation, and login", () => {
-    expect(renderToStaticMarkup(<NotConnected />)).toContain("Loading wallet...");
+  it.each([
+    ["Privy is loading", { authenticated: false, ready: false }, false, ["Loading wallet..."], []],
+    [
+      "the embedded wallet is preparing",
+      { authenticated: true, ready: true },
+      true,
+      ["Preparing your wallet", "You&#x27;re signed in"],
+      ["Access the Filecoin Pay console"],
+    ],
+    ["login is needed", { authenticated: false, ready: true }, true, ["Access the Filecoin Pay console"], []],
+  ] as const)("shows the %s copy", (_label, privy, walletsReady, expected, unexpected) => {
+    mocks.privy = { ...privy, error: null };
+    mocks.walletsReady = walletsReady;
 
-    mocks.privy = { authenticated: true, error: null, ready: true };
-    mocks.walletsReady = true;
-    const preparing = renderToStaticMarkup(<NotConnected />);
-    expect(preparing).toContain("Preparing your wallet");
-    expect(preparing).toContain("You&#x27;re signed in");
-    expect(preparing).not.toContain("Access the Filecoin Pay console");
+    const markup = renderToStaticMarkup(<NotConnected />);
 
-    mocks.privy = { authenticated: false, error: null, ready: true };
-    expect(renderToStaticMarkup(<NotConnected />)).toContain("Access the Filecoin Pay console");
+    for (const copy of expected) expect(markup).toContain(copy);
+    for (const copy of unexpected) expect(markup).not.toContain(copy);
   });
 });
