@@ -170,7 +170,7 @@ describe("useCardPurchase", () => {
     act(() => {
       void latest.buyWithCard();
     });
-    harness.contextKey = `${ADDRESS}:8453`;
+    account.address = OTHER;
     await act(async () => {
       renderer.update(<Harness />);
     });
@@ -309,6 +309,36 @@ describe("useCardPurchase", () => {
     expect(latest.label).toBe("Buy USDC with card");
     expect(toast.error).not.toHaveBeenCalled();
     expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("lets the user start over when the purchase never lands", async () => {
+    vi.useFakeTimers();
+    chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    await act(async () => {
+      const purchase = latest.buyWithCard();
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+    expect(latest.label).toBe("Check for purchased USDC");
+    expect(latest.canStartOver).toBe(true);
+    expect(stored.size).toBe(1);
+
+    act(() => latest.startOver());
+    expect(stored.size).toBe(0);
+    expect(latest.canStartOver).toBe(false);
+    expect(latest.label).toBe("Buy USDC with card");
+
+    await act(async () => {
+      const purchase = latest.buyWithCard();
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+    expect(privy.fund).toHaveBeenCalledTimes(2);
   });
 
   it("keeps cancellation recoverable and reports provider failures", async () => {
