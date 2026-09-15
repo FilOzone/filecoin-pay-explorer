@@ -127,7 +127,6 @@ export function formatNativeFee(value: bigint, currency: { decimals: number; sym
 
 /** The subgraph account id is the lowercase address; the owner may be checksummed. */
 export function invalidateTopUpQueries(queryClient: QueryClient, accountId: string, accountOwner: string) {
-  return Promise.all(
-    [...new Set([accountOwner, accountId])].map((address) => invalidateAccountQueries(queryClient, address)),
-  );
+  const addresses = accountOwner.toLowerCase() === accountId.toLowerCase() ? [accountOwner] : [accountOwner, accountId];
+  return Promise.all(addresses.map((address) => invalidateAccountQueries(queryClient, address)));
 }
