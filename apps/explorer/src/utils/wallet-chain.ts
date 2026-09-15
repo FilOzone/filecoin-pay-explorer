@@ -2,6 +2,7 @@ import { type Hex, hexToNumber, numberToHex } from "viem";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const POLL_INTERVAL_MS = 100;
+const TIMED_OUT = Symbol("timed-out");
 
 type ChainProvider = {
   request(
@@ -16,6 +17,39 @@ type WaitOptions = {
 };
 
 const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+async function requestBefore(provider: ChainProvider, args: Parameters<ChainProvider["request"]>[0], deadline: number) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return TIMED_OUT;
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      provider.request(args).catch(() => undefined),
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timeout = setTimeout(() => resolve(TIMED_OUT), remaining);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+async function waitUntilWalletChain(
+  provider: ChainProvider,
+  chainId: number,
+  deadline: number,
+  sleep: (milliseconds: number) => Promise<void>,
+) {
+  for (;;) {
+    const reported = await requestBefore(provider, { method: "eth_chainId" }, deadline);
+    if (reported === TIMED_OUT) return false;
+    if (parseChainId(reported) === chainId) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(POLL_INTERVAL_MS, remaining));
+  }
+}
 
 /**
  * Resolves once the wallet's provider reports `chainId`, or after `timeoutMs`.
@@ -32,12 +66,7 @@ export async function waitForWalletChain(
   { timeoutMs = DEFAULT_TIMEOUT_MS, sleep = defaultSleep }: WaitOptions = {},
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const reported = await provider.request({ method: "eth_chainId" }).catch(() => undefined);
-    if (parseChainId(reported) === chainId) return true;
-    if (Date.now() >= deadline) return false;
-    await sleep(POLL_INTERVAL_MS);
-  }
+  return waitUntilWalletChain(provider, chainId, deadline, sleep);
 }
 
 function parseChainId(value: unknown): number | undefined {
@@ -56,11 +85,18 @@ function parseChainId(value: unknown): number | undefined {
  * keeps the old chain, so the switch has to be repeated on that provider.
  */
 export async function ensureWalletChain(provider: ChainProvider, chainId: number, options: WaitOptions = {}) {
-  if (await waitForWalletChain(provider, chainId, { ...options, timeoutMs: 0 })) return true;
-  try {
-    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(chainId) }] });
-  } catch {
-    // Some providers switch and reject at the same time, or refuse; the wait below is the verdict.
-  }
-  return waitForWalletChain(provider, chainId, options);
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, sleep = defaultSleep } = options;
+  const deadline = Date.now() + timeoutMs;
+  const reported = await requestBefore(provider, { method: "eth_chainId" }, deadline);
+  if (reported === TIMED_OUT) return false;
+  if (parseChainId(reported) === chainId) return true;
+
+  const switched = await requestBefore(
+    provider,
+    { method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(chainId) }] },
+    deadline,
+  );
+  if (switched === TIMED_OUT) return false;
+  // Some providers switch and reject at the same time, or refuse; the wait below is the verdict.
+  return waitUntilWalletChain(provider, chainId, deadline, sleep);
 }

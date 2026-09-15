@@ -550,6 +550,10 @@ export function DirectSquidDepositDialog({
     }
     try {
       await payingWallet.switchChain(mainnet.id);
+      const provider = await payingWallet.getEthereumProvider();
+      if (!(await ensureWalletChain(provider, mainnet.id))) {
+        throw new Error(`The wallet did not switch to ${mainnet.name}. Try again.`);
+      }
       hasSwitchedToSource.current = false;
       return true;
     } catch (failure) {

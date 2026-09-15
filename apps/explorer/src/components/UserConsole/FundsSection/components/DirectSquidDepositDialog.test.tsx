@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
   liveRecipient: "0x2222222222222222222222222222222222222222" as `0x${string}` | undefined,
   refetchBalances: vi.fn(),
   requestRoute: vi.fn(),
+  walletChainId: 8453,
 }));
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as const,
@@ -29,11 +30,15 @@ const wallet = vi.hoisted(() => ({
     async (): Promise<{ request: (args: { method: string }) => Promise<unknown> }> => ({
       // The fake provider is already on Base, the dialog's default source network.
       request: vi.fn(async ({ method }: { method: string }) =>
-        method === "eth_chainId" ? "0x2105" : ["0x1111111111111111111111111111111111111111"],
+        method === "eth_chainId"
+          ? `0x${state.walletChainId.toString(16)}`
+          : ["0x1111111111111111111111111111111111111111"],
       ),
     }),
   ),
-  switchChain: vi.fn(async () => undefined),
+  switchChain: vi.fn(async (chainId: number) => {
+    state.walletChainId = chainId;
+  }),
 }));
 const connectedWallets = vi.hoisted(() => ({
   current: [] as (typeof wallet)[],
@@ -276,6 +281,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
     }));
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
+    state.walletChainId = 8453;
     query.allowance = 100_000_000n;
     query.balanceIsError = false;
     query.budgetIsError = false;
@@ -287,7 +293,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.recipientFilIsFetching = false;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
-    wallet.switchChain.mockReset().mockResolvedValue(undefined);
+    wallet.switchChain.mockReset().mockImplementation(async (chainId: number) => {
+      state.walletChainId = chainId;
+    });
     topUp.setActive.mockClear();
     vi.stubGlobal("navigator", {
       locks: {
@@ -308,6 +316,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -983,6 +992,31 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(state.execute).toHaveBeenCalledOnce();
   });
 
+  it("does not execute when the provider never reports the source chain", async () => {
+    vi.useFakeTimers();
+    const request = vi.fn(async ({ method }: { method: string }) => (method === "eth_chainId" ? "0x13a" : null));
+    wallet.getEthereumProvider.mockResolvedValueOnce({ request });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => {
+      button(renderer, "Review")?.props.onClick();
+    });
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain(
+      "The wallet did not switch to Base",
+    );
+  });
+
   it("hands execution a route refresher that re-checks the reviewed caps", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -1042,7 +1076,13 @@ describe("DirectSquidDepositDialog safety integration", () => {
     );
     // The return to Filecoin takes a real round trip, during which React paints whatever state is current.
     wallet.switchChain.mockImplementation(
-      () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 0)),
+      (chainId: number) =>
+        new Promise<undefined>((resolve) =>
+          setTimeout(() => {
+            state.walletChainId = chainId;
+            resolve(undefined);
+          }, 0),
+        ),
     );
     let renderer!: ReactTestRenderer;
     const viewsAtClose: string[] = [];
@@ -1153,5 +1193,31 @@ describe("DirectSquidDepositDialog safety integration", () => {
     } finally {
       connectedWallets.current.pop();
     }
+  });
+
+  it("does not close until the provider confirms the return to Filecoin", async () => {
+    vi.useFakeTimers();
+    state.execute.mockResolvedValueOnce({
+      depositedAmount: 92n,
+      destinationTransactionHash: ROUTE_HASH,
+      transactionHash: ROUTE_HASH,
+    });
+    wallet.switchChain.mockResolvedValue(undefined);
+    const request = vi.fn(async ({ method }: { method: string }) => (method === "eth_chainId" ? "0x2105" : null));
+    wallet.getEthereumProvider.mockResolvedValue({ request });
+    const onOpenChange = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain(
+      "The wallet did not switch to Filecoin",
+    );
   });
 });

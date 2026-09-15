@@ -90,6 +90,12 @@ describe("Balance", () => {
 
   it("hides the key export for an external wallet", () => {
     privy.wallets = [
+      {
+        address: "0x2222222222222222222222222222222222222222",
+        connectorType: "embedded",
+        walletClientType: "privy",
+        disconnect: vi.fn(),
+      },
       { address: ADDRESS, connectorType: "injected", walletClientType: "metamask", disconnect: vi.fn() },
     ];
     const renderer = render();
@@ -99,15 +105,7 @@ describe("Balance", () => {
   });
 
   it("opens the shared funding host from the wallet menu", () => {
-    let renderer!: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(
-        <FundingLaunchProvider>
-          <Balance />
-          <LaunchState />
-        </FundingLaunchProvider>,
-      );
-    });
+    const renderer = render();
 
     const addFunds = renderer.root
       .findAllByProps({ "data-menu-item": true })
