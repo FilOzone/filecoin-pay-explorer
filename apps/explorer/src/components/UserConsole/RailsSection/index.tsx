@@ -121,6 +121,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
+    chainName: chain.name,
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
