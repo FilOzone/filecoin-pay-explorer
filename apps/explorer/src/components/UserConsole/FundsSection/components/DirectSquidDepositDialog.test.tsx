@@ -867,7 +867,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       "Confirm the swap",
       "Source network confirms",
       "Bridge and deposit",
-      "Balance confirmed",
+      "Confirm balance",
     ]);
     expect(instruction()).toBe("Preparing the route…");
     expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
@@ -879,7 +879,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       "Confirm the swap",
       "Source network confirms",
       "Bridge and deposit",
-      "Balance confirmed",
+      "Confirm balance",
     ]);
     expect(instruction()).toBe("Step 1 of 2: approve USDC in your wallet");
 

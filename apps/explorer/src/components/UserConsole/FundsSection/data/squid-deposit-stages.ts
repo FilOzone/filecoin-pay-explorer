@@ -59,7 +59,7 @@ export function describeSquidDepositProgress(
     "swap-requested": "Confirm the swap",
     "swap-broadcast": "Source network confirms",
     bridging: "Bridge and deposit",
-    verifying: "Balance confirmed",
+    verifying: "Confirm balance",
   };
   const current = PROGRESS_ORDER.indexOf(stage);
   return PROGRESS_ORDER.filter((step) => step !== "approving" || hasApproved || stage === "approving").map((step) => {

@@ -21,7 +21,7 @@ describe("squid deposit stages", () => {
       { label: "Confirm the swap", state: "done" },
       { label: "Source network confirms", state: "done" },
       { label: "Bridge and deposit", state: "current" },
-      { label: "Balance confirmed", state: "upcoming" },
+      { label: "Confirm balance", state: "upcoming" },
     ]);
     expect(
       describeSquidDepositProgress("approving", { hasApproved: false, symbol: "USDT" }).map(({ label, state }) => [
@@ -34,7 +34,7 @@ describe("squid deposit stages", () => {
       ["Confirm the swap", "upcoming"],
       ["Source network confirms", "upcoming"],
       ["Bridge and deposit", "upcoming"],
-      ["Balance confirmed", "upcoming"],
+      ["Confirm balance", "upcoming"],
     ]);
   });
 });

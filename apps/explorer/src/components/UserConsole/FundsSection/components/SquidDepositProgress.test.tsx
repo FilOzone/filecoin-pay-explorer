@@ -42,7 +42,7 @@ describe("SquidDepositProgress", () => {
       ["Confirm the swap", "other"],
       ["Source network confirms", "other"],
       ["Bridge and deposit", "other"],
-      ["Balance confirmed", "other"],
+      ["Confirm balance", "other"],
     ]);
     expect(instruction(renderer)).toBe("Preparing the route…");
     expect(renderer.root.findAllByType("a")).toHaveLength(0);
@@ -56,7 +56,7 @@ describe("SquidDepositProgress", () => {
       ["Confirm the swap", "other"],
       ["Source network confirms", "other"],
       ["Bridge and deposit", "other"],
-      ["Balance confirmed", "other"],
+      ["Confirm balance", "other"],
     ]);
     expect(instruction(renderer)).toBe("Step 1 of 2: approve USDC in your wallet");
 
