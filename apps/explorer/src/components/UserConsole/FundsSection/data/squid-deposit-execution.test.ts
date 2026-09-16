@@ -154,9 +154,10 @@ function fakeWallet(hashes?: Hash[]) {
       gasPrice: 1_000_000_000n,
       nonce: nonce++,
     })),
-    sendTransaction: vi.fn(async ({ to }: { to: Address }) =>
-      pendingHashes?.length ? (pendingHashes.shift() as Hash) : to === USDC ? APPROVAL_HASH : ROUTE_HASH,
-    ),
+    sendTransaction: vi.fn(async ({ to }: { to: Address }) => {
+      if (pendingHashes?.length) return pendingHashes.shift() as Hash;
+      return to === USDC ? APPROVAL_HASH : ROUTE_HASH;
+    }),
   } as unknown as SquidDepositWalletClient & {
     prepareTransactionRequest: ReturnType<typeof vi.fn>;
     sendTransaction: ReturnType<typeof vi.fn>;

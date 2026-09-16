@@ -103,7 +103,8 @@ export async function readSourceTokenBalances(
 export function orderSourceTokensByBalance(tokens: readonly SourceToken[], balances: SourceTokenBalances) {
   const rank = (token: SourceToken) => {
     const balance = balances[normalizeAddress(token.token)];
-    return balance == null ? 0 : balance === 0n ? 1 : 2;
+    if (balance == null) return 0;
+    return balance === 0n ? 1 : 2;
   };
   return [...tokens].sort((left, right) => {
     const byBalance = rank(right) - rank(left);
