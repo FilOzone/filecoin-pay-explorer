@@ -25,10 +25,14 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => children,
 }));
+const wallet = vi.hoisted(() => ({
+  balance: { data: (3n * 10n ** 16n) as bigint | undefined, isError: false, isLoading: false },
+}));
+
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }),
   usePublicClient: () => ({}),
-  useReadContract: () => ({ data: 3n * 10n ** 16n, isLoading: false }),
+  useReadContract: () => wallet.balance,
   useReadContracts: () => ({ data: undefined, isError: false, isLoading: false }),
   useWalletClient: () => ({ data: {} }),
 }));
@@ -73,5 +77,22 @@ describe("DepositDialog", () => {
     const deposit = renderer.root.findAllByType("button").find((button) => button.children.join("") === "Deposit");
     expect(deposit?.props.disabled).toBe(true);
     expect(JSON.stringify(renderer.toJSON())).toContain("Insufficient wallet balance");
+  });
+
+  it("says why the deposit is blocked when the wallet balance cannot be read", () => {
+    wallet.balance = { data: undefined, isError: true, isLoading: false };
+    let renderer!: ReturnType<typeof create>;
+    try {
+      act(() => {
+        renderer = create(<DepositDialog depositToken={usdfc} onOpenChange={vi.fn()} open tokens={[usdfc]} />);
+      });
+      act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("1"));
+
+      const deposit = renderer.root.findAllByType("button").find((button) => button.children.join("") === "Deposit");
+      expect(deposit?.props.disabled).toBe(true);
+      expect(JSON.stringify(renderer.toJSON())).toContain("Wallet balance unavailable.");
+    } finally {
+      wallet.balance = { data: 3n * 10n ** 16n, isError: false, isLoading: false };
+    }
   });
 });

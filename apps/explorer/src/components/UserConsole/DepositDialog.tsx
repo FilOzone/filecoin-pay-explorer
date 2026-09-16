@@ -219,7 +219,11 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     token: chainToken,
   });
 
-  const { data: balance, isLoading: isLoadingBalance } = useReadContract({
+  const {
+    data: balance,
+    isError: isBalanceError,
+    isLoading: isLoadingBalance,
+  } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
     functionName: "balanceOf",
@@ -500,6 +504,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
               {hasInsufficientBalance ? <p className='text-xs text-destructive'>Insufficient wallet balance.</p> : null}
+              {isBalanceError ? <p className='text-xs text-destructive'>Wallet balance unavailable.</p> : null}
             </div>
           ) : null}
 
