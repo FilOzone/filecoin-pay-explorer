@@ -514,11 +514,11 @@ export function DirectSquidDepositDialog({
           {pending ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Pending Squid deposit'>
               <p>
-                {stage
-                  ? `Deposit status: ${stage}`
-                  : pending.transactionHash
-                    ? "A USDC deposit is still in progress."
-                    : "Your wallet may have submitted this route. Check its activity before trying again."}
+                {stage ? `Deposit status: ${stage}` : null}
+                {!stage && pending.transactionHash ? "A USDC deposit is still in progress." : null}
+                {!stage && !pending.transactionHash
+                  ? "Your wallet may have submitted this route. Check its activity before trying again."
+                  : null}
               </p>
               {pending.transactionHash ? (
                 <div className='flex flex-wrap gap-3'>
@@ -563,7 +563,8 @@ export function DirectSquidDepositDialog({
                 </Button>
               </div>
             </section>
-          ) : reviewed && reviewedSourceChain ? (
+          ) : null}
+          {!pending && reviewed && reviewedSourceChain ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Reviewed Squid deposit'>
               <p>
                 <span className='text-muted-foreground'>Spend:</span> {reviewed.amount} {reviewed.sourceSymbol}
@@ -594,7 +595,8 @@ export function DirectSquidDepositDialog({
                 Your wallet will confirm the USDC approval when needed, then the Squid transaction.
               </p>
             </section>
-          ) : (
+          ) : null}
+          {!pending && (!reviewed || !reviewedSourceChain) ? (
             <>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-wallet'>Paying wallet</Label>
@@ -702,7 +704,7 @@ export function DirectSquidDepositDialog({
                 </p>
               ) : null}
             </>
-          )}
+          ) : null}
           {transactionHash && !pending ? <code className='break-all text-xs'>{transactionHash}</code> : null}
           {error ? (
             <p className='text-destructive' role='alert'>
