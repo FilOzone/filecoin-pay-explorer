@@ -1,7 +1,7 @@
 import { Address, Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { Rail } from "../../../generated/schema";
 import { isNativeToken } from "../helpers";
-import { ONE_BIG_INT, ZERO_BIG_INT } from "./constants";
+import { ONE_BIG_INT } from "./constants";
 import { MetricsEntityManager } from "./core";
 
 // Base collector interface for consistency
@@ -21,25 +21,11 @@ export abstract class BaseMetricsCollector {
 export class RailCreationCollector extends BaseMetricsCollector {
   private rail: Rail;
   private newAccounts: GraphBN;
-  private isNewPayer: boolean;
-  private isNewPayee: boolean;
-  private isNewOperator: boolean;
 
-  constructor(
-    rail: Rail,
-    newAccounts: GraphBN,
-    isNewPayer: boolean,
-    isNewPayee: boolean,
-    isNewOperator: boolean,
-    timestamp: GraphBN,
-    blockNumber: GraphBN,
-  ) {
+  constructor(rail: Rail, newAccounts: GraphBN, timestamp: GraphBN, blockNumber: GraphBN) {
     super(timestamp, blockNumber);
     this.rail = rail;
     this.newAccounts = newAccounts;
-    this.isNewPayer = isNewPayer;
-    this.isNewPayee = isNewPayee;
-    this.isNewOperator = isNewOperator;
   }
 
   collect(): void {
@@ -55,13 +41,6 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     dailyMetric.railsCreated = dailyMetric.railsCreated.plus(ONE_BIG_INT);
 
-    dailyMetric.uniqueAccounts = dailyMetric.uniqueAccounts.plus(this.newAccounts);
-
-    // Update unique counts (simplified - in production you'd track sets)
-    dailyMetric.uniquePayers = dailyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
-    dailyMetric.uniquePayees = dailyMetric.uniquePayees.plus(this.isNewPayee ? ONE_BIG_INT : ZERO_BIG_INT);
-    dailyMetric.uniqueOperators = dailyMetric.uniqueOperators.plus(this.isNewOperator ? ONE_BIG_INT : ZERO_BIG_INT);
-
     dailyMetric.save();
   }
 
@@ -69,13 +48,6 @@ export class RailCreationCollector extends BaseMetricsCollector {
     const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
 
     weeklyMetric.railsCreated = weeklyMetric.railsCreated.plus(ONE_BIG_INT);
-
-    weeklyMetric.uniqueAccounts = weeklyMetric.uniqueAccounts.plus(this.newAccounts);
-
-    // Update unique counts (simplified - in production you'd track sets)
-    weeklyMetric.uniquePayers = weeklyMetric.uniquePayers.plus(this.isNewPayer ? ONE_BIG_INT : ZERO_BIG_INT);
-    weeklyMetric.uniquePayees = weeklyMetric.uniquePayees.plus(this.isNewPayee ? ONE_BIG_INT : ZERO_BIG_INT);
-    weeklyMetric.uniqueOperators = weeklyMetric.uniqueOperators.plus(this.isNewOperator ? ONE_BIG_INT : ZERO_BIG_INT);
 
     weeklyMetric.save();
   }
@@ -99,9 +71,6 @@ export class RailCreationCollector extends BaseMetricsCollector {
 
     operatorMetric.railsCreated = operatorMetric.railsCreated.plus(ONE_BIG_INT);
 
-    const uniqueClients = (this.isNewPayee ? 1 : 0) + (this.isNewPayer ? 1 : 0);
-    operatorMetric.uniqueClients = operatorMetric.uniqueClients.plus(GraphBN.fromI32(uniqueClients));
-
     operatorMetric.save();
   }
 
@@ -111,14 +80,6 @@ export class RailCreationCollector extends BaseMetricsCollector {
     networkMetric.totalRails = networkMetric.totalRails.plus(ONE_BIG_INT);
     networkMetric.totalZeroRateRails = networkMetric.totalZeroRateRails.plus(ONE_BIG_INT);
     networkMetric.totalAccounts = networkMetric.totalAccounts.plus(this.newAccounts);
-
-    if (this.isNewPayee) {
-      networkMetric.uniquePayees = networkMetric.uniquePayees.plus(ONE_BIG_INT);
-    }
-
-    if (this.isNewPayer) {
-      networkMetric.uniquePayers = networkMetric.uniquePayers.plus(ONE_BIG_INT);
-    }
 
     networkMetric.save();
   }
@@ -301,24 +262,6 @@ export class TokenActivityCollector extends BaseMetricsCollector {
   collect(): void {
     this.updateTokenMetrics();
     this.updateNetworkMetrics();
-    this.updateDailyMetrics();
-    this.updateWeeklyMetrics();
-  }
-
-  private updateDailyMetrics(): void {
-    const dailyMetric = MetricsEntityManager.loadOrCreateDailyMetric(this.timestamp);
-    dailyMetric.uniqueAccounts = this.isNewAccount
-      ? dailyMetric.uniqueAccounts.plus(ONE_BIG_INT)
-      : dailyMetric.uniqueAccounts;
-    dailyMetric.save();
-  }
-
-  private updateWeeklyMetrics(): void {
-    const weeklyMetric = MetricsEntityManager.loadOrCreateWeeklyMetric(this.timestamp);
-    weeklyMetric.uniqueAccounts = this.isNewAccount
-      ? weeklyMetric.uniqueAccounts.plus(ONE_BIG_INT)
-      : weeklyMetric.uniqueAccounts;
-    weeklyMetric.save();
   }
 
   private updateTokenMetrics(): void {
@@ -329,10 +272,6 @@ export class TokenActivityCollector extends BaseMetricsCollector {
       tokenMetric.deposit = tokenMetric.deposit.plus(this.amount);
     } else {
       tokenMetric.withdrawal = tokenMetric.withdrawal.plus(this.amount);
-    }
-
-    if (this.isNewAccount) {
-      tokenMetric.uniqueHolders = tokenMetric.uniqueHolders.plus(ONE_BIG_INT);
     }
 
     tokenMetric.save();
@@ -503,24 +442,8 @@ export class FeeAuctionCollector extends BaseMetricsCollector {
 
 // Metrics Collection Orchestrator
 export class MetricsCollectionOrchestrator {
-  static collectRailCreationMetrics(
-    rail: Rail,
-    newAccounts: GraphBN,
-    isNewPayer: boolean,
-    isNewPayee: boolean,
-    isNewOperator: boolean,
-    timestamp: GraphBN,
-    blockNumber: GraphBN,
-  ): void {
-    const collector = new RailCreationCollector(
-      rail,
-      newAccounts,
-      isNewPayer,
-      isNewPayee,
-      isNewOperator,
-      timestamp,
-      blockNumber,
-    );
+  static collectRailCreationMetrics(rail: Rail, newAccounts: GraphBN, timestamp: GraphBN, blockNumber: GraphBN): void {
+    const collector = new RailCreationCollector(rail, newAccounts, timestamp, blockNumber);
     collector.collect();
   }
 

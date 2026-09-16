@@ -1,9 +1,7 @@
 export { AddFundsDialog, type AddFundsMethod } from "./AddFundsDialog";
-export { default as FundsEmptyState } from "./FundsEmptyState";
-export { default as FundsErrorState } from "./FundsErrorState";
-export { default as FundsLoadingState } from "./FundsLoadingState";
 export { default as FundsOverview } from "./FundsOverview";
 export { default as FundsSectionLayout } from "./FundsSectionLayout";
+export { FundsEmptyState, FundsErrorState, FundsLoadingState } from "./FundsStates";
 export { GuidedTopUpDialog } from "./GuidedTopUpDialog";
 export { SquidQuoteReview } from "./SquidQuoteReview";
 export { default as TokenSelect } from "./TokenSelect";

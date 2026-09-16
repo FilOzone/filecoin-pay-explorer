@@ -11,5 +11,28 @@
         "noSvgWithoutTitle": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/app/console/(console)/page.tsx",
+        "src/app/error.tsx",
+        "src/components/UserConsole/AddServiceDialog/index.tsx",
+        "src/components/UserConsole/DepositDialog.tsx",
+        "src/components/UserConsole/FundsSection/components/GuidedTopUpDialog.tsx",
+        "src/components/UserConsole/FundsSection/components/RunwayCard.tsx",
+        "src/components/UserConsole/FundsSection/components/SquidQuoteReview.tsx",
+        "src/components/UserConsole/FundsSection/data/squid-acquisition.ts",
+        "src/components/UserConsole/FundsSection/data/squid-quote.ts",
+        "src/components/UserConsole/IncreaseApprovalDialog.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNestedTernary": "off"
+          }
+        }
+      }
+    }
+  ]
 }

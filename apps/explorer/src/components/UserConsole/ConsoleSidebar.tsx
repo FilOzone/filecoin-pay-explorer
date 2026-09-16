@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, LayoutDashboard } from "lucide-react";
+import { Bell, BellOff, Compass, KeyRound, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -65,6 +65,7 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   const isSubscribed = notificationStatus?.subscribed;
 
   const isAlertsActive = pathname.startsWith("/console/notifications");
+  const isSessionKeysActive = pathname.startsWith("/console/session-keys");
   const isDashboardActive = pathname === "/console";
 
   // Chrome (border, responsive visibility) belongs to the caller: this renders
@@ -89,6 +90,11 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
           </span>
         </SidebarLink>
       ) : null}
+
+      <SidebarLink href='/console/session-keys' isActive={isSessionKeysActive} onNavigate={onNavigate}>
+        <KeyRound className='size-4' />
+        Session Keys
+      </SidebarLink>
 
       <hr className='my-3 border-t' />
 
