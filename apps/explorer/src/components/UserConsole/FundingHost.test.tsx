@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingHost } from "./FundingHost";
@@ -10,9 +9,6 @@ const wallet = vi.hoisted(() => ({
 }));
 const dialogs = vi.hoisted(() => ({
   accountId: "",
-  controllerMounts: 0,
-  openTopUp: vi.fn(),
-  onPickerOpenChange: undefined as ((open: boolean) => void) | undefined,
   onSelect: undefined as ((method: "deposit" | "squid") => void) | undefined,
   squidOpen: false,
 }));
@@ -22,32 +18,8 @@ vi.mock("@/hooks/useAccountDetails", () => ({
   CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () => ({ data: { userTokens: [{ id: "token-1" }] } }),
 }));
-vi.mock("./FundsSection/TopUpDialogController", () => ({
-  TopUpDialogController: ({
-    accountId,
-    children,
-  }: {
-    accountId: string;
-    children: (openTopUp: () => void, isOpen: boolean) => React.ReactNode;
-  }) => {
-    useEffect(() => {
-      dialogs.controllerMounts += 1;
-    }, []);
-    dialogs.accountId = accountId;
-    return <div data-controller>{children(dialogs.openTopUp, false)}</div>;
-  },
-}));
 vi.mock("./FundsSection/components", () => ({
-  AddFundsDialog: ({
-    onOpenChange,
-    onSelect,
-    open,
-  }: {
-    onOpenChange: (open: boolean) => void;
-    onSelect: (method: "deposit" | "squid") => void;
-    open: boolean;
-  }) => {
-    dialogs.onPickerOpenChange = onOpenChange;
+  AddFundsDialog: ({ onSelect, open }: { onSelect: (method: "deposit" | "squid") => void; open: boolean }) => {
     dialogs.onSelect = onSelect;
     return <div data-picker-open={open} />;
   },
@@ -74,9 +46,10 @@ vi.mock("./DepositDialog", () => ({
   ),
 }));
 vi.mock("./FundsSection/components/DirectSquidDepositDialog", () => ({
-  DirectSquidDepositDialog: ({ open }: { open: boolean }) => {
+  DirectSquidDepositDialog: ({ accountId, open }: { accountId: string; open: boolean }) => {
+    dialogs.accountId = accountId;
     dialogs.squidOpen = open;
-    return <div data-squid-open={open} />;
+    return <div data-account-id={accountId} data-squid-open={open} />;
   },
 }));
 
@@ -121,15 +94,12 @@ beforeEach(() => {
   wallet.address = "0xABCDEF0000000000000000000000000000000001";
   wallet.chainId = 314;
   dialogs.accountId = "";
-  dialogs.controllerMounts = 0;
-  dialogs.openTopUp.mockClear();
   dialogs.squidOpen = false;
 });
 
 describe("FundingHost", () => {
-  it("owns one mainnet picker/controller and routes deposit or direct Squid funding", async () => {
+  it("routes mainnet funding to a direct deposit or direct Squid deposit", async () => {
     const renderer = await renderHost();
-    expect(renderer.root.findAllByProps({ "data-controller": true }, { deep: false })).toHaveLength(1);
     expect(dialogs.accountId).toBe("0xabcdef0000000000000000000000000000000001");
 
     act(() => renderer.root.findByProps({ "data-open-seeded": true }).props.onClick());
@@ -144,27 +114,26 @@ describe("FundingHost", () => {
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     act(() => dialogs.onSelect?.("squid"));
     expect(dialogs.squidOpen).toBe(true);
-    expect(dialogs.openTopUp).not.toHaveBeenCalled();
   });
 
   it("opens direct deposit without a one-choice picker on Calibration", async () => {
     wallet.chainId = 314159;
     const renderer = await renderHost();
-    expect(renderer.root.findAllByProps({ "data-controller": true }, { deep: false })).toHaveLength(0);
     expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     expect(find(renderer, "data-deposit-open").props["data-deposit-open"]).toBe(true);
   });
 
-  it("closes the mainnet picker instead of turning it into a deposit on a Squid source chain", async () => {
+  it("keeps direct Squid funding open while switching to its source chain", async () => {
     const renderer = await renderHost();
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
-    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
+    act(() => dialogs.onSelect?.("squid"));
+    expect(dialogs.squidOpen).toBe(true);
 
     wallet.chainId = 8453;
     await rerenderHost(renderer);
 
-    expect(dialogs.controllerMounts).toBe(1);
+    expect(dialogs.squidOpen).toBe(true);
     expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
     expect(renderer.root.findAll((node) => node.type === "button" && "data-deposit-open" in node.props)).toHaveLength(
       0,
@@ -186,6 +155,6 @@ describe("FundingHost", () => {
   it("renders no dialog tree without a connected address", async () => {
     wallet.address = undefined;
     const renderer = await renderHost();
-    expect(renderer.root.findAllByProps({ "data-controller": true }, { deep: false })).toHaveLength(0);
+    expect(renderer.root.findAll((node) => node.type === "div" && "data-squid-open" in node.props)).toHaveLength(0);
   });
 });
