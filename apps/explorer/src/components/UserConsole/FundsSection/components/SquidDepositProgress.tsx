@@ -1,4 +1,5 @@
 import { Check, Loader2 } from "lucide-react";
+import type { SquidDepositSignature } from "../data/squid-deposit-execution";
 import {
   describeSquidDepositProgress,
   describeSquidDepositStage,
@@ -21,15 +22,16 @@ function StepIcon({ state }: { state: SquidDepositProgressStep["state"] }) {
 /** The running deposit as a timeline, with what the user should do right now underneath. */
 export function SquidDepositProgress({
   explorerUrl,
-  hasApproved,
   isEmbedded,
+  signature,
   stage,
   symbol,
   transactionHash,
 }: {
   explorerUrl?: string;
-  hasApproved: boolean;
   isEmbedded: boolean;
+  /** The signature execution is waiting for, once it has said which one. */
+  signature: SquidDepositSignature | null;
   stage: SquidDepositUiStage;
   symbol: string;
   transactionHash: `0x${string}` | null;
@@ -37,7 +39,7 @@ export function SquidDepositProgress({
   return (
     <section aria-label='Squid deposit progress' className='grid gap-3 rounded-md border p-3' role='status'>
       <ol className='grid gap-2'>
-        {describeSquidDepositProgress(stage, { hasApproved, symbol }).map((step) => (
+        {describeSquidDepositProgress(stage, { signature, symbol }).map((step) => (
           <li className='flex items-center gap-3' key={step.label}>
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${BADGE_CLASS[step.state]}`}
@@ -48,7 +50,7 @@ export function SquidDepositProgress({
           </li>
         ))}
       </ol>
-      <p className='text-muted-foreground'>{describeSquidDepositStage(stage, { hasApproved, isEmbedded, symbol })}</p>
+      <p className='text-muted-foreground'>{describeSquidDepositStage(stage, { isEmbedded, signature, symbol })}</p>
       {transactionHash ? (
         <div className='flex flex-wrap gap-3 text-xs'>
           {explorerUrl ? (

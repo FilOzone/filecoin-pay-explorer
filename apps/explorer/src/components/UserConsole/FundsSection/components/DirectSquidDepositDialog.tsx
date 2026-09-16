@@ -45,6 +45,7 @@ import {
   SquidDepositBudgetError,
   type SquidDepositDestinationClient,
   SquidDepositError,
+  type SquidDepositSignature,
   type SquidDepositSourceClient,
   type SquidDepositStage,
 } from "../data/squid-deposit-execution";
@@ -174,8 +175,8 @@ export function DirectSquidDepositDialog({
   const [filGasDefaultRecipient, setFilGasDefaultRecipient] = useState("");
   const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositUiStage | null>(null);
-  // Whether this run signed an approval, so the swap reads as the second of two signatures.
-  const [hasApproved, setHasApproved] = useState(false);
+  // The signature execution is waiting for, so the instruction reads as one of this run's signatures.
+  const [signature, setSignature] = useState<SquidDepositSignature | null>(null);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [pending, setPending] = useState<PendingSquidDeposit | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -561,8 +562,8 @@ export function DirectSquidDepositDialog({
     onOpenChange(false);
   };
 
-  const setStageWithHash = (next: SquidDepositStage, hash?: Hash) => {
-    if (next === "approving") setHasApproved(true);
+  const setStageWithHash = (next: SquidDepositStage, hash?: Hash, nextSignature?: SquidDepositSignature) => {
+    if (nextSignature) setSignature(nextSignature);
     setStage(next);
     if (hash) setTransactionHash(hash);
   };
@@ -710,7 +711,7 @@ export function DirectSquidDepositDialog({
           throw new Error("A Squid deposit from this wallet is already pending.");
         }
         assertContext(snapshot);
-        setHasApproved(false);
+        setSignature(null);
         setStage("preparing");
         await payingWallet.switchChain(snapshot.sourceChainId);
         hasSwitchedToSource.current = snapshot.sourceChainId !== mainnet.id;
@@ -844,8 +845,8 @@ export function DirectSquidDepositDialog({
           {stage ? (
             <SquidDepositProgress
               explorerUrl={explorerUrl}
-              hasApproved={hasApproved}
               isEmbedded={payingWallet ? isPrivyEmbeddedWallet(payingWallet) : false}
+              signature={signature}
               stage={stage}
               symbol={progressSymbol}
               transactionHash={transactionHash}

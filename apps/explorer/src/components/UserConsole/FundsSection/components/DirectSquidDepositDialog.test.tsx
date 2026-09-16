@@ -872,7 +872,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(instruction()).toBe("Preparing the route…");
     expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
 
-    await act(async () => onStage?.("approving"));
+    await act(async () => onStage?.("approving", undefined, { kind: "approve", index: 0, total: 2 }));
     expect(steps()).toEqual([
       "Prepare the route",
       "Approve USDC",
@@ -883,7 +883,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     ]);
     expect(instruction()).toBe("Step 1 of 2: approve USDC in your wallet");
 
-    await act(async () => onStage?.("swap-requested"));
+    await act(async () => onStage?.("swap-requested", undefined, { kind: "route", index: 1, total: 2 }));
     expect(instruction()).toBe("Step 2 of 2: confirm the swap in your wallet");
 
     await act(async () => onStage?.("swap-broadcast", ROUTE_HASH));

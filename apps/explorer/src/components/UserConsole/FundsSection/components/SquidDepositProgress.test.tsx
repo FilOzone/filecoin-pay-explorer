@@ -12,8 +12,8 @@ function render(props: Partial<Props> = {}) {
     renderer = create(
       <SquidDepositProgress
         explorerUrl='https://basescan.org'
-        hasApproved={false}
         isEmbedded={false}
+        signature={null}
         stage='preparing'
         symbol='USDC'
         transactionHash={null}
@@ -49,7 +49,7 @@ describe("SquidDepositProgress", () => {
   });
 
   it("numbers the approval and the swap as two signatures", () => {
-    const renderer = render({ stage: "approving" });
+    const renderer = render({ signature: { kind: "approve", index: 0, total: 2 }, stage: "approving" });
     expect(steps(renderer)).toEqual([
       ["Prepare the route", "other"],
       ["Approve USDC", "current"],
@@ -64,8 +64,8 @@ describe("SquidDepositProgress", () => {
       renderer.update(
         <SquidDepositProgress
           explorerUrl='https://basescan.org'
-          hasApproved
           isEmbedded
+          signature={{ kind: "route", index: 1, total: 2 }}
           stage='swap-requested'
           symbol='USDC'
           transactionHash={null}

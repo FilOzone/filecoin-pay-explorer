@@ -17,6 +17,7 @@ import {
   SquidDepositBudgetError,
   type SquidDepositDestinationClient,
   SquidDepositError,
+  type SquidDepositSignature,
   type SquidDepositSourceClient,
   type SquidDepositStage,
   type SquidDepositWalletClient,
@@ -445,14 +446,14 @@ describe("executeSquidDeposit", () => {
     const wallet = fakeWallet();
     const source = fakeSource();
     const fetch = vi.fn(async () => statusResponse("success"));
-    const stages: [SquidDepositStage, Hash | undefined][] = [];
+    const stages: [SquidDepositStage, Hash | undefined, SquidDepositSignature | undefined][] = [];
     const broadcasts: { transactionHash: Hash; fundsBefore: bigint; quote: ExecutableSquidDepositQuote }[] = [];
 
     const result = await executeSquidDeposit({
       destinationClient: fakeDestination(),
       ...signingChecks,
       onBroadcast: (broadcast) => broadcasts.push(broadcast),
-      onStage: (stage, hash) => stages.push([stage, hash]),
+      onStage: (stage, hash, signature) => stages.push([stage, hash, signature]),
       quote,
       request,
       sleep: noSleep,
@@ -487,20 +488,24 @@ describe("executeSquidDeposit", () => {
       gasPrice: 1_000_000_000n,
     });
     expect(stages).toEqual([
-      ["approving", undefined],
-      ["swap-requested", undefined],
-      ["swap-broadcast", ROUTE_HASH],
-      ["bridging", ROUTE_HASH],
-      ["verifying", ROUTE_HASH],
+      ["approving", undefined, { kind: "approve", index: 0, total: 2 }],
+      ["swap-requested", undefined, { kind: "route", index: 1, total: 2 }],
+      ["swap-broadcast", ROUTE_HASH, undefined],
+      ["bridging", ROUTE_HASH, undefined],
+      ["verifying", ROUTE_HASH, undefined],
     ]);
     expect(broadcasts).toEqual([{ transactionHash: ROUTE_HASH, fundsBefore: 100n, quote }]);
   });
 
   it("skips the approval only when the allowance exactly matches the amount", async () => {
     const wallet = fakeWallet();
+    const signatures: (SquidDepositSignature | undefined)[] = [];
     await executeSquidDeposit({
       destinationClient: fakeDestination(),
       ...signingChecks,
+      onStage: (stage, _hash, signature) => {
+        if (stage === "approving" || stage === "swap-requested") signatures.push(signature);
+      },
       quote,
       request,
       sleep: noSleep,
@@ -509,14 +514,17 @@ describe("executeSquidDeposit", () => {
       walletClient: wallet,
     });
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(signatures).toEqual([{ kind: "route", index: 0, total: 1 }]);
   });
 
   it("resets a nonzero insufficient allowance before approving the payment amount", async () => {
     const wallet = fakeWallet([RESET_HASH, APPROVAL_HASH, ROUTE_HASH]);
+    const stages: [SquidDepositStage, SquidDepositSignature | undefined][] = [];
     await executeSquidDeposit({
       destinationClient: fakeDestination(),
       ...signingChecks,
       approvalResetRequired: true,
+      onStage: (stage, _hash, signature) => stages.push([stage, signature]),
       quote,
       request,
       sleep: noSleep,
@@ -535,6 +543,12 @@ describe("executeSquidDeposit", () => {
       functionName: "approve",
       args: [getAddress(SQUID_ROUTER_ADDRESS), request.sourceAmount],
     });
+    // Each signature is numbered off the plan, so the UI can say "Step 2 of 3" rather than "1 of 2" twice.
+    expect(stages.slice(0, 3)).toEqual([
+      ["approving", { kind: "reset", index: 0, total: 3 }],
+      ["approving", { kind: "approve", index: 1, total: 3 }],
+      ["swap-requested", { kind: "route", index: 2, total: 3 }],
+    ]);
   });
 
   it("does not count reset gas against the refreshed balance before approval", async () => {
