@@ -12,7 +12,7 @@ import {
   type WalletClient,
 } from "viem";
 import { formatAddress } from "@/utils/formatter";
-import { readSourceTokenState } from "./source-token-balances";
+import { readSourceTokenState, type SourceTokenState } from "./source-token-balances";
 import {
   ERC20_APPROVE_FALLBACK_GAS,
   type ExecutableSquidDepositQuote,
@@ -97,7 +97,7 @@ export type SquidDepositWalletClient = Pick<WalletClient, "getChainId" | "sendTr
 /** Reads state and prices transactions on the source network; the wallet only signs what it is handed. */
 export type SquidDepositSourceClient = Pick<
   PublicClient,
-  "getBalance" | "getChainId" | "multicall" | "readContract" | "waitForTransactionReceipt"
+  "getBalance" | "getBlockNumber" | "getChainId" | "multicall" | "readContract" | "waitForTransactionReceipt"
 > &
   SquidDepositFeeClient;
 export type SquidDepositDestinationClient = Pick<PublicClient, "readContract" | "waitForTransactionReceipt">;
@@ -170,9 +170,64 @@ type SigningStateInput = Pick<
   "assertCurrentContext" | "getCurrentOwner" | "quote" | "request" | "sourceClient" | "walletClient"
 >;
 
+/** Reads of the state an approval just set, before the mismatch counts as real. */
+const ALLOWANCE_READ_ATTEMPTS = 5;
+/** Between allowance re-reads: a block or two on the slowest source chain, not the Squid status poll. */
+const ALLOWANCE_READ_INTERVAL_MS = 2_000;
+
+interface AfterApprovalRead {
+  /** Block the approval's receipt came from; the state is read from that block or a later one. */
+  receiptBlock: bigint;
+  expectedAllowance: bigint;
+  /** What the caller reports when the allowance differs or no node caught up in time. */
+  mismatchMessage: string;
+  attempts?: number;
+  pollIntervalMs: number;
+  sleep: (milliseconds: number) => Promise<void>;
+}
+
+/**
+ * Reads the source-token state after an approval was mined. Public RPC
+ * endpoints are load balanced, and the node that answers a read can be a block
+ * behind the one that returned the receipt. The read is pinned to the current
+ * head, taken only once it is at or past the receipt's block, so a lagging node
+ * refuses the read instead of answering with the old allowance. Only that read
+ * is repeated: a read that succeeds is final for its block, and an allowance
+ * that still differs is the mismatch. Balances come from the same current block,
+ * so spending after the approval shows up before the route is signed.
+ */
+async function readSourceTokenStateAfterApproval(
+  { quote, request, sourceClient }: Pick<SigningStateInput, "quote" | "request" | "sourceClient">,
+  {
+    attempts = ALLOWANCE_READ_ATTEMPTS,
+    expectedAllowance,
+    mismatchMessage,
+    pollIntervalMs,
+    receiptBlock,
+    sleep,
+  }: AfterApprovalRead,
+): Promise<SourceTokenState> {
+  const spender = quote.transaction.approvalSpender ?? quote.transaction.target;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (attempt > 1) await sleep(pollIntervalMs);
+    let state: SourceTokenState;
+    try {
+      // viem caches the head for a few seconds; a cached number can predate the receipt.
+      const head = await sourceClient.getBlockNumber({ cacheTime: 0 });
+      if (head < receiptBlock) continue;
+      state = await readSourceTokenState(sourceClient, request.owner, request.sourceToken, spender, head);
+    } catch {
+      continue;
+    }
+    if (state.allowance !== expectedAllowance) throw new Error(mismatchMessage);
+    return state;
+  }
+  throw new Error(mismatchMessage);
+}
+
 async function assertFreshSigningState({
+  afterApproval,
   assertCurrentContext,
-  blockNumber,
   getCurrentOwner,
   quote,
   request,
@@ -181,8 +236,8 @@ async function assertFreshSigningState({
   walletClient,
 }: SigningStateInput & {
   requireAllowance: boolean;
-  /** Reads pinned to this block, so state older than a just-mined approval is refused, not returned. */
-  blockNumber?: bigint;
+  /** Set once an approval was mined: the read must come from that block or later, and its allowance must match. */
+  afterApproval?: AfterApprovalRead;
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
   const isNativeSource = isNativeToken(request.sourceToken);
@@ -190,13 +245,14 @@ async function assertFreshSigningState({
     getCurrentOwner(),
     walletClient.getChainId(),
     sourceClient.getChainId(),
-    readSourceTokenState(
-      sourceClient,
-      request.owner,
-      request.sourceToken,
-      quote.transaction.approvalSpender ?? quote.transaction.target,
-      blockNumber,
-    ),
+    afterApproval
+      ? readSourceTokenStateAfterApproval({ quote, request, sourceClient }, afterApproval)
+      : readSourceTokenState(
+          sourceClient,
+          request.owner,
+          request.sourceToken,
+          quote.transaction.approvalSpender ?? quote.transaction.target,
+        ),
   ]);
   const { native: nativeBalance, token: tokenBalance } = state;
   // A native payment needs no approval, so it counts as already allowed.
@@ -207,42 +263,6 @@ async function assertFreshSigningState({
   if (requireAllowance && allowance !== request.sourceAmount)
     throw new Error("Source-token allowance does not match the reviewed spend after approval");
   return { allowance, nativeBalance };
-}
-
-/** Reads of the allowance an approval just set, before the mismatch counts as real. */
-const ALLOWANCE_READ_ATTEMPTS = 5;
-
-/**
- * Reads the signing state after an approval was mined. Public RPC endpoints
- * are load balanced, and the node that answers the read can be a block behind
- * the one that returned the receipt, so a first read may still show the old
- * allowance. The read is pinned to the receipt's block, which makes a lagging
- * node fail instead of answering, and repeated a few times before the
- * mismatch is reported as such.
- */
-async function assertSigningStateAfterApproval({
-  attempts = ALLOWANCE_READ_ATTEMPTS,
-  blockNumber,
-  expectedAllowance,
-  pollIntervalMs,
-  sleep,
-  ...input
-}: SigningStateInput & {
-  blockNumber: bigint;
-  expectedAllowance: bigint;
-  attempts?: number;
-  pollIntervalMs: number;
-  sleep: (milliseconds: number) => Promise<void>;
-}): Promise<{ allowance: bigint; nativeBalance: bigint }> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const state = await assertFreshSigningState({ ...input, blockNumber, requireAllowance: false });
-      if (state.allowance === expectedAllowance || attempt >= attempts) return state;
-    } catch (error) {
-      if (attempt >= attempts) throw error;
-    }
-    await sleep(pollIntervalMs);
-  }
 }
 
 async function assertCurrentWallet({
@@ -580,7 +600,7 @@ export async function executeSquidDeposit({
   assertCurrentContext,
   ...polling
 }: ExecuteSquidDepositInput): Promise<SquidDepositResult> {
-  const { sleep = defaultSleep, pollIntervalMs = 10_000 } = polling;
+  const { sleep = defaultSleep } = polling;
   if (quote.sourceChainId !== request.sourceChainId) throw new Error("Quote does not match the requested network");
   if (walletClient.account.address.toLowerCase() !== request.owner.toLowerCase()) {
     throw new Error("Wallet does not control the paying account");
@@ -598,23 +618,22 @@ export async function executeSquidDeposit({
   const signingState = { assertCurrentContext, getCurrentOwner, quote, request, sourceClient, walletClient };
   // Block of the last mined approval; reads after it must not come from an older block.
   let approvalBlock: bigint | undefined;
-  const assertRouteSigningState = async (currentQuote: ExecutableSquidDepositQuote) => {
-    const currentSigningState = { ...signingState, quote: currentQuote };
-    if (approvalBlock === undefined) {
-      return assertFreshSigningState({ ...currentSigningState, requireAllowance: !isNativeSource });
-    }
-    const state = await assertSigningStateAfterApproval({
-      ...currentSigningState,
-      blockNumber: approvalBlock,
-      expectedAllowance: request.sourceAmount,
-      pollIntervalMs,
-      sleep,
+  const assertRouteSigningState = (currentQuote: ExecutableSquidDepositQuote) =>
+    assertFreshSigningState({
+      ...signingState,
+      quote: currentQuote,
+      requireAllowance: !isNativeSource,
+      afterApproval:
+        approvalBlock === undefined
+          ? undefined
+          : {
+              expectedAllowance: request.sourceAmount,
+              mismatchMessage: "Source-token allowance does not match the reviewed spend after approval",
+              pollIntervalMs: ALLOWANCE_READ_INTERVAL_MS,
+              receiptBlock: approvalBlock,
+              sleep,
+            },
     });
-    if (state.allowance !== request.sourceAmount) {
-      throw new Error("Source-token allowance does not match the reviewed spend after approval");
-    }
-    return state;
-  };
   {
     let { allowance, nativeBalance } = await assertFreshSigningState({
       assertCurrentContext,
@@ -665,15 +684,17 @@ export async function executeSquidDeposit({
         }
         approvalBlock = approvalReceipt.blockNumber;
         if (amount === 0n) {
-          ({ allowance, nativeBalance } = await assertSigningStateAfterApproval({
+          ({ allowance, nativeBalance } = await assertFreshSigningState({
             ...signingState,
-            blockNumber: approvalBlock,
-            expectedAllowance: 0n,
-            pollIntervalMs,
-            sleep,
+            requireAllowance: false,
+            afterApproval: {
+              expectedAllowance: 0n,
+              mismatchMessage: "Source-token allowance changed after reset. Review the payment again.",
+              pollIntervalMs: ALLOWANCE_READ_INTERVAL_MS,
+              receiptBlock: approvalBlock,
+              sleep,
+            },
           }));
-          if (allowance !== 0n)
-            throw new Error("Source-token allowance changed after reset. Review the payment again.");
           nativeFeeSinceBalanceRead = 0n;
         }
       }
