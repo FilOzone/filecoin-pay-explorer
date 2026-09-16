@@ -1029,7 +1029,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
       if (open) return;
       const progress = renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" }).length;
       const review = renderer.root.findAllByProps({ "aria-label": "Reviewed Squid deposit" }).length;
-      viewsAtClose.push(progress ? "progress" : review ? "review" : "form");
+      if (progress) viewsAtClose.push("progress");
+      else if (review) viewsAtClose.push("review");
+      else viewsAtClose.push("form");
     });
     await act(async () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);

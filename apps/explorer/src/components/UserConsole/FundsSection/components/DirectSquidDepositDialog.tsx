@@ -853,7 +853,8 @@ export function DirectSquidDepositDialog({
               symbol={progressSymbol}
               transactionHash={transactionHash}
             />
-          ) : pending ? (
+          ) : null}
+          {!stage && pending ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Pending Squid deposit'>
               <p>
                 {pending.transactionHash
@@ -903,7 +904,8 @@ export function DirectSquidDepositDialog({
                 </Button>
               </div>
             </section>
-          ) : reviewed && reviewedSourceChain ? (
+          ) : null}
+          {!stage && !pending && reviewed && reviewedSourceChain ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Reviewed Squid deposit'>
               {notice ? <Alert title='Review the updated gas maximum' description={notice} /> : null}
               <p>
@@ -958,7 +960,8 @@ export function DirectSquidDepositDialog({
               </p>
               <p className='text-muted-foreground'>Your wallet will confirm {describeWalletConfirmations(reviewed)}</p>
             </section>
-          ) : (
+          ) : null}
+          {!stage && !pending && (!reviewed || !reviewedSourceChain) ? (
             <>
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-wallet'>Paying wallet</Label>
@@ -1149,7 +1152,7 @@ export function DirectSquidDepositDialog({
                 </p>
               ) : null}
             </>
-          )}
+          ) : null}
           {transactionHash && !pending ? <code className='break-all text-xs'>{transactionHash}</code> : null}
           {error ? (
             <p className='break-words text-destructive' role='alert'>
