@@ -185,8 +185,8 @@ export function useSessionKeys(network: Network, account: Hex) {
     removeKey,
     syncFromChain,
     refetchStatuses,
-    /** True until the first batch of status reads has come back, failed entries included. */
-    statusReadsPending,
+    /** True until the first status reads are back. False with no records: a disabled query never leaves `pending`. */
+    statusReadsPending: records.length > 0 && statusReadsPending,
     markConfirmed,
     registry,
   };

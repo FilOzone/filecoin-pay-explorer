@@ -5,15 +5,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { ArrowSquareOutIcon, KeyIcon, WalletIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Hex } from "viem";
+import { useSwitchChain } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
+import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
-import type { AuthorizeParamError } from "@/utils/authorizeParam";
+import { type AuthorizeParamError, LINK_PARAMS } from "@/utils/authorizeParam";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
 import {
   existingKeyPrefill,
@@ -33,8 +35,11 @@ interface SessionKeysSectionProps {
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
   prefillNetwork?: Network | null;
-  /** Set when the link carried an `authorize` value that could not be used. */
+  /** Set when the link carried an `authorize` or `revoke` value that could not be used. */
   prefillError?: AuthorizeParamError | null;
+  /** Session key a `?revoke=` link names, from `filecoin-pin logout`. */
+  revokeAddress?: Hex | null;
+  revokeNetwork?: Network | null;
 }
 
 type ConnectedProps = SessionKeysSectionProps & { account: Hex };
@@ -77,14 +82,16 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
       />
     );
   }
-  return <ConnectedSessionKeys account={account} {...rest} />;
+  // Keyed on the identity: a wallet or network switch starts over, so no
+  // link state, dialog, or sync in flight carries across inventories.
+  return <ConnectedSessionKeys key={`${rest.network}:${account}`} account={account} {...rest} />;
 };
 
 const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
-  "bad-checksum": "The address in this link is misspelled, so nothing was added. Ask for a new link.",
-  "not-an-address": "This link does not contain a valid address, so nothing was added. Ask for a new link.",
-  "no-network": "This link does not say which network it is for, so nothing was added. Ask for a new link.",
-  "no-scopes": "This link does not say which scopes it needs, so nothing was added. Ask for a new link.",
+  "bad-checksum": "The address in this link is misspelled, so nothing was changed. Ask for a new link.",
+  "not-an-address": "This link does not contain a valid address, so nothing was changed. Ask for a new link.",
+  "no-network": "This link does not say which network it is for, so nothing was changed. Ask for a new link.",
+  "no-scopes": "This link does not say which scopes it needs, so nothing was changed. Ask for a new link.",
 };
 
 const ConnectedSessionKeys = ({
@@ -94,6 +101,8 @@ const ConnectedSessionKeys = ({
   prefillScopes,
   prefillNetwork,
   prefillError,
+  revokeAddress,
+  revokeNetwork,
 }: ConnectedProps) => {
   const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsPending, markConfirmed, registry } =
     useSessionKeys(network, account);
@@ -125,6 +134,11 @@ const ConnectedSessionKeys = ({
     setRevoke(target ? { target, identity: { network, account } } : null);
   const [activeOnly, setActiveOnly] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  // A ref, not state: wagmi pushes sync renders that can land before a state
+  // update, and a stale "syncing" once fired the missing-key path mid-read.
+  const revokeLinkRef = useRef<"idle" | "syncing" | "done">("idle");
+  // Flips when the one chain read settles, so the effect runs again.
+  const [revokeLinkSynced, setRevokeLinkSynced] = useState(false);
 
   // Newest first; unknown createdAt (sanitize-coerced 0) sinks to the bottom.
   // Deterministic order matters once sync interleaves imported and local keys.
@@ -135,6 +149,8 @@ const ConnectedSessionKeys = ({
   // URL request (?authorize=) guards
   const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
   const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
+  const { switchChain } = useSwitchChain();
+  const revokeNetworkMismatch = revokeAddress != null && revokeNetwork !== network;
   const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
   // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
   const existingForPrefill = cliPrefill
@@ -148,7 +164,8 @@ const ConnectedSessionKeys = ({
   const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
 
-  const handleSync = async () => {
+  /** Resolves true when the chain was read, false when the read failed and was reported. */
+  const handleSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     try {
       const { addedCount, updatedCount, skippedUnrecognized } = await syncFromChain();
@@ -161,14 +178,50 @@ const ConnectedSessionKeys = ({
         if (skippedUnrecognized > 0) parts.push(`Skipped ${skippedUnrecognized} with unrecognized scopes.`);
         toast.success(parts.join(" "));
       }
+      return true;
     } catch (err) {
       toast.error("Sync failed", {
         description: err instanceof Error ? err.message : "Request failed. See console logs for more details.",
       });
+      return false;
     } finally {
       setSyncing(false);
     }
-  };
+  }, [syncFromChain]);
+
+  // ?revoke= link: listed key opens the dialog; unknown key gets one chain sync, then opens or reports.
+  useEffect(() => {
+    if (revokeAddress == null || revokeNetworkMismatch) return;
+    if (revokeLinkRef.current === "done") return;
+    // A browser with no records never leaves pending: only wait when there is something to read.
+    if (statusReadsPending && keys.length > 0) return;
+    const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
+    if (listed) {
+      revokeLinkRef.current = "done";
+      dropSearchParams(LINK_PARAMS);
+      setRevoke({ target: listed, identity: { network, account } });
+      return;
+    }
+    if (revokeLinkSynced) {
+      revokeLinkRef.current = "done";
+      dropSearchParams(LINK_PARAMS);
+      // After the effect flush: sonner's Toaster re-subscribes on every list
+      // change, and a toast published between its cleanup and re-subscribe is dropped.
+      queueMicrotask(() =>
+        toast.error("That session key is not in this wallet's list", {
+          description: "It may belong to another wallet, or to a different network.",
+        }),
+      );
+      return;
+    }
+    if (revokeLinkRef.current === "syncing") return;
+    revokeLinkRef.current = "syncing";
+    // A failed read is reported by handleSync and leaves the link in the URL for a reload.
+    void handleSync().then((read) => {
+      if (read) setRevokeLinkSynced(true);
+      else revokeLinkRef.current = "done";
+    });
+  }, [revokeAddress, revokeNetworkMismatch, keys, statusReadsPending, revokeLinkSynced, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
   const syncButton = (
@@ -247,6 +300,27 @@ const ConnectedSessionKeys = ({
             <span className='capitalize'>{network}</span> instead. Switch your wallet to{" "}
             <span className='capitalize'>{prefillNetwork}</span> to review the request.
           </p>
+        </Notice>
+      )}
+      {revokeNetworkMismatch && (
+        <Notice tone='warn' className='p-4'>
+          <p className='font-semibold'>
+            This revoke link is for <span className='capitalize'>{revokeNetwork}</span>, but your wallet is connected to{" "}
+            <span className='capitalize'>{network}</span>.
+          </p>
+          <p className='text-xs mt-1'>
+            Nothing was opened. Switch to <span className='capitalize'>{revokeNetwork}</span> to revoke{" "}
+            <span className='font-mono break-all'>{revokeAddress}</span>.
+          </p>
+          <Button
+            variant='primary'
+            size='compact'
+            className='mt-3'
+            aria-label={`Switch to ${revokeNetwork}`}
+            onClick={() => revokeNetwork && switchChain({ chainId: getChain(revokeNetwork).id })}
+          >
+            Switch to <span className='capitalize'>{revokeNetwork}</span>
+          </Button>
         </Notice>
       )}
 

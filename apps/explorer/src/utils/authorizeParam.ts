@@ -78,6 +78,24 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
+/** Every search param a CLI link can carry; acting on one clears them all. */
+export const LINK_PARAMS = ["authorize", "scopes", "network", "revoke"] as const;
+
+export interface RevokeLink {
+  address: `0x${string}`;
+  network: "mainnet" | "calibration";
+}
+
+/** `?revoke=&network=`, as `filecoin-pin logout` prints it. Same rules as the pairing link; network required. */
+export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: AuthorizeParamError } | null {
+  if (!params.has("revoke")) return null;
+  const requested = parseAuthorizeParam(params.get("revoke")) ?? { error: "not-an-address" as const };
+  if ("error" in requested) return requested;
+  const network = parseNetworkParam(params.get("network"));
+  if (!network) return { error: "no-network" };
+  return { address: requested.address, network };
+}
+
 export interface AuthorizeLink {
   address: `0x${string}`;
   scopes: ScopeId[] | null;
@@ -89,6 +107,8 @@ export interface AuthorizeLink {
  * none, an error when any part is unusable, otherwise every field validated.
  */
 export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
+  // A revoke link also carries `network`; it wins, it only removes authority.
+  if (params.has("revoke")) return null;
   if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
   // Scopes or a network without an address is still a pairing request, just a broken one.
   const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };
