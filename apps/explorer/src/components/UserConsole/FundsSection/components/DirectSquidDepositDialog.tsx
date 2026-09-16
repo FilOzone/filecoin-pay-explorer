@@ -574,8 +574,10 @@ export function DirectSquidDepositDialog({
     await invalidateTopUpQueries(queryClient, accountId, depositRecipient);
     // The stage is left in place: the review was already dropped by the chain switch, and a reset
     // here would land in the same render as the parent's close, so the dialog would animate out
-    // showing the form. The next open clears it.
+    // showing the form. The next open clears it. A refused switch back keeps the dialog open, so
+    // the form returns with the error and Close retries the switch.
     if (await restoreFilecoin()) onOpenChange(false);
+    else setStage(null);
   };
 
   const fail = async (failure: unknown, owner?: Address) => {

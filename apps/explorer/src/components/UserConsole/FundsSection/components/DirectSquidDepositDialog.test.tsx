@@ -1054,6 +1054,31 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(amountInput(renderer)).toBeDefined();
   });
 
+  it("returns to the form with the error when the wallet refuses the switch back after a deposit", async () => {
+    state.execute.mockResolvedValueOnce({
+      depositedAmount: 92n,
+      destinationTransactionHash: ROUTE_HASH,
+      transactionHash: ROUTE_HASH,
+    });
+    // The switch to Base goes through; the switch back to Filecoin is refused.
+    wallet.switchChain.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Switch refused"));
+    const onOpenChange = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenLastCalledWith(314));
+    await vi.waitFor(() =>
+      expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0),
+    );
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe("Switch refused");
+    // The review survives here because the mocked account never leaves Filecoin; the footer is usable again.
+    expect(button(renderer, "Back")?.props.disabled).toBe(false);
+  });
+
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
     state.execute.mockResolvedValueOnce({
       depositedAmount: 92n,
