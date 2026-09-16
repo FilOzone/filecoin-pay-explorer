@@ -297,7 +297,7 @@ export function DirectSquidDepositDialog({
     refetchOnMount: "always",
     retry: 1,
   });
-  // Defaults the top-up on for any wallet below the fee reserve, matching the Add Service guard.
+  // Only drives the explanatory copy under the FIL option; the default itself is set below.
   // A background refetch of a known balance is not loading, or the hint would tell a
   // funded wallet it has no FIL every 30 s.
   const recipientFilStatus = getFilecoinGasBalanceStatus({
@@ -396,8 +396,13 @@ export function DirectSquidDepositDialog({
     amount: parsedAmount ?? undefined,
   };
 
+  // Decision (#444 over #377): the FIL top-up is on for every fresh open, including a wallet
+  // that already holds the fee reserve. Costs accepted for now: a funded wallet buys 0.05 FIL it
+  // may not need, and a deposit under about 0.5 USDFC cannot be quoted while the FIL leg exceeds
+  // Squid's 10% cap; both are one untick away. Still open for discussion on PR #430.
+  // The reset runs while the dialog is closed, so a reopen never shows the previous opt-out.
   useEffect(() => {
-    if (open) setFilGasTopUpEnabled(true);
+    if (!open) setFilGasTopUpEnabled(true);
   }, [open]);
 
   useEffect(() => {
