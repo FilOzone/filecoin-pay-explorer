@@ -205,6 +205,16 @@ describe("parseSquidDepositRoute", () => {
     expect(isExecutableQuote(quote)).toBe(true);
   });
 
+  it("rejects invalid cost token metadata", () => {
+    const invalidChain = fakeRoute();
+    invalidChain.estimate.feeCosts[0].token.chainId = "not-a-chain";
+    expect(() => parseSquidDepositRoute(invalidChain, request, true, now)).toThrow("fee costs 1 chain ID");
+
+    const invalidDecimals = fakeRoute();
+    invalidDecimals.estimate.gasCosts[0].token.decimals = -1;
+    expect(() => parseSquidDepositRoute(invalidDecimals, request, true, now)).toThrow("gas costs 1 decimals");
+  });
+
   it("rejects executable spend, fee and minimum-output drift beyond the reviewed quote", () => {
     const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now));
     const executable = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);

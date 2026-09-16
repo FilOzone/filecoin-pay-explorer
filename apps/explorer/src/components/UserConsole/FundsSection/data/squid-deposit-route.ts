@@ -284,15 +284,21 @@ function parseCosts(value: unknown, label: string): SquidDepositCost[] {
   return value.map((item, index) => {
     if (!isRecord(item) || !isRecord(item.token)) throw new Error(`Invalid Squid route: ${label} ${index + 1}`);
     const name = label === "fee costs" ? item.name : item.type;
+    const chainId = Number(item.token.chainId);
+    if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+      throw new Error(`Invalid Squid route: ${label} ${index + 1} chain ID`);
+    }
     const decimals = Number(item.token.decimals);
-    if (!Number.isSafeInteger(decimals)) throw new Error(`Invalid Squid route: ${label} ${index + 1} decimals`);
+    if (!Number.isSafeInteger(decimals) || decimals < 0) {
+      throw new Error(`Invalid Squid route: ${label} ${index + 1} decimals`);
+    }
     return {
       name: typeof name === "string" ? name : label,
       amount: parseAmount(item.amount, `${label} ${index + 1} amount`),
       ...(typeof item.amountUSD === "string" ? { amountUsd: item.amountUSD } : {}),
       token: {
         address: parseAddress(item.token.address, `${label} ${index + 1} token`),
-        chainId: Number(item.token.chainId),
+        chainId,
         symbol: typeof item.token.symbol === "string" ? item.token.symbol : "",
         decimals,
       },
