@@ -150,13 +150,13 @@ describe("FundingHost", () => {
     expect(dialogs.squidOpen).toBe(true);
   });
 
-  it("closes the picker before Privy starts a card purchase", async () => {
+  it("keeps the picker open while Privy starts a card purchase", async () => {
     const renderer = await renderHost();
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     act(() => dialogs.onSelect?.("card"));
 
     expect(card.buyWithCard).toHaveBeenCalledOnce();
-    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(false);
+    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
 
     act(() => card.onPurchased?.(12_500_000n));
     expect(dialogs.squidOpen).toBe(true);
