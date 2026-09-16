@@ -64,9 +64,7 @@ export function describeSquidDepositProgress(
   const current = PROGRESS_ORDER.indexOf(stage);
   return PROGRESS_ORDER.filter((step) => step !== "approving" || hasApproved || stage === "approving").map((step) => {
     const index = PROGRESS_ORDER.indexOf(step);
-    return {
-      label: labels[step],
-      state: index < current ? "done" : index === current ? "current" : "upcoming",
-    };
+    const state = index < current ? "done" : "upcoming";
+    return { label: labels[step], state: index === current ? "current" : state };
   });
 }

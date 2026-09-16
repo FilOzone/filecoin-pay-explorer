@@ -2,8 +2,21 @@ import { Check, Loader2 } from "lucide-react";
 import {
   describeSquidDepositProgress,
   describeSquidDepositStage,
+  type SquidDepositProgressStep,
   type SquidDepositUiStage,
 } from "../data/squid-deposit-stages";
+
+const BADGE_CLASS: Record<SquidDepositProgressStep["state"], string> = {
+  current: "bg-primary text-primary-foreground",
+  done: "bg-primary/20 text-primary",
+  upcoming: "bg-muted text-muted-foreground",
+};
+
+function StepIcon({ state }: { state: SquidDepositProgressStep["state"] }) {
+  if (state === "done") return <Check className='h-3.5 w-3.5' />;
+  if (state === "current") return <Loader2 className='h-3.5 w-3.5 animate-spin' />;
+  return <span className='h-1.5 w-1.5 rounded-full bg-current' />;
+}
 
 /** The running deposit as a timeline, with what the user should do right now underneath. */
 export function SquidDepositProgress({
@@ -27,21 +40,9 @@ export function SquidDepositProgress({
         {describeSquidDepositProgress(stage, { hasApproved, symbol }).map((step) => (
           <li className='flex items-center gap-3' key={step.label}>
             <span
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
-                step.state === "current"
-                  ? "bg-primary text-primary-foreground"
-                  : step.state === "done"
-                    ? "bg-primary/20 text-primary"
-                    : "bg-muted text-muted-foreground"
-              }`}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${BADGE_CLASS[step.state]}`}
             >
-              {step.state === "done" ? (
-                <Check className='h-3.5 w-3.5' />
-              ) : step.state === "current" ? (
-                <Loader2 className='h-3.5 w-3.5 animate-spin' />
-              ) : (
-                <span className='h-1.5 w-1.5 rounded-full bg-current' />
-              )}
+              <StepIcon state={step.state} />
             </span>
             <span className={step.state === "current" ? "font-medium" : "text-muted-foreground"}>{step.label}</span>
           </li>

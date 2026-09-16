@@ -74,6 +74,7 @@ export function walletErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
   const short = "shortMessage" in error && typeof error.shortMessage === "string" ? error.shortMessage : undefined;
   const details = "details" in error && typeof error.details === "string" ? error.details.trim() : "";
-  const message = short ? (details && !short.includes(details) ? `${short} ${details}` : short) : error.message;
+  let message = error.message;
+  if (short) message = details && !short.includes(details) ? `${short} ${details}` : short;
   return message.length > MAX_ERROR_MESSAGE_LENGTH ? `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH - 1)}…` : message;
 }
