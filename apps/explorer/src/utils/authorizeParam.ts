@@ -78,6 +78,9 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
+/** Every search param a CLI link can carry; acting on one clears them all. */
+export const LINK_PARAMS = ["authorize", "scopes", "network", "revoke"] as const;
+
 export interface RevokeLink {
   address: `0x${string}`;
   network: "mainnet" | "calibration";

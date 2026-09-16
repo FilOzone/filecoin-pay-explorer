@@ -187,6 +187,36 @@ describe("revoke deep link", () => {
     expect(toastError.mock.calls.map((c) => c[0])).toEqual(["That session key is not in this wallet's list"]);
   });
 
+  it("keeps the link and reports nothing about the key when the chain read fails", async () => {
+    hooks.syncFromChain.mockRejectedValue(new Error("rpc down"));
+
+    await renderWithLink(KEY);
+
+    expect(hooks.syncFromChain).toHaveBeenCalledTimes(1);
+    expect(revokeTargets.at(-1)).toBeNull();
+    // The sync's own failure toast, and nothing claiming the key is missing.
+    expect(toastError.mock.calls.map((c) => c[0])).toEqual(["Sync failed"]);
+  });
+
+  it("clears every link param when it acts, not only the revoke ones", async () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal("window", {
+      location: {
+        pathname: "/console/session-keys",
+        search: `?authorize=${KEY}&scopes=addPieces&revoke=${KEY}&network=calibration`,
+        hash: "",
+      },
+      history: { replaceState },
+    });
+    hooks.keys = [listed];
+
+    await renderWithLink(KEY);
+
+    // Left behind, `authorize` without its network would report a broken pairing link on reload.
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/console/session-keys");
+    vi.unstubAllGlobals();
+  });
+
   it("says so instead of doing nothing when the link is for another network", async () => {
     hooks.keys = [listed];
 

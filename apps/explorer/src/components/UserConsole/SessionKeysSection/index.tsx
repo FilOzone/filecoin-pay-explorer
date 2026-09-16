@@ -15,7 +15,7 @@ import { getChain } from "@/constants/chains";
 import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
-import type { AuthorizeParamError } from "@/utils/authorizeParam";
+import { type AuthorizeParamError, LINK_PARAMS } from "@/utils/authorizeParam";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
 import {
   existingKeyPrefill,
@@ -164,7 +164,8 @@ const ConnectedSessionKeys = ({
   const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
 
-  const handleSync = useCallback(async () => {
+  /** Resolves true when the chain was read, false when the read failed and was reported. */
+  const handleSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     try {
       const { addedCount, updatedCount, skippedUnrecognized } = await syncFromChain();
@@ -177,10 +178,12 @@ const ConnectedSessionKeys = ({
         if (skippedUnrecognized > 0) parts.push(`Skipped ${skippedUnrecognized} with unrecognized scopes.`);
         toast.success(parts.join(" "));
       }
+      return true;
     } catch (err) {
       toast.error("Sync failed", {
         description: err instanceof Error ? err.message : "Request failed. See console logs for more details.",
       });
+      return false;
     } finally {
       setSyncing(false);
     }
@@ -195,13 +198,13 @@ const ConnectedSessionKeys = ({
     const listed = keys.find((k) => k.sessionKeyPublic.toLowerCase() === revokeAddress.toLowerCase());
     if (listed) {
       revokeLinkRef.current = "done";
-      dropSearchParams(["revoke", "network"]);
+      dropSearchParams(LINK_PARAMS);
       setRevoke({ target: listed, identity: { network, account } });
       return;
     }
     if (revokeLinkSynced) {
       revokeLinkRef.current = "done";
-      dropSearchParams(["revoke", "network"]);
+      dropSearchParams(LINK_PARAMS);
       // After the effect flush: sonner's Toaster re-subscribes on every list
       // change, and a toast published between its cleanup and re-subscribe is dropped.
       queueMicrotask(() =>
@@ -213,8 +216,11 @@ const ConnectedSessionKeys = ({
     }
     if (revokeLinkRef.current === "syncing") return;
     revokeLinkRef.current = "syncing";
-    // handleSync reports its own failure and never throws.
-    void handleSync().then(() => setRevokeLinkSynced(true));
+    // A failed read is reported by handleSync and leaves the link in the URL for a reload.
+    void handleSync().then((read) => {
+      if (read) setRevokeLinkSynced(true);
+      else revokeLinkRef.current = "done";
+    });
   }, [revokeAddress, revokeNetworkMismatch, keys, statusReadsPending, revokeLinkSynced, handleSync, network, account]);
 
   // Rendered in the header and again in the empty state — keep the two in lockstep.
