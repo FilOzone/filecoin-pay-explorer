@@ -39,7 +39,7 @@ const WARM_STORAGE_ENTRY: ServiceMetadataEntry = {
     { label: "Storage", amount: "2.5 USDFC", unit: "per TiB / month" },
     { label: "CDN egress", amount: "7 USDFC", unit: "per TiB" },
     { label: "CDN cache miss", amount: "7 USDFC", unit: "per TiB" },
-    { label: "Minimum", amount: "0.02 USDFC", unit: "per month" },
+    { label: "Minimum", amount: "0.12 USDFC", unit: "per month" },
   ],
 };
 
