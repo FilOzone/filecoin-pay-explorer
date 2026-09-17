@@ -74,6 +74,8 @@ export interface SquidDepositResult {
 interface PollingOptions {
   sleep?: (milliseconds: number) => Promise<void>;
   pollIntervalMs?: number;
+  /** Bound on one status request; a request that never settles counts as a failed attempt. */
+  statusRequestTimeoutMs?: number;
   /** Squid status polls before giving up; the route itself is quoted at ~90s. */
   maxStatusAttempts?: number;
   /** Consecutive failed status requests tolerated before the outage is reported. */
@@ -231,6 +233,8 @@ export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef 
 }
 
 const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+/** Squid answers status requests in well under a second; a request still open after this is stalled. */
+export const STATUS_REQUEST_TIMEOUT_MS = 15_000;
 
 export function readFilecoinPayFunds(
   client: SquidDepositDestinationClient,
@@ -244,6 +248,7 @@ export function readFilecoinPayFunds(
 export async function fetchSquidDepositStatus(
   input: SquidDepositRef,
   client: SquidClient,
+  requestTimeoutMs = STATUS_REQUEST_TIMEOUT_MS,
 ): Promise<{ status: SquidDepositStatus; destinationTransactionHash?: Hash }> {
   const fetcher = client.fetch ?? globalThis.fetch.bind(globalThis);
   const query = new URLSearchParams({
@@ -252,17 +257,23 @@ export async function fetchSquidDepositStatus(
     toChainId: String(FILECOIN_CHAIN_ID),
     quoteId: input.quoteId,
   });
-  const response = await fetcher(`${client.baseUrl ?? SQUID_API_BASE_URL}/status?${query}`, {
-    headers: { "x-integrator-id": client.integratorId },
-  });
-  // Squid answers 404 until its indexer sees the source transaction.
-  if (response.status === 404) return { status: "pending" };
-  if (!response.ok) throw new Error(`Squid status request failed (${response.status})`);
-  const body = (await response.json()) as {
-    squidTransactionStatus?: unknown;
-    status?: unknown;
-    toChain?: { transactionId?: unknown };
-  };
+  // The poll loop bounds attempts and failures, but only for requests that settle;
+  // an abort turns a hung request into one more failed attempt.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("Squid status request timed out")), requestTimeoutMs);
+  let body: { squidTransactionStatus?: unknown; status?: unknown; toChain?: { transactionId?: unknown } };
+  try {
+    const response = await fetcher(`${client.baseUrl ?? SQUID_API_BASE_URL}/status?${query}`, {
+      headers: { "x-integrator-id": client.integratorId },
+      signal: controller.signal,
+    });
+    // Squid answers 404 until its indexer sees the source transaction.
+    if (response.status === 404) return { status: "pending" };
+    if (!response.ok) throw new Error(`Squid status request failed (${response.status})`);
+    body = (await response.json()) as typeof body;
+  } finally {
+    clearTimeout(timer);
+  }
   const status = body.squidTransactionStatus ?? body.status;
   if (typeof status !== "string") throw new Error("Invalid Squid status response");
   const normalized = status.toLowerCase();
@@ -296,6 +307,7 @@ export async function awaitSquidDepositSettlement({
   sleep = defaultSleep,
   sourceChainId,
   squid,
+  statusRequestTimeoutMs = STATUS_REQUEST_TIMEOUT_MS,
   target,
   transactionHash,
 }: AwaitSquidDepositInput): Promise<SquidDepositResult> {
@@ -309,7 +321,11 @@ export async function awaitSquidDepositSettlement({
     let consecutiveFailures = 0;
     for (let attempt = 0; attempt < maxStatusAttempts && status === "pending"; attempt += 1) {
       try {
-        const result = await fetchSquidDepositStatus({ transactionHash, sourceChainId, quoteId }, squid);
+        const result = await fetchSquidDepositStatus(
+          { transactionHash, sourceChainId, quoteId },
+          squid,
+          statusRequestTimeoutMs,
+        );
         status = result.status;
         if (result.destinationTransactionHash) destinationTransactionHash = result.destinationTransactionHash;
         consecutiveFailures = 0;

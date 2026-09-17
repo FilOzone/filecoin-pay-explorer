@@ -156,6 +156,14 @@ function fakeWallet() {
 }
 
 const noSleep = async () => undefined;
+/** A fetch that only ever settles by rejecting when its abort signal fires. */
+const hangingFetch = () =>
+  vi.fn(
+    (_input: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      }),
+  );
 const signingChecks = {
   approvalRequired: true,
   assertCurrentContext: vi.fn(),
@@ -193,6 +201,21 @@ describe("fetchSquidDepositStatus", () => {
         { integratorId: "id", fetch },
       ),
     ).rejects.toThrow("Squid status request failed (500)");
+  });
+
+  it("aborts a status request that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const attempt = fetchSquidDepositStatus(
+        { transactionHash: ROUTE_HASH, sourceChainId: 8453, quoteId: "quote-1" },
+        { integratorId: "id", fetch: hangingFetch() },
+      );
+      const rejection = expect(attempt).rejects.toThrow("Squid status request timed out");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -324,6 +347,27 @@ describe("awaitSquidDepositSettlement", () => {
       "Squid's status service is not answering (Squid status request failed (500)). Keep this page open or check back later.",
     );
     expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("counts a hung status request as a failed attempt", async () => {
+    const fetch = hangingFetch();
+    const attempt = awaitSquidDepositSettlement({
+      destinationClient: fakeDestination(),
+      fundsBefore: 100n,
+      minimumDestinationAmount: 1n,
+      maxStatusFailures: 2,
+      quoteId: "quote-1",
+      sleep: noSleep,
+      sourceChainId: 8453,
+      squid: { integratorId: "id", fetch },
+      statusRequestTimeoutMs: 1,
+      target,
+      transactionHash: ROUTE_HASH,
+    });
+    await expect(attempt).rejects.toThrow(
+      "Squid's status service is not answering (Squid status request timed out). Keep this page open or check back later.",
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("times out while keeping the transaction hash for a later resume", async () => {
