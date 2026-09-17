@@ -76,8 +76,11 @@ export function useGraphQLClient(options?: UseGraphQLClientOptions) {
     query: string,
     // biome-ignore lint/suspicious/noExplicitAny: GraphQL variables can be of any type
     variables?: Record<string, any>,
+    // Callers that walk many pages should forward TanStack Query's signal, so a
+    // switched account or token stops the walk instead of finishing it unseen.
+    signal?: AbortSignal,
   ): Promise<T> => {
-    return request<T>(subgraphUrl, query, variables);
+    return request<T>({ url: subgraphUrl, document: query, variables, signal });
   };
 
   return { executeQuery, network };

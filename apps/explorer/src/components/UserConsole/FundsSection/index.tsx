@@ -1,6 +1,7 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
+import { SpendChart } from "@/components/UserConsole/SpendChart";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { useAccountTokens } from "@/hooks/useAccountDetails";
 import useSynapse from "@/hooks/useSynapse";
@@ -147,6 +148,16 @@ export const FundsSection = ({ account, network, onGuidedTopUp }: FundsSectionPr
   return (
     <>
       {renderSection()}
+
+      {/* Chart follows the selected overview token; mounted only once one resolves. */}
+      {selectedToken ? (
+        <SpendChart
+          accountId={account.id}
+          network={network}
+          userToken={selectedToken}
+          currentTimestamp={currentTimestamp}
+        />
+      ) : null}
 
       {canUseGuidedTopUp ? (
         <AddFundsDialog
