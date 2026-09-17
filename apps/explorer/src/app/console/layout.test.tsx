@@ -14,6 +14,14 @@ describe("console access and continuity", () => {
     expect(getConsoleAccessState({ isConnected: true, hasAddress: true, chainId: 8453 })).toBe("squid-source");
   });
 
+  it("admits a Squid source chain only while a top-up is in progress", () => {
+    // Every console route derives its network from the wallet chain, and an
+    // unrecognized chain falls back to the default. Admitting a Squid chain
+    // outside the top-up flow would serve the wrong network's data.
+    expect(getConsoleDisplayAccessState("squid-source", false)).not.toBe("ready");
+    expect(getConsoleDisplayAccessState("squid-source", true)).toBe("ready");
+  });
+
   it("continues to reject unrelated unsupported chains", () => {
     expect(getConsoleAccessState({ isConnected: true, hasAddress: true, chainId: 12345 })).toBe("unsupported-chain");
     expect(getConsoleDisplayAccessState("unsupported-chain", true)).toBe("unsupported-chain");

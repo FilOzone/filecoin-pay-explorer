@@ -1,5 +1,5 @@
 export { default as RailActions } from "./RailActions";
-export { RailsEmptyInitial, RailsEmptyNoResults } from "./RailsEmptyStates";
-export { default as RailsErrorState } from "./RailsErrorState";
-export { default as RailsLoadingState } from "./RailsLoadingState";
+export { RailsSearch } from "./RailsSearch";
+export { default as RailsSectionLayout } from "./RailsSectionLayout";
+export { RailsEmptyInitial, RailsEmptyNoResults, RailsErrorState, RailsLoadingState } from "./RailsStates";
 export { default as RailsTable } from "./RailsTable";
