@@ -150,7 +150,7 @@ describe("FundingHost", () => {
     expect(dialogs.squidOpen).toBe(true);
   });
 
-  it("keeps the picker context while Privy starts a card purchase", async () => {
+  it("keeps the picker open while Privy starts a card purchase", async () => {
     const renderer = await renderHost();
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     act(() => dialogs.onSelect?.("card"));
