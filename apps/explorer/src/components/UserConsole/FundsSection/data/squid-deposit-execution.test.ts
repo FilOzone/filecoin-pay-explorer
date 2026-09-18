@@ -105,6 +105,9 @@ function fakeSource({
   approvalUpdatesAllowance = true,
   nativeBalance = 10n ** 18n,
   nativeBalanceSequence,
+  headSequence,
+  readNodeHeadSequence,
+  receiptBlock = 1n,
   receiptStatus = "success" as "success" | "reverted",
   tokenBalance = 200_000_000n,
   tokenBalanceSequence,
@@ -116,6 +119,12 @@ function fakeSource({
   approvalUpdatesAllowance?: boolean;
   nativeBalance?: bigint;
   nativeBalanceSequence?: bigint[];
+  /** Heads `getBlockNumber` reports in call order; the receipt block afterwards. */
+  headSequence?: bigint[];
+  /** Heads of the node answering each pinned `multicall`; a node behind the pinned block refuses the read. */
+  readNodeHeadSequence?: bigint[];
+  /** Block the fake receipts report; reads after an approval must come from it or later. */
+  receiptBlock?: bigint;
   receiptStatus?: "success" | "reverted";
   tokenBalance?: bigint;
   tokenBalanceSequence?: bigint[];
@@ -133,6 +142,7 @@ function fakeSource({
     }),
     estimateGas: vi.fn(async ({ to }: { to: Address }) => (to === USDC ? 60_000n : 599_399n)),
     getBalance: vi.fn(async () => next(nativeBalanceSequence, nativeBalance)),
+    getBlockNumber: vi.fn(async () => next(headSequence, receiptBlock)),
     getChainId: vi.fn(async () => 8453),
     getGasPrice: vi.fn(async () => 1_000_000_000n),
     estimateTotalFee: vi.fn(
@@ -147,14 +157,23 @@ function fakeSource({
       if (allowanceSequence?.length) return allowanceSequence.shift() as bigint;
       return approvalUpdatesAllowance && allowanceReads > 1 ? request.sourceAmount : allowance;
     }),
-    multicall: vi.fn(async ({ contracts }: { contracts: { functionName: string }[] }) =>
-      Promise.all(contracts.map((contract) => source.readContract(contract))),
+    multicall: vi.fn(
+      async ({ blockNumber, contracts }: { blockNumber?: bigint; contracts: { functionName: string }[] }) => {
+        if (blockNumber !== undefined && next(readNodeHeadSequence, blockNumber) < blockNumber) {
+          throw new Error(`block ${blockNumber} not found`);
+        }
+        return Promise.all(contracts.map((contract) => source.readContract(contract)));
+      },
     ),
-    waitForTransactionReceipt: vi.fn(async () => ({ status: receiptStatus })),
+    waitForTransactionReceipt: vi.fn(async () => ({
+      status: receiptStatus,
+      ...(receiptBlock === undefined ? {} : { blockNumber: receiptBlock }),
+    })),
   };
   return source as unknown as SquidDepositSourceClient & {
     estimateGas: ReturnType<typeof vi.fn>;
     estimateTotalFee: ReturnType<typeof vi.fn>;
+    multicall: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -515,6 +534,178 @@ describe("executeSquidDeposit", () => {
     });
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
     expect(signatures).toEqual([{ kind: "route", index: 0, total: 1 }]);
+  });
+
+  const pinnedBlocks = (source: ReturnType<typeof fakeSource>) =>
+    source.multicall.mock.calls.map((call: unknown[]) => (call[0] as { blockNumber?: bigint }).blockNumber);
+
+  it("retries a pinned read the node refuses, then signs the route", async () => {
+    const wallet = fakeWallet();
+    // The node answering the first read after the receipt is a block behind it.
+    const source = fakeSource({ readNodeHeadSequence: [41n], receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await executeSquidDeposit({
+      destinationClient: fakeDestination(),
+      ...signingChecks,
+      quote,
+      request,
+      sleep,
+      sourceClient: source,
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      walletClient: wallet,
+    });
+
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(sleep).toHaveBeenCalledWith(2_000);
+    // The refused read, its retry, then the read before the route is signed.
+    expect(pinnedBlocks(source)).toEqual([undefined, 42n, 42n, 42n]);
+  });
+
+  it("waits for a head at or past the receipt's block before reading", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ headSequence: [41n, 43n], receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await executeSquidDeposit({
+      destinationClient: fakeDestination(),
+      ...signingChecks,
+      quote,
+      request,
+      sleep,
+      sourceClient: source,
+      squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+      walletClient: wallet,
+    });
+
+    expect(sleep).toHaveBeenCalledOnce();
+    expect(pinnedBlocks(source)).toEqual([undefined, 43n, 42n]);
+  });
+
+  it("reports the allowance mismatch from the first read at or after the receipt", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ allowance: 0n, approvalUpdatesAllowance: false, receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Source-token allowance does not match the reviewed spend after approval");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("reports the mismatch, not the node error, when every pinned read fails", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ readNodeHeadSequence: [41n, 41n, 41n, 41n, 41n], receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Source-token allowance does not match the reviewed spend after approval");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledTimes(4);
+  });
+
+  it("refuses the route when the token balance dropped after the approval", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ tokenBalanceSequence: [200_000_000n, 50_000_000n], receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Source-token balance no longer covers the reviewed spend");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("refuses the route when the native balance dropped after the approval", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ nativeBalance: 0n, nativeBalanceSequence: [10n ** 18n], receiptBlock: 42n });
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep: noSleep,
+        sourceClient: source,
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Native balance no longer covers gas and route fees");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      "account",
+      "Wallet account changed before signing",
+      (wallet: ReturnType<typeof fakeWallet>) => ({
+        getCurrentOwner: vi.fn(async () => (wallet.sendTransaction.mock.calls.length ? RECIPIENT : OWNER)),
+      }),
+    ],
+    [
+      "network",
+      "Source network changed before signing",
+      (wallet: ReturnType<typeof fakeWallet>) => ({
+        walletClient: {
+          ...wallet,
+          getChainId: vi.fn(async () => (wallet.sendTransaction.mock.calls.length ? 1 : 8453)),
+        },
+      }),
+    ],
+    [
+      "reviewed context",
+      "Reviewed screen changed",
+      (wallet: ReturnType<typeof fakeWallet>) => ({
+        assertCurrentContext: vi.fn(() => {
+          if (wallet.sendTransaction.mock.calls.length) throw new Error("Reviewed screen changed");
+        }),
+      }),
+    ],
+  ])("fails at once when the %s changes after the approval, without re-reading", async (_case, message, overrides) => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ receiptBlock: 42n });
+    const sleep = vi.fn(async () => undefined);
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id" },
+        walletClient: wallet,
+        ...overrides(wallet),
+      }),
+    ).rejects.toThrow(message);
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(pinnedBlocks(source).filter((block) => block !== undefined).length).toBeLessThanOrEqual(1);
   });
 
   it("resets a nonzero insufficient allowance before approving the payment amount", async () => {
