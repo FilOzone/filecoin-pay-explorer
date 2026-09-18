@@ -95,6 +95,9 @@ type ReviewedDeposit = {
   sourceSymbol: string;
 };
 
+/** A verified source balance, such as a card purchase, that pre-fills the form. */
+export type SquidDepositInitialSource = { amount: bigint; chainId: number; decimals: number; token: string };
+
 function describeWalletConfirmations(reviewed: {
   approvalRequired: boolean;
   approvalResetRequired: boolean;
@@ -108,10 +111,12 @@ function describeWalletConfirmations(reviewed: {
 
 export function DirectSquidDepositDialog({
   accountId,
+  initialSource,
   onOpenChange,
   open,
 }: {
   accountId: string;
+  initialSource?: SquidDepositInitialSource;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
@@ -142,6 +147,13 @@ export function DirectSquidDepositDialog({
   });
 
   const recipient = connectedRecipient ? getAddress(connectedRecipient) : undefined;
+  const initialSourceAmount = initialSource?.amount;
+  const initialSourceChainId = initialSource?.chainId;
+  const initialSourceDecimals = initialSource?.decimals;
+  const initialSourceToken = initialSource?.token;
+  // The prefill is applied once per verified source, so later renders (a pending
+  // marker clearing, for instance) cannot overwrite what the user typed since.
+  const appliedInitialSource = useRef("");
   const payingWallet =
     wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
     wallets.find((wallet) => wallet.address.toLowerCase() === recipient?.toLowerCase()) ??
@@ -302,15 +314,44 @@ export function DirectSquidDepositDialog({
   ]);
 
   useEffect(() => {
+    if (!open) {
+      appliedInitialSource.current = "";
+      // A wallet picked in an earlier session must not pay for the next one; the
+      // fallback selects the recipient's own wallet again.
+      setPayingAddress("");
+      return;
+    }
+    if (
+      initialSourceAmount === undefined ||
+      initialSourceChainId === undefined ||
+      initialSourceDecimals === undefined ||
+      !initialSourceToken ||
+      pending
+    )
+      return;
+    const sourceKey = `${initialSourceChainId}:${initialSourceToken.toLowerCase()}:${initialSourceAmount}`;
+    if (appliedInitialSource.current === sourceKey) return;
+    appliedInitialSource.current = sourceKey;
+    setSourceChainId(initialSourceChainId);
+    setSourceTokenAddress(initialSourceToken);
+    setAmount(formatUnits(initialSourceAmount, initialSourceDecimals));
+    initializedSelectionScope.current = "";
+  }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending]);
+
+  useEffect(() => {
     if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
     const scope = `${owner}:${sourceChainId}:${getSourceTokenCatalogIdentity(tokens)}`;
     if (initializedSelectionScope.current === scope) return;
     initializedSelectionScope.current = scope;
-    if (!tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
+    const isPurchasedSource =
+      initialSourceChainId === sourceChainId && initialSourceToken?.toLowerCase() === sourceTokenAddress.toLowerCase();
+    if (!isPurchasedSource && !tokens.some((token) => token.token.toLowerCase() === sourceTokenAddress.toLowerCase())) {
       setSourceTokenAddress(orderedTokens[0]?.token ?? "");
     }
   }, [
     inventoryBalancesQuery.isPending,
+    initialSourceChainId,
+    initialSourceToken,
     open,
     orderedTokens,
     owner,
@@ -813,6 +854,11 @@ export function DirectSquidDepositDialog({
                 ) : null}
                 {!tokensQuery.isPending && !tokensQuery.isError && tokens.length === 0 ? (
                   <p className='text-sm text-muted-foreground'>No supported tokens are available on this network.</p>
+                ) : null}
+                {initialSource && !tokensQuery.isPending && !tokensQuery.isError && !sourceToken ? (
+                  <p className='text-sm text-destructive' role='alert'>
+                    Purchased Base USDC is not currently supported by Squid.
+                  </p>
                 ) : null}
               </div>
               <div className='grid gap-1'>

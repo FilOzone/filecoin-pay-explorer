@@ -11,7 +11,7 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 }));
 
 describe("AddFundsDialog", () => {
-  it("names both funding actions by what they do and preserves their selection values", () => {
+  it("names all funding actions by what they do and preserves their selection values", () => {
     const onSelect = vi.fn();
     let renderer!: ReturnType<typeof create>;
 
@@ -21,13 +21,16 @@ describe("AddFundsDialog", () => {
 
     const deposit = renderer.root.findByProps({ "aria-label": "Deposit token" });
     const swap = renderer.root.findByProps({ "aria-label": "Swap to USDFC" });
+    const card = renderer.root.findByProps({ "aria-label": "Buy USDC with card" });
     const visibleText = renderer.root.findAllByType("span").flatMap((node) => node.children);
     expect(visibleText).toContain("Deposit token");
     expect(visibleText).toContain("Swap to USDFC");
+    expect(visibleText).toContain("Buy USDC with card");
     expect(visibleText).toContain("Already hold USDFC or another token on Filecoin? Deposit it directly.");
 
+    act(() => card.props.onClick());
     act(() => deposit.props.onClick());
     act(() => swap.props.onClick());
-    expect(onSelect.mock.calls).toEqual([["deposit"], ["squid"]]);
+    expect(onSelect.mock.calls).toEqual([["card"], ["deposit"], ["squid"]]);
   });
 });
