@@ -1,13 +1,23 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { erc20Abi, type Hex, isAddress, zeroAddress } from "viem";
-import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
+import {
+  useAccount,
+  useBalance,
+  useConnection,
+  usePublicClient,
+  useReadContract,
+  useReadContracts,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
+import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
 
 // A service contract reserves upcoming charges from the deposit for its lockup
 // period (30 days for Filecoin Warm Storage Service), so the approval must
@@ -213,6 +223,37 @@ export function useTokenSelection(open: boolean): TokenSelection {
     balance,
     isLoadingBalance,
     reset,
+  };
+}
+
+export function useFilecoinGasBalance(open: boolean) {
+  const { constants } = useSynapse();
+  const { address: owner, chainId } = useConnection();
+  const { isPending: isSwitchingNetwork, switchChain } = useSwitchChain();
+  const query = useBalance({
+    address: owner,
+    chainId: constants.chain.id,
+    query: { enabled: !!owner && open, refetchInterval: open ? 15_000 : false, refetchOnMount: "always" },
+  });
+  const status = getFilecoinGasBalanceStatus({
+    balance: query.data?.value,
+    isError: query.isError,
+    isLoading: query.isFetching && query.data === undefined,
+  });
+  const { refetch } = query;
+  const refresh = useCallback(async () => {
+    const result = await refetch();
+    return getFilecoinGasBalanceStatus({ balance: result.data?.value, isError: result.isError, isLoading: false });
+  }, [refetch]);
+  return {
+    chainId,
+    isCorrectChain: chainId === constants.chain.id,
+    isSwitchingNetwork,
+    owner,
+    refresh,
+    status,
+    switchToFilecoin: () => switchChain({ chainId: constants.chain.id }),
+    targetChainId: constants.chain.id,
   };
 }
 

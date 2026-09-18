@@ -514,7 +514,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
       amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
     expect(JSON.stringify(renderer.toJSON())).not.toContain("Balance: 200 USDC");
-    expect(JSON.stringify(renderer.toJSON())).not.toContain("does not have enough");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("The paying wallet does not have enough");
     expect(button(renderer, "Review")?.props.disabled).toBe(true);
   });
 
@@ -535,9 +535,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
   });
 
   it.each([
-    [0n, false, true, "Your wallet has no FIL."],
-    [1n, false, false, "You already have FIL for fees."],
-    [0n, true, true, "Your wallet has no FIL."],
+    [0n, false, true, "Your wallet does not have enough FIL for fees."],
+    [1n, false, true, "Your wallet does not have enough FIL for fees."],
+    [250_000_000_000_000_000n, false, false, "You already have FIL for fees."],
+    [0n, true, true, "Your wallet does not have enough FIL for fees."],
   ])("defaults the FIL option from destination balance %s (error: %s)", async (balance, isError, checked, hint) => {
     query.recipientFil = balance;
     query.recipientFilIsError = isError;
@@ -555,6 +556,19 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(text.includes("+ 0.05 FIL for network fees")).toBe(checked);
   });
 
+  it("keeps a funded wallet funded while the FIL balance refetches in the background", async () => {
+    query.recipientFil = 250_000_000_000_000_000n;
+    query.recipientFilIsFetching = true;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+
+    const text = JSON.stringify(renderer.toJSON());
+    expect(text).toContain("You already have FIL for fees.");
+    expect(text).not.toContain("does not have enough FIL");
+  });
+
   it("waits for a fresh destination balance before defaulting from cached data", async () => {
     query.recipientFil = 0n;
     query.recipientFilIsFetching = true;
@@ -568,7 +582,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
     expect(query.quoteEnabled).toBe(false);
 
-    query.recipientFil = 1n;
+    query.recipientFil = 250_000_000_000_000_000n;
     query.recipientFilIsFetching = false;
     await act(async () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
