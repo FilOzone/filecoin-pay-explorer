@@ -1,14 +1,17 @@
 import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { Abi, Hex, TransactionReceipt } from "viem";
-import { usePublicClient, useWriteContract } from "wagmi";
+import type { Abi, Address, Hex, TransactionReceipt } from "viem";
+import { useConfig, usePublicClient, useWriteContract } from "wagmi";
+import { getAccount } from "wagmi/actions";
 import type { TransactionMetadata } from "@/types";
 import { getToastContent } from "@/utils/toast";
 
 interface UseContractTransactionOptions {
-  contractAddress: Hex;
+  account?: Address;
+  contractAddress: Address;
   abi: Abi;
+  chainId?: number;
   explorerUrl?: string;
 }
 
@@ -34,11 +37,12 @@ interface ExecuteTransactionParams {
  * callbacks (its loading toast never resolved).
  */
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
-  const { contractAddress, abi, explorerUrl } = options;
+  const { account, contractAddress, abi, chainId, explorerUrl } = options;
 
   const [inFlightCount, setInFlightCount] = useState(0);
+  const config = useConfig();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId });
 
   const explorerAction = (txHash: Hex) =>
     explorerUrl
@@ -64,9 +68,19 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
     onReverted,
   }: ExecuteTransactionParams) => {
     try {
+      const connected = getAccount(config);
+      if (account && connected.address?.toLowerCase() !== account.toLowerCase()) {
+        throw new Error("The connected wallet changed. Review the transaction and try again.");
+      }
+      if (chainId !== undefined && connected.chainId !== chainId) {
+        throw new Error("The connected network changed. Switch back, review the transaction, and try again.");
+      }
+
       const txHash = await writeContractAsync({
+        account,
         address: contractAddress,
         abi,
+        chainId,
         functionName,
         args,
         value,

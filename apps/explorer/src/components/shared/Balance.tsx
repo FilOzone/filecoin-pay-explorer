@@ -18,6 +18,7 @@ import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
@@ -29,6 +30,7 @@ const Balance = () => {
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
   const { action: exitAction, exit } = useWalletExit(activeWallet);
   const [copied, setCopied] = useState(false);
+  const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
     query: { enabled: !!address },
@@ -121,6 +123,9 @@ const Balance = () => {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Tools</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => openAddFunds()} className='cursor-pointer'>
+          <span className='text-base text-zinc-950'>Add funds</span>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
