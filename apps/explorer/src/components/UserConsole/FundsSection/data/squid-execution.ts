@@ -1,13 +1,5 @@
-import {
-  executeSquidFunding,
-  SQUID_ROUTER_ADDRESS,
-  type SquidExecutionResult,
-  type SquidFundingPlan,
-  type SquidPublicClient,
-  type SquidWalletClient,
-} from "@filecoin-project/squid-evm-funding";
-import type { Hash } from "viem";
-import type { SquidAcquisitionExecutionStage } from "./squid-acquisition";
+import type { Address, Hex, PublicClient } from "viem";
+import { estimateL1Fee } from "viem/op-stack";
 
 const OP_STACK_CHAIN_IDS = new Set([10, 8453]);
 const OP_STACK_FEE_BUFFER_BPS = 12_000n;
@@ -17,67 +9,43 @@ export function applyNetworkFeeExecutionBuffer(chainId: number, fee: bigint): bi
   return OP_STACK_CHAIN_IDS.has(chainId) ? (fee * OP_STACK_FEE_BUFFER_BPS + BPS - 1n) / BPS : fee;
 }
 
-export async function executeSquidTopUp({
-  destinationClient,
-  integratorId,
-  maxNativeFee,
-  maxTotalNativeRouteFee,
-  onSwapAttempt,
-  onSwapBroadcast,
-  plan,
-  sourcePublicClient,
-  sourceWalletClient,
-}: {
-  destinationClient: SquidPublicClient;
-  integratorId: string;
-  maxNativeFee: bigint;
-  maxTotalNativeRouteFee: bigint;
-  onSwapAttempt?: () => void;
-  onSwapBroadcast?: (transactionHash: Hash) => void;
-  plan: SquidFundingPlan;
-  sourcePublicClient: SquidPublicClient;
-  sourceWalletClient: SquidWalletClient;
-}): Promise<SquidExecutionResult> {
-  const trackedWalletClient = {
-    ...sourceWalletClient,
-    sendTransaction: async (...args: Parameters<SquidWalletClient["sendTransaction"]>) => {
-      const [request] = args;
-      const isSwap = request.to?.toLowerCase() === SQUID_ROUTER_ADDRESS.toLowerCase();
-      if (isSwap) onSwapAttempt?.();
-      const transactionHash = await sourceWalletClient.sendTransaction(...args);
-      if (isSwap) onSwapBroadcast?.(transactionHash);
-      return transactionHash;
-    },
-  } as SquidWalletClient;
-
-  return executeSquidFunding(
-    {
-      feeMode: OP_STACK_CHAIN_IDS.has(plan.source.chainId) ? "op-stack" : "standard",
-      maxNativeFee,
-      maxTotalNativeRouteFee,
-      maxPollAttempts: 30,
-      opStackFeeBuffer: OP_STACK_CHAIN_IDS.has(plan.source.chainId)
-        ? (fee) => applyNetworkFeeExecutionBuffer(plan.source.chainId, fee)
-        : undefined,
-      plan,
-      pollIntervalMs: 10_000,
-      trustedSpender: SQUID_ROUTER_ADDRESS,
-      trustedTarget: SQUID_ROUTER_ADDRESS,
-    },
-    {
-      destinationClient,
-      publicClient: sourcePublicClient,
-      squid: { integratorId },
-      walletClient: trackedWalletClient,
-    },
-  );
+export function isOpStackChain(chainId: number): boolean {
+  return OP_STACK_CHAIN_IDS.has(chainId);
 }
 
-export function canClearSquidAcquisitionAfterError(
-  executionStage: SquidAcquisitionExecutionStage | undefined,
-  error: unknown,
-): boolean {
-  return executionStage === "preparing" || (executionStage === "swap-requested" && isUserRejectedRequest(error));
+/**
+ * Total native cost of one OP Stack transaction: the L1 data fee the gas
+ * price oracle quotes for its calldata, plus its gas at the fee per gas it
+ * will be sent with. viem's own total-fee helper re-simulates the call and
+ * prices it at the legacy gas price, which both fails for a sender without
+ * gas money and disagrees with what is actually sent.
+ */
+export async function estimateOpStackTotalFee(
+  client: Pick<PublicClient, "readContract"> & { chain?: PublicClient["chain"] },
+  request: {
+    account: Address;
+    to: Address;
+    data: Hex;
+    value: bigint;
+    gas: bigint;
+    maxFeePerGas?: bigint;
+    gasPrice?: bigint;
+  },
+): Promise<bigint> {
+  const perGas = request.maxFeePerGas ?? request.gasPrice;
+  if (perGas === undefined) throw new Error("Complete execution fee is unavailable");
+  // The oracle address comes from the client's chain; viem's generics want it restated.
+  const l1Fee = await estimateL1Fee(
+    client as unknown as Parameters<typeof estimateL1Fee>[0],
+    {
+      account: request.account,
+      to: request.to,
+      data: request.data,
+      value: request.value,
+      chain: client.chain,
+    } as Parameters<typeof estimateL1Fee>[1],
+  );
+  return l1Fee + request.gas * perGas;
 }
 
 export function isUserRejectedRequest(error: unknown): boolean {
@@ -94,7 +62,19 @@ export function isUserRejectedRequest(error: unknown): boolean {
   return false;
 }
 
+const MAX_ERROR_MESSAGE_LENGTH = 240;
+
+/**
+ * What the dialog shows for a failure. viem errors carry the whole request
+ * (calldata included) in `message`; their `shortMessage` and `details` say
+ * what happened, which is all a reader needs.
+ */
 export function walletErrorMessage(error: unknown, fallback: string): string {
   if (isUserRejectedRequest(error)) return "Transaction cancelled in your wallet.";
-  return error instanceof Error ? error.message : fallback;
+  if (!(error instanceof Error)) return fallback;
+  const short = "shortMessage" in error && typeof error.shortMessage === "string" ? error.shortMessage : undefined;
+  const details = "details" in error && typeof error.details === "string" ? error.details.trim() : "";
+  let message = error.message;
+  if (short) message = details && !short.includes(details) ? `${short} ${details}` : short;
+  return message.length > MAX_ERROR_MESSAGE_LENGTH ? `${message.slice(0, MAX_ERROR_MESSAGE_LENGTH - 1)}…` : message;
 }

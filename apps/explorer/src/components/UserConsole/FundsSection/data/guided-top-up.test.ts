@@ -1,6 +1,7 @@
 import { NATIVE_TOKEN_ADDRESS, type SquidFundingPlan } from "@filecoin-project/squid-evm-funding";
 import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { getAddress } from "viem";
+import { describe, expect, it, vi } from "vitest";
 import {
   getBridgeNativeFee,
   getMaximumBridgeNativeFee,
@@ -91,6 +92,24 @@ describe("guided top-up", () => {
       true,
     ]);
     expect(queryClient.getQueryState(unaffectedKey)?.isInvalidated).toBe(false);
+  });
+
+  it("invalidates checksummed account aliases only once", async () => {
+    vi.useFakeTimers();
+    try {
+      const queryClient = new QueryClient();
+      const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+      const accountOwner = getAddress("0xabcdef0000000000000000000000000000000001");
+
+      await invalidateTopUpQueries(queryClient, accountOwner.toLowerCase(), accountOwner);
+
+      expect(
+        invalidateQueries.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === "readContract"),
+      ).toHaveLength(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("derives the reviewed gas cap from source type and the current allowance", () => {

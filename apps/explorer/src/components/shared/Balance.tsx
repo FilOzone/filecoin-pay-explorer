@@ -8,21 +8,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@filecoin-pay/ui/components/dropdown-menu";
-import { ArrowUpRightIcon, Check, Copy, LogOut, Wallet } from "lucide-react";
+import { useExportWallet, useWallets } from "@privy-io/react-auth";
+import { ArrowUpRightIcon, Check, Copy, KeyRound, LogOut, Wallet } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useDisconnect, useReadContract, useWalletClient } from "wagmi";
+import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
+import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
+import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
+import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
+import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
   const { constants } = useSynapse();
   const { address } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
+  const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
+  const { action: exitAction, exit } = useWalletExit(activeWallet);
+  const { exportWallet } = useExportWallet();
+  // Privy creates a separate embedded wallet per app for the same login, so the key is the only way to carry it elsewhere.
+  const canExportKey = activeWallet !== undefined && isPrivyEmbeddedWallet(activeWallet);
   const [copied, setCopied] = useState(false);
+  const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
     query: { enabled: !!address },
@@ -64,21 +76,42 @@ const Balance = () => {
     }
   };
 
+  const exportKey = async () => {
+    if (!activeWallet) return;
+    try {
+      await exportWallet({ address: activeWallet.address });
+    } catch (error) {
+      toast.error("Unable to export the wallet key", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
+  const exitWallet = async () => {
+    try {
+      await exit();
+    } catch (error) {
+      toast.error(exitAction === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline' className='w-full justify-start md:w-fit'>
-          <div className='flex items-center gap-3'>
-            <Wallet className='size-4 text-zinc-500' />
+        <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <Wallet className='size-4 text-muted-foreground' />
             {isLoading ? (
               "Loading..."
             ) : (
               <>
-                <span className='text-sm font-mono'>{address && formatAddress(address)}</span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='truncate text-sm font-mono'>{address && formatAddress(address)}</span>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
                 </span>
-                <span className='flex items-center gap-1.5 text-sm'>
+                <span className='hidden items-center gap-1.5 text-sm sm:flex'>
                   <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
                 </span>
               </>
@@ -87,6 +120,17 @@ const Balance = () => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className='w-64' align='start'>
+        {/* The trigger hides these figures below `sm` to fit the phone header, so the menu carries them instead. */}
+        <DropdownMenuLabel className='text-zinc-600 py-2 sm:hidden'>Balances</DropdownMenuLabel>
+        <div className='flex flex-col gap-1 px-2 pb-2 text-sm text-zinc-950 sm:hidden'>
+          <span className='flex items-center gap-1.5'>
+            <FilecoinLogo className='size-4' /> {tFilBalanceFormatted}
+          </span>
+          <span className='flex items-center gap-1.5'>
+            <USDFCLogo className='size-4' /> {usdfcBalanceFormatted}
+          </span>
+        </div>
+        <DropdownMenuSeparator className='sm:hidden' />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}
@@ -97,12 +141,21 @@ const Balance = () => {
           <span className='text-base text-zinc-950 font-mono'>{address && formatAddress(address)}</span>
           {copied && <Check className='text-green-500 ml-auto' />}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => disconnect()} className='cursor-pointer py-2'>
+        {canExportKey ? (
+          <DropdownMenuItem onClick={() => void exportKey()} className='cursor-pointer py-2'>
+            <KeyRound />
+            <span className='text-base text-zinc-950'>Export key</span>
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem onClick={() => void exitWallet()} className='cursor-pointer py-2'>
           <LogOut />
-          <span className='text-base text-zinc-950'>Disconnect</span>
+          <span className='text-base text-zinc-950'>{WALLET_EXIT_LABEL[exitAction]}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className='text-zinc-600 py-2'>Tools</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => openAddFunds()} className='cursor-pointer'>
+          <span className='text-base text-zinc-950'>Add funds</span>
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>

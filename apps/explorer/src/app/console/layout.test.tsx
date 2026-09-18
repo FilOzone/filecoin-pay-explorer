@@ -10,8 +10,27 @@ vi.mock("@/components/shared/Balance", () => ({ default: () => <span>Filecoin ba
 vi.mock("@/components/shared/ChainSwitcher", () => ({ default: () => <span>Filecoin network</span> }));
 
 describe("console access and continuity", () => {
+  it("does not expose a default-chain console while the selected wallet reconnects", () => {
+    expect(
+      getConsoleAccessState({
+        isConnected: true,
+        isReconnecting: true,
+        hasAddress: true,
+        chainId: 314159,
+      }),
+    ).toBe("reconnecting");
+  });
+
   it("keeps the console page mounted on a Squid source chain", () => {
     expect(getConsoleAccessState({ isConnected: true, hasAddress: true, chainId: 8453 })).toBe("squid-source");
+  });
+
+  it("admits a Squid source chain only while a top-up is in progress", () => {
+    // Every console route derives its network from the wallet chain, and an
+    // unrecognized chain falls back to the default. Admitting a Squid chain
+    // outside the top-up flow would serve the wrong network's data.
+    expect(getConsoleDisplayAccessState("squid-source", false)).not.toBe("ready");
+    expect(getConsoleDisplayAccessState("squid-source", true)).toBe("ready");
   });
 
   it("continues to reject unrelated unsupported chains", () => {

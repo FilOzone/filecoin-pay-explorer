@@ -1,5 +1,6 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
+import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
@@ -7,6 +8,7 @@ import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
+import { FundingHost } from "@/components/UserConsole/FundingHost";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
@@ -15,21 +17,26 @@ import { type ConsoleAccessState, getConsoleAccessState, getConsoleDisplayAccess
 
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
+    case "reconnecting":
+      return <LoadingStateCard message='Connecting your wallet...' />;
     case "not-connected":
       return <NotConnected />;
     case "unsupported-chain":
-      return <UnsupportedChain />;
+    // A Squid source chain only reaches here with no top-up in progress:
+    // getConsoleDisplayAccessState reports an active one as "ready".
     case "squid-source":
+      return <UnsupportedChain />;
     case "ready":
       return children;
   }
 };
 
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
-  const { address, isConnected, chainId } = useConnection();
+  const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { isTopUpActive } = useTopUpActivity();
   const walletAccessState = getConsoleAccessState({
     isConnected,
+    isReconnecting,
     hasAddress: Boolean(address),
     chainId,
   });
@@ -54,6 +61,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
+            <FundingHost />
           </div>
         </Container>
       </div>
