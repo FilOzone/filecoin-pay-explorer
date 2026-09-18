@@ -9,6 +9,16 @@ import { formatToken } from "@/utils/formatter";
 import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { getToastContent } from "@/utils/toast";
 
+/** wagmi raises ConnectorChainMismatchError and viem ChainMismatchError, possibly wrapped, when the wallet is on another chain. */
+function isChainMismatch(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
+    if (current.name.endsWith("ChainMismatchError")) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
 interface RailSettlementState {
   railId: string;
   txHash?: Hex;
@@ -17,8 +27,12 @@ interface RailSettlementState {
 }
 
 interface UseRailSettlementsOptions {
+  account?: Hex;
   contractAddress: Hex;
   abi: Abi;
+  chainId: number;
+  /** Named in the error toast when the wallet is on another network. */
+  chainName?: string;
   explorerUrl?: string;
   onSettlementSuccess?: (railId: string, receipt: TransactionReceipt) => void;
   onSettlementError?: (railId: string, error: Error) => void;
@@ -33,7 +47,8 @@ export interface SettleRailParams {
 }
 
 export const useRailSettlements = (options: UseRailSettlementsOptions) => {
-  const { contractAddress, abi, explorerUrl, onSettlementSuccess, onSettlementError } = options;
+  const { account, contractAddress, abi, chainId, chainName, explorerUrl, onSettlementSuccess, onSettlementError } =
+    options;
 
   const [settlements, setSettlements] = useState<Map<string, RailSettlementState>>(new Map());
   const [pendingTxHashes, setPendingTxHashes] = useState<Set<Hex>>(new Set());
@@ -54,6 +69,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
     isError,
     error,
   } = useWaitForTransactionReceipt({
+    chainId,
     hash: currentPendingTx,
     query: {
       enabled: !!currentPendingTx,
@@ -153,8 +169,10 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         );
 
         const txHash = await writeContractAsync({
+          account,
           address: contractAddress,
           abi,
+          chainId,
           functionName: "settleRail",
           args: [railId, untilEpoch],
         });
@@ -193,7 +211,11 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         // Dismiss the loading toast and show error
         toast.dismiss(settlement?.toastId);
         toast.error("Settlement Rejected", {
-          description: "Transaction was rejected. Please try again.",
+          // A write pinned to the displayed chain fails while the wallet sits on another network,
+          // for example Base after a Squid deposit; retrying cannot help until the wallet switches.
+          description: isChainMismatch(err)
+            ? `Your wallet is on another network. Switch it to ${chainName ?? "the displayed Filecoin network"} and try again.`
+            : "Transaction was rejected. Please try again.",
           duration: 4000,
         });
 
@@ -207,7 +229,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         throw err;
       }
     },
-    [contractAddress, abi, writeContractAsync],
+    [account, contractAddress, abi, chainId, chainName, writeContractAsync],
   );
 
   const isSettling = useCallback(
