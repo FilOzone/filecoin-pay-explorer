@@ -8,7 +8,7 @@ import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
-import { TopUpDialogController } from "./FundsSection/TopUpDialogController";
+import { DirectSquidDepositDialog } from "./FundsSection/components/DirectSquidDepositDialog";
 
 export function FundingHost() {
   const { address, chainId } = useConnection();
@@ -19,13 +19,14 @@ export function FundingHost() {
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
+  const [isSquidOpen, setSquidOpen] = useState(false);
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
   const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
   const network = getNetworkFromChainId(chainId);
   const isMainnet = isFilecoinChain && network === "mainnet";
   const isCalibration = isFilecoinChain && network === "calibration";
   const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
-  // The effect below closes every dialog after a chain change, but that runs one
+  // The effect below closes Filecoin-network dialogs after a chain change, but that runs one
   // render late. Comparing against the last committed chain id keeps the dialogs
   // closed during that render so nothing reopens on the new network.
   const previousChainId = useRef(chainId);
@@ -60,29 +61,24 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   if (!isMainnet && !isSquidSourceChain) return depositDialog;
 
-  return (
-    <TopUpDialogController accountId={address.toLowerCase()}>
-      {(openTopUp) => {
-        const chooseMethod = (method: AddFundsMethod) => {
-          launch.closeAddFunds();
-          if (method === "squid") openTopUp();
-          else setDepositOpen(true);
-        };
+  const chooseMethod = (method: AddFundsMethod) => {
+    launch.closeAddFunds();
+    if (method === "squid") setSquidOpen(true);
+    else setDepositOpen(true);
+  };
 
-        return (
-          <>
-            {isMainnet ? (
-              <AddFundsDialog
-                onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
-                onSelect={chooseMethod}
-                open={!chainChanged && launch.isAddFundsOpen}
-                squidAvailable
-              />
-            ) : null}
-            {depositDialog}
-          </>
-        );
-      }}
-    </TopUpDialogController>
+  return (
+    <>
+      {isMainnet ? (
+        <AddFundsDialog
+          onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
+          onSelect={chooseMethod}
+          open={!chainChanged && launch.isAddFundsOpen}
+          squidAvailable
+        />
+      ) : null}
+      {depositDialog}
+      <DirectSquidDepositDialog accountId={address.toLowerCase()} onOpenChange={setSquidOpen} open={isSquidOpen} />
+    </>
   );
 }
