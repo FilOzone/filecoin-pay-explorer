@@ -30,7 +30,7 @@ export const ConsoleNavDrawer = () => {
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant='ghost' size='icon' aria-label='Open console navigation'>
+        <Button variant='ghost' size='icon' className='pointer-coarse:size-11' aria-label='Open console navigation'>
           <Menu className='size-6' />
         </Button>
       </SheetTrigger>

@@ -23,12 +23,16 @@ const ChainSwitcher = ({ chainId }: ChainSwitcherProps) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='outline' className='w-full justify-between md:w-fit'>
+        <Button
+          aria-label={`Switch network, current network ${currentChain.label}`}
+          variant='outline'
+          className='shrink-0 justify-between'
+        >
           <span className='flex items-center gap-2'>
-            <Globe className='size-4 text-zinc-500' />
-            {currentChain.label}
+            <Globe className='size-4 text-muted-foreground' />
+            <span className='hidden sm:inline'>{currentChain.label}</span>
           </span>
-          <ChevronDown className='size-4 text-zinc-500' />
+          <ChevronDown className='size-4 text-muted-foreground' />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>
