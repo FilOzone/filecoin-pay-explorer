@@ -35,6 +35,9 @@ import {
 
 export type SquidDepositStage = "approving" | "swap-requested" | "swap-broadcast" | "bridging" | "verifying";
 
+/** Which of this run's source-network signatures a stage is waiting for; `index` counts from 0. */
+export type SquidDepositSignature = { kind: SquidDepositTransactionKind; index: number; total: number };
+
 /** A route this close to its expiry is not sent: the wallet prompt and the broadcast take time too. */
 export const ROUTE_EXPIRY_MARGIN_SECONDS = 30;
 
@@ -135,7 +138,8 @@ export interface ExecuteSquidDepositInput extends PollingOptions {
   getCurrentOwner(): Promise<Address | undefined>;
   /** Fails when recipient, source wallet, chain or token no longer match the reviewed screen. */
   assertCurrentContext(): void;
-  onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
+  /** Signature stages carry their place in the plan so the UI can number them. */
+  onStage?: (stage: SquidDepositStage, transactionHash?: Hash, signature?: SquidDepositSignature) => void;
   /** Persists a durable marker synchronously before asking the wallet to submit the route. */
   onSwapAttempt?: (fundsBefore: bigint, quote: ExecutableSquidDepositQuote) => void;
   /** Fires once the route is broadcast, with what a resume needs to finish it. */
@@ -566,17 +570,17 @@ export async function executeSquidDeposit({
     await assertPlanWithinReview({ allowance, maxNativeFee, quote, request, sourceClient, spender, walletClient });
     if (allowance !== request.sourceAmount) {
       const plan = getDepositTransactionKinds(request.sourceToken, request.sourceAmount, allowance);
-      onStage?.("approving");
       // USDC accepts a direct overwrite, but USDT-style tokens revert unless a
       // non-zero allowance is zeroed first; one path keeps the plan the same for
       // every source token at the price of a third signature on a stale allowance.
       for (const amount of allowance > 0n ? [0n, request.sourceAmount] : [request.sourceAmount]) {
+        const kind = amount === 0n ? "reset" : "approve";
+        onStage?.("approving", undefined, { kind, index: completed.length, total: plan.length });
         const approval = await prepareTransaction(sourceClient, walletClient, request.sourceChainId, {
           to: request.sourceToken,
           data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
           value: 0n,
         });
-        const kind = amount === 0n ? "reset" : "approve";
         assertFeeWithinReview(
           { completed, feeSoFar: totalNativeFee, remaining: plan.slice(completed.length) },
           approval.fee,
@@ -652,7 +656,7 @@ export async function executeSquidDeposit({
   });
   assertNativeBalance(nativeBalance, route.fee, routeQuote.transaction.value);
   if (isRouteExpiring(routeQuote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
-  onStage?.("swap-requested");
+  onStage?.("swap-requested", undefined, { kind: "route", index: completed.length, total: completed.length + 1 });
   onSwapAttempt?.(fundsBefore, routeQuote);
   const transactionHash = await walletClient.sendTransaction({
     ...route.request,

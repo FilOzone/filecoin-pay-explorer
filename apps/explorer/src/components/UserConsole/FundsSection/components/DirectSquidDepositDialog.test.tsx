@@ -287,7 +287,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.recipientFilIsFetching = false;
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
-    wallet.switchChain.mockClear();
+    wallet.switchChain.mockReset().mockResolvedValue(undefined);
     topUp.setActive.mockClear();
     vi.stubGlobal("navigator", {
       locks: {
@@ -710,6 +710,36 @@ describe("DirectSquidDepositDialog safety integration", () => {
     });
   });
 
+  it("shows the token to USDFC rate on the quote stage and the review card", async () => {
+    const destinationAmount = query.quote.destinationAmount;
+    query.quote.destinationAmount = 94_000_000_000_000_000_000n;
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      await act(async () => {
+        amountInput(renderer).props.onChange({ target: { value: "100" } });
+      });
+      const rateLine = () => {
+        const label = renderer.root.findAllByType("span").find((node) => node.children.join("") === "Rate:");
+        return label?.parent?.children
+          .map((child) => (typeof child === "string" ? child : child.children.join("")))
+          .join("");
+      };
+
+      // 100 USDC buys 94 USDFC plus the 0.125 USDFC spent on the FIL top-up.
+      expect(rateLine()).toBe("Rate: 1 USDC ≈ 0.9413 USDFC (1 USDFC ≈ 1.062 USDC)");
+
+      await act(async () => {
+        button(renderer, "Review")?.props.onClick();
+      });
+      expect(rateLine()).toBe("Rate: 1 USDC ≈ 0.9413 USDFC (1 USDFC ≈ 1.062 USDC)");
+    } finally {
+      query.quote.destinationAmount = destinationAmount;
+    }
+  });
+
   it("cannot review while the gas budget is unavailable", async () => {
     query.budgetIsError = true;
     let renderer!: ReactTestRenderer;
@@ -808,6 +838,68 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
   });
 
+  it("shows the deposit as numbered steps while it runs, with the approval only when signed", async () => {
+    query.allowance = 0n;
+    let onStage!: ExecuteSquidDepositInput["onStage"];
+    let finishExecution!: () => void;
+    state.execute.mockImplementationOnce(
+      (input: ExecuteSquidDepositInput) =>
+        new Promise<never>((_, reject) => {
+          onStage = input.onStage;
+          finishExecution = () => reject(new Error("stopped"));
+        }),
+    );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    const steps = () =>
+      renderer.root
+        .findByProps({ "aria-label": "Squid deposit progress" })
+        .findAllByType("li")
+        .map((item) => item.findAllByType("span").at(-1)?.children.join(""));
+    const instruction = () =>
+      renderer.root.findByProps({ "aria-label": "Squid deposit progress" }).findAllByType("p")[0]?.children.join("");
+
+    expect(steps()).toEqual([
+      "Prepare the route",
+      "Confirm the swap",
+      "Source network confirms",
+      "Bridge and deposit",
+      "Confirm balance",
+    ]);
+    expect(instruction()).toBe("Preparing the route…");
+    expect(button(renderer, "Pay 100 USDC")).toBeUndefined();
+
+    await act(async () => onStage?.("approving", undefined, { kind: "approve", index: 0, total: 2 }));
+    expect(steps()).toEqual([
+      "Prepare the route",
+      "Approve USDC",
+      "Confirm the swap",
+      "Source network confirms",
+      "Bridge and deposit",
+      "Confirm balance",
+    ]);
+    expect(instruction()).toBe("Step 1 of 2: approve USDC in your wallet");
+
+    await act(async () => onStage?.("swap-requested", undefined, { kind: "route", index: 1, total: 2 }));
+    expect(instruction()).toBe("Step 2 of 2: confirm the swap in your wallet");
+
+    await act(async () => onStage?.("swap-broadcast", ROUTE_HASH));
+    const links = renderer.root
+      .findByProps({ "aria-label": "Squid deposit progress" })
+      .findAllByType("a")
+      .map((link) => [link.children.join(""), link.props.href]);
+    expect(links).toEqual([
+      ["Source transaction", `https://basescan.org/tx/${ROUTE_HASH}`],
+      ["Squid route / add gas", `https://axelarscan.io/gmp/${ROUTE_HASH}`],
+    ]);
+
+    await act(async () => finishExecution());
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0);
+  });
+
   it("executes once when Pay is clicked twice", async () => {
     let finishExecution!: () => void;
     state.execute.mockImplementationOnce(
@@ -884,6 +976,109 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     state.requestRoute.mockResolvedValueOnce({ ...query.quote, sourceAmount: 1n });
     await expect(input.refreshQuote?.()).rejects.toThrow("The source spend changed after review");
+  });
+
+  it("keeps the review, and a failure's message, when Privy re-emits the same wallets", async () => {
+    state.execute.mockRejectedValueOnce(new Error("The Squid route expired. Refresh the quote."));
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe(
+      "The Squid route expired. Refresh the quote.",
+    );
+
+    // A chain switch makes Privy publish a new array holding the same wallet.
+    connectedWallets.current = [{ ...wallet }];
+    try {
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      expect(renderer.root.findAllByProps({ "aria-label": "Reviewed Squid deposit" })).toHaveLength(1);
+      expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe(
+        "The Squid route expired. Refresh the quote.",
+      );
+      expect(button(renderer, "Pay 100 USDC")?.props.disabled).toBe(false);
+    } finally {
+      connectedWallets.current = [wallet];
+    }
+  });
+
+  it("keeps the progress view up until the dialog closes after a successful deposit", async () => {
+    let settle!: () => void;
+    state.execute.mockImplementationOnce(
+      (input: ExecuteSquidDepositInput) =>
+        new Promise((resolve) => {
+          input.onStage?.("verifying", ROUTE_HASH);
+          settle = () =>
+            resolve({
+              depositedAmount: 92n,
+              destinationTransactionHash: ROUTE_HASH,
+              transactionHash: ROUTE_HASH,
+            });
+        }),
+    );
+    // The return to Filecoin takes a real round trip, during which React paints whatever state is current.
+    wallet.switchChain.mockImplementation(
+      () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 0)),
+    );
+    let renderer!: ReactTestRenderer;
+    const viewsAtClose: string[] = [];
+    const onOpenChange = vi.fn((open: boolean) => {
+      if (open) return;
+      const progress = renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" }).length;
+      const review = renderer.root.findAllByProps({ "aria-label": "Reviewed Squid deposit" }).length;
+      if (progress) viewsAtClose.push("progress");
+      else if (review) viewsAtClose.push("review");
+      else viewsAtClose.push("form");
+    });
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(1);
+
+    // Settled outside act so the intermediate renders happen as they would in the browser.
+    settle();
+    await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    expect(viewsAtClose).toEqual(["progress"]);
+    // The progress view rides out the close animation, and the next open starts on the form.
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open={false} />);
+    });
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(1);
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0);
+    expect(amountInput(renderer)).toBeDefined();
+  });
+
+  it("returns to the form with the error when the wallet refuses the switch back after a deposit", async () => {
+    state.execute.mockResolvedValueOnce({
+      depositedAmount: 92n,
+      destinationTransactionHash: ROUTE_HASH,
+      transactionHash: ROUTE_HASH,
+    });
+    // The switch to Base goes through; the switch back to Filecoin is refused.
+    wallet.switchChain.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Switch refused"));
+    const onOpenChange = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenLastCalledWith(314));
+    await vi.waitFor(() =>
+      expect(renderer.root.findAllByProps({ "aria-label": "Squid deposit progress" })).toHaveLength(0),
+    );
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe("Switch refused");
+    // The review survives here because the mocked account never leaves Filecoin; the footer is usable again.
+    expect(button(renderer, "Back")?.props.disabled).toBe(false);
   });
 
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {
