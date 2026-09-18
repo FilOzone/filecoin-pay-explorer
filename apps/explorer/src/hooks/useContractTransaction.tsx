@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -5,6 +6,7 @@ import type { Abi, Address, Hex, TransactionReceipt } from "viem";
 import { useConfig, usePublicClient, useWriteContract } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import type { TransactionMetadata } from "@/types";
+import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { getToastContent } from "@/utils/toast";
 
 interface UseContractTransactionOptions {
@@ -41,6 +43,7 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
   const [inFlightCount, setInFlightCount] = useState(0);
   const config = useConfig();
+  const queryClient = useQueryClient();
   const { writeContractAsync, isPending: isWritePending } = useWriteContract();
   const publicClient = usePublicClient({ chainId });
 
@@ -107,6 +110,9 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
             description: success.description,
             action: explorerAction(txHash),
           });
+          // Every write here moves the account's balances, approvals or rails;
+          // the receipt, not the submission, makes the cached reads stale.
+          void invalidateAccountQueries(queryClient, account ?? receipt.from);
           onConfirmed?.(receipt);
         } catch (caught) {
           const receiptError = caught instanceof Error ? caught : new Error(String(caught));
