@@ -1,7 +1,8 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
-import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
+import { type ReactNode, useState } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
@@ -14,6 +15,8 @@ import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext"
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import { type ConsoleAccessState, getConsoleAccessState, getConsoleDisplayAccessState } from "./console-access";
+
+const AddServiceDialog = dynamic(() => import("@/components/UserConsole/AddServiceDialog"));
 
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
@@ -32,6 +35,7 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
 };
 
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
+  const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
   const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { isTopUpActive } = useTopUpActivity();
   const walletAccessState = getConsoleAccessState({
@@ -48,7 +52,9 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
         walletControls={
           <ConsoleWalletControls accessState={walletAccessState} chainId={chainId} isTopUpActive={isTopUpActive} />
         }
-        navTrigger={displayAccessState === "ready" ? <ConsoleNavDrawer /> : null}
+        navTrigger={
+          displayAccessState === "ready" ? <ConsoleNavDrawer onAddService={() => setIsAddServiceOpen(true)} /> : null
+        }
       />
 
       <div className='flex-1 pt-4 pb-12'>
@@ -57,11 +63,15 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={displayAccessState}>
-              <ConsoleContent accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
+              <ConsoleContent
+                accessState={displayAccessState}
+                sidebar={<ConsoleSidebar onAddService={() => setIsAddServiceOpen(true)} />}
+              >
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
             <FundingHost />
+            {isAddServiceOpen ? <AddServiceDialog open onOpenChange={setIsAddServiceOpen} /> : null}
           </div>
         </Container>
       </div>

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 
-export const ConsoleNavDrawer = () => {
+export const ConsoleNavDrawer = ({ onAddService }: { onAddService: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const previousPathnameRef = useRef(pathname);
@@ -14,6 +14,11 @@ export const ConsoleNavDrawer = () => {
   const closeDrawer = useCallback(() => {
     setIsOpen(false);
   }, []);
+
+  const openAddService = useCallback(() => {
+    closeDrawer();
+    onAddService();
+  }, [closeDrawer, onAddService]);
 
   // Back/forward (including the mobile edge-swipe gesture) changes the route
   // without any click of ours to react to, and the console layout persists
@@ -37,7 +42,7 @@ export const ConsoleNavDrawer = () => {
 
       <SheetContent side='right' className='w-64 px-6 py-16 text-foreground'>
         <SheetTitle className='sr-only'>Console navigation</SheetTitle>
-        <ConsoleSidebar onNavigate={closeDrawer} />
+        <ConsoleSidebar onAddService={openAddService} onNavigate={closeDrawer} />
       </SheetContent>
     </Sheet>
   );
