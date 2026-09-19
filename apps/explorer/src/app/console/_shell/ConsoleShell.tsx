@@ -2,6 +2,7 @@
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
@@ -12,6 +13,7 @@ import { FundingHost } from "@/components/UserConsole/FundingHost";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { trackConsoleView } from "@/utils/funnel-analytics";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
@@ -23,6 +25,8 @@ import {
   type ReadyConnection,
   rememberReadyConnection,
 } from "./console-access";
+
+const AddServiceDialog = dynamic(() => import("@/components/UserConsole/AddServiceDialog"));
 
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
@@ -57,6 +61,8 @@ export const ConsoleShell = ({
   focused?: boolean;
   intro?: ReactNode;
 }) => {
+  const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
+  const { network } = useConsoleNetwork();
   const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { account } = useConsoleAccount();
   const { ready: walletsReady, wallets } = useWallets();
@@ -98,7 +104,11 @@ export const ConsoleShell = ({
         walletControls={
           <ConsoleWalletControls accessState={walletAccessState} chainId={chainId} isTopUpActive={isTopUpActive} />
         }
-        navTrigger={displayAccessState === "ready" && !focused ? <ConsoleNavDrawer /> : null}
+        navTrigger={
+          displayAccessState === "ready" && !focused ? (
+            <ConsoleNavDrawer onAddService={() => setIsAddServiceOpen(true)} />
+          ) : null
+        }
       />
 
       <div className='flex-1 pt-4 pb-12'>
@@ -114,7 +124,7 @@ export const ConsoleShell = ({
               ) : (
                 <div key={account?.address} className='flex gap-8'>
                   <div className='hidden border-r pr-4 lg:flex'>
-                    <ConsoleSidebar />
+                    <ConsoleSidebar onAddService={() => setIsAddServiceOpen(true)} />
                   </div>
                   <div className='min-w-0 flex-1'>{children}</div>
                 </div>
@@ -122,6 +132,7 @@ export const ConsoleShell = ({
             </ConsoleAccessGate>
             {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
             {accountState === "active" ? <FundingHost /> : null}
+            {isAddServiceOpen ? <AddServiceDialog network={network} open onOpenChange={setIsAddServiceOpen} /> : null}
           </div>
         </Container>
       </div>
