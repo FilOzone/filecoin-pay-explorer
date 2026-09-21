@@ -116,7 +116,7 @@ const SidebarServices = ({
           type='button'
           onClick={() => void fetchNextPage()}
           disabled={isFetchingNextPage}
-          className='border-l-2 border-transparent py-2 pl-10 text-left text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+          className='cursor-pointer border-l-2 border-transparent py-2 pl-10 text-left text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
         >
           {isFetchingNextPage ? "Loading..." : "Load more"}
         </button>
@@ -125,7 +125,7 @@ const SidebarServices = ({
       <button
         type='button'
         onClick={onAddService}
-        className='flex items-center gap-2.5 border-l-2 border-transparent py-2 pl-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground'
+        className='flex cursor-pointer items-center gap-2.5 border-l-2 border-transparent py-2 pl-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground'
       >
         <Plus className='size-4' />
         Add service
