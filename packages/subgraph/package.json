@@ -3,7 +3,7 @@
   "version": "1.2.2",
   "description": "A subgraph to index data from payments actor to serve as data layer for frontend integration",
   "private": false,
-  "files": ["build", "schemas", "config", "templates", "README.md"],
+  "files": ["build", "schemas", "config", "templates", "abis", "README.md"],
   "publishConfig": {
     "access": "public"
   },
@@ -16,7 +16,7 @@
     "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
     "prebuild": "pnpm codegen",
     "build": "graph build",
-    "clean": "rm -rf ./generated ./build ./schema.graphql ./subgraph.yaml",
+    "clean": "rm -rf ./generated ./build ./schema.graphql ./subgraph.yaml ./abis",
     "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ filecoin-pay-subgraph",
     "create-local": "graph create --node http://localhost:8020/ filecoin-pay-subgraph",
     "remove-local": "graph remove --node http://localhost:8020/ filecoin-pay-subgraph",
