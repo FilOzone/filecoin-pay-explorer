@@ -3,7 +3,7 @@ import { cn } from "@filecoin-pay/ui/lib/utils";
 import { Bell, BellOff, Compass, KeyRound, Layers, LayoutDashboard, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect } from "react";
+import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
 import { useAccountServices } from "@/hooks/useAccountServices";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
@@ -77,19 +77,14 @@ const SidebarServices = ({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isFetchNextPageError,
-  } = useAccountServices(accountId, { networkOverride: network });
+  } = useAccountServices(accountId, {
+    networkOverride: network,
+  });
   const services = servicesData?.pages.flatMap((page) => page.services) ?? [];
   const profileFor = useServiceProfiles(
     services.map((service) => service.operator.address),
     network,
   );
-
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
-      void fetchNextPage();
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError]);
 
   return (
     <>
@@ -115,6 +110,17 @@ const SidebarServices = ({
           </SidebarLink>
         );
       })}
+
+      {hasNextPage ? (
+        <button
+          type='button'
+          onClick={() => void fetchNextPage()}
+          disabled={isFetchingNextPage}
+          className='border-l-2 border-transparent py-2 pl-10 text-left text-sm text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          {isFetchingNextPage ? "Loading..." : "Load more"}
+        </button>
+      ) : null}
 
       <button
         type='button'

@@ -9,7 +9,6 @@ const state = vi.hoisted(() => ({
   pages: [] as AccountService[][],
   hasNextPage: false,
   isFetchingNextPage: false,
-  isFetchNextPageError: false,
   fetchNextPage: vi.fn(async () => undefined),
 }));
 
@@ -29,7 +28,6 @@ vi.mock("@/hooks/useAccountServices", () => ({
     fetchNextPage: state.fetchNextPage,
     hasNextPage: state.hasNextPage,
     isFetchingNextPage: state.isFetchingNextPage,
-    isFetchNextPageError: state.isFetchNextPageError,
   }),
 }));
 vi.mock("@/hooks/useServiceProfiles", () => ({
@@ -69,7 +67,6 @@ describe("ConsoleSidebar", () => {
     state.pages = [];
     state.hasNextPage = false;
     state.isFetchingNextPage = false;
-    state.isFetchNextPageError = false;
     state.fetchNextPage.mockClear();
   });
 
@@ -102,10 +99,15 @@ describe("ConsoleSidebar", () => {
     expect(onAddService).toHaveBeenCalledOnce();
   });
 
-  it("continues loading service pages for the navigation", async () => {
+  it("loads another service page only when requested", async () => {
     state.hasNextPage = true;
 
-    await renderSidebar();
+    const renderer = await renderSidebar();
+    const loadMore = renderer.root.findAllByType("button").find((item) => item.children.includes("Load more"));
+    if (!loadMore) throw new Error("Missing Load more button");
+
+    expect(state.fetchNextPage).not.toHaveBeenCalled();
+    await act(async () => loadMore.props.onClick());
 
     expect(state.fetchNextPage).toHaveBeenCalledOnce();
   });
