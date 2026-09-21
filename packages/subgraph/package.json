@@ -9,7 +9,8 @@
   },
   "scripts": {
     "lint": "biome check --write",
-    "precodegen": "rm -rf ./generated && pnpm generate:schema && pnpm generate:yaml",
+    "sync-abis": "node scripts/sync-abis.mjs",
+    "precodegen": "rm -rf ./generated && pnpm sync-abis && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
     "generate:yaml": "mustache ./config/${NETWORK:-calibration}.json ./templates/subgraph.template.yaml > subgraph.yaml",
     "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
+    "@filoz/synapse-core": "^0.9.0",
     "assemblyscript": "0.19.23",
     "matchstick-as": "^0.6.0",
     "mustache": "^4.2.0",

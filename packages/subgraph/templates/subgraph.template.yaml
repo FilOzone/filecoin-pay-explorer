@@ -34,9 +34,9 @@ dataSources:
         - Payments
       abis:
         - name: Payments
-          file: ./config/Payments-abi.json
+          file: ./abis/Payments-abi.json
         - name: erc20
-          file: ./config/erc20-abi.json
+          file: ./abis/erc20-abi.json
       eventHandlers:
         - event: RailCreated(indexed uint256,indexed address,indexed address,address,address,address,address,uint256)
           handler: handleRailCreated
@@ -82,7 +82,7 @@ templates:
         - FeeAuctionPurchase
       abis:
         - name: erc20
-          file: ./config/erc20-abi.json
+          file: ./abis/erc20-abi.json
       eventHandlers:
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleFeeAuctionTransfer
