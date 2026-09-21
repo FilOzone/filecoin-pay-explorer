@@ -1,6 +1,8 @@
+import { getChain } from "@/constants/chains";
 import { useAccountService } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
+import { DatasetsSection } from "../DatasetsSection";
 import { RailsSection } from "../RailsSection";
 import {
   ServiceErrorState,
@@ -51,6 +53,9 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
   }
 
   const profile = profileFor(operatorId);
+  // Only one deployment of Warm Storage exists per network, so its FWSS contract
+  // address is what "the operator is Warm Storage" means for this route.
+  const isWarmStorage = operatorId === getChain(network).contracts.fwss.address.toLowerCase();
 
   return (
     <div className='flex flex-col gap-10'>
@@ -66,6 +71,8 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
         totalRails={BigInt(service.totalRails)}
         userAddress={userAddress}
       />
+
+      {isWarmStorage ? <DatasetsSection accountId={accountId} network={network} /> : null}
     </div>
   );
 };
