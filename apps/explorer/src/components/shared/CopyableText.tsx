@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { knownAddresses } from "@/constants/known-addresses";
 import useNetwork from "@/hooks/useNetwork";
+import type { Network } from "@/types";
 import CopyButton from "./CopyButton";
 
 interface CopyableTextProps {
@@ -16,6 +17,8 @@ interface CopyableTextProps {
   linkClassName?: string;
   monospace?: boolean;
   lookupName?: boolean;
+  /** Overrides the shared network context, which /console pages never sync to the wallet's chain. */
+  networkOverride?: Network;
 }
 
 const CopyableText = ({
@@ -29,13 +32,15 @@ const CopyableText = ({
   linkClassName,
   monospace = true,
   lookupName = true,
+  networkOverride,
 }: CopyableTextProps) => {
   const displayValue =
     (lookupName && knownAddresses[value.toLowerCase()]) ||
     (truncate && value.length > truncateLength * 2
       ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
       : value);
-  const { network } = useNetwork();
+  const { network: contextNetwork } = useNetwork();
+  const network = networkOverride ?? contextNetwork;
 
   return (
     <div

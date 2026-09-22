@@ -1,9 +1,11 @@
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import type { DataSet } from "@filecoin-pay/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Info } from "lucide-react";
 import { CopyableText, StyledLink } from "@/components/shared";
 import type { Network } from "@/types";
-import { formatBytes, formatDate, formatToken } from "@/utils/formatter";
+import { formatBytes, formatDate, formatTokenCeiling } from "@/utils/formatter";
 import { monthlyDataSetSpend } from "./monthlySpend";
 
 const columnHelper = createColumnHelper<DataSet>();
@@ -12,7 +14,7 @@ const columnHelper = createColumnHelper<DataSet>();
 const pdpExplorerUrl = (network: Network, dataSetId: bigint) =>
   `https://pdp.filecoin.cloud/${network}/dataset/${dataSetId}`;
 
-export const getDatasetColumns = (network: Network) => [
+export const getDatasetColumns = (network: Network, currentEpoch: bigint | undefined) => [
   columnHelper.accessor("dataSetId", {
     id: "dataSetId",
     header: "ID",
@@ -28,6 +30,7 @@ export const getDatasetColumns = (network: Network) => [
           className='text-sm font-medium'
           value={provider}
           to={`/accounts/${provider}`}
+          networkOverride={network}
           monospace={true}
           label='Provider address'
           truncate={true}
@@ -48,13 +51,26 @@ export const getDatasetColumns = (network: Network) => [
   }),
   columnHelper.display({
     id: "monthlySpend",
-    header: () => <div className='text-right'>Monthly Spend</div>,
+    header: () => (
+      <div className='flex items-center justify-end gap-1.5'>
+        Monthly Spend
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger className='inline-flex items-center cursor-help' aria-label='Explain monthly spend'>
+            <Info className='h-3.5 w-3.5 text-muted-foreground' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='max-w-xs'>
+            Projected cost over the next 30 days at each rail's current rate, not a historical total.
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    ),
     cell: (info) => {
       const dataSet = info.row.original;
       const { token } = dataSet.pdpRail;
+      const monthlySpend = monthlyDataSetSpend(dataSet, currentEpoch);
       return (
         <div className='text-right font-medium text-sm tabular-nums'>
-          {formatToken(monthlyDataSetSpend(dataSet), token.decimals, token.symbol, 4)}
+          {monthlySpend === undefined ? "—" : formatTokenCeiling(monthlySpend, token.decimals, token.symbol, 4)}
         </div>
       );
     },

@@ -31,9 +31,8 @@ export function formatToken(
 }
 
 /**
- * Formats a token amount by truncating to `decimals` fractional digits, computed exactly via
- * BigInt division. Unlike `formatToken`, this never rounds up through a float `Number()`
- * conversion, so the display can't show more than the underlying amount actually is.
+ * Truncates exactly at the displayed precision. Use `formatTokenCeiling` when
+ * projected charges must not be understated.
  */
 export function formatTokenTruncated(
   value: bigint,
@@ -47,6 +46,28 @@ export function formatTokenTruncated(
   const whole = absValue / divisor;
   const fraction = (absValue % divisor).toString().padStart(Number(tokenDecimals), "0").slice(0, decimals);
   const amount = `${whole}.${fraction.padEnd(decimals, "0")}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+  return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
+}
+
+/**
+ * Ceils exactly at the displayed precision. Use `formatTokenTruncated` when
+ * rounding up would overstate an available amount.
+ */
+export function formatTokenCeiling(
+  value: bigint,
+  tokenDecimals: number | bigint,
+  symbol: string = "",
+  decimals: number = 2,
+): string {
+  const precision = 10n ** BigInt(decimals);
+  const divisor = 10n ** BigInt(tokenDecimals);
+  const scaled = value * precision;
+  const ceiling = scaled / divisor + (scaled > 0n && scaled % divisor !== 0n ? 1n : 0n);
+  const negative = ceiling < 0n;
+  const magnitude = negative ? -ceiling : ceiling;
+  const whole = magnitude / precision;
+  const fraction = decimals === 0 ? "" : `.${(magnitude % precision).toString().padStart(decimals, "0")}`;
+  const amount = `${whole}${fraction}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
   return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
 }
 

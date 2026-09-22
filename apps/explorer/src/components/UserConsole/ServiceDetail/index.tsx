@@ -72,7 +72,9 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
         userAddress={userAddress}
       />
 
-      {isWarmStorage ? <DatasetsSection accountId={accountId} network={network} /> : null}
+      {isWarmStorage ? (
+        <DatasetsSection key={`${network}:${accountId}`} accountId={accountId} network={network} />
+      ) : null}
     </div>
   );
 };

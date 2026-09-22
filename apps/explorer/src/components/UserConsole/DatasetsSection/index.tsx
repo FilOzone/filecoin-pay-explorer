@@ -7,6 +7,8 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { useState } from "react";
+import { useBlockNumber } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { useAccountDataSets } from "@/hooks/useAccountDataSets";
 import type { Network } from "@/types";
 import {
@@ -64,6 +66,8 @@ export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, net
 
   const { data, isLoading, isError } = useAccountDataSets(accountId, page, { networkOverride: network });
 
+  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
+
   function renderResults() {
     if (isLoading) {
       return <DatasetsLoadingState />;
@@ -81,7 +85,7 @@ export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, net
 
     return (
       <>
-        <DatasetsTable data={dataSets} network={network} />
+        <DatasetsTable data={dataSets} network={network} currentEpoch={currentEpoch} />
         {page > 1 || data?.hasMore ? (
           <DatasetsPagination page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />
         ) : null}

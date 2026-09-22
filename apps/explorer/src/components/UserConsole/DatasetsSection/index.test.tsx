@@ -13,6 +13,9 @@ vi.mock("@/hooks/useAccountDataSets", () => ({
     return mockUseAccountDataSets();
   },
 }));
+vi.mock("wagmi", () => ({
+  useBlockNumber: () => ({ data: undefined }),
+}));
 vi.mock("./components", () => ({
   DatasetsEmptyState: () => <div>No datasets</div>,
   DatasetsErrorState: () => <div>Failed to load datasets</div>,

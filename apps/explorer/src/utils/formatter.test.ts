@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatFutureTimestamp } from "./formatter";
+import { formatBytes, formatFutureTimestamp, formatTokenCeiling } from "./formatter";
 
 /**
  * Boundary tests for the unit the function picks. The absolute calendar day a
@@ -125,5 +125,12 @@ describe("formatBytes", () => {
 
   it("picks the largest unit the size clears", () => {
     expect(formatBytes(2n * TiB + 512n * GiB)).toBe("2.50 TiB");
+  });
+});
+
+describe("formatTokenCeiling", () => {
+  it("ceils without converting the amount to a number", () => {
+    expect(formatTokenCeiling(1_003_010_000_000_000_000n, 18, "USDFC", 4)).toBe("1.0031 USDFC");
+    expect(formatTokenCeiling(1_003_000_000_000_000_000n, 18, "USDFC", 4)).toBe("1.003 USDFC");
   });
 });
