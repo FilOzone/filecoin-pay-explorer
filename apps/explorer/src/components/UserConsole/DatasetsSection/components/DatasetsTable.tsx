@@ -9,10 +9,11 @@ import { getDatasetColumns } from "../data/columnDefinitions";
 export type DatasetsTableProps = {
   data: DataSet[];
   network: Network;
+  currentEpoch: bigint | undefined;
 };
 
-function DatasetsTable({ data, network }: DatasetsTableProps) {
-  const columns = useMemo(() => getDatasetColumns(network), [network]);
+function DatasetsTable({ data, network, currentEpoch }: DatasetsTableProps) {
+  const columns = useMemo(() => getDatasetColumns(network, currentEpoch), [network, currentEpoch]);
 
   const table = useReactTable({
     data,

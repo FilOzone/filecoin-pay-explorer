@@ -634,6 +634,8 @@ const DATA_SET_ROW_FIELDS = `
     lastWriteAt
     pdpRail {
       paymentRate
+      state
+      endEpoch
       token {
         id
         symbol
@@ -642,9 +644,13 @@ const DATA_SET_ROW_FIELDS = `
     }
     cacheMissRail {
       paymentRate
+      state
+      endEpoch
     }
     cdnRail {
       paymentRate
+      state
+      endEpoch
     }
   }
 `;
