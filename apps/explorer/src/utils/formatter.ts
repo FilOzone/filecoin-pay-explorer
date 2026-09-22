@@ -1,3 +1,4 @@
+import { SIZE_CONSTANTS } from "@filoz/synapse-sdk";
 import { EPOCH_DURATION, UNLIMITED_THRESHOLD } from "./constants";
 
 export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -30,9 +31,8 @@ export function formatToken(
 }
 
 /**
- * Formats a token amount by truncating to `decimals` fractional digits, computed exactly via
- * BigInt division. Unlike `formatToken`, this never rounds up through a float `Number()`
- * conversion, so the display can't show more than the underlying amount actually is.
+ * Truncates exactly at the displayed precision. Use `formatTokenCeiling` when
+ * projected charges must not be understated.
  */
 export function formatTokenTruncated(
   value: bigint,
@@ -46,6 +46,28 @@ export function formatTokenTruncated(
   const whole = absValue / divisor;
   const fraction = (absValue % divisor).toString().padStart(Number(tokenDecimals), "0").slice(0, decimals);
   const amount = `${whole}.${fraction.padEnd(decimals, "0")}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+  return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
+}
+
+/**
+ * Ceils exactly at the displayed precision. Use `formatTokenTruncated` when
+ * rounding up would overstate an available amount.
+ */
+export function formatTokenCeiling(
+  value: bigint,
+  tokenDecimals: number | bigint,
+  symbol: string = "",
+  decimals: number = 2,
+): string {
+  const precision = 10n ** BigInt(decimals);
+  const divisor = 10n ** BigInt(tokenDecimals);
+  const scaled = value * precision;
+  const ceiling = scaled / divisor + (scaled > 0n && scaled % divisor !== 0n ? 1n : 0n);
+  const negative = ceiling < 0n;
+  const magnitude = negative ? -ceiling : ceiling;
+  const whole = magnitude / precision;
+  const fraction = decimals === 0 ? "" : `.${(magnitude % precision).toString().padStart(decimals, "0")}`;
+  const amount = `${whole}${fraction}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
   return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
 }
 
@@ -87,6 +109,22 @@ export const formatFIL = (attoFil: string | bigint) => {
 
   return "0 FIL";
 };
+
+/** Largest unit first, so the first one the size clears is the one it's shown in. */
+const BYTE_UNITS = [
+  { unit: "PiB", size: SIZE_CONSTANTS.PiB },
+  { unit: "TiB", size: SIZE_CONSTANTS.TiB },
+  { unit: "GiB", size: SIZE_CONSTANTS.GiB },
+  { unit: "MiB", size: SIZE_CONSTANTS.MiB },
+  { unit: "KiB", size: SIZE_CONSTANTS.KiB },
+] as const;
+
+export function formatBytes(bytes: bigint, decimals: number = 2): string {
+  if (bytes <= 0n) return "0 B";
+  const match = BYTE_UNITS.find(({ size }) => bytes >= size);
+  if (!match) return `${bytes} B`;
+  return `${(Number(bytes) / Number(match.size)).toFixed(decimals)} ${match.unit}`;
+}
 
 export const isUnlimitedValue = (value: number | string | bigint): boolean => {
   try {
