@@ -35,6 +35,9 @@ vi.mock("../DatasetsSection", () => ({
     return <div data-testid='datasets' data-account-id={accountId} data-mount={mount} />;
   },
 }));
+vi.mock("../StaleQueue", () => ({
+  StaleQueue: () => null,
+}));
 
 afterEach(cleanup);
 

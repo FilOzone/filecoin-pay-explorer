@@ -1,7 +1,7 @@
 import { count, eq } from "drizzle-orm";
 import type { DB } from "../shared/db/client";
 import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
-import { verifiedEmails, walletSubscriptions } from "../shared/db/schema";
+import { mutedDataSets, verifiedEmails, walletSubscriptions } from "../shared/db/schema";
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -141,4 +141,25 @@ export async function deleteSubscription(db: DB, walletAddress: string): Promise
   if (countRows[0]?.remaining === 0) {
     await db.delete(verifiedEmails).where(eq(verifiedEmails.id, sub.verifiedEmailId));
   }
+}
+
+/** Inserts a muted_data_sets row. Muting the same dataset twice is a no-op. */
+export async function muteDataSet(
+  db: DB,
+  data: { id: string; walletAddress: string; dataSetId: string },
+): Promise<void> {
+  const now = nowSeconds();
+  await db
+    .insert(mutedDataSets)
+    .values({ ...data, createdAt: now })
+    .onConflictDoNothing();
+}
+
+/** Returns the dataset ids this wallet has muted inactivity alerts for. */
+export async function findMutedDataSetIds(db: DB, walletAddress: string): Promise<string[]> {
+  const rows = await db
+    .select({ dataSetId: mutedDataSets.dataSetId })
+    .from(mutedDataSets)
+    .where(eq(mutedDataSets.walletAddress, walletAddress));
+  return rows.map((row) => row.dataSetId);
 }
