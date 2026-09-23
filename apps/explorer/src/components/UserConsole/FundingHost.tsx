@@ -1,0 +1,122 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useConnection } from "wagmi";
+import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
+import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
+import { DepositDialog } from "./DepositDialog";
+import { useFundingLaunch } from "./FundingLaunchContext";
+import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
+import {
+  DirectSquidDepositDialog,
+  type SquidDepositInitialSource,
+} from "./FundsSection/components/DirectSquidDepositDialog";
+import { CARD_CHAIN_ID, CARD_USDC, CARD_USDC_DECIMALS, useCardPurchase } from "./FundsSection/hooks/useCardPurchase";
+
+export function FundingHost() {
+  const { address, chainId } = useConnection();
+  if (!address) return null;
+  return <FundingDialogs address={address} chainId={chainId} key={address} />;
+}
+
+function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
+  const launch = useFundingLaunch();
+  const [isDepositOpen, setDepositOpen] = useState(false);
+  const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
+  // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
+  const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
+  const network = getNetworkFromChainId(chainId);
+  const isMainnet = isFilecoinChain && network === "mainnet";
+  const isCalibration = isFilecoinChain && network === "calibration";
+  const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
+  // The effect below closes Filecoin-network dialogs after a chain change, but that runs one
+  // render late. Comparing against the last committed chain id keeps the dialogs
+  // closed during that render so nothing reopens on the new network.
+  const previousChainId = useRef(chainId);
+  const chainChanged = previousChainId.current !== chainId;
+  const { data } = useAccountTokens(address.toLowerCase(), 1, {
+    enabled: isFilecoinChain,
+    networkOverride: network,
+    pageSize: CONSOLE_TOKEN_PAGE_SIZE,
+  });
+  const card = useCardPurchase({
+    address,
+    // The recipient check covers the account; a network switch after buying is not a wallet change.
+    contextKey: address,
+    onPurchased: (amount) => {
+      setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
+      launch.openSquid();
+    },
+  });
+
+  useEffect(() => {
+    previousChainId.current = chainId;
+    setDepositOpen(false);
+    launch.closeAddFunds();
+  }, [chainId, launch.closeAddFunds]);
+
+  // FundingDialogs remounts per address (see the key above), so a Squid dialog left open
+  // by the previous wallet must not carry over into the new one.
+  useEffect(() => launch.closeSquid(), [launch.closeSquid]);
+
+  const handleDepositOpenChange = (open: boolean) => {
+    setDepositOpen(open);
+    if (!open) launch.closeAddFunds();
+  };
+
+  const depositDialog =
+    isMainnet || isCalibration ? (
+      <DepositDialog
+        depositToken={launch.depositToken}
+        key={network}
+        onOpenChange={handleDepositOpenChange}
+        open={!chainChanged && (isDepositOpen || (isCalibration && launch.isAddFundsOpen))}
+        tokens={data?.userTokens ?? []}
+      />
+    ) : null;
+
+  if (!isMainnet && !isSquidSourceChain) return depositDialog;
+
+  const chooseMethod = (method: AddFundsMethod) => {
+    if (method === "card") {
+      // The picker stays open: it shows the purchase status and Start over, and it
+      // refuses to close while the purchase is busy so Privy's modal above it cannot dismiss it.
+      void card.buyWithCard();
+      return;
+    }
+    launch.closeAddFunds();
+    if (method === "squid") launch.openSquid();
+    else setDepositOpen(true);
+  };
+
+  return (
+    <>
+      {isMainnet ? (
+        <AddFundsDialog
+          cardLabel={card.label}
+          cardStatus={card.statusMessage}
+          isBusy={card.isBusy}
+          onCardStartOver={card.canStartOver ? card.startOver : undefined}
+          onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
+          onSelect={chooseMethod}
+          open={!chainChanged && launch.isAddFundsOpen}
+          squidAvailable
+        />
+      ) : null}
+      {depositDialog}
+      <DirectSquidDepositDialog
+        accountId={address.toLowerCase()}
+        initialSource={cardSource}
+        onOpenChange={(open) => {
+          if (open) launch.openSquid();
+          else {
+            launch.closeSquid();
+            setCardSource(undefined);
+          }
+        }}
+        open={launch.isSquidOpen}
+      />
+    </>
+  );
+}

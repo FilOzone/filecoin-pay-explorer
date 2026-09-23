@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { getChain } from "@/constants/chains";
 import { GET_APPROVED_OPERATOR_CLIENTS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { useGraphQLClient } from "./useGraphQLQuery";
@@ -10,10 +11,6 @@ import { useServiceMetadata } from "./useServiceMetadata";
 // dropdown: at least this many distinct paying accounts. Calibration is a
 // testnet with a handful of real payers, so its bar is much lower.
 const MIN_UNIQUE_PAYERS: Record<Network, number> = { mainnet: 11, calibration: 3 };
-
-// Untrusted contract text: a homepage renders only when it looks like a plain
-// URL (no whitespace tricks), and even then as copy-only text, never a link.
-const HOMEPAGE_PATTERN = /^https?:\/\/\S+$/i;
 
 interface ApprovedOperatorClientsResponse {
   operatorApprovals: Array<{
@@ -93,6 +90,7 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
   // land — without this, the dropdown briefly claims there are no services.
   const { metadata, isLoading: isLoadingMetadata } = useServiceMetadata(
     candidates.map((candidate) => candidate.address),
+    getChain(network).id,
   );
 
   const services = useMemo<ApprovableService[]>(
@@ -101,8 +99,7 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
         .flatMap((candidate) => {
           const meta = metadata.get(candidate.address);
           if (!meta?.name) return [];
-          const homepage = meta.homepage && HOMEPAGE_PATTERN.test(meta.homepage) ? meta.homepage : undefined;
-          return [{ ...candidate, name: meta.name, description: meta.description, homepage }];
+          return [{ ...candidate, name: meta.name, description: meta.description, homepage: meta.homepage }];
         })
         .sort((a, b) => b.payerCount - a.payerCount || a.address.localeCompare(b.address)),
     [candidates, metadata],

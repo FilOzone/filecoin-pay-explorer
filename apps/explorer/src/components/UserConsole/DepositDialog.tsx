@@ -31,6 +31,7 @@ import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import { getPermitSignature } from "@/utils/permit";
+import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
 const PERMIT_DEADLINE_SECONDS = 3600;
 
@@ -98,8 +99,10 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   const publicClient = usePublicClient();
 
   const { execute, isExecuting } = useContractTransaction({
+    account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
+    chainId: constants.chain.id,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
 
@@ -216,7 +219,11 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     token: chainToken,
   });
 
-  const { data: balance, isLoading: isLoadingBalance } = useReadContract({
+  const {
+    data: balance,
+    isError: isBalanceError,
+    isLoading: isLoadingBalance,
+  } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
     functionName: "balanceOf",
@@ -281,13 +288,24 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     }
   };
 
+  const parsedDepositAmount = (() => {
+    if (!currentToken || amount === "") return null;
+    try {
+      const parsed = parseUnits(amount, currentToken.decimals);
+      return parsed > 0n ? parsed : null;
+    } catch {
+      return null;
+    }
+  })();
+  const hasInsufficientBalance = parsedDepositAmount !== null && balance !== undefined && parsedDepositAmount > balance;
+
   const handleDeposit = async () => {
     if (!currentToken) {
       console.log("No token selected");
       return;
     }
 
-    if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (parsedDepositAmount === null || balance === undefined || hasInsufficientBalance) {
       console.log("Invalid amount");
       return;
     }
@@ -310,7 +328,6 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     setIsSubmitting(true);
 
     try {
-      const amountInWei = parseUnits(amount, currentToken.decimals);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
 
       console.log("[Deposit] Getting permit signature...");
@@ -327,7 +344,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           tokenName: currentToken.name,
           ownerAddress: userAddress,
           spenderAddress: constants.contracts.payments.address,
-          amount: amountInWei,
+          amount: parsedDepositAmount,
           deadline,
           chainId: constants.chain.id,
         },
@@ -337,12 +354,18 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
 
       console.log("[Deposit] Permit signature obtained, submitting transaction...");
 
+      // Privy resolves the signature while its sign dialog is still animating
+      // closed. Sending the transaction inside that window swaps the dialog's
+      // data under the screen it is still showing, which throws and takes the
+      // console down with it. See `waitForPrivyModalToClose`.
+      await waitForPrivyModalToClose();
+
       await execute({
         functionName: "depositWithPermit",
         args: [
           currentToken.address,
           userAddress,
-          amountInWei,
+          parsedDepositAmount,
           permitSignature.deadline,
           permitSignature.v,
           permitSignature.r,
@@ -366,7 +389,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     }
   };
 
-  const canDeposit = Boolean(currentToken) && Boolean(amount) && !isBusy;
+  const canDeposit = parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy;
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
@@ -480,6 +503,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
               <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
+              {hasInsufficientBalance ? <p className='text-xs text-destructive'>Insufficient wallet balance.</p> : null}
+              {isBalanceError ? <p className='text-xs text-destructive'>Wallet balance unavailable.</p> : null}
             </div>
           ) : null}
 
