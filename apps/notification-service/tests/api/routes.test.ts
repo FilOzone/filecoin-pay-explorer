@@ -10,7 +10,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SIWE_STATEMENTS } from "../../api/auth";
 import app from "../../api/index";
 import { writePendingVerification } from "../../api/kv";
-import { createVerifiedSubscription, findSubscriptionByWallet, findVerifiedEmailByEmail } from "../../api/queries";
+import {
+  createVerifiedSubscription,
+  findMutedDataSetIds,
+  findSubscriptionByWallet,
+  findVerifiedEmailByEmail,
+} from "../../api/queries";
 import { createDb } from "../../shared/db/client";
 
 const account = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
@@ -61,6 +66,7 @@ beforeEach(async () => {
   await env.KV.delete(`verify:${WALLET}`);
   await env.DB.prepare("DELETE FROM wallet_subscriptions").run();
   await env.DB.prepare("DELETE FROM verified_emails").run();
+  await env.DB.prepare("DELETE FROM muted_data_sets").run();
 });
 
 // ─── GET /health ─────────────────────────────────────────────────────────────
@@ -272,5 +278,88 @@ describe("POST /unsubscribe", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(await findSubscriptionByWallet(db, WALLET)).toBeNull();
+  });
+});
+
+// ─── POST /mute-dataset ──────────────────────────────────────────────────────
+
+describe("POST /mute-dataset", () => {
+  it("returns 422 when required body fields are missing", async () => {
+    const res = await post("/mute-dataset", { message: "m", signature: "s" });
+    expect(res.status).toBe(422);
+  });
+
+  it("returns 429 when rate limit is exceeded", async () => {
+    rateLimiterLimit.mockResolvedValueOnce({ success: false });
+    const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1" });
+    expect(res.status).toBe(429);
+  });
+
+  it("returns 401 when SIWE verification fails and records no mute", async () => {
+    const message = makeSiwe({
+      issuedAt: new Date(Date.now() - 10 * 60 * 1000),
+      statement: SIWE_STATEMENTS.muteDataset("1"),
+    });
+    const signature = await account.signMessage({ message });
+    const res = await post("/mute-dataset", { message, signature, dataSetId: "1" });
+    expect(res.status).toBe(401);
+    const db = createDb(env.DB);
+    expect(await findMutedDataSetIds(db, WALLET)).toEqual([]);
+  });
+
+  it("returns 401 when the signed statement names a different dataset", async () => {
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
+    const signature = await account.signMessage({ message });
+    const res = await post("/mute-dataset", { message, signature, dataSetId: "2" });
+    expect(res.status).toBe(401);
+  });
+
+  it("records the mute for the SIWE-recovered wallet address on success", async () => {
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
+    const signature = await account.signMessage({ message });
+    const res = await post("/mute-dataset", { message, signature, dataSetId: "1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const db = createDb(env.DB);
+    expect(await findMutedDataSetIds(db, WALLET)).toEqual(["1"]);
+  });
+
+  it("muting the same dataset twice is idempotent", async () => {
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
+    const signature = await account.signMessage({ message });
+    await post("/mute-dataset", { message, signature, dataSetId: "1" });
+    const secondMessage = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1"), nonce: "testonce2" });
+    const secondSignature = await account.signMessage({ message: secondMessage });
+    const res = await post("/mute-dataset", { message: secondMessage, signature: secondSignature, dataSetId: "1" });
+    expect(res.status).toBe(200);
+    const db = createDb(env.DB);
+    expect(await findMutedDataSetIds(db, WALLET)).toEqual(["1"]);
+  });
+});
+
+// ─── GET /muted-datasets ─────────────────────────────────────────────────────
+
+describe("GET /muted-datasets", () => {
+  it("returns 422 when wallet param is missing", async () => {
+    const res = await get("/muted-datasets");
+    expect(res.status).toBe(422);
+  });
+
+  it("returns an empty list when the wallet has muted nothing", async () => {
+    const res = await get(`/muted-datasets?wallet=${WALLET}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ dataSetIds: [] });
+  });
+
+  it("returns only the requested wallet's muted dataset ids", async () => {
+    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
+    const signature = await account.signMessage({ message });
+    await post("/mute-dataset", { message, signature, dataSetId: "1" });
+    const res = await get(`/muted-datasets?wallet=${WALLET}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ dataSetIds: ["1"] });
+
+    const otherWalletRes = await get("/muted-datasets?wallet=0x9999999999999999999999999999999999999999");
+    expect(await otherWalletRes.json()).toEqual({ dataSetIds: [] });
   });
 });

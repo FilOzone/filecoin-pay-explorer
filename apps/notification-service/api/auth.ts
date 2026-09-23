@@ -6,6 +6,7 @@ const FRESHNESS_WINDOW_MS = 5 * 60 * 1000;
 export const SIWE_STATEMENTS = {
   subscribe: (email: string) => `Subscribe to Filecoin Pay notifications for ${email}`,
   unsubscribe: "Unsubscribe from Filecoin Pay notifications",
+  muteDataset: (dataSetId: string) => `Mute inactivity alerts for Filecoin Pay dataset ${dataSetId}`,
 } as const;
 
 export type SiweVerifyResult = { ok: true; walletAddress: string } | { ok: false; error: string };

@@ -35,6 +35,9 @@ vi.mock("../DatasetsSection", () => ({
     return <div data-account-id={accountId} data-mount={mount} />;
   },
 }));
+vi.mock("../StaleQueue", () => ({
+  StaleQueue: () => null,
+}));
 
 const PAYER = "0x1111111111111111111111111111111111111111";
 const OPERATOR = "0x2222222222222222222222222222222222222222";

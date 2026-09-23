@@ -14,7 +14,13 @@ import { renderVerificationEmail } from "../shared/emails/templates/Verification
 import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
-import { createVerifiedSubscription, deleteSubscription, findSubscriptionByWallet } from "./queries";
+import {
+  createVerifiedSubscription,
+  deleteSubscription,
+  findMutedDataSetIds,
+  findSubscriptionByWallet,
+  muteDataSet,
+} from "./queries";
 
 initWorkersLogger({ env: { service: "notification-api" } });
 
@@ -44,6 +50,15 @@ const verifyQuery = z.object({
 });
 
 const statusQuery = z.object({
+  wallet: z
+    .string()
+    .min(1)
+    .transform((s) => s.toLowerCase()),
+});
+
+const muteDatasetBody = siweBody.extend({ dataSetId: z.string().min(1) });
+
+const mutedDatasetsQuery = z.object({
   wallet: z
     .string()
     .min(1)
@@ -243,6 +258,64 @@ app.post(
 
     log.set({ outcome: "success" });
     return c.json({ ok: true });
+  },
+);
+
+// POST /mute-dataset
+// Verifies SIWE (statement scoped to the specific dataset) and records the mute.
+// Idempotent: muting an already-muted dataset is a no-op.
+app.post(
+  "/mute-dataset",
+  zValidator("json", muteDatasetBody, (result, c) => {
+    if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
+  }),
+  async (c) => {
+    const log = c.get("log");
+    log.set({ route: "mute-dataset" });
+
+    const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+    const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
+    if (!success) {
+      log.set({ outcome: "rate_limited" });
+      return c.json({ error: "Too many requests" }, 429);
+    }
+
+    const { message, signature, dataSetId } = c.req.valid("json");
+    log.set({ dataSetId });
+
+    const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.muteDataset(dataSetId));
+    if (!siweResult.ok) {
+      log.set({ outcome: "auth_failed", reason: siweResult.error });
+      return c.json({ error: siweResult.error }, 401);
+    }
+
+    const walletAddress = siweResult.walletAddress.toLowerCase();
+    log.set({ wallet: walletAddress });
+
+    const db = createDb(c.env.DB);
+    await muteDataSet(db, { id: crypto.randomUUID(), walletAddress, dataSetId });
+
+    log.set({ outcome: "success" });
+    return c.json({ ok: true });
+  },
+);
+
+// GET /muted-datasets?wallet=
+// Returns the dataset ids this wallet has muted. No signature required: this
+// only reveals which of the wallet's already-public datasets it muted, the
+// same sensitivity as /status's subscribed boolean.
+app.get(
+  "/muted-datasets",
+  zValidator("query", mutedDatasetsQuery, (result, c) => {
+    if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
+  }),
+  async (c) => {
+    const log = c.get("log");
+    const { wallet } = c.req.valid("query");
+    const db = createDb(c.env.DB);
+    const dataSetIds = await findMutedDataSetIds(db, wallet);
+    log.set({ route: "muted-datasets", wallet, count: dataSetIds.length });
+    return c.json({ dataSetIds });
   },
 );
 

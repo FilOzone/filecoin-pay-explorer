@@ -632,6 +632,7 @@ const DATA_SET_ROW_FIELDS = `
     provider
     totalSize
     lastWriteAt
+    status
     pdpRail {
       paymentRate
       state
@@ -660,6 +661,25 @@ export const GET_ACCOUNT_DATA_SETS = gql`
   ${DATA_SET_ROW_FIELDS}
   query GetAccountDataSets($payer: Bytes!, $first: Int!, $skip: Int!) {
     dataSets(where: { payer: $payer }, first: $first, skip: $skip, orderBy: lastWriteAt, orderDirection: asc) {
+      ...DataSetRowFields
+    }
+  }
+`;
+
+/**
+ * Stale-first candidates for the triage queue: datasets with no write since
+ * `before`, excluding ones that have already fully stopped. The exact
+ * cost-weighted rank is computed client-side over this bounded candidate set.
+ */
+export const GET_STALE_DATA_SETS = gql`
+  ${DATA_SET_ROW_FIELDS}
+  query GetStaleDataSets($payer: Bytes!, $before: BigInt!, $first: Int!) {
+    dataSets(
+      where: { payer: $payer, lastWriteAt_lt: $before, status_not: TERMINATED }
+      first: $first
+      orderBy: lastWriteAt
+      orderDirection: asc
+    ) {
       ...DataSetRowFields
     }
   }

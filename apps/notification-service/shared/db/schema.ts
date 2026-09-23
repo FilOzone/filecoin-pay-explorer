@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { ALERT_LEVELS } from "../alert-levels";
 
 export const verifiedEmails = sqliteTable(
@@ -47,6 +47,23 @@ export const notificationLog = sqliteTable(
     index("idx_notification_log_wallet_level").on(table.walletAddress, table.alertLevel, table.sentAt),
   ],
 );
+
+export const mutedDataSets = sqliteTable(
+  "muted_data_sets",
+  {
+    id: text("id").notNull().primaryKey(),
+    walletAddress: text("wallet_address").notNull(),
+    dataSetId: text("data_set_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
+    uniqueIndex("idx_muted_data_sets_wallet_dataset").on(table.walletAddress, table.dataSetId),
+  ],
+);
+
+export type MutedDataSet = typeof mutedDataSets.$inferSelect;
+export type InsertMutedDataSet = typeof mutedDataSets.$inferInsert;
 
 export type VerifiedEmail = typeof verifiedEmails.$inferSelect;
 export type InsertVerifiedEmail = typeof verifiedEmails.$inferInsert;
