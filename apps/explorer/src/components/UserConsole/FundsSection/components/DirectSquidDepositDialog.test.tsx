@@ -793,7 +793,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
   });
 
-  it("keeps the review visible while its live balance check is pending", async () => {
+  it("shows progress and disables Back while the live balance check is pending", async () => {
     let resolveBalance: ((balance: bigint) => void) | undefined;
     state.getRecipientFilBalance.mockImplementationOnce(
       () =>
@@ -814,6 +814,11 @@ describe("DirectSquidDepositDialog safety integration", () => {
       await vi.waitFor(() => expect(state.getRecipientFilBalance).toHaveBeenCalledOnce());
     });
 
+    // Back would show the form while this payment carries on once the read returns.
+    expect(button(renderer, "Back")?.props.disabled).toBe(true);
+    expect(button(renderer, "Processing…")?.props.disabled).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Preparing the route…");
+
     query.recipientFil = 250_000_000_000_000_000n;
     await act(async () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
@@ -822,6 +827,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     await act(async () => resolveBalance?.(250_000_000_000_000_000n));
     expect(state.execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Preparing the route…");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Review the updated quote without a FIL top-up");
+    expect(button(renderer, "Close")?.props.disabled).toBe(false);
   });
 
   it("requires a fresh balance decision on each open", async () => {
