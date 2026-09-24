@@ -9,10 +9,9 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { useState } from "react";
+import { ExpiryPicker } from "@/components/shared/ExpiryPicker";
 import { formatDateTime } from "@/utils/formatter";
 import { resolveSnoozeUntil, SNOOZE_PRESETS, snoozeDateRange } from "../data/snooze";
-
-const FIELD_CLASS = "rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm";
 
 interface SnoozeDialogProps {
   dataSetId: string;
@@ -27,7 +26,6 @@ export function SnoozeDialog({ dataSetId, onCancel, onConfirm }: SnoozeDialogPro
 
   const nowMs = Date.now();
   const mutedUntil = resolveSnoozeUntil(presetIndex, customDate, nowMs);
-  const dateRange = snoozeDateRange(nowMs);
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
@@ -42,30 +40,16 @@ export function SnoozeDialog({ dataSetId, onCancel, onConfirm }: SnoozeDialogPro
 
         <div className='flex flex-col gap-1.5'>
           <Label htmlFor='snooze-duration'>Snooze for</Label>
-          <select
+          <ExpiryPicker
             id='snooze-duration'
-            className={FIELD_CLASS}
-            value={presetIndex}
-            onChange={(e) => setPresetIndex(e.target.value)}
-          >
-            {SNOOZE_PRESETS.map((preset, i) => (
-              <option key={preset.label} value={String(i)}>
-                {preset.label}
-              </option>
-            ))}
-            <option value='custom'>Custom date…</option>
-          </select>
-          {presetIndex === "custom" ? (
-            <input
-              type='date'
-              aria-label='Snooze until'
-              className={FIELD_CLASS}
-              min={dateRange.min}
-              max={dateRange.max}
-              value={customDate}
-              onChange={(e) => setCustomDate(e.target.value)}
-            />
-          ) : null}
+            presets={SNOOZE_PRESETS}
+            presetIndex={presetIndex}
+            customDate={customDate}
+            onPresetIndexChange={setPresetIndex}
+            onCustomDateChange={setCustomDate}
+            customDateLabel='Snooze until'
+            customDateRange={snoozeDateRange(nowMs)}
+          />
           <p className='text-xs text-muted-foreground'>
             {mutedUntil === null
               ? "Pick a date within the next year."
