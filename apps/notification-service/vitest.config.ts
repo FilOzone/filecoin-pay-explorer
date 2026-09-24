@@ -31,6 +31,7 @@ export default defineConfig({
             "tests/api/email-validation.test.ts",
             "tests/alert-processor/account.test.ts",
             "tests/alert-processor/alert-content.test.ts",
+            "tests/alert-processor/inactivity.test.ts",
           ],
           environment: "node",
           clearMocks: true,

@@ -1,6 +1,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import clsx from "clsx";
 import { useState } from "react";
 import { InlineTextLoader } from "@/components/shared";
 import { useMuteDataSet } from "@/hooks/useMuteDataSet";
@@ -12,9 +13,11 @@ import { SnoozeDialog } from "./SnoozeDialog";
 type StaleQueueRowProps = RankedDataSet & {
   accountId: string;
   canMute: boolean;
+  /** Opened from an inactivity email link. */
+  isLinked: boolean;
 };
 
-export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute }: StaleQueueRowProps) {
+export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute, isLinked }: StaleQueueRowProps) {
   const muteDataSet = useMuteDataSet(accountId);
   const [isSnoozeDialogOpen, setIsSnoozeDialogOpen] = useState(false);
   const dataSetId = dataSet.dataSetId.toString();
@@ -25,7 +28,13 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute 
   const showError = muteDataSet.isError && !isUserRejection(muteDataSet.error);
 
   return (
-    <li className='flex flex-wrap items-center justify-between gap-3 py-3'>
+    <li
+      id={`stale-dataset-${dataSetId}`}
+      className={clsx(
+        "flex flex-wrap items-center justify-between gap-3 py-3",
+        isLinked && "-mx-3 rounded-md bg-muted px-3",
+      )}
+    >
       <div className='flex min-w-0 flex-col gap-1'>
         <ID number={Number(dataSet.dataSetId)} />
         <span className='text-xs text-muted-foreground'>

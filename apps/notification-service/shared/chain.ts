@@ -14,3 +14,8 @@ export function getChain(network: Network) {
 export function filecoinPayAddress(network: Network): string {
   return getChain(network).contracts.filecoinPay.address;
 }
+
+/** The Warm Storage (FWSS) contract, which is also the operator in the explorer's service URLs. */
+export function warmStorageAddress(network: Network): string {
+  return getChain(network).contracts.fwss.address;
+}

@@ -34,6 +34,8 @@ const CRITICAL = summaryWithRunwayDays(5); // < 7d, >= 3d
 function deps(summary: AccountSummary): ProcessDeps & { sendEmail: ReturnType<typeof vi.fn> } {
   return {
     readSummary: vi.fn(async () => summary),
+    // No stale datasets, so these tests only ever see balance alerts.
+    fetchStaleDataSets: vi.fn(async () => ({ epoch: 1000n, dataSets: [] })),
     sendEmail: vi.fn(async () => {}),
   };
 }
@@ -60,6 +62,8 @@ beforeEach(async () => {
   await env.DB.prepare("DELETE FROM wallet_subscriptions").run();
   await env.DB.prepare("DELETE FROM verified_emails").run();
   await env.DB.prepare("DELETE FROM notification_log").run();
+  await env.DB.prepare("DELETE FROM inactivity_alerts").run();
+  await env.DB.prepare("DELETE FROM muted_data_sets").run();
   const { keys } = await env.KV.list({ prefix: "alert:" });
   await Promise.all(keys.map((k) => env.KV.delete(k.name)));
 });
@@ -137,11 +141,11 @@ describe("processMessage", () => {
 
   it("retries when the on-chain read fails", async () => {
     await subscribe(WALLET, EMAIL);
-    const d: ProcessDeps & { sendEmail: ReturnType<typeof vi.fn> } = {
+    const d = {
+      ...deps(WARNING),
       readSummary: vi.fn(async () => {
         throw new Error("rpc down");
       }),
-      sendEmail: vi.fn(async () => {}),
     };
 
     const action = await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d);
@@ -152,8 +156,8 @@ describe("processMessage", () => {
 
   it("retries when the email send fails, leaving no dedup state", async () => {
     await subscribe(WALLET, EMAIL);
-    const d: ProcessDeps & { sendEmail: ReturnType<typeof vi.fn> } = {
-      readSummary: vi.fn(async () => WARNING),
+    const d = {
+      ...deps(WARNING),
       sendEmail: vi.fn(async () => {
         throw Object.assign(new Error("mailer down"), { code: "E_DELIVERY_FAILED" });
       }),
@@ -179,6 +183,70 @@ describe("processMessage", () => {
 
     expect(action).toBe("retry");
     expect(d.sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("processMessage — inactivity email", () => {
+  const nowSec = () => Math.floor(Date.now() / 1000);
+
+  function staleDataSet(dataSetId: string, daysInactive: number) {
+    return {
+      id: `0x${dataSetId}`,
+      dataSetId,
+      lastWriteAt: String(nowSec() - daysInactive * 86_400),
+      pdpRail: { paymentRate: "1", state: "ACTIVE", endEpoch: "0", token: { symbol: "USDFC", decimals: "18" } },
+      cacheMissRail: null,
+      cdnRail: null,
+    };
+  }
+
+  function inactivityDeps(...dataSets: ReturnType<typeof staleDataSet>[]) {
+    return { ...deps(HEALTHY), fetchStaleDataSets: vi.fn(async () => ({ epoch: 1000n, dataSets })) };
+  }
+
+  it("emails once about newly inactive datasets, linking each to the triage queue", async () => {
+    await subscribe(WALLET, EMAIL);
+    const d = inactivityDeps(staleDataSet("12", 45), staleDataSet("7", 31));
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+
+    expect(d.sendEmail).toHaveBeenCalledOnce();
+    const email = d.sendEmail.mock.calls[0]?.[1];
+    expect(email?.to).toBe(EMAIL);
+    expect(email?.subject).toBe("2 of your datasets have had no new data for 30 days");
+    expect(email?.html).toContain(`/console/services/0x02925630df557F957f70E112bA06e50965417CA0?dataset=12#stale`);
+
+    // The next cron run finds the same inactive period already emailed.
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+    expect(d.sendEmail).toHaveBeenCalledOnce();
+  });
+
+  it("skips a snoozed dataset", async () => {
+    await subscribe(WALLET, EMAIL);
+    await env.DB.prepare(
+      "INSERT INTO muted_data_sets (id, wallet_address, data_set_id, muted_until, created_at) VALUES ('m1', ?, '12', ?, 0)",
+    )
+      .bind(WALLET, nowSec() + 86_400)
+      .run();
+    const d = inactivityDeps(staleDataSet("12", 45));
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+    expect(d.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("retries when the subgraph read fails, without affecting the balance check", async () => {
+    await subscribe(WALLET, EMAIL);
+    const d = {
+      ...deps(WARNING),
+      fetchStaleDataSets: vi.fn(async () => {
+        throw new Error("subgraph down");
+      }),
+    };
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("retry");
+    // The low-balance alert still went out.
+    expect(d.sendEmail).toHaveBeenCalledOnce();
+    expect(await logCount()).toBe(1);
   });
 });
 
