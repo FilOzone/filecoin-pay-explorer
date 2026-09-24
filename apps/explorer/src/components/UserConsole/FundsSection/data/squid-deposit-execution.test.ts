@@ -716,6 +716,54 @@ describe("executeSquidDeposit", () => {
     expect(sleep).toHaveBeenCalledOnce();
   });
 
+  // Only the read right before the route signature lags, so no later read would catch a switch during its retry.
+  it("checks the account after the pre-route read waits for a lagging node", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ headSequence: [42n, 41n, 42n], receiptBlock: 42n });
+    let currentOwner: typeof OWNER | typeof RECIPIENT = OWNER;
+    const sleep = vi.fn(async () => {
+      currentOwner = RECIPIENT;
+    });
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        getCurrentOwner: vi.fn(async () => currentOwner),
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+        walletClient: wallet,
+      }),
+    ).rejects.toThrow("Wallet account changed before signing");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledOnce();
+  });
+
+  it("checks the wallet network after the pre-route read waits for a lagging node", async () => {
+    const wallet = fakeWallet();
+    const source = fakeSource({ headSequence: [42n, 41n, 42n], receiptBlock: 42n });
+    let walletChainId = 8453;
+    const sleep = vi.fn(async () => {
+      walletChainId = 1;
+    });
+    await expect(
+      executeSquidDeposit({
+        destinationClient: fakeDestination(),
+        ...signingChecks,
+        quote,
+        request,
+        sleep,
+        sourceClient: source,
+        squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("success")) },
+        walletClient: { ...wallet, getChainId: vi.fn(async () => walletChainId) },
+      }),
+    ).rejects.toThrow("Source network changed before signing");
+    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledOnce();
+  });
+
   it("stops when the reviewed context changes at the approval receipt", async () => {
     const wallet = fakeWallet();
     const source = fakeSource({ receiptBlock: 42n });
