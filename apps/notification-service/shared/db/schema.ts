@@ -63,6 +63,24 @@ export const mutedDataSets = sqliteTable(
   ],
 );
 
+// The last inactivity email per dataset. One row per wallet and dataset, replaced on each send.
+export const inactivityAlerts = sqliteTable(
+  "inactivity_alerts",
+  {
+    id: text("id").notNull().primaryKey(),
+    walletAddress: text("wallet_address").notNull(),
+    dataSetId: text("data_set_id").notNull(),
+    // The dataset's lastWriteAt (unix seconds) when emailed. A new write starts a new inactive period.
+    lastWriteAt: integer("last_write_at").notNull(),
+    sentAt: integer("sent_at").notNull(),
+    emailSentTo: text("email_sent_to").notNull(),
+  },
+  (table) => [
+    check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
+    uniqueIndex("idx_inactivity_alerts_wallet_dataset").on(table.walletAddress, table.dataSetId),
+  ],
+);
+
 export type VerifiedEmail = typeof verifiedEmails.$inferSelect;
 export type InsertVerifiedEmail = typeof verifiedEmails.$inferInsert;
 
