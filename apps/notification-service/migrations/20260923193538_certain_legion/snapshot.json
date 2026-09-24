@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "48900bda-71e8-4881-b3b2-99fb78981bc6",
+  "id": "39b25d44-a19c-4c0b-98e1-ecca7a512b49",
   "prevIds": ["ae003242-9593-40f6-848d-650a367d0014"],
   "ddl": [
     {
@@ -47,6 +47,16 @@
       "default": null,
       "generated": null,
       "name": "data_set_id",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "muted_until",
       "entityType": "columns",
       "table": "muted_data_sets"
     },

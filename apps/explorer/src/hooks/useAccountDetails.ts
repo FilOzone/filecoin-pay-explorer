@@ -11,6 +11,7 @@ import {
   GET_SUBGRAPH_BLOCK,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
+import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { useGraphQLClient, useGraphQLQuery } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
 
@@ -157,9 +158,6 @@ export const useAccountRails = (accountId: string, page: number = 1, options?: A
     networkOverride: options?.networkOverride,
   });
 
-/** graph-node's per-request maximum. */
-const SPEND_HISTORY_PAGE_SIZE = 1_000;
-
 /**
  * Pages to walk before giving up on a collection.
  *
@@ -190,44 +188,6 @@ const SPEND_HISTORY_REFRESH_MS = 12 * 60 * 60 * 1_000;
  * half a day costs far more than re-reading one.
  */
 const SPEND_HISTORY_GC_MS = 30 * 60 * 1_000;
-
-/**
- * Walks a cursor-paged collection until it is exhausted or `maxPages` is hit.
- *
- * Cursors on `id` rather than `skip`, which graph-node caps at 5,000. Mirrors
- * `getApprovedOperatorClients`, including the guard against a cursor that fails
- * to advance — that would otherwise spin forever.
- */
-export async function fetchAllPages<T extends { id: string }>(
-  fetchPage: (cursor: string) => Promise<T[]>,
-  maxPages: number = SPEND_HISTORY_MAX_PAGES,
-): Promise<{ items: T[]; reachedPageLimit: boolean }> {
-  // Ids are transaction hash plus log index, so they carry no order in time.
-  // Stopping at the cap therefore yields an arbitrary subset of the matching
-  // records, not the newest or the oldest — which is why the chart says the
-  // months may be incomplete rather than trying to describe what is missing.
-  const items: T[] = [];
-  let cursor = "0x";
-
-  for (let page = 0; page < maxPages; page++) {
-    const rows = await fetchPage(cursor);
-    items.push(...rows);
-    if (rows.length < SPEND_HISTORY_PAGE_SIZE) return { items, reachedPageLimit: false };
-
-    const nextCursor = rows[rows.length - 1].id;
-    if (!nextCursor || nextCursor === cursor) throw new Error("Spend history pagination did not advance");
-    cursor = nextCursor;
-  }
-
-  // Reaching here means every page was full, which data ending exactly on the
-  // cap looks identical to. One more read tells them apart, and without it a
-  // complete history reports itself as possibly truncated. Only accounts already
-  // at the cap pay for it, and its rows are dropped: they fall outside the pages
-  // the cap allows, so keeping them would move the boundary rather than raise it.
-  const beyondCap = await fetchPage(cursor);
-
-  return { items, reachedPageLimit: beyondCap.length > 0 };
-}
 
 /**
  * Every rate period and one-time payment touching the charted months.
@@ -276,6 +236,10 @@ export const useAccountSpendHistory = (
       if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
       const block = _meta.block.number;
 
+      // Ids are transaction hash plus log index, so they carry no order in time.
+      // Stopping at the page cap therefore yields an arbitrary subset of the
+      // matching records, not the newest or the oldest — which is why the chart
+      // says the months may be incomplete rather than describing what is missing.
       const [periods, payments] = await Promise.all([
         fetchAllPages<SpendHistoryRatePeriodResponse>(async (cursor) => {
           const page = await executeQuery<{ railRatePeriods: SpendHistoryRatePeriodResponse[] }>(
@@ -284,14 +248,14 @@ export const useAccountSpendHistory = (
               accountId,
               tokenId,
               windowStartEpoch: windowStartEpoch.toString(),
-              first: SPEND_HISTORY_PAGE_SIZE,
+              first: SUBGRAPH_PAGE_SIZE,
               cursor,
               block,
             },
             signal,
           );
           return page.railRatePeriods;
-        }),
+        }, SPEND_HISTORY_MAX_PAGES),
         fetchAllPages<SpendHistoryOneTimePaymentResponse>(async (cursor) => {
           const page = await executeQuery<{ oneTimePayments: SpendHistoryOneTimePaymentResponse[] }>(
             GET_ACCOUNT_ONE_TIME_PAYMENTS,
@@ -299,14 +263,14 @@ export const useAccountSpendHistory = (
               accountId,
               tokenId,
               windowStartTimestamp: windowStartTimestamp.toString(),
-              first: SPEND_HISTORY_PAGE_SIZE,
+              first: SUBGRAPH_PAGE_SIZE,
               cursor,
               block,
             },
             signal,
           );
           return page.oneTimePayments;
-        }),
+        }, SPEND_HISTORY_MAX_PAGES),
       ]);
 
       return {

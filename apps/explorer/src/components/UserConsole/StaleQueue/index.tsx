@@ -1,20 +1,15 @@
-import { useMemo } from "react";
+import { useState } from "react";
 import { useBlockNumber } from "wagmi";
 import { getChain } from "@/constants/chains";
 import { useMutedDataSets } from "@/hooks/useMutedDataSets";
 import { useStaleDataSets } from "@/hooks/useStaleDataSets";
 import type { Network } from "@/types";
-import { StaleQueueErrorState, StaleQueueLayout, StaleQueueLoadingState, StaleQueueRow } from "./components";
-import { wastedSpend } from "./data/staleness";
+import { isNotificationsEligibleNetwork } from "@/utils/network";
+import { DatasetsPagination } from "../DatasetsSection";
+import { StaleQueueErrorState, StaleQueueLayout, StaleQueueRow } from "./components";
+import { rankStaleDataSets } from "./data/staleness";
 
-/** The queue ranks candidates but only ever surfaces the worst offenders. */
-const QUEUE_SIZE = 10;
-
-/** Descending by spend. */
-function byDescendingSpend(a: { spend: bigint }, b: { spend: bigint }): number {
-  if (a.spend === b.spend) return 0;
-  return b.spend > a.spend ? 1 : -1;
-}
+const PAGE_SIZE = 10;
 
 interface StaleQueueProps {
   /** The connected payer. Every dataset ranked here has this account as its payer. */
@@ -23,26 +18,26 @@ interface StaleQueueProps {
 }
 
 /**
- * Triage queue for stale Warm Storage datasets: ranked by money spent since
- * they went quiet, with Keep (mute) and a stubbed Terminate. Renders nothing
- * once loaded when nothing is stale, matching the issue's own merge note.
+ * Triage queue for stale Warm Storage datasets: ranked by monthly spend times
+ * days inactive, with Keep (snooze) and a stubbed Terminate. Hidden while
+ * loading and when nothing is stale.
  */
 export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) => {
-  const { data: dataSets, isLoading, isError } = useStaleDataSets(accountId, { networkOverride: network });
-  const { data: mutedIds } = useMutedDataSets(accountId);
+  const [page, setPage] = useState(1);
 
-  const chain = useMemo(() => getChain(network), [network]);
-  const { data: currentEpoch } = useBlockNumber({ chainId: chain.id, watch: true });
+  // The notifications API serves a single network, so mutes only exist there.
+  const canMute = isNotificationsEligibleNetwork(network) && Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
 
-  if (isLoading) {
-    return (
-      <StaleQueueLayout>
-        <StaleQueueLoadingState />
-      </StaleQueueLayout>
-    );
+  const staleDataSets = useStaleDataSets(accountId, { networkOverride: network });
+  const mutedDataSets = useMutedDataSets(canMute ? accountId : undefined);
+  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
+
+  // Waiting for mutes too keeps muted rows from flashing in.
+  if (staleDataSets.isLoading || mutedDataSets.isLoading) {
+    return null;
   }
 
-  if (isError) {
+  if (staleDataSets.isError) {
     return (
       <StaleQueueLayout>
         <StaleQueueErrorState />
@@ -50,31 +45,36 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
     );
   }
 
+  const unmuted = (staleDataSets.data?.dataSets ?? []).filter(
+    (dataSet) => !mutedDataSets.data?.has(dataSet.dataSetId.toString()),
+  );
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-
-  const ranked = (dataSets ?? [])
-    .filter((dataSet) => !mutedIds?.has(dataSet.dataSetId.toString()))
-    .map((dataSet) => ({ dataSet, spend: wastedSpend(dataSet, currentEpoch, nowSeconds) ?? 0n }))
-    .sort(byDescendingSpend)
-    .slice(0, QUEUE_SIZE);
+  const ranked = rankStaleDataSets(unmuted, currentEpoch, nowSeconds);
 
   if (ranked.length === 0) {
     return null;
   }
 
+  // Keeping the last row of the last page shrinks the page count under `page`.
+  const pageCount = Math.ceil(ranked.length / PAGE_SIZE);
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <StaleQueueLayout>
       <ul className='flex flex-col divide-y'>
-        {ranked.map(({ dataSet, spend }) => (
-          <StaleQueueRow
-            key={dataSet.id}
-            dataSet={dataSet}
-            accountId={accountId}
-            spend={spend}
-            nowSeconds={nowSeconds}
-          />
+        {pageRows.map((entry) => (
+          <StaleQueueRow key={entry.dataSet.id} {...entry} accountId={accountId} canMute={canMute} />
         ))}
       </ul>
+      {pageCount > 1 ? (
+        <DatasetsPagination page={currentPage} hasMore={currentPage < pageCount} onPageChange={setPage} />
+      ) : null}
+      {staleDataSets.data?.reachedPageLimit ? (
+        <p className='text-xs text-muted-foreground'>
+          This account has more than 10,000 inactive datasets. Only 10,000 of them are ranked here.
+        </p>
+      ) : null}
     </StaleQueueLayout>
   );
 };

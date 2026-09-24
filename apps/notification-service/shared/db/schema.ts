@@ -54,6 +54,7 @@ export const mutedDataSets = sqliteTable(
     id: text("id").notNull().primaryKey(),
     walletAddress: text("wallet_address").notNull(),
     dataSetId: text("data_set_id").notNull(),
+    mutedUntil: integer("muted_until").notNull(),
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
@@ -61,9 +62,6 @@ export const mutedDataSets = sqliteTable(
     uniqueIndex("idx_muted_data_sets_wallet_dataset").on(table.walletAddress, table.dataSetId),
   ],
 );
-
-export type MutedDataSet = typeof mutedDataSets.$inferSelect;
-export type InsertMutedDataSet = typeof mutedDataSets.$inferInsert;
 
 export type VerifiedEmail = typeof verifiedEmails.$inferSelect;
 export type InsertVerifiedEmail = typeof verifiedEmails.$inferInsert;

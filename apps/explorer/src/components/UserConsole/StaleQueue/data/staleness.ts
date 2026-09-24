@@ -6,33 +6,39 @@ export const STALE_AFTER_DAYS = 30;
 
 const SECONDS_PER_DAY = 86_400n;
 
-/**
- * Whole days since the dataset's last write, floored, never negative.
- *
- * The subgraph serializes `BigInt` fields as decimal strings over the wire;
- * the generated type calls `lastWriteAt` a `bigint`, but `graphql-request`
- * hands back the raw JSON string, so it must be converted before use.
- */
+export type RankedDataSet = {
+  dataSet: DataSet;
+  days: bigint;
+  /** Undefined until the current epoch is known for a terminated rail. */
+  monthlySpend: bigint | undefined;
+};
+
+/** Whole days since the dataset's last write, floored, never negative. */
 export function daysInactive(lastWriteAt: bigint, nowSeconds: bigint): bigint {
+  // GraphQL BigInt values arrive as decimal strings.
   const elapsed = nowSeconds - BigInt(lastWriteAt);
   return elapsed > 0n ? elapsed / SECONDS_PER_DAY : 0n;
 }
 
-export function isStale(lastWriteAt: bigint, nowSeconds: bigint): boolean {
-  return daysInactive(lastWriteAt, nowSeconds) >= BigInt(STALE_AFTER_DAYS);
-}
-
 /**
- * Money spent since the dataset went quiet: its projected monthly rate,
- * scaled to the days it's actually been inactive. Ranks the triage queue —
- * a heuristic, not a precise accounting figure.
+ * Highest monthly spend × days inactive first. An unknown spend ranks as zero,
+ * and ties keep the input order.
  */
-export function wastedSpend(
-  dataSet: Pick<DataSet, "pdpRail" | "cacheMissRail" | "cdnRail" | "lastWriteAt">,
+export function rankStaleDataSets(
+  dataSets: DataSet[],
   currentEpoch: bigint | undefined,
   nowSeconds: bigint,
-): bigint | undefined {
-  const monthlySpend = monthlyDataSetSpend(dataSet, currentEpoch);
-  if (monthlySpend === undefined) return undefined;
-  return (monthlySpend * daysInactive(dataSet.lastWriteAt, nowSeconds)) / 30n;
+): RankedDataSet[] {
+  const ranked = dataSets.map((dataSet) => ({
+    dataSet,
+    days: daysInactive(dataSet.lastWriteAt, nowSeconds),
+    monthlySpend: monthlyDataSetSpend(dataSet, currentEpoch),
+  }));
+  const weight = (entry: RankedDataSet) => (entry.monthlySpend ?? 0n) * entry.days;
+
+  return ranked.sort((a, b) => {
+    const difference = weight(b) - weight(a);
+    if (difference === 0n) return 0;
+    return difference > 0n ? 1 : -1;
+  });
 }

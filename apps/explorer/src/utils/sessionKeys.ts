@@ -155,19 +155,24 @@ export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
 ];
 
 /**
- * Absolute expiry (unix seconds) for the create form. A preset index is a
- * duration added to `nowMs`; "custom" is an absolute `YYYY-MM-DD` taken as
- * end of day in local time. Returns null when the choice is missing or in
- * the past.
+ * Absolute expiry (unix seconds) for an expiry picker. A preset index picks a
+ * duration from `presets` to add to `nowMs`; "custom" is an absolute
+ * `YYYY-MM-DD` taken as end of day in local time. Returns null when the
+ * choice is missing or in the past.
  */
-export function resolveExpiry(presetIndex: string, customDate: string, nowMs: number): bigint | null {
+export function resolveExpiry(
+  presetIndex: string,
+  customDate: string,
+  nowMs: number,
+  presets = EXPIRY_PRESETS,
+): bigint | null {
   const nowSec = Math.floor(nowMs / 1000);
   if (presetIndex === "custom") {
     if (!customDate) return null;
     const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
     return ts > nowSec ? BigInt(ts) : null;
   }
-  const preset = EXPIRY_PRESETS[Number(presetIndex)];
+  const preset = presets[Number(presetIndex)];
   return preset ? BigInt(nowSec + preset.seconds) : null;
 }
 
