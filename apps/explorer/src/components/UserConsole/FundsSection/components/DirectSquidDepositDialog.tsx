@@ -1114,6 +1114,7 @@ export function DirectSquidDepositDialog({
               {isFilGasTopUpEnabled !== null && !hasRecipientFil ? (
                 <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
                   <Checkbox
+                    aria-describedby='direct-squid-fil-gas-description'
                     aria-labelledby='direct-squid-fil-gas-label'
                     checked={includeFilGasTopUp}
                     disabled={isBusy}
@@ -1127,10 +1128,11 @@ export function DirectSquidDepositDialog({
                     <Label htmlFor='direct-squid-fil-gas' id='direct-squid-fil-gas-label'>
                       {`Include ${FIL_GAS_TOP_UP_LABEL} for transaction fees`}
                     </Label>
-                    <p className='text-xs text-muted-foreground'>
-                      Your wallet does not have enough FIL for fees. Filecoin transactions (like depositing USDFC) need
-                      a small amount of FIL, and this covers about a month of typical activity. The FIL goes to your
-                      wallet to pay network fees, not to your Filecoin Pay balance.
+                    <p className='text-xs text-muted-foreground' id='direct-squid-fil-gas-description'>
+                      {recipientFilQuery.data === undefined
+                        ? "Your FIL balance could not be loaded."
+                        : "Your wallet is low on FIL for Filecoin transaction fees."}{" "}
+                      This FIL goes to your wallet, not your Filecoin Pay balance.
                     </p>
                     {quote?.filGasTopUp ? (
                       <p className='text-xs text-muted-foreground'>
