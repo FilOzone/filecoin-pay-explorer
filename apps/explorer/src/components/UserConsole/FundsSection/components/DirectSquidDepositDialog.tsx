@@ -716,11 +716,15 @@ export function DirectSquidDepositDialog({
         throw new Error("Review a current Squid quote before confirming.");
       }
       const snapshot = reviewed.context;
+      // Busy from the click: Back during the FIL read below would show the form while this payment carries on.
+      setSignature(null);
+      setStage("preparing");
       if (reviewed.quote.filGasTopUp) {
         try {
           const balance = await destinationClient.getBalance({ address: snapshot.recipient });
           if (getFilecoinGasBalanceStatus({ balance, isError: false, isLoading: false }) === "funded") {
             queryClient.setQueryData(["direct-squid-destination-fil", snapshot.recipient, filBalanceVersion], balance);
+            setStage(null);
             setReviewed(null);
             setNotice("This wallet now has FIL for fees. Review the updated quote without a FIL top-up.");
             return;
@@ -742,8 +746,6 @@ export function DirectSquidDepositDialog({
           throw new Error("A Squid deposit from this wallet is already pending.");
         }
         assertContext(snapshot);
-        setSignature(null);
-        setStage("preparing");
         await payingWallet.switchChain(snapshot.sourceChainId);
         hasSwitchedToSource.current = snapshot.sourceChainId !== mainnet.id;
         assertContext(snapshot);
