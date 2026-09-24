@@ -19,6 +19,7 @@ const ROUTE_HASH = `0x${"b".repeat(64)}` as const;
 const state = vi.hoisted(() => ({
   estimateBudget: vi.fn(),
   execute: vi.fn(),
+  getRecipientFilBalance: vi.fn(),
   liveRecipient: "0x2222222222222222222222222222222222222222" as `0x${string}` | undefined,
   refetchBalances: vi.fn(),
   requestRoute: vi.fn(),
@@ -58,10 +59,13 @@ const query = vi.hoisted(() => ({
   budgetIsFetching: false,
   inventory: {} as Record<string, bigint | null>,
   nativeBalance: 10n ** 18n,
-  recipientFil: 0n,
+  recipientFil: 0n as bigint | undefined,
   recipientFilIsError: false,
   recipientFilIsFetching: false,
+  recipientFilQueryKey: [] as unknown[],
   quoteEnabled: undefined as boolean | undefined,
+  quoteIsFetching: false,
+  quoteQueryKey: [] as unknown[],
   filGasTopUp: {
     deadline: 1_700_604_800n,
     minimumFil: 50_000_000_000_000_000n,
@@ -112,7 +116,10 @@ connectedWallets.current.push(wallet);
 vi.mock("@privy-io/react-auth", () => ({ useWallets: () => ({ wallets: connectedWallets.current }) }));
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: state.liveRecipient }),
-  usePublicClient: ({ chainId }: { chainId: number }) => ({ chain: { id: chainId } }),
+  usePublicClient: ({ chainId }: { chainId: number }) => ({
+    chain: { id: chainId },
+    getBalance: state.getRecipientFilBalance,
+  }),
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => ({ address: state.liveRecipient }) }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
@@ -150,6 +157,7 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     if (queryKey[0] === "direct-squid-destination-fil") {
+      query.recipientFilQueryKey = [...queryKey];
       return {
         data: query.recipientFil,
         isError: query.recipientFilIsError,
@@ -159,15 +167,21 @@ vi.mock("@tanstack/react-query", () => ({
     }
     if (queryKey[0] === "direct-squid-deposit-quote") {
       query.quoteEnabled = enabled;
+      query.quoteQueryKey = [...queryKey];
       return {
         data: queryKey.at(-1) ? { ...query.quote, filGasTopUp: query.filGasTopUp } : query.quote,
         error: null,
-        isFetching: false,
+        isFetching: query.quoteIsFetching,
       };
     }
     return { data: query.quote, error: null, isFetching: false };
   },
-  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(async () => undefined),
+    setQueryData: vi.fn((_key: unknown, balance: bigint) => {
+      query.recipientFil = balance;
+    }),
+  }),
 }));
 vi.mock("../data/squid-deposit-route", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../data/squid-deposit-route")>();
@@ -277,6 +291,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     state.liveRecipient = RECIPIENT;
     state.estimateBudget.mockReset().mockResolvedValue(query.budget);
     state.execute.mockReset();
+    state.getRecipientFilBalance.mockReset().mockImplementation(async () => query.recipientFil ?? 0n);
     state.refetchBalances.mockReset().mockImplementation(async () => ({
       data: { allowance: query.allowance, native: query.nativeBalance, token: query.tokenBalance },
     }));
@@ -291,6 +306,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.recipientFil = 0n;
     query.recipientFilIsError = false;
     query.recipientFilIsFetching = false;
+    query.recipientFilQueryKey = [];
+    query.quoteIsFetching = false;
+    query.quoteQueryKey = [];
     query.tokenBalance = 200_000_000n;
     wallet.getEthereumProvider.mockClear();
     wallet.switchChain.mockReset().mockImplementation(async (chainId: number) => {
@@ -592,8 +610,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
   it.each([
     [0n, false, "Your wallet does not have enough FIL for fees."],
     [1n, false, "Your wallet does not have enough FIL for fees."],
-    [250_000_000_000_000_000n, false, "You already have FIL for fees."],
-    [0n, true, "Your wallet does not have enough FIL for fees."],
+    [undefined, true, "Your wallet does not have enough FIL for fees."],
   ])("defaults the FIL option on for destination balance %s (error: %s)", async (balance, isError, hint) => {
     query.recipientFil = balance;
     query.recipientFilIsError = isError;
@@ -611,22 +628,38 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(text).toContain("+ 0.05 FIL for network fees");
   });
 
-  it("keeps a funded wallet funded while the FIL balance refetches in the background", async () => {
+  it("hides the FIL option and quotes without a top-up for a funded wallet", async () => {
     query.recipientFil = 250_000_000_000_000_000n;
-    query.recipientFilIsFetching = true;
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
-
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
     const text = JSON.stringify(renderer.toJSON());
-    expect(text).toContain("You already have FIL for fees.");
-    expect(text).not.toContain("does not have enough FIL");
+    expect(text).not.toContain("Include 0.05 FIL for transaction fees");
+    expect(text).not.toContain("+ 0.05 FIL for network fees");
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(query.quoteEnabled).toBe(true);
+    await act(async () => {
+      button(renderer, "Review")?.props.onClick();
+    });
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+      await vi.waitFor(() => expect(state.execute).toHaveBeenCalledOnce());
+    });
+    expect(state.requestRoute).toHaveBeenCalledWith(
+      expect.not.objectContaining({ filGasTopUp: expect.anything() }),
+      expect.anything(),
+      { quoteOnly: false },
+    );
   });
 
-  it("does not wait for a fresh destination balance to enable the FIL option", async () => {
+  it("waits for the fresh destination balance before choosing FIL and fetching a quote", async () => {
     query.recipientFil = 0n;
     query.recipientFilIsFetching = true;
+    query.quoteIsFetching = true;
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
@@ -635,23 +668,226 @@ describe("DirectSquidDepositDialog safety integration", () => {
     await act(async () => {
       amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
-    expect(query.quoteEnabled).toBe(true);
-    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
+    expect(query.quoteEnabled).toBe(false);
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Receive at least:");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Fetching a quote");
+    expect(button(renderer, "Review")?.props.disabled).toBe(true);
 
     query.recipientFil = 250_000_000_000_000_000n;
     query.recipientFilIsFetching = false;
+    query.quoteIsFetching = false;
     await act(async () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
 
-    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
     expect(query.quoteEnabled).toBe(true);
+    const quoteKey = query.quoteQueryKey;
+
+    query.quoteIsFetching = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(button(renderer, "Review")?.props.disabled).toBe(true);
+    query.quoteIsFetching = false;
 
     query.recipientFilIsFetching = true;
     await act(async () => {
       renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
     });
     expect(query.quoteEnabled).toBe(true);
+    expect(query.quoteQueryKey).toEqual(quoteKey);
+
+    query.recipientFilIsFetching = false;
+    query.recipientFilIsError = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(query.quoteQueryKey).toEqual(quoteKey);
+  });
+
+  it("keeps a manual FIL opt-out through a background balance refresh", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.onChange(false);
+    });
+    query.recipientFilIsFetching = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(false);
+  });
+
+  it("drops a reviewed FIL plan when the recipient becomes funded", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => {
+      button(renderer, "Review")?.props.onClick();
+    });
+    expect(button(renderer, "Pay 100 USDC for USDFC + FIL")).toBeDefined();
+    query.recipientFil = 250_000_000_000_000_000n;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(button(renderer, "Pay 100 USDC for USDFC + FIL")).toBeUndefined();
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain("Review the updated quote without a FIL top-up");
+  });
+
+  it("keeps the reviewed plan while a deposit is in progress", async () => {
+    let finishExecution: (() => void) | undefined;
+    state.execute.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishExecution = () =>
+            resolve({ depositedAmount: 95n, destinationTransactionHash: ROUTE_HASH, transactionHash: ROUTE_HASH });
+        }),
+    );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await reachExecution(renderer);
+
+    query.recipientFil = 250_000_000_000_000_000n;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Review Squid deposit");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Pay with another token");
+
+    await act(async () => finishExecution?.());
+  });
+
+  it("checks a reviewed FIL plan against the live balance before execution", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => {
+      button(renderer, "Review")?.props.onClick();
+    });
+    state.getRecipientFilBalance.mockResolvedValueOnce(250_000_000_000_000_000n);
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+    });
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(state.requestRoute).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), { quoteOnly: false });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Review the updated quote without a FIL top-up");
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+  });
+
+  it("keeps the review visible while its live balance check is pending", async () => {
+    let resolveBalance: ((balance: bigint) => void) | undefined;
+    state.getRecipientFilBalance.mockImplementationOnce(
+      () =>
+        new Promise<bigint>((resolve) => {
+          resolveBalance = resolve;
+        }),
+    );
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    await act(async () => button(renderer, "Review")?.props.onClick());
+    await act(async () => {
+      button(renderer, "Pay 100 USDC")?.props.onClick();
+      await vi.waitFor(() => expect(state.getRecipientFilBalance).toHaveBeenCalledOnce());
+    });
+
+    query.recipientFil = 250_000_000_000_000_000n;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain("Review Squid deposit");
+
+    await act(async () => resolveBalance?.(250_000_000_000_000_000n));
+    expect(state.execute).not.toHaveBeenCalled();
+  });
+
+  it("requires a fresh balance decision on each open", async () => {
+    let renderer!: ReactTestRenderer;
+    const render = (open: boolean) => (
+      <DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open={open} />
+    );
+    await act(async () => {
+      renderer = create(render(true));
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
+    const firstQueryKey = query.recipientFilQueryKey;
+    await act(async () => {
+      renderer.update(render(false));
+    });
+    query.recipientFilIsFetching = true;
+    await act(async () => {
+      renderer.update(render(true));
+    });
+    expect(query.recipientFilQueryKey).not.toEqual(firstQueryKey);
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(query.quoteEnabled).toBe(false);
+    query.recipientFil = 250_000_000_000_000_000n;
+    query.recipientFilIsFetching = false;
+    await act(async () => {
+      renderer.update(render(true));
+    });
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    expect(query.quoteEnabled).toBe(true);
+  });
+
+  it("waits for a balance read when the recipient changes mid-dialog", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    await act(async () => {
+      amountInput(renderer).props.onChange({ target: { value: "100" } });
+    });
+    state.liveRecipient = OTHER;
+    query.recipientFilIsFetching = true;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(query.quoteEnabled).toBe(false);
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+    query.recipientFil = 250_000_000_000_000_000n;
+    query.recipientFilIsFetching = false;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(query.quoteEnabled).toBe(true);
+    expect(renderer.root.findAllByProps({ id: "direct-squid-fil-gas" })).toHaveLength(0);
+  });
+
+  it("offers FIL by default when a funded recipient becomes insufficient", async () => {
+    query.recipientFil = 250_000_000_000_000_000n;
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    query.recipientFil = 0n;
+    await act(async () => {
+      renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+    });
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
   });
 
   it("preserves the reviewed FIL plan through executable route construction", async () => {

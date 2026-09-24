@@ -86,7 +86,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
       const settlement = Array.from(settlementsRef.current.values()).find((s) => s.txHash === txHash);
       if (!settlement) return;
 
-      if (success && receiptData) {
+      if (success && receiptData?.status === "success") {
         const content = getToastContent(settlement.metadata, "success");
         const txHashShort = `${txHash.slice(0, 6)}...${txHash.slice(-4)}`;
 
@@ -103,13 +103,14 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
         // A settlement moves funds for payer and payee and rewrites the rail.
         void invalidateAccountQueries(queryClient, receiptData.from);
         onSettlementSuccess?.(settlement.railId, receiptData);
-      } else if (errorData) {
+      } else {
+        const failure = errorData ?? new Error("Settlement transaction reverted");
         const content = getToastContent(settlement.metadata, "error");
 
         console.error(`[Settlement Error] Rail ${settlement.railId}:`, {
-          error: errorData.message,
+          error: failure.message,
           txHash,
-          fullError: errorData,
+          fullError: failure,
         });
 
         toast.error(content.title, {
@@ -117,7 +118,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
           description: "Settlement failed. See console for details.",
         });
 
-        onSettlementError?.(settlement.railId, errorData);
+        onSettlementError?.(settlement.railId, failure);
       }
 
       // Cleanup
@@ -137,7 +138,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
 
   // Effect to handle transaction status changes
   useEffect(() => {
-    if (currentPendingTx && (isSuccess || isError)) {
+    if (currentPendingTx && ((isSuccess && receipt) || isError)) {
       handleTransactionComplete(currentPendingTx, isSuccess, receipt, error as Error);
     }
   }, [currentPendingTx, isSuccess, isError, receipt, error, handleTransactionComplete]);
