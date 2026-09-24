@@ -792,6 +792,7 @@ describe("executeSquidDeposit", () => {
     ).rejects.toThrow("Reviewed screen changed");
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
+    expect(pinnedBlocks(source)).toEqual([undefined]);
   });
 
   it("resets a nonzero insufficient allowance before approving the payment amount", async () => {
