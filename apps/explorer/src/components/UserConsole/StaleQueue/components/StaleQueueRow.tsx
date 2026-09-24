@@ -1,26 +1,26 @@
-"use client";
-
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
-import type { DataSet } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { useState } from "react";
 import { InlineTextLoader } from "@/components/shared";
-import { isUserRejection, useMuteDataSet } from "@/hooks/useMuteDataSet";
+import { useMuteDataSet } from "@/hooks/useMuteDataSet";
 import { formatTokenCeiling } from "@/utils/formatter";
-import { daysInactive } from "../data/staleness";
+import { isUserRejection } from "@/utils/wallet-errors";
+import type { RankedDataSet } from "../data/staleness";
+import { SnoozeDialog } from "./SnoozeDialog";
 
-type StaleQueueRowProps = {
-  dataSet: DataSet;
+type StaleQueueRowProps = RankedDataSet & {
   accountId: string;
-  /** Pre-ranked by the caller; already resolved to 0 when not yet knowable. */
-  spend: bigint;
-  nowSeconds: bigint;
+  canMute: boolean;
 };
 
-export function StaleQueueRow({ dataSet, accountId, spend, nowSeconds }: StaleQueueRowProps) {
+export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute }: StaleQueueRowProps) {
   const muteDataSet = useMuteDataSet(accountId);
+  const [isSnoozeDialogOpen, setIsSnoozeDialogOpen] = useState(false);
+  const dataSetId = dataSet.dataSetId.toString();
   const { token } = dataSet.pdpRail;
-  const days = daysInactive(dataSet.lastWriteAt, nowSeconds);
+  const monthlySpendLabel =
+    monthlySpend === undefined ? "—" : formatTokenCeiling(monthlySpend, token.decimals, token.symbol, 4);
 
   const showError = muteDataSet.isError && !isUserRejection(muteDataSet.error);
 
@@ -29,7 +29,7 @@ export function StaleQueueRow({ dataSet, accountId, spend, nowSeconds }: StaleQu
       <div className='flex min-w-0 flex-col gap-1'>
         <ID number={Number(dataSet.dataSetId)} />
         <span className='text-xs text-muted-foreground'>
-          {days.toString()} days inactive · {formatTokenCeiling(spend, token.decimals, token.symbol, 4)} spent since
+          {days.toString()} days inactive · {monthlySpendLabel} per month
         </span>
         {showError ? (
           <span className='text-xs text-destructive'>
@@ -38,13 +38,11 @@ export function StaleQueueRow({ dataSet, accountId, spend, nowSeconds }: StaleQu
         ) : null}
       </div>
       <div className='flex shrink-0 gap-2'>
-        <Button
-          variant='ghost'
-          onClick={() => muteDataSet.mutate(dataSet.dataSetId.toString())}
-          disabled={muteDataSet.isPending}
-        >
-          {muteDataSet.isPending ? <InlineTextLoader text='Keeping' /> : "Keep"}
-        </Button>
+        {canMute ? (
+          <Button variant='ghost' onClick={() => setIsSnoozeDialogOpen(true)} disabled={muteDataSet.isPending}>
+            {muteDataSet.isPending ? <InlineTextLoader text='Keeping' /> : "Keep"}
+          </Button>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             {/* biome-ignore lint/a11y/noNoninteractiveTabindex: makes the disabled action explanation keyboard-accessible */}
@@ -54,9 +52,19 @@ export function StaleQueueRow({ dataSet, accountId, spend, nowSeconds }: StaleQu
               </Button>
             </span>
           </TooltipTrigger>
-          <TooltipContent side='top'>Terminate ships with the dataset termination flow.</TooltipContent>
+          <TooltipContent side='top'>Terminating datasets from the console isn't available yet.</TooltipContent>
         </Tooltip>
       </div>
+      {isSnoozeDialogOpen ? (
+        <SnoozeDialog
+          dataSetId={dataSetId}
+          onCancel={() => setIsSnoozeDialogOpen(false)}
+          onConfirm={(mutedUntil) => {
+            setIsSnoozeDialogOpen(false);
+            muteDataSet.mutate({ dataSetId, mutedUntil });
+          }}
+        />
+      ) : null}
     </li>
   );
 }

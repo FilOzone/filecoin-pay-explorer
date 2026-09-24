@@ -1,13 +1,14 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BaseError, UserRejectedRequestError } from "viem";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 
-async function callMuteDataset(body: { message: string; signature: string; dataSetId: string }): Promise<void> {
+type MuteRequest = { dataSetId: string; mutedUntil: number };
+
+async function callMuteDataset(body: MuteRequest & { message: string; signature: string }): Promise<void> {
   if (!API_URL) throw new Error("Notifications API URL not configured");
   const res = await fetch(`${API_URL}/mute-dataset`, {
     method: "POST",
@@ -24,11 +25,12 @@ async function callMuteDataset(body: { message: string; signature: string; dataS
 }
 
 // Statement must match api/auth.ts SIWE_STATEMENTS.muteDataset exactly.
-function buildMuteSiweMessage(address: `0x${string}`, chainId: number, dataSetId: string): string {
+function buildMuteSiweMessage(address: `0x${string}`, chainId: number, { dataSetId, mutedUntil }: MuteRequest): string {
+  const until = new Date(mutedUntil * 1000).toISOString();
   return createSiweMessage({
     domain: window.location.host,
     address,
-    statement: `Mute inactivity alerts for Filecoin Pay dataset ${dataSetId}`,
+    statement: `Mute inactivity alerts for Filecoin Pay dataset ${dataSetId} until ${until}`,
     uri: window.location.origin,
     version: "1",
     chainId,
@@ -37,16 +39,10 @@ function buildMuteSiweMessage(address: `0x${string}`, chainId: number, dataSetId
   });
 }
 
-// wagmi/viem usually wraps the rejection, so walk the cause chain rather than
-// matching the top-level error.
-export function isUserRejection(err: unknown): boolean {
-  return err instanceof BaseError && Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
-}
-
 /**
- * Mutes inactivity alerts for one dataset: signs a dataset-scoped SIWE
- * message and posts it, then invalidates the muted-datasets query so the
- * triage queue drops the row without a manual refetch.
+ * Mutes inactivity alerts for one dataset until `mutedUntil` (unix seconds):
+ * signs a SIWE message naming the dataset and end date, posts it, then
+ * refetches the muted datasets so the triage queue drops the row.
  */
 export function useMuteDataSet(accountId: string) {
   const { address, chainId } = useConnection();
@@ -54,14 +50,14 @@ export function useMuteDataSet(accountId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (dataSetId: string) => {
+    mutationFn: async (mute: MuteRequest) => {
       if (!address || !chainId) throw new Error("Wallet not connected");
-      const message = buildMuteSiweMessage(address, chainId, dataSetId);
+      const message = buildMuteSiweMessage(address, chainId, mute);
       const signature = await signMessageAsync({ message });
-      await callMuteDataset({ message, signature, dataSetId });
+      await callMuteDataset({ ...mute, message, signature });
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["muted-datasets", accountId] });
-    },
+    // Returning the refetch keeps the mutation pending until the row is gone,
+    // so Keep can't be clicked again in between.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["muted-datasets", accountId] }),
   });
 }

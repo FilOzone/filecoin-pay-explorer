@@ -1,5 +1,5 @@
 // Integration tests — no module mocking. All shared modules (auth, kv, db/queries)
-// run real code against miniflare bindings. Only EMAIL and RATE_LIMITER are
+// run real code against miniflare bindings. Only EMAIL and the rate limiters are
 // overridden in testEnv because miniflare cannot simulate CF service bindings.
 // SIWE messages are signed with a fixed test key (Anvil default — never deployed).
 
@@ -12,7 +12,7 @@ import app from "../../api/index";
 import { writePendingVerification } from "../../api/kv";
 import {
   createVerifiedSubscription,
-  findMutedDataSetIds,
+  findActiveMutes,
   findSubscriptionByWallet,
   findVerifiedEmailByEmail,
 } from "../../api/queries";
@@ -39,11 +39,13 @@ function makeSiwe(overrides: Partial<Parameters<typeof createSiweMessage>[0]> = 
 
 const emailSend = vi.fn<(message: EmailMessage | EmailMessageBuilder) => Promise<void>>();
 const rateLimiterLimit = vi.fn<(opts: { key: string }) => Promise<{ success: boolean }>>();
+const muteRateLimiterLimit = vi.fn<(opts: { key: string }) => Promise<{ success: boolean }>>();
 
 const testEnv = {
   ...env,
   EMAIL: { send: emailSend },
   RATE_LIMITER: { limit: rateLimiterLimit },
+  MUTE_RATE_LIMITER: { limit: muteRateLimiterLimit },
 } as unknown as typeof env;
 
 function post(path: string, body: unknown) {
@@ -63,6 +65,8 @@ beforeEach(async () => {
   emailSend.mockResolvedValue(undefined);
   rateLimiterLimit.mockReset();
   rateLimiterLimit.mockResolvedValue({ success: true });
+  muteRateLimiterLimit.mockReset();
+  muteRateLimiterLimit.mockResolvedValue({ success: true });
   await env.KV.delete(`verify:${WALLET}`);
   await env.DB.prepare("DELETE FROM wallet_subscriptions").run();
   await env.DB.prepare("DELETE FROM verified_emails").run();
@@ -283,57 +287,120 @@ describe("POST /unsubscribe", () => {
 
 // ─── POST /mute-dataset ──────────────────────────────────────────────────────
 
+const inDays = (days: number) => Math.floor(Date.now() / 1000) + days * 86_400;
+
+async function signedMute(dataSetId: string, mutedUntil: number) {
+  const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset(dataSetId, mutedUntil) });
+  const signature = await account.signMessage({ message });
+  return { message, signature, dataSetId, mutedUntil };
+}
+
+/** Inserts mutes for data sets "1".."count" of WALLET directly, bypassing the route. */
+async function seedMutes(count: number, mutedUntil: number) {
+  await env.DB.prepare(
+    `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1)
+     INSERT INTO muted_data_sets (id, wallet_address, data_set_id, muted_until, created_at)
+     SELECT 'seed-' || i, ?2, CAST(i AS TEXT), ?3, 0 FROM n`,
+  )
+    .bind(count, WALLET, mutedUntil)
+    .run();
+}
+
+async function mutedRowCount() {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM muted_data_sets").first<{ total: number }>();
+  return row?.total;
+}
+
 describe("POST /mute-dataset", () => {
   it("returns 422 when required body fields are missing", async () => {
     const res = await post("/mute-dataset", { message: "m", signature: "s" });
     expect(res.status).toBe(422);
   });
 
-  it("returns 429 when rate limit is exceeded", async () => {
-    rateLimiterLimit.mockResolvedValueOnce({ success: false });
-    const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1" });
+  it("returns 422 when dataSetId is not a canonical decimal integer", async () => {
+    for (const dataSetId of ["01", "abc", "1.5", "-1"]) {
+      const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId, mutedUntil: inDays(30) });
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it("returns 422 when mutedUntil is in the past or more than a year away", async () => {
+    for (const mutedUntil of [inDays(-1), inDays(400)]) {
+      const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1", mutedUntil });
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it("returns 429 when its own rate limit is exceeded", async () => {
+    muteRateLimiterLimit.mockResolvedValueOnce({ success: false });
+    const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1", mutedUntil: inDays(30) });
     expect(res.status).toBe(429);
   });
 
+  it("does not use the register and unsubscribe rate limit", async () => {
+    await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1", mutedUntil: inDays(30) });
+    expect(muteRateLimiterLimit).toHaveBeenCalledOnce();
+    expect(rateLimiterLimit).not.toHaveBeenCalled();
+  });
+
   it("returns 401 when SIWE verification fails and records no mute", async () => {
+    const mutedUntil = inDays(30);
     const message = makeSiwe({
       issuedAt: new Date(Date.now() - 10 * 60 * 1000),
-      statement: SIWE_STATEMENTS.muteDataset("1"),
+      statement: SIWE_STATEMENTS.muteDataset("1", mutedUntil),
     });
     const signature = await account.signMessage({ message });
-    const res = await post("/mute-dataset", { message, signature, dataSetId: "1" });
+    const res = await post("/mute-dataset", { message, signature, dataSetId: "1", mutedUntil });
     expect(res.status).toBe(401);
-    const db = createDb(env.DB);
-    expect(await findMutedDataSetIds(db, WALLET)).toEqual([]);
+    expect(await mutedRowCount()).toBe(0);
   });
 
   it("returns 401 when the signed statement names a different dataset", async () => {
-    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
-    const signature = await account.signMessage({ message });
-    const res = await post("/mute-dataset", { message, signature, dataSetId: "2" });
+    const body = await signedMute("1", inDays(30));
+    const res = await post("/mute-dataset", { ...body, dataSetId: "2" });
     expect(res.status).toBe(401);
   });
 
-  it("records the mute for the SIWE-recovered wallet address on success", async () => {
-    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
-    const signature = await account.signMessage({ message });
-    const res = await post("/mute-dataset", { message, signature, dataSetId: "1" });
+  it("returns 401 when the signed statement names a different end date", async () => {
+    const body = await signedMute("1", inDays(30));
+    const res = await post("/mute-dataset", { ...body, mutedUntil: inDays(90) });
+    expect(res.status).toBe(401);
+  });
+
+  it("records the mute and its end date for the SIWE-recovered wallet", async () => {
+    const mutedUntil = inDays(30);
+    const res = await post("/mute-dataset", await signedMute("1", mutedUntil));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     const db = createDb(env.DB);
-    expect(await findMutedDataSetIds(db, WALLET)).toEqual(["1"]);
+    expect(await findActiveMutes(db, WALLET)).toEqual([{ dataSetId: "1", mutedUntil }]);
   });
 
-  it("muting the same dataset twice is idempotent", async () => {
-    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
-    const signature = await account.signMessage({ message });
-    await post("/mute-dataset", { message, signature, dataSetId: "1" });
-    const secondMessage = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1"), nonce: "testonce2" });
-    const secondSignature = await account.signMessage({ message: secondMessage });
-    const res = await post("/mute-dataset", { message: secondMessage, signature: secondSignature, dataSetId: "1" });
+  it("muting an already-muted dataset replaces its end date", async () => {
+    await post("/mute-dataset", await signedMute("1", inDays(30)));
+    const laterUntil = inDays(90);
+    const res = await post("/mute-dataset", await signedMute("1", laterUntil));
     expect(res.status).toBe(200);
     const db = createDb(env.DB);
-    expect(await findMutedDataSetIds(db, WALLET)).toEqual(["1"]);
+    expect(await findActiveMutes(db, WALLET)).toEqual([{ dataSetId: "1", mutedUntil: laterUntil }]);
+  });
+
+  it("returns 409 once the wallet has 10,000 active mutes, but still re-mutes one of them", async () => {
+    await seedMutes(10_000, inDays(30));
+
+    const newMute = await post("/mute-dataset", await signedMute("10001", inDays(30)));
+    expect(newMute.status).toBe(409);
+
+    const reMute = await post("/mute-dataset", await signedMute("1", inDays(90)));
+    expect(reMute.status).toBe(200);
+  });
+
+  it("does not count expired mutes toward the limit and deletes them on write", async () => {
+    await seedMutes(10_000, inDays(-1));
+
+    const res = await post("/mute-dataset", await signedMute("10001", inDays(30)));
+    expect(res.status).toBe(200);
+    expect(await mutedRowCount()).toBe(1);
   });
 });
 
@@ -348,18 +415,19 @@ describe("GET /muted-datasets", () => {
   it("returns an empty list when the wallet has muted nothing", async () => {
     const res = await get(`/muted-datasets?wallet=${WALLET}`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ dataSetIds: [] });
+    expect(await res.json()).toEqual({ mutes: [] });
   });
 
-  it("returns only the requested wallet's muted dataset ids", async () => {
-    const message = makeSiwe({ statement: SIWE_STATEMENTS.muteDataset("1") });
-    const signature = await account.signMessage({ message });
-    await post("/mute-dataset", { message, signature, dataSetId: "1" });
+  it("returns only the requested wallet's active mutes", async () => {
+    await seedMutes(1, inDays(-1)); // data set "1", expired
+    const mutedUntil = inDays(30);
+    await post("/mute-dataset", await signedMute("2", mutedUntil));
+
     const res = await get(`/muted-datasets?wallet=${WALLET}`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ dataSetIds: ["1"] });
+    expect(await res.json()).toEqual({ mutes: [{ dataSetId: "2", mutedUntil }] });
 
     const otherWalletRes = await get("/muted-datasets?wallet=0x9999999999999999999999999999999999999999");
-    expect(await otherWalletRes.json()).toEqual({ dataSetIds: [] });
+    expect(await otherWalletRes.json()).toEqual({ mutes: [] });
   });
 });
