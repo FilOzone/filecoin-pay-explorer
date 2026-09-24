@@ -395,12 +395,22 @@ describe("POST /mute-dataset", () => {
     expect(reMute.status).toBe(200);
   });
 
-  it("does not count expired mutes toward the limit and deletes them on write", async () => {
+  it("does not count expired mutes toward the limit", async () => {
     await seedMutes(10_000, inDays(-1));
 
     const res = await post("/mute-dataset", await signedMute("10001", inDays(30)));
     expect(res.status).toBe(200);
+  });
+
+  it("re-muting a dataset whose mute expired replaces its end date", async () => {
+    await seedMutes(1, inDays(-1));
+    const mutedUntil = inDays(30);
+
+    const res = await post("/mute-dataset", await signedMute("1", mutedUntil));
+    expect(res.status).toBe(200);
     expect(await mutedRowCount()).toBe(1);
+    const db = createDb(env.DB);
+    expect(await findActiveMutes(db, WALLET)).toEqual([{ dataSetId: "1", mutedUntil }]);
   });
 });
 
