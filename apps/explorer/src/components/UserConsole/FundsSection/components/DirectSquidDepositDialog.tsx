@@ -1155,9 +1155,9 @@ export function DirectSquidDepositDialog({
                     </Label>
                     <p className='text-xs text-muted-foreground' id='direct-squid-fil-gas-description'>
                       {recipientFilQuery.data === undefined
-                        ? "Your FIL balance could not be loaded."
-                        : "Your wallet is low on FIL for Filecoin transaction fees."}{" "}
-                      This FIL goes to your wallet, not your Filecoin Pay balance.
+                        ? "Your FIL balance could not be loaded. "
+                        : "Your wallet does not have enough FIL for fees. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
+                      The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.
                     </p>
                     {quote?.filGasTopUp ? (
                       <p className='text-xs text-muted-foreground'>
