@@ -608,9 +608,9 @@ describe("DirectSquidDepositDialog safety integration", () => {
   });
 
   it.each([
-    [0n, false, "Your wallet does not have enough FIL for fees."],
-    [1n, false, "Your wallet does not have enough FIL for fees."],
-    [undefined, true, "Your wallet does not have enough FIL for fees."],
+    [0n, false, "Your wallet is low on FIL for Filecoin transaction fees."],
+    [1n, false, "Your wallet is low on FIL for Filecoin transaction fees."],
+    [undefined, true, "Your FIL balance could not be loaded."],
   ])("defaults the FIL option on for destination balance %s (error: %s)", async (balance, isError, hint) => {
     query.recipientFil = balance;
     query.recipientFilIsError = isError;
@@ -621,10 +621,13 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     const option = renderer.root.findByProps({ id: "direct-squid-fil-gas" });
     expect(option.props.checked).toBe(true);
+    expect(option.props["aria-describedby"]).toBe("direct-squid-fil-gas-description");
+    expect(renderer.root.findByProps({ id: "direct-squid-fil-gas-description" })).toBeTruthy();
     const text = JSON.stringify(renderer.toJSON());
     expect(text).toContain("Include 0.05 FIL for transaction fees");
     expect(text).toContain(hint);
-    expect(text).toContain("The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.");
+    expect(text).not.toContain(isError ? "Your wallet is low on FIL" : "Your FIL balance could not be loaded.");
+    expect(text).toContain("This FIL goes to your wallet, not your Filecoin Pay balance.");
     expect(text).toContain("+ 0.05 FIL for network fees");
   });
 
