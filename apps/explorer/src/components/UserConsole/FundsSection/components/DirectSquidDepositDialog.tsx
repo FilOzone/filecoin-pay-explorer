@@ -304,8 +304,7 @@ export function DirectSquidDepositDialog({
     retry: 1,
   });
   // Keep a successfully observed funded balance through a failed background refetch.
-  const hasRecipientFil =
-    getFilecoinGasBalanceStatus({ balance: recipientFilQuery.data, isError: false, isLoading: false }) === "funded";
+  const hasRecipientFil = (recipientFilQuery.data ?? 0n) >= FIL_TRANSACTION_FEE_RESERVE;
   // confirm() reads this after its own balance read, so FIL a poll saw in the meantime is not lost.
   const hasRecipientFilRef = useRef(hasRecipientFil);
   hasRecipientFilRef.current = hasRecipientFil;
