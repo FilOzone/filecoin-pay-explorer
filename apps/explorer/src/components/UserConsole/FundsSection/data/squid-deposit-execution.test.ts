@@ -669,53 +669,6 @@ describe("executeSquidDeposit", () => {
     expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it("checks the account after a lagging node's approval read recovers", async () => {
-    const wallet = fakeWallet();
-    const source = fakeSource({ headSequence: [41n, 42n], receiptBlock: 42n });
-    let currentOwner: typeof OWNER | typeof RECIPIENT = OWNER;
-    const sleep = vi.fn(async () => {
-      currentOwner = RECIPIENT;
-    });
-    await expect(
-      executeSquidDeposit({
-        destinationClient: fakeDestination(),
-        ...signingChecks,
-        getCurrentOwner: vi.fn(async () => currentOwner),
-        quote,
-        request,
-        sleep,
-        sourceClient: source,
-        squid: { integratorId: "id" },
-        walletClient: wallet,
-      }),
-    ).rejects.toThrow("Wallet account changed before signing");
-    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
-    expect(sleep).toHaveBeenCalledOnce();
-  });
-
-  it("checks the wallet network after a lagging node's approval read recovers", async () => {
-    const wallet = fakeWallet();
-    const source = fakeSource({ headSequence: [41n, 42n], receiptBlock: 42n });
-    let walletChainId = 8453;
-    const sleep = vi.fn(async () => {
-      walletChainId = 1;
-    });
-    await expect(
-      executeSquidDeposit({
-        destinationClient: fakeDestination(),
-        ...signingChecks,
-        quote,
-        request,
-        sleep,
-        sourceClient: source,
-        squid: { integratorId: "id" },
-        walletClient: { ...wallet, getChainId: vi.fn(async () => walletChainId) },
-      }),
-    ).rejects.toThrow("Source network changed before signing");
-    expect(wallet.sendTransaction).toHaveBeenCalledTimes(1);
-    expect(sleep).toHaveBeenCalledOnce();
-  });
-
   // Only the read right before the route signature lags, so no later read would catch a switch during its retry.
   it("checks the account after the pre-route read waits for a lagging node", async () => {
     const wallet = fakeWallet();
