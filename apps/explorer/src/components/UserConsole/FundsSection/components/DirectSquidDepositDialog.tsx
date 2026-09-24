@@ -29,7 +29,7 @@ import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
-import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
+import { FIL_TRANSACTION_FEE_RESERVE, getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import {
   getSourceTokenBalance,

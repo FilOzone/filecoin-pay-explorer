@@ -50,12 +50,7 @@ const FAILURE_MESSAGES = {
   "rpc-error": "Receipt RPC failed",
 } as const;
 
-it.each([
-  "success",
-  "wagmi-revert",
-  "reverted",
-  "rpc-error",
-] as const)("handles a %s settlement result", async (resultType) => {
+async function renderSettlementResult(resultType: "success" | keyof typeof FAILURE_MESSAGES) {
   const onSettlementSuccess = vi.fn();
   const onSettlementError = vi.fn();
   let result: ReturnType<typeof useRailSettlements> | undefined;
@@ -100,30 +95,40 @@ it.each([
     renderer.update(<Harness />);
   });
 
-  if (resultType === "success") {
-    expect(toast.success).toHaveBeenCalledOnce();
-    expect(onSettlementSuccess).toHaveBeenCalledOnce();
-    expect(onSettlementSuccess).toHaveBeenCalledWith("1", receipt);
-    expect(invalidateAccountQueries).toHaveBeenCalledOnce();
-    expect(onSettlementError).not.toHaveBeenCalled();
-    expect(toast.error).not.toHaveBeenCalled();
-  } else {
-    expect(toast.error).toHaveBeenCalledOnce();
-    expect(onSettlementError).toHaveBeenCalledOnce();
-    expect(onSettlementError).toHaveBeenCalledWith(
-      "1",
-      expect.objectContaining({ message: FAILURE_MESSAGES[resultType] }),
-    );
-    expect(onSettlementSuccess).not.toHaveBeenCalled();
-    expect(toast.success).not.toHaveBeenCalled();
-    expect(invalidateAccountQueries).not.toHaveBeenCalled();
-  }
   expect(result?.settlements.size).toBe(0);
   expect(waitForTransactionReceipt).toHaveBeenLastCalledWith({
     chainId: 314,
     hash: undefined,
     query: { enabled: false },
   });
+  return { onSettlementError, onSettlementSuccess, receipt };
+}
+
+it("handles a successful settlement once", async () => {
+  const { onSettlementError, onSettlementSuccess, receipt } = await renderSettlementResult("success");
+  expect(toast.success).toHaveBeenCalledOnce();
+  expect(onSettlementSuccess).toHaveBeenCalledOnce();
+  expect(onSettlementSuccess).toHaveBeenCalledWith("1", receipt);
+  expect(invalidateAccountQueries).toHaveBeenCalledOnce();
+  expect(onSettlementError).not.toHaveBeenCalled();
+  expect(toast.error).not.toHaveBeenCalled();
+});
+
+it.each([
+  "wagmi-revert",
+  "reverted",
+  "rpc-error",
+] as const)("handles a %s settlement failure once", async (resultType) => {
+  const { onSettlementError, onSettlementSuccess } = await renderSettlementResult(resultType);
+  expect(toast.error).toHaveBeenCalledOnce();
+  expect(onSettlementError).toHaveBeenCalledOnce();
+  expect(onSettlementError).toHaveBeenCalledWith(
+    "1",
+    expect.objectContaining({ message: FAILURE_MESSAGES[resultType] }),
+  );
+  expect(onSettlementSuccess).not.toHaveBeenCalled();
+  expect(toast.success).not.toHaveBeenCalled();
+  expect(invalidateAccountQueries).not.toHaveBeenCalled();
 });
 
 it("pins settlement writes and receipts to the displayed Filecoin chain", async () => {
