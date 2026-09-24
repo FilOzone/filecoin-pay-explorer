@@ -1,4 +1,4 @@
-import { and, count, eq, gt, lte, ne } from "drizzle-orm";
+import { and, count, eq, gt, ne } from "drizzle-orm";
 import type { DB } from "../shared/db/client";
 import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
 import { mutedDataSets, verifiedEmails, walletSubscriptions } from "../shared/db/schema";
@@ -144,26 +144,21 @@ export async function deleteSubscription(db: DB, walletAddress: string): Promise
 }
 
 /**
- * Mutes a dataset until `mutedUntil`, replacing any earlier mute of it. The
- * wallet's expired mutes are deleted in the same batch.
+ * Mutes a dataset until `mutedUntil`, replacing any earlier mute of it.
+ * Expired mutes are kept: the inactivity alert uses a snooze's end date to
+ * email again once it passes.
  */
 export async function muteDataSet(
   db: DB,
   data: { id: string; walletAddress: string; dataSetId: string; mutedUntil: number },
 ): Promise<void> {
-  const now = nowSeconds();
-  await db.batch([
-    db
-      .delete(mutedDataSets)
-      .where(and(eq(mutedDataSets.walletAddress, data.walletAddress), lte(mutedDataSets.mutedUntil, now))),
-    db
-      .insert(mutedDataSets)
-      .values({ ...data, createdAt: now })
-      .onConflictDoUpdate({
-        target: [mutedDataSets.walletAddress, mutedDataSets.dataSetId],
-        set: { mutedUntil: data.mutedUntil },
-      }),
-  ]);
+  await db
+    .insert(mutedDataSets)
+    .values({ ...data, createdAt: nowSeconds() })
+    .onConflictDoUpdate({
+      target: [mutedDataSets.walletAddress, mutedDataSets.dataSetId],
+      set: { mutedUntil: data.mutedUntil },
+    });
 }
 
 /** Counts the wallet's mutes still in effect, leaving out `dataSetId`. */
