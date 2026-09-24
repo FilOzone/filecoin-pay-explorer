@@ -41,7 +41,21 @@ beforeEach(() => {
   toast.success.mockClear();
 });
 
-it.each(["success", "reverted", "rpc-error"] as const)("handles a %s settlement result", async (resultType) => {
+const FAILURE_MESSAGES = {
+  // @wagmi/core 3 throws on a reverted receipt, so a real revert arrives as an error without data.
+  "wagmi-revert": "Execution reverted with reason: rail already settled to epoch.",
+  // A success result carrying a reverted receipt, which the status check guards against.
+  reverted: "Settlement transaction reverted",
+  // A failed receipt poll keeps the earlier data.
+  "rpc-error": "Receipt RPC failed",
+} as const;
+
+it.each([
+  "success",
+  "wagmi-revert",
+  "reverted",
+  "rpc-error",
+] as const)("handles a %s settlement result", async (resultType) => {
   const onSettlementSuccess = vi.fn();
   const onSettlementError = vi.fn();
   let result: ReturnType<typeof useRailSettlements> | undefined;
@@ -73,27 +87,34 @@ it.each(["success", "reverted", "rpc-error"] as const)("handles a %s settlement 
     from: "0x1111111111111111111111111111111111111111",
     status: resultType === "reverted" ? "reverted" : "success",
   } as unknown as TransactionReceipt;
-  receiptState.data = receipt;
-  receiptState.isSuccess = resultType !== "rpc-error";
-  receiptState.isError = resultType === "rpc-error";
-  receiptState.error = resultType === "rpc-error" ? new Error("Receipt RPC failed") : undefined;
+  receiptState.data = resultType === "wagmi-revert" ? undefined : receipt;
+  receiptState.isSuccess = resultType === "success" || resultType === "reverted";
+  receiptState.isError = !receiptState.isSuccess;
+  receiptState.error =
+    resultType === "wagmi-revert" || resultType === "rpc-error" ? new Error(FAILURE_MESSAGES[resultType]) : undefined;
+  await act(async () => {
+    renderer.update(<Harness />);
+  });
+  // The settled transaction leaves the queue, so a later render cannot report it again.
   await act(async () => {
     renderer.update(<Harness />);
   });
 
   if (resultType === "success") {
     expect(toast.success).toHaveBeenCalledOnce();
+    expect(onSettlementSuccess).toHaveBeenCalledOnce();
     expect(onSettlementSuccess).toHaveBeenCalledWith("1", receipt);
     expect(invalidateAccountQueries).toHaveBeenCalledOnce();
+    expect(onSettlementError).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   } else {
     expect(toast.error).toHaveBeenCalledOnce();
+    expect(onSettlementError).toHaveBeenCalledOnce();
     expect(onSettlementError).toHaveBeenCalledWith(
       "1",
-      expect.objectContaining({
-        message: resultType === "reverted" ? "Settlement transaction reverted" : "Receipt RPC failed",
-      }),
+      expect.objectContaining({ message: FAILURE_MESSAGES[resultType] }),
     );
+    expect(onSettlementSuccess).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
     expect(invalidateAccountQueries).not.toHaveBeenCalled();
   }

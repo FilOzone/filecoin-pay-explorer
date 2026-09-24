@@ -86,6 +86,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
       const settlement = Array.from(settlementsRef.current.values()).find((s) => s.txHash === txHash);
       if (!settlement) return;
 
+      // @wagmi/core 3 already throws on a reverted receipt; this guards a success result that still carries one.
       if (success && receiptData?.status === "success") {
         const content = getToastContent(settlement.metadata, "success");
         const txHashShort = `${txHash.slice(0, 6)}...${txHash.slice(-4)}`;
