@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, gt, lte, ne } from "drizzle-orm";
 import type { DB } from "../shared/db/client";
 import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
 import { mutedDataSets, verifiedEmails, walletSubscriptions } from "../shared/db/schema";
@@ -143,23 +143,51 @@ export async function deleteSubscription(db: DB, walletAddress: string): Promise
   }
 }
 
-/** Inserts a muted_data_sets row. Muting the same dataset twice is a no-op. */
+/**
+ * Mutes a dataset until `mutedUntil`, replacing any earlier mute of it. The
+ * wallet's expired mutes are deleted in the same batch.
+ */
 export async function muteDataSet(
   db: DB,
-  data: { id: string; walletAddress: string; dataSetId: string },
+  data: { id: string; walletAddress: string; dataSetId: string; mutedUntil: number },
 ): Promise<void> {
   const now = nowSeconds();
-  await db
-    .insert(mutedDataSets)
-    .values({ ...data, createdAt: now })
-    .onConflictDoNothing();
+  await db.batch([
+    db
+      .delete(mutedDataSets)
+      .where(and(eq(mutedDataSets.walletAddress, data.walletAddress), lte(mutedDataSets.mutedUntil, now))),
+    db
+      .insert(mutedDataSets)
+      .values({ ...data, createdAt: now })
+      .onConflictDoUpdate({
+        target: [mutedDataSets.walletAddress, mutedDataSets.dataSetId],
+        set: { mutedUntil: data.mutedUntil },
+      }),
+  ]);
 }
 
-/** Returns the dataset ids this wallet has muted inactivity alerts for. */
-export async function findMutedDataSetIds(db: DB, walletAddress: string): Promise<string[]> {
+/** Counts the wallet's mutes still in effect, leaving out `dataSetId`. */
+export async function countActiveMutesExcept(db: DB, walletAddress: string, dataSetId: string): Promise<number> {
   const rows = await db
-    .select({ dataSetId: mutedDataSets.dataSetId })
+    .select({ total: count() })
     .from(mutedDataSets)
-    .where(eq(mutedDataSets.walletAddress, walletAddress));
-  return rows.map((row) => row.dataSetId);
+    .where(
+      and(
+        eq(mutedDataSets.walletAddress, walletAddress),
+        ne(mutedDataSets.dataSetId, dataSetId),
+        gt(mutedDataSets.mutedUntil, nowSeconds()),
+      ),
+    );
+  return rows[0]?.total ?? 0;
+}
+
+/** The wallet's mutes still in effect. */
+export async function findActiveMutes(
+  db: DB,
+  walletAddress: string,
+): Promise<{ dataSetId: string; mutedUntil: number }[]> {
+  return db
+    .select({ dataSetId: mutedDataSets.dataSetId, mutedUntil: mutedDataSets.mutedUntil })
+    .from(mutedDataSets)
+    .where(and(eq(mutedDataSets.walletAddress, walletAddress), gt(mutedDataSets.mutedUntil, nowSeconds())));
 }

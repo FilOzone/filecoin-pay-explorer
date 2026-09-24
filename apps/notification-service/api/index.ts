@@ -15,9 +15,10 @@ import { SIWE_STATEMENTS, verifySiwe } from "./auth";
 import { validateEmail } from "./email-validation";
 import { deletePendingVerification, readPendingVerification, writePendingVerification } from "./kv";
 import {
+  countActiveMutesExcept,
   createVerifiedSubscription,
   deleteSubscription,
-  findMutedDataSetIds,
+  findActiveMutes,
   findSubscriptionByWallet,
   muteDataSet,
 } from "./queries";
@@ -56,7 +57,26 @@ const statusQuery = z.object({
     .transform((s) => s.toLowerCase()),
 });
 
-const muteDatasetBody = siweBody.extend({ dataSetId: z.string().min(1) });
+// Bounds the GET /muted-datasets response, which the explorer reads in full.
+const MAX_ACTIVE_MUTES = 10_000;
+
+// The explorer offers at most 365 days. The extra days cover a custom date's
+// end-of-day time, DST and clock skew.
+const MAX_MUTE_SECONDS = 367 * 86_400;
+
+const muteDatasetBody = siweBody.extend({
+  // Canonical decimal only, so "01" can't be stored as a mute that never matches "1".
+  // A uint256 has at most 78 digits.
+  dataSetId: z
+    .string()
+    .max(78)
+    .regex(/^(0|[1-9]\d*)$/, "dataSetId must be a decimal integer"),
+  mutedUntil: z
+    .number()
+    .int()
+    .refine((until) => until > Date.now() / 1000, "mutedUntil must be in the future")
+    .refine((until) => until <= Date.now() / 1000 + MAX_MUTE_SECONDS, "mutedUntil is too far in the future"),
+});
 
 const mutedDatasetsQuery = z.object({
   wallet: z
@@ -262,8 +282,8 @@ app.post(
 );
 
 // POST /mute-dataset
-// Verifies SIWE (statement scoped to the specific dataset) and records the mute.
-// Idempotent: muting an already-muted dataset is a no-op.
+// Verifies SIWE (statement names the dataset and end date) and mutes the dataset
+// until then. Muting an already-muted dataset replaces its end date.
 app.post(
   "/mute-dataset",
   zValidator("json", muteDatasetBody, (result, c) => {
@@ -273,17 +293,23 @@ app.post(
     const log = c.get("log");
     log.set({ route: "mute-dataset" });
 
+    // Own limiter: triaging a queue takes several mutes in a row, and those
+    // must not use up the IP's /register and /unsubscribe budget.
     const ip = c.req.header("cf-connecting-ip") ?? "unknown";
-    const { success } = await c.env.RATE_LIMITER.limit({ key: ip });
+    const { success } = await c.env.MUTE_RATE_LIMITER.limit({ key: ip });
     if (!success) {
       log.set({ outcome: "rate_limited" });
       return c.json({ error: "Too many requests" }, 429);
     }
 
-    const { message, signature, dataSetId } = c.req.valid("json");
-    log.set({ dataSetId });
+    const { message, signature, dataSetId, mutedUntil } = c.req.valid("json");
+    log.set({ dataSetId, mutedUntil });
 
-    const siweResult = await verifyRequestSiwe(c, { message, signature }, SIWE_STATEMENTS.muteDataset(dataSetId));
+    const siweResult = await verifyRequestSiwe(
+      c,
+      { message, signature },
+      SIWE_STATEMENTS.muteDataset(dataSetId, mutedUntil),
+    );
     if (!siweResult.ok) {
       log.set({ outcome: "auth_failed", reason: siweResult.error });
       return c.json({ error: siweResult.error }, 401);
@@ -293,7 +319,18 @@ app.post(
     log.set({ wallet: walletAddress });
 
     const db = createDb(c.env.DB);
-    await muteDataSet(db, { id: crypto.randomUUID(), walletAddress, dataSetId });
+
+    // Concurrent requests can overshoot by a few; the cap only has to bound growth.
+    const activeMutes = await countActiveMutesExcept(db, walletAddress, dataSetId);
+    if (activeMutes >= MAX_ACTIVE_MUTES) {
+      log.set({ outcome: "mute_limit_reached" });
+      return c.json(
+        { error: `You can mute at most ${MAX_ACTIVE_MUTES.toLocaleString("en-US")} datasets at once.` },
+        409,
+      );
+    }
+
+    await muteDataSet(db, { id: crypto.randomUUID(), walletAddress, dataSetId, mutedUntil });
 
     log.set({ outcome: "success" });
     return c.json({ ok: true });
@@ -301,9 +338,9 @@ app.post(
 );
 
 // GET /muted-datasets?wallet=
-// Returns the dataset ids this wallet has muted. No signature required: this
-// only reveals which of the wallet's already-public datasets it muted, the
-// same sensitivity as /status's subscribed boolean.
+// Returns the wallet's mutes still in effect, each with its end date. No
+// signature required: this only reveals which of the wallet's already-public
+// datasets it muted, the same sensitivity as /status's subscribed boolean.
 app.get(
   "/muted-datasets",
   zValidator("query", mutedDatasetsQuery, (result, c) => {
@@ -313,9 +350,9 @@ app.get(
     const log = c.get("log");
     const { wallet } = c.req.valid("query");
     const db = createDb(c.env.DB);
-    const dataSetIds = await findMutedDataSetIds(db, wallet);
-    log.set({ route: "muted-datasets", wallet, count: dataSetIds.length });
-    return c.json({ dataSetIds });
+    const mutes = await findActiveMutes(db, wallet);
+    log.set({ route: "muted-datasets", wallet, count: mutes.length });
+    return c.json({ mutes });
   },
 );
 
