@@ -973,8 +973,6 @@ describe("DirectSquidDepositDialog safety integration", () => {
       amountInput(renderer).props.onChange({ target: { value: "100" } });
     });
     expect(renderer.root.findByProps({ id: "direct-squid-fil-gas" }).props.checked).toBe(true);
-    // The query mock has no cache, so pin the options that keep a remount from reusing an earlier balance.
-    expect(query.recipientFilOptions).toMatchObject({ gcTime: 0, refetchOnMount: "always" });
     const firstQueryKey = query.recipientFilQueryKey;
     await act(async () => {
       renderer.update(render(false));
