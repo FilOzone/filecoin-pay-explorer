@@ -4,6 +4,7 @@ import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
 import { DatasetsSection } from "../DatasetsSection";
 import { RailsSection } from "../RailsSection";
+import { StaleQueue } from "../StaleQueue";
 import {
   ServiceErrorState,
   ServiceHeader,
@@ -73,7 +74,10 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
       />
 
       {isWarmStorage ? (
-        <DatasetsSection key={`${network}:${accountId}`} accountId={accountId} network={network} />
+        <>
+          <DatasetsSection key={`${network}:${accountId}:datasets`} accountId={accountId} network={network} />
+          <StaleQueue key={`${network}:${accountId}:stale`} accountId={accountId} network={network} />
+        </>
       ) : null}
     </div>
   );

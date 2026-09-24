@@ -17,6 +17,7 @@ import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import CopyButton from "@/components/shared/CopyButton";
+import { ExpiryPicker } from "@/components/shared/ExpiryPicker";
 import { Notice } from "@/components/shared/Notice";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
@@ -498,30 +499,16 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
                 ) : (
                   <>
-                    <select
-                      disabled={formLocked}
+                    <ExpiryPicker
                       id='sk-expiry'
-                      className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                      value={presetIndex}
-                      onChange={(e) => setPresetIndex(e.target.value)}
-                    >
-                      {EXPIRY_PRESETS.map((preset, i) => (
-                        <option key={preset.label} value={String(i)}>
-                          {preset.label}
-                        </option>
-                      ))}
-                      <option value='custom'>Custom date…</option>
-                    </select>
-                    {presetIndex === "custom" && (
-                      <input
-                        type='date'
-                        disabled={formLocked}
-                        aria-label='Custom expiry date'
-                        className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                        value={customDate}
-                        onChange={(e) => setCustomDate(e.target.value)}
-                      />
-                    )}
+                      presets={EXPIRY_PRESETS}
+                      presetIndex={presetIndex}
+                      customDate={customDate}
+                      onPresetIndexChange={setPresetIndex}
+                      onCustomDateChange={setCustomDate}
+                      customDateLabel='Custom expiry date'
+                      disabled={formLocked}
+                    />
                     <p className='text-xs text-zinc-500'>
                       The key stops working on this date. Every key has to expire.
                     </p>

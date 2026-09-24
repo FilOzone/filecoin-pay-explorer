@@ -6,7 +6,6 @@ import { useMutation } from "@tanstack/react-query";
 import { ChevronRight, WifiOff } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BaseError, UserRejectedRequestError } from "viem";
 import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
 import {
@@ -26,6 +25,7 @@ import {
   isNotificationsEligibleNetwork,
   isSupportedChainId,
 } from "@/utils/network";
+import { isUserRejection } from "@/utils/wallet-errors";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 const POLL_INTERVAL_MS = 10_000;
@@ -161,13 +161,6 @@ function buildSiweMessage(
     nonce: generateSiweNonce(),
     issuedAt: new Date(),
   });
-}
-
-// wagmi/viem usually wraps the rejection, so walk the cause chain rather than
-// matching the top-level error (UserRejectedRequestError extends BaseError, so a
-// direct throw is covered too).
-function isUserRejection(err: unknown): boolean {
-  return err instanceof BaseError && Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
 }
 
 const eligibleNetwork = getNotificationsEligibleNetwork();

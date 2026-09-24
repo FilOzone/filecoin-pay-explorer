@@ -4,11 +4,18 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-worker
 import { defineConfig, defineProject } from "vitest/config";
 
 const migrationsDir = path.join(import.meta.dirname, "migrations");
+// Each drizzle-kit folder's file is always named "migration.sql", and
+// readD1Migrations names a migration after its filename alone — so two
+// folders collide on the same "migration.sql" name unless the folder's own
+// (uniquely timestamped) name is folded in here.
 const migrations = (
   await Promise.all(
     readdirSync(migrationsDir)
       .sort()
-      .map((d) => readD1Migrations(path.join(migrationsDir, d))),
+      .map(async (d) => {
+        const dirMigrations = await readD1Migrations(path.join(migrationsDir, d));
+        return dirMigrations.map((migration) => ({ ...migration, name: `${d}_${migration.name}` }));
+      }),
   )
 ).flat();
 

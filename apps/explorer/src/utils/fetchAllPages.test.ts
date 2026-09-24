@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fetchAllPages } from "./useAccountDetails";
+import { fetchAllPages, SUBGRAPH_PAGE_SIZE as PAGE_SIZE } from "./fetchAllPages";
 
-const PAGE_SIZE = 1_000;
+const MAX_PAGES = 10;
 
 /** `count` rows with ascending ids, served in pages the way graph-node would. */
 const makePager = (count: number) => {
@@ -23,7 +23,7 @@ const makePager = (count: number) => {
 describe("fetchAllPages", () => {
   it("returns a short first page without asking for another", async () => {
     const pager = makePager(3);
-    const result = await fetchAllPages(pager.fetchPage);
+    const result = await fetchAllPages(pager.fetchPage, MAX_PAGES);
 
     expect(result.items).toHaveLength(3);
     expect(result.reachedPageLimit).toBe(false);
@@ -32,7 +32,7 @@ describe("fetchAllPages", () => {
 
   it("returns an empty collection without looping", async () => {
     const pager = makePager(0);
-    const result = await fetchAllPages(pager.fetchPage);
+    const result = await fetchAllPages(pager.fetchPage, MAX_PAGES);
 
     expect(result.items).toEqual([]);
     expect(pager.calls).toBe(1);
@@ -40,7 +40,7 @@ describe("fetchAllPages", () => {
 
   it("walks every page and concatenates them in order", async () => {
     const pager = makePager(2_500);
-    const result = await fetchAllPages(pager.fetchPage);
+    const result = await fetchAllPages(pager.fetchPage, MAX_PAGES);
 
     expect(result.items).toHaveLength(2_500);
     expect(result.reachedPageLimit).toBe(false);
@@ -53,7 +53,7 @@ describe("fetchAllPages", () => {
     // A full page is indistinguishable from more data, so the walk cannot stop
     // until it sees a short one.
     const pager = makePager(PAGE_SIZE);
-    const result = await fetchAllPages(pager.fetchPage);
+    const result = await fetchAllPages(pager.fetchPage, MAX_PAGES);
 
     expect(result.items).toHaveLength(PAGE_SIZE);
     expect(result.reachedPageLimit).toBe(false);
@@ -94,6 +94,6 @@ describe("fetchAllPages", () => {
     // A full page whose last id equals the cursor would loop forever.
     const stuck = Array.from({ length: PAGE_SIZE }, () => ({ id: "0x" }));
 
-    await expect(fetchAllPages(async () => stuck)).rejects.toThrow("did not advance");
+    await expect(fetchAllPages(async () => stuck, MAX_PAGES)).rejects.toThrow("did not advance");
   });
 });

@@ -22,10 +22,11 @@ import {
 const stepClass = (isDisabled: boolean) => (isDisabled ? "pointer-events-none opacity-50" : "cursor-pointer");
 
 /**
- * No total count is fetched for this list, so pagination can only step:
- * disable Previous on the first page, disable Next once no extra row came back.
+ * Previous/Next only: Previous is disabled on the first page, Next once there
+ * is no further page. The datasets table fetches no total count, so it can
+ * only step.
  */
-function DatasetsPagination({
+export function DatasetsPagination({
   page,
   hasMore,
   onPageChange,
