@@ -8,7 +8,11 @@
   "env": {
     "staging": {
       "name": "notification-alert-processor-staging",
-      "vars": { "NETWORK": "calibration", "FRONTEND_ORIGIN": "https://filecoin-pay-explorer-staging.vercel.app" },
+      "vars": {
+        "NETWORK": "calibration",
+        "FRONTEND_ORIGIN": "https://filecoin-pay-explorer-staging.vercel.app",
+        "SUBGRAPH_URL": "https://api.goldsky.com/api/public/project_cmb9tuo8r1xdw01ykb8uidk7h/subgraphs/filecoin-pay-calibration/staging/gn"
+      },
       "secrets": { "required": ["RPC_URL"] },
       "d1_databases": [
         {
@@ -33,7 +37,11 @@
     },
     "production": {
       "name": "notification-alert-processor-production",
-      "vars": { "NETWORK": "mainnet", "FRONTEND_ORIGIN": "https://pay.filecoin.cloud" },
+      "vars": {
+        "NETWORK": "mainnet",
+        "FRONTEND_ORIGIN": "https://pay.filecoin.cloud",
+        "SUBGRAPH_URL": "https://api.goldsky.com/api/public/project_cmb9tuo8r1xdw01ykb8uidk7h/subgraphs/filecoin-pay-mainnet/prod/gn"
+      },
       "secrets": { "required": ["RPC_URL"] },
       "d1_databases": [
         {

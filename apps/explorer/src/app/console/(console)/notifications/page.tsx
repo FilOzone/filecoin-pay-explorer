@@ -448,7 +448,8 @@ const NotificationsPage = () => {
         </div>
         <p className='mt-2 text-muted-foreground'>
           Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
-          services are affected.
+          services are affected, and when a Warm Storage dataset has had no new data for 30 days, so you can decide
+          whether to keep paying for it.
         </p>
       </div>
 

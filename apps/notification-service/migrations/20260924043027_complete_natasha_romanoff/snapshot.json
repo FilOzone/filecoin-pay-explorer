@@ -1,0 +1,475 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "d73a8731-5700-4bbf-96ba-ee549b988ec8",
+  "prevIds": ["39b25d44-a19c-4c0b-98e1-ecca7a512b49"],
+  "ddl": [
+    {
+      "name": "inactivity_alerts",
+      "entityType": "tables"
+    },
+    {
+      "name": "muted_data_sets",
+      "entityType": "tables"
+    },
+    {
+      "name": "notification_log",
+      "entityType": "tables"
+    },
+    {
+      "name": "verified_emails",
+      "entityType": "tables"
+    },
+    {
+      "name": "wallet_subscriptions",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "wallet_address",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data_set_id",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_write_at",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "email_sent_to",
+      "entityType": "columns",
+      "table": "inactivity_alerts"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "wallet_address",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data_set_id",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "muted_until",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "muted_data_sets"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "wallet_address",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "alert_level",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "funded_until",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "email_sent_to",
+      "entityType": "columns",
+      "table": "notification_log"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "verified_emails"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "email",
+      "entityType": "columns",
+      "table": "verified_emails"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preferred_name",
+      "entityType": "columns",
+      "table": "verified_emails"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "verified_emails"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "verified_emails"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "wallet_address",
+      "entityType": "columns",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "verified_email_id",
+      "entityType": "columns",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "columns": ["verified_email_id"],
+      "tableTo": "verified_emails",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "name": "fk_wallet_subscriptions_verified_email_id_verified_emails_id_fk",
+      "entityType": "fks",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "inactivity_alerts_pk",
+      "table": "inactivity_alerts",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "muted_data_sets_pk",
+      "table": "muted_data_sets",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "notification_log_pk",
+      "table": "notification_log",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "verified_emails_pk",
+      "table": "verified_emails",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "wallet_subscriptions_pk",
+      "table": "wallet_subscriptions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "wallet_address",
+          "isExpression": false
+        },
+        {
+          "value": "data_set_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_inactivity_alerts_wallet_dataset",
+      "entityType": "indexes",
+      "table": "inactivity_alerts"
+    },
+    {
+      "columns": [
+        {
+          "value": "wallet_address",
+          "isExpression": false
+        },
+        {
+          "value": "data_set_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_muted_data_sets_wallet_dataset",
+      "entityType": "indexes",
+      "table": "muted_data_sets"
+    },
+    {
+      "columns": [
+        {
+          "value": "sent_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_notification_log_sent_at",
+      "entityType": "indexes",
+      "table": "notification_log"
+    },
+    {
+      "columns": [
+        {
+          "value": "wallet_address",
+          "isExpression": false
+        },
+        {
+          "value": "alert_level",
+          "isExpression": false
+        },
+        {
+          "value": "sent_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_notification_log_wallet_level",
+      "entityType": "indexes",
+      "table": "notification_log"
+    },
+    {
+      "columns": [
+        {
+          "value": "verified_email_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_wallet_subscriptions_verified_email_id",
+      "entityType": "indexes",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "columns": ["email"],
+      "nameExplicit": false,
+      "name": "verified_emails_email_unique",
+      "entityType": "uniques",
+      "table": "verified_emails"
+    },
+    {
+      "columns": ["wallet_address"],
+      "nameExplicit": false,
+      "name": "wallet_subscriptions_wallet_address_unique",
+      "entityType": "uniques",
+      "table": "wallet_subscriptions"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
+      "table": "inactivity_alerts"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
+      "table": "muted_data_sets"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
+      "table": "notification_log"
+    },
+    {
+      "value": "\"email\" = lower(\"email\")",
+      "name": "email_lower",
+      "entityType": "checks",
+      "table": "verified_emails"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "wallet_address_lower",
+      "entityType": "checks",
+      "table": "wallet_subscriptions"
+    }
+  ],
+  "renames": []
+}

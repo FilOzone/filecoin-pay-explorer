@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useBlockNumber } from "wagmi";
 import { getChain } from "@/constants/chains";
 import { useMutedDataSets } from "@/hooks/useMutedDataSets";
@@ -23,7 +24,10 @@ interface StaleQueueProps {
  * loading and when nothing is stale.
  */
 export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) => {
-  const [page, setPage] = useState(1);
+  // Null until the reader picks a page, so a linked dataset can choose it.
+  const [page, setPage] = useState<number | null>(null);
+  // Inactivity emails link to `?dataset=<id>#stale`.
+  const linkedDataSetId = useSearchParams().get("dataset");
 
   // The notifications API serves a single network, so mutes only exist there.
   const canMute = isNotificationsEligibleNetwork(network) && Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
@@ -33,7 +37,32 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
   const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
 
   // Waiting for mutes too keeps muted rows from flashing in.
-  if (staleDataSets.isLoading || mutedDataSets.isLoading) {
+  const isLoading = staleDataSets.isLoading || mutedDataSets.isLoading;
+
+  const unmuted = (staleDataSets.data?.dataSets ?? []).filter(
+    (dataSet) => !mutedDataSets.data?.has(dataSet.dataSetId.toString()),
+  );
+  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  const ranked = rankStaleDataSets(unmuted, currentEpoch, nowSeconds);
+
+  const linkedIndex = ranked.findIndex((entry) => entry.dataSet.dataSetId.toString() === linkedDataSetId);
+  const linkedPage = linkedIndex === -1 ? 1 : Math.floor(linkedIndex / PAGE_SIZE) + 1;
+  // Keeping the last row of the last page shrinks the page count under `page`.
+  const pageCount = Math.max(1, Math.ceil(ranked.length / PAGE_SIZE));
+  const currentPage = Math.min(page ?? linkedPage, pageCount);
+  const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // The queue renders after its data loads, too late for the browser's own jump to #stale.
+  const hasRows = !isLoading && ranked.length > 0;
+  const hasScrolled = useRef(false);
+  useEffect(() => {
+    if (!hasRows || hasScrolled.current || window.location.hash !== "#stale") return;
+    hasScrolled.current = true;
+    const linkedRow = linkedIndex === -1 ? null : document.getElementById(`stale-dataset-${linkedDataSetId}`);
+    (linkedRow ?? document.getElementById("stale"))?.scrollIntoView({ block: "center" });
+  }, [hasRows, linkedIndex, linkedDataSetId]);
+
+  if (isLoading) {
     return null;
   }
 
@@ -45,26 +74,21 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
     );
   }
 
-  const unmuted = (staleDataSets.data?.dataSets ?? []).filter(
-    (dataSet) => !mutedDataSets.data?.has(dataSet.dataSetId.toString()),
-  );
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-  const ranked = rankStaleDataSets(unmuted, currentEpoch, nowSeconds);
-
   if (ranked.length === 0) {
     return null;
   }
-
-  // Keeping the last row of the last page shrinks the page count under `page`.
-  const pageCount = Math.ceil(ranked.length / PAGE_SIZE);
-  const currentPage = Math.min(page, pageCount);
-  const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <StaleQueueLayout>
       <ul className='flex flex-col divide-y'>
         {pageRows.map((entry) => (
-          <StaleQueueRow key={entry.dataSet.id} {...entry} accountId={accountId} canMute={canMute} />
+          <StaleQueueRow
+            key={entry.dataSet.id}
+            {...entry}
+            accountId={accountId}
+            canMute={canMute}
+            isLinked={entry.dataSet.dataSetId.toString() === linkedDataSetId}
+          />
         ))}
       </ul>
       {pageCount > 1 ? (

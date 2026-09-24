@@ -5,6 +5,7 @@ import { StaleQueue } from ".";
 
 const mockUseStaleDataSets = vi.hoisted(() => vi.fn());
 const mockUseMutedDataSets = vi.hoisted(() => vi.fn());
+const mockSearchParams = vi.hoisted(() => ({ current: new URLSearchParams() }));
 
 vi.mock("@/hooks/useStaleDataSets", () => ({
   useStaleDataSets: () => mockUseStaleDataSets(),
@@ -14,6 +15,9 @@ vi.mock("@/hooks/useMutedDataSets", () => ({
 }));
 vi.mock("@/utils/network", () => ({
   isNotificationsEligibleNetwork: (network: Network) => network === "mainnet",
+}));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => mockSearchParams.current,
 }));
 vi.mock("wagmi", () => ({
   useBlockNumber: () => ({ data: undefined }),
@@ -29,10 +33,11 @@ vi.mock("../DatasetsSection", () => ({
 vi.mock("./components", () => ({
   StaleQueueLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   StaleQueueErrorState: () => <div>Failed to load inactive datasets</div>,
-  StaleQueueRow: ({ dataSet, canMute }: { dataSet: { id: string }; canMute: boolean }) => (
+  StaleQueueRow: ({ dataSet, canMute, isLinked }: { dataSet: { id: string }; canMute: boolean; isLinked: boolean }) => (
     <div>
       Row {dataSet.id}
       {canMute ? " with Keep" : ""}
+      {isLinked ? " linked" : ""}
     </div>
   ),
 }));
@@ -57,6 +62,7 @@ const render = (network: Network = "mainnet") =>
   renderToStaticMarkup(<StaleQueue accountId={ACCOUNT} network={network} />);
 
 beforeEach(() => {
+  mockSearchParams.current = new URLSearchParams();
   vi.stubEnv("NEXT_PUBLIC_NOTIFICATIONS_API_URL", "https://notifications.test");
   mockUseMutedDataSets.mockReturnValue({ data: undefined, isLoading: false });
 });
@@ -123,6 +129,27 @@ describe("StaleQueue", () => {
     expect(markup.match(/Row 0x/g)).toHaveLength(10);
     expect(markup).not.toContain("Row 0x11");
     expect(markup).toContain("Page 1 with next");
+  });
+
+  it("opens the page of a dataset linked from an inactivity email and marks its row", () => {
+    const dataSets = Array.from({ length: 12 }, (_, i) => staleDataSet(`0x${i + 1}`, String(i + 1)));
+    mockUseStaleDataSets.mockReturnValue(loaded(dataSets));
+    mockSearchParams.current = new URLSearchParams("dataset=11");
+
+    const markup = render();
+    expect(markup).toContain("Page 2");
+    expect(markup).toContain("Row 0x11 with Keep linked");
+    expect(markup).not.toContain("Row 0x1 ");
+  });
+
+  it("falls back to the first page when the linked dataset is no longer in the queue", () => {
+    const dataSets = Array.from({ length: 12 }, (_, i) => staleDataSet(`0x${i + 1}`, String(i + 1)));
+    mockUseStaleDataSets.mockReturnValue(loaded(dataSets));
+    mockSearchParams.current = new URLSearchParams("dataset=99");
+
+    const markup = render();
+    expect(markup).toContain("Page 1 with next");
+    expect(markup).not.toContain("linked");
   });
 
   it("hides pagination when everything fits on one page", () => {
