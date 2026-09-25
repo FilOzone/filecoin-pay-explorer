@@ -3,6 +3,10 @@ name: Deploy Explorer
 # Deploys run under the team VERCEL_TOKEN instead of the Vercel Git integration,
 # which rejects commits whose author lacks a deploying Vercel role.
 # Git deploys are disabled in apps/explorer/vercel.json.
+#
+# SECURITY: VERCEL_TOKEN is team-wide. This job must never run repository code
+# (no install, no build): `vercel deploy` uploads the source and Vercel builds it
+# remotely, as the Git integration did.
 on:
   pull_request:
   push:
@@ -15,13 +19,6 @@ concurrency:
 
 permissions:
   contents: read
-
-env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-  BRANCH: ${{ github.head_ref || github.ref_name }}
-  TARGET: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
 
 jobs:
   deploy:
@@ -36,41 +33,26 @@ jobs:
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Preview' }}
       url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          # Build the PR head, not the merge commit, like the Git integration did.
+          # Deploy the PR head, not the merge commit, like the Git integration did.
           ref: ${{ github.head_ref }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 9.15.2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
+          persist-credentials: false
 
       - name: Install Vercel CLI
         run: npm install --global vercel@60.0.0
 
-      - name: Pull Vercel settings
-        run: vercel pull --yes --environment="$TARGET" --git-branch="$BRANCH" --token="$VERCEL_TOKEN"
-
-      - name: Build
-        # next.config.ts reads VERCEL_ENV to allow the vercel.live toolbar on previews.
-        env:
-          VERCEL_ENV: ${{ env.TARGET }}
-        run: vercel build ${{ env.TARGET == 'production' && '--prod' || '' }} --token="$VERCEL_TOKEN"
-
       - name: Deploy
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt ${{ env.TARGET == 'production' && '--prod' || '' }} --token="$VERCEL_TOKEN")
+          url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --yes --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Alias staging
