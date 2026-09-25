@@ -16,7 +16,7 @@ Use the installed package versions and current source as truth when prose docume
 
 ## Workspace
 
-This is a pnpm workspace orchestrated by Turbo. It requires Node.js 22 or newer and pnpm 9 or newer; the root package pins pnpm 9.15.2. Biome is the only formatter and linter.
+This is a pnpm workspace orchestrated by Turbo. It requires Node.js 24 or newer and pnpm 9 or newer; the root package pins pnpm 9.15.2. Biome is the only formatter and linter.
 
 | Path | Package | Role |
 | --- | --- | --- |
