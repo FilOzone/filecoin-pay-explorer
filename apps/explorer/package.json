@@ -46,6 +46,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-test-renderer": "19.3.0",
+    "filecoin-pin": "^2.1.1",
     "frontmatter-markdown-loader": "^3.7.0",
     "react-test-renderer": "19.3.0",
     "tailwindcss": "^4",
