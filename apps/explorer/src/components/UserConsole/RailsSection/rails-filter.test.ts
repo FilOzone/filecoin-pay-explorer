@@ -26,15 +26,10 @@ describe("parseServiceRailsSearch", () => {
 
   // A summary is present exactly when the filter narrows something, so callers
   // have one thing to test for "is this searchable" and "am I filtering".
-  it.each([
-    "",
-    "   ",
-    "abc",
-    "0x8f1d",
-    "12abc",
-    "-1",
-    "not-an-address",
-  ])("narrows on nothing and offers no summary for %s", (query) => {
-    expect(parseServiceRailsSearch(query)).toEqual({ filter: {} });
-  });
+  it.each(["", "   ", "abc", "0x8f1d", "12abc", "-1", "not-an-address"])(
+    "narrows on nothing and offers no summary for %s",
+    (query) => {
+      expect(parseServiceRailsSearch(query)).toEqual({ filter: {} });
+    },
+  );
 });
