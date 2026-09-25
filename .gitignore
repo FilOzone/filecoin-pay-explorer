@@ -51,5 +51,4 @@ Thumbs.db
 .claude
 
 # Playwright
-.env.e2e.local
 test-results/

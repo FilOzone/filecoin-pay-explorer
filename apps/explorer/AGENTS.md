@@ -196,7 +196,7 @@ Follow existing `react-test-renderer` and module-mocking patterns for component 
 
 ### End-to-end tests
 
-Playwright specs live in `e2e/`. `test:e2e` runs them against a fake Privy (`e2e/fake-privy.tsx`), the mode for CI. `test:e2e:privy` logs in to the staging Privy app and is on-demand only; setup lives in `playwright.config.ts`. When the app starts using another Privy export, add it to the fake.
+Playwright specs live in `e2e/`. `test:e2e` runs them against a fake Privy (`e2e/fake-privy.tsx`), the mode for CI. `test:e2e:privy` logs in to the staging Privy app and is on-demand only; copy `.env.e2e.example` to `.env.e2e.local` for its credentials, and setup lives in `playwright.config.ts`. When the app starts using another Privy export, add it to the fake.
 
 During development, run the narrowest useful checks from the repository root:
 
