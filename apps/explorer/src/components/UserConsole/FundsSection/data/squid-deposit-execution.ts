@@ -241,18 +241,19 @@ async function assertFreshSigningState({
 }): Promise<{ allowance: bigint; nativeBalance: bigint }> {
   assertCurrentContext();
   const isNativeSource = isNativeToken(request.sourceToken);
-  const [providerOwner, walletChainId, rpcChainId, state] = await Promise.all([
+  const state = afterApproval
+    ? await readSourceTokenStateAfterApproval({ quote, request, sourceClient }, afterApproval)
+    : await readSourceTokenState(
+        sourceClient,
+        request.owner,
+        request.sourceToken,
+        quote.transaction.approvalSpender ?? quote.transaction.target,
+      );
+  assertCurrentContext();
+  const [providerOwner, walletChainId, rpcChainId] = await Promise.all([
     getCurrentOwner(),
     walletClient.getChainId(),
     sourceClient.getChainId(),
-    afterApproval
-      ? readSourceTokenStateAfterApproval({ quote, request, sourceClient }, afterApproval)
-      : readSourceTokenState(
-          sourceClient,
-          request.owner,
-          request.sourceToken,
-          quote.transaction.approvalSpender ?? quote.transaction.target,
-        ),
   ]);
   const { native: nativeBalance, token: tokenBalance } = state;
   // A native payment needs no approval, so it counts as already allowed.
