@@ -9,6 +9,13 @@ const DEFAULT_CHAIN_ID = 314;
 
 type Listener = (...args: unknown[]) => void;
 
+/** Every eth_sendTransaction the fake wallet received, readable from Playwright as `window.__fakePrivyTransactions`. */
+function sentTransactions(): Record<string, unknown>[] {
+  const w = window as typeof window & { __fakePrivyTransactions?: Record<string, unknown>[] };
+  w.__fakePrivyTransactions ??= [];
+  return w.__fakePrivyTransactions;
+}
+
 function createProvider(account: PrivateKeyAccount) {
   let chainId = DEFAULT_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
@@ -32,6 +39,10 @@ function createProvider(account: PrivateKeyAccount) {
         return account.signMessage({ message: { raw: params[0] as Hex } });
       case "eth_signTypedData_v4":
         return account.signTypedData(JSON.parse(params[1] as string));
+      // Recorded for the test to read, never signed or broadcast; the dummy hash never confirms.
+      case "eth_sendTransaction":
+        sentTransactions().push(params[0] as Record<string, unknown>);
+        return `0x${"e2".repeat(32)}`;
       default:
         throw Object.assign(new Error(`fake Privy wallet does not support ${method}`), { code: 4200 });
     }
