@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Preview' }}
-      url: ${{ steps.deploy.outputs.url }}
+      url: ${{ steps.alias.outputs.url || steps.deploy.outputs.url }}
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -55,6 +55,14 @@ jobs:
           url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --yes --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Alias staging
-        if: github.ref == 'refs/heads/staging'
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" filecoin-pay-explorer-staging.vercel.app --token="$VERCEL_TOKEN"
+      # PR previews get a stable host under *.preview.pay.filecoin.cloud, which the
+      # dev Privy app client allows; hashed *.vercel.app URLs can't be allowlisted.
+      - name: Alias
+        id: alias
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/staging'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          ALIAS: ${{ github.event_name == 'pull_request' && format('pr-{0}.preview.pay.filecoin.cloud', github.event.pull_request.number) || 'filecoin-pay-explorer-staging.vercel.app' }}
+        run: |
+          vercel alias set "$DEPLOYMENT_URL" "$ALIAS" --token="$VERCEL_TOKEN"
+          echo "url=https://$ALIAS" >> "$GITHUB_OUTPUT"
