@@ -49,3 +49,7 @@ lerna-debug.log*
 Thumbs.db
 .vercel*
 .claude
+
+# Playwright
+.env.e2e.local
+test-results/

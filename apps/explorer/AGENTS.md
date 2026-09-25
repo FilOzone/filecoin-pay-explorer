@@ -10,7 +10,7 @@ These instructions apply to `apps/explorer/**`. They supplement the repository-r
 - Server state: TanStack Query
 - Wallet and contracts: wagmi, viem, RainbowKit, and Synapse SDK
 - Data source: GraphQL subgraphs and current chain data
-- Tests: Vitest
+- Tests: Vitest (unit, `src/**`) and Playwright (end-to-end, `e2e/`)
 - Formatting and linting: Biome
 
 ## Application Structure
@@ -193,6 +193,10 @@ Follow existing `react-test-renderer` and module-mocking patterns for component 
 - Cover mainnet and calibration differences and wallet states when they affect the change.
 - Mock GraphQL, `fetch`, RPC, and wallet boundaries. Tests must not depend on live networks or hosted services.
 - For server routes, test validation, success, upstream failure, thrown or timeout failure, status propagation, and cache headers as relevant.
+
+### End-to-end tests
+
+Playwright specs live in `e2e/`. `test:e2e` runs them against a fake Privy (`e2e/fake-privy.tsx`), the mode for CI. `test:e2e:privy` logs in to the staging Privy app and is on-demand only; setup lives in `playwright.config.ts`. When the app starts using another Privy export, add it to the fake.
 
 During development, run the narrowest useful checks from the repository root:
 

@@ -14,6 +14,8 @@ const markdownRule = {
 };
 
 const isDevelopment = process.env.NODE_ENV === "development";
+// Playwright's default mode swaps Privy for a local fake; `test:e2e:privy` runs the real one.
+const privyAlias = process.env.E2E_PRIVY === "mock" ? { "@privy-io/react-auth": "./e2e/fake-privy.tsx" } : undefined;
 const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
 const contentSecurityPolicy = [
@@ -52,6 +54,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   turbopack: {
+    resolveAlias: privyAlias,
     rules: {
       "*.svg": {
         loaders: ["@svgr/webpack"],
