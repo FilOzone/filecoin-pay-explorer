@@ -1,0 +1,262 @@
+[
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "endEpoch",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cacheMissRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cdnRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "name": "CDNPaymentTerminated"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "providerId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "pdpRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cacheMissRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cdnRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "payer",
+        "internalType": "address",
+        "type": "address",
+        "indexed": false
+      },
+      {
+        "name": "serviceProvider",
+        "internalType": "address",
+        "type": "address",
+        "indexed": false
+      },
+      {
+        "name": "payee",
+        "internalType": "address",
+        "type": "address",
+        "indexed": false
+      },
+      {
+        "name": "metadataKeys",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      },
+      {
+        "name": "metadataValues",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      }
+    ],
+    "name": "DataSetCreated"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "oldServiceProvider",
+        "internalType": "address",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "newServiceProvider",
+        "internalType": "address",
+        "type": "address",
+        "indexed": true
+      }
+    ],
+    "name": "DataSetServiceProviderChanged"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "endEpoch",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "pdpRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "name": "PDPPaymentTerminated"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "pieceId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "pieceCid",
+        "internalType": "struct Cids.Cid",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "data",
+            "internalType": "bytes",
+            "type": "bytes"
+          }
+        ],
+        "indexed": false
+      },
+      {
+        "name": "keys",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      },
+      {
+        "name": "values",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      }
+    ],
+    "name": "PieceAdded"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "approver",
+        "internalType": "address",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "pdpRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cacheMissRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "cdnRailId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "name": "ServiceTerminated"
+  },
+  {
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "pieceId",
+        "internalType": "uint256",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "keys",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      },
+      {
+        "name": "values",
+        "internalType": "string[]",
+        "type": "string[]",
+        "indexed": false
+      }
+    ],
+    "name": "PieceAdded"
+  }
+]
