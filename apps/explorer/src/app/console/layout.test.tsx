@@ -125,11 +125,10 @@ describe("same-wallet re-sync", () => {
     expect(rememberReadyConnection("reconnecting", WALLET, 314, lastReady)).toBe(lastReady);
   });
 
-  it.each([
-    "not-connected",
-    "unsupported-chain",
-    "squid-source",
-  ] as const)("forgets the remembered wallet on %s, so the next restore shows reconnecting", (state) => {
-    expect(rememberReadyConnection(state, WALLET, 314, lastReady)).toBeNull();
-  });
+  it.each(["not-connected", "unsupported-chain", "squid-source"] as const)(
+    "forgets the remembered wallet on %s, so the next restore shows reconnecting",
+    (state) => {
+      expect(rememberReadyConnection(state, WALLET, 314, lastReady)).toBeNull();
+    },
+  );
 });
