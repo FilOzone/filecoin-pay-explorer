@@ -30,3 +30,32 @@ export const getConsoleAccessState = ({
 
   return "ready";
 };
+
+export type ReadyConnection = { address: string; chainId: number };
+
+/**
+ * A reconnect that keeps the wallet and chain the console last showed as ready is a re-sync
+ * (Privy's wagmi sync calls reconnect() on every user or wallet-list change), so the page stays
+ * mounted. A first restore or a changed wallet or chain still reports "reconnecting".
+ */
+export const keepReadyThroughResync = (
+  accessState: ConsoleAccessState,
+  lastReady: ReadyConnection | null,
+  address: string | undefined,
+  chainId: number | undefined,
+): ConsoleAccessState => {
+  if (accessState !== "reconnecting" || lastReady === null) return accessState;
+  return lastReady.address === address && lastReady.chainId === chainId ? "ready" : accessState;
+};
+
+/** The wallet and chain to compare the next reconnect against; any state but a reconnect resets it. */
+export const rememberReadyConnection = (
+  accessState: ConsoleAccessState,
+  address: string | undefined,
+  chainId: number | undefined,
+  previous: ReadyConnection | null,
+): ReadyConnection | null => {
+  if (accessState === "reconnecting") return previous;
+  if (accessState !== "ready" || address === undefined || chainId === undefined) return null;
+  return { address, chainId };
+};
