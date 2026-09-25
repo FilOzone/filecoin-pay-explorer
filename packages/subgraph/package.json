@@ -3,19 +3,20 @@
   "version": "1.2.2",
   "description": "A subgraph to index data from payments actor to serve as data layer for frontend integration",
   "private": false,
-  "files": ["build", "schemas", "config", "templates", "README.md"],
+  "files": ["build", "schemas", "config", "templates", "abis", "README.md"],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "lint": "biome check --write",
-    "precodegen": "rm -rf ./generated && pnpm generate:schema && pnpm generate:yaml",
+    "sync-abis": "node scripts/sync-abis.mjs",
+    "precodegen": "rm -rf ./generated && pnpm sync-abis && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
     "generate:yaml": "mustache ./config/${NETWORK:-calibration}.json ./templates/subgraph.template.yaml > subgraph.yaml",
     "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
     "prebuild": "pnpm codegen",
     "build": "graph build",
-    "clean": "rm -rf ./generated ./build ./schema.graphql ./subgraph.yaml",
+    "clean": "rm -rf ./generated ./build ./schema.graphql ./subgraph.yaml ./abis",
     "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ filecoin-pay-subgraph",
     "create-local": "graph create --node http://localhost:8020/ filecoin-pay-subgraph",
     "remove-local": "graph remove --node http://localhost:8020/ filecoin-pay-subgraph",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
+    "@filoz/synapse-core": "^0.9.0",
     "assemblyscript": "0.19.23",
     "matchstick-as": "^0.6.0",
     "mustache": "^4.2.0",
