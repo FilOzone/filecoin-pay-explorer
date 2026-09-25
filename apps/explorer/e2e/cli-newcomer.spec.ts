@@ -1,13 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { decodeFunctionData, type Hex, parseAbi } from "viem";
+import { decodeFunctionData, type Hex } from "viem";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { loginWithTestAccount } from "./privy";
-
-// SessionKeyRegistry on mainnet, and the scopes `filecoin-pin login` requests by default.
-const MAINNET_SESSION_KEY_REGISTRY = "0x74FD50525A958aF5d484601E252271f9625231aB";
-const REGISTRY_ABI = parseAbi(["function login(address signer, uint256 expiry, bytes32[] permissions, string origin)"]);
-const CREATE_DATA_SET_TYPEHASH = "0x25ebf20299107c91b4624d5bac3a16d32cabf0db23b450ee09ab7732983b1dc9";
-const ADD_PIECES_TYPEHASH = "0x954bdc254591a7eab1b73f03842464d9283a08352772737094d710a4428fd183";
 
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
 // (filecoin-pin buildFundingUrl, with its default 2 USDFC suggestion).
@@ -32,7 +26,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     );
     const cli = await filecoinPin(`${baseURL}`);
     const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
-    const sessionKey = new URL(link, baseURL).searchParams.get("authorize");
+    const requested = new URL(link, baseURL).searchParams;
     await page.goto(link);
     await loginWithTestAccount(page);
 
@@ -45,11 +39,15 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
           .__fakePrivyTransactions?.[0],
     );
     const tx = (await sent.jsonValue()) as { to: string; data: Hex };
-    const { functionName, args } = decodeFunctionData({ abi: REGISTRY_ABI, data: tx.data });
-    expect(tx.to.toLowerCase()).toBe(MAINNET_SESSION_KEY_REGISTRY.toLowerCase());
+    // The contract's published address and ABI; typehash values are unit-tested in sessionKeys.test.ts.
+    // Imported dynamically: the SDK is ESM-only and Playwright loads this spec as CommonJS.
+    const { mainnet } = await import("@filoz/synapse-sdk");
+    const registry = mainnet.contracts.sessionKeyRegistry;
+    const { functionName, args } = decodeFunctionData({ abi: registry.abi, data: tx.data });
+    expect(tx.to.toLowerCase()).toBe(registry.address.toLowerCase());
     expect(functionName).toBe("login");
-    expect(args[0].toLowerCase()).toBe(sessionKey);
-    expect(args[2]).toEqual([CREATE_DATA_SET_TYPEHASH, ADD_PIECES_TYPEHASH]);
+    expect(`${args?.[0]}`.toLowerCase()).toBe(requested.get("authorize"));
+    expect(args?.[2]).toHaveLength(`${requested.get("scopes")}`.split(",").length);
   });
 
   test("signs up from the funding link and sees deposit & approve pre-filled", async ({ page }) => {
@@ -59,6 +57,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2");
+    // The form renders after a chain read; a cold `next dev` in CI can take well past the default 5s.
+    await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2", { timeout: 30_000 });
   });
 });
