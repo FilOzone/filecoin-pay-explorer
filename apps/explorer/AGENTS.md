@@ -177,14 +177,14 @@ Do not hardcode deployment endpoints, credentials, private keys, or new environm
 
 ## Testing
 
-Vitest runs in the Node environment and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
+Vitest runs in the Node environment by default and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
 
 ```text
 Component.tsx
 Component.test.tsx
 ```
 
-Follow existing `react-test-renderer` and module-mocking patterns for component tests unless intentionally changing the test environment.
+Write new component tests with `@testing-library/react`. Start the file with `// @vitest-environment jsdom` and register `afterEach(cleanup)`, as in `src/components/shared/Providers.test.tsx`. Do not add new `react-test-renderer` tests; existing ones are migrating under [#498](https://github.com/FilOzone/filecoin-pay-explorer/issues/498). Follow existing module-mocking patterns.
 
 - Add regression coverage for bug fixes and tests for new behavior.
 - Test observable outputs and state transitions, not component internals.

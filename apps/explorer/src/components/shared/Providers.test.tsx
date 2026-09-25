@@ -1,5 +1,6 @@
-import { act, create } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Providers from "./Providers";
 
 const toaster = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
@@ -19,15 +20,15 @@ vi.mock("@/context/Network", () => ({
   NetworkProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+afterEach(cleanup);
+
 describe("Providers", () => {
   it("keeps the toaster on the app's light theme", () => {
-    act(() => {
-      create(
-        <Providers>
-          <span>page</span>
-        </Providers>,
-      );
-    });
+    render(
+      <Providers>
+        <span>page</span>
+      </Providers>,
+    );
 
     expect(toaster.props).toMatchObject({ theme: "light", position: "top-right" });
   });
