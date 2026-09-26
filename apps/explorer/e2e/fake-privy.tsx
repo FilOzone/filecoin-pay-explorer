@@ -1,6 +1,7 @@
 // Stand-in for @privy-io/react-auth, aliased in by next.config.ts when E2E_PRIVY=mock.
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:privy`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { type Hex, numberToHex } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
@@ -9,11 +10,22 @@ const DEFAULT_CHAIN_ID = 314;
 
 type Listener = (...args: unknown[]) => void;
 
-/** Every eth_sendTransaction the fake wallet received, readable from Playwright as `window.__fakePrivyTransactions`. */
-function sentTransactions(): Record<string, unknown>[] {
-  const w = window as typeof window & { __fakePrivyTransactions?: Record<string, unknown>[] };
+type SentTransaction = Record<string, unknown> & { hash: Hex };
+
+/** Every transaction approved in the fake dialog, readable from Playwright as `window.__fakePrivyTransactions`. */
+function sentTransactions(): SentTransaction[] {
+  const w = window as typeof window & { __fakePrivyTransactions?: SentTransaction[] };
   w.__fakePrivyTransactions ??= [];
   return w.__fakePrivyTransactions;
+}
+
+type PendingSend = { tx: Record<string, unknown>; resolve: (hash: Hex) => void; reject: (error: unknown) => void };
+
+// The provider lives outside React, so a send reaches the dialog in PrivyProvider through a window event.
+function requestSend(tx: Record<string, unknown>): Promise<Hex> {
+  return new Promise((resolve, reject) => {
+    window.dispatchEvent(new CustomEvent<PendingSend>("fake-privy:send", { detail: { tx, resolve, reject } }));
+  });
 }
 
 function createProvider(account: PrivateKeyAccount) {
@@ -39,10 +51,9 @@ function createProvider(account: PrivateKeyAccount) {
         return account.signMessage({ message: { raw: params[0] as Hex } });
       case "eth_signTypedData_v4":
         return account.signTypedData(JSON.parse(params[1] as string));
-      // Recorded for the test to read, never signed or broadcast; the dummy hash never confirms.
+      // Goes through the fake Privy transaction dialog; nothing is signed or broadcast.
       case "eth_sendTransaction":
-        sentTransactions().push(params[0] as Record<string, unknown>);
-        return `0x${"e2".repeat(32)}`;
+        return requestSend(params[0] as Record<string, unknown>);
       default:
         throw Object.assign(new Error(`fake Privy wallet does not support ${method}`), { code: 4200 });
     }
@@ -128,11 +139,74 @@ function LoginModal({ onDone, onClose }: { onDone: (email: string) => void; onCl
   );
 }
 
+// Real Privy's embedded-wallet flow on Filecoin: approve, then "Loading..." while it waits for the receipt,
+// then "Transaction complete" whose All Done button is what hands the hash back. Closing the dialog before
+// approving rejects; closing it after leaves the request unsettled, as the real dialog does.
+function TransactionModal({ pending, onClose }: { pending: PendingSend; onClose: () => void }) {
+  const [phase, setPhase] = useState<"approve" | "loading" | "complete">("approve");
+  const [hash, setHash] = useState<Hex | null>(null);
+  const approve = () => {
+    const sent = sentTransactions();
+    const txHash = numberToHex(sent.length + 1, { size: 32 });
+    sent.push({ ...pending.tx, hash: txHash });
+    setHash(txHash);
+    setPhase("loading");
+    setTimeout(() => setPhase("complete"), 1_500);
+  };
+  const close = () => {
+    if (phase === "approve") pending.reject(Object.assign(new Error("User rejected the request."), { code: 4001 }));
+    onClose();
+  };
+  return (
+    <div role='dialog' aria-label='approve transaction' id='privy-dialog'>
+      <button type='button' aria-label='close modal' onClick={close}>
+        ✕
+      </button>
+      {phase === "approve" && (
+        <>
+          <h3>Approve transaction</h3>
+          <button type='button' onClick={approve}>
+            Approve
+          </button>
+        </>
+      )}
+      {phase === "loading" && <p>Loading...</p>}
+      {phase === "complete" && hash && (
+        <>
+          <h3>Transaction complete! You're all set.</h3>
+          <button
+            type='button'
+            onClick={() => {
+              pending.resolve(hash);
+              onClose();
+            }}
+          >
+            All Done
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Like real Privy: portaled to <body> above the console's own modal dialogs, which make the page behind them inert.
+const overlay = (dialog: ReactNode) =>
+  createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 2147483647, pointerEvents: "auto" }}>{dialog}</div>,
+    document.body,
+  );
+
 export function PrivyProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [onLogin] = useState(() => new Set<LoginComplete>());
+  const [pendingSend, setPendingSend] = useState<PendingSend | null>(null);
+  useEffect(() => {
+    const onSend = (event: Event) => setPendingSend((event as CustomEvent<PendingSend>).detail);
+    window.addEventListener("fake-privy:send", onSend);
+    return () => window.removeEventListener("fake-privy:send", onSend);
+  }, []);
 
   const completeLogin = (email: string) => {
     setModalOpen(false);
@@ -163,7 +237,8 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
   return (
     <FakePrivyContext.Provider value={value}>
       {children}
-      {modalOpen && <LoginModal onDone={completeLogin} onClose={() => setModalOpen(false)} />}
+      {modalOpen && overlay(<LoginModal onDone={completeLogin} onClose={() => setModalOpen(false)} />)}
+      {pendingSend && overlay(<TransactionModal pending={pendingSend} onClose={() => setPendingSend(null)} />)}
     </FakePrivyContext.Provider>
   );
 }

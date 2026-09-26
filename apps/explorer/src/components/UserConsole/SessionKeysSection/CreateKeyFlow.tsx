@@ -16,8 +16,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { useReadContracts } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
@@ -66,7 +68,11 @@ interface GeneratedKey {
   walletAddress: Hex;
 }
 
-type TxState = "idle" | "pending" | "confirmed" | "failed";
+// "wallet": the wallet has the request and has not answered. "pending": it answered with a tx hash.
+type TxState = "idle" | "wallet" | "pending" | "confirmed" | "failed";
+
+/** A submitted login, read back from the registry until its grant lands (see `finish` in handleCreate). */
+type AwaitedGrant = { signer: Hex; permissions: Hex[]; expiry: bigint; finish: () => void };
 
 type CreateMode = "renew" | "add" | "new";
 
@@ -133,6 +139,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
+  // Outlives the dialog: a closed dialog or a wallet that never answers still gets its row once the chain shows the grant.
+  const [awaitedGrant, setAwaitedGrant] = useState<AwaitedGrant | null>(null);
 
   const isExistingKey = prefillAddress != null && existingKey != null;
   // A known key with no live expiry and lapsed scopes is being renewed, not
@@ -153,11 +161,34 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
 
+  const chainId = getChain(network).id;
   const { execute } = useContractTransaction({
+    account,
+    chainId,
     contractAddress: registry.address,
     abi: registry.abi,
     explorerUrl,
   });
+
+  // Privy's embedded wallet answers only after its own receipt wait and an "All Done" click, and never if its
+  // dialog is closed after sending, so the grant is read from the registry too.
+  const { data: grantReads } = useReadContracts({
+    contracts: (awaitedGrant?.permissions ?? []).map((permission) => ({
+      address: registry.address,
+      abi: registry.abi,
+      functionName: "authorizationExpiry" as const,
+      args: [account, awaitedGrant?.signer, permission],
+      chainId,
+    })),
+    query: { enabled: awaitedGrant !== null, refetchInterval: 5_000 },
+  });
+  useEffect(() => {
+    if (!awaitedGrant || !grantReads?.length) return;
+    const landed = grantReads.every(
+      (read) => read.status === "success" && typeof read.result === "bigint" && read.result >= awaitedGrant.expiry,
+    );
+    if (landed) awaitedGrant.finish();
+  }, [awaitedGrant, grantReads]);
 
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
@@ -168,10 +199,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
-  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && txState !== "pending";
+  const isBusy = txState === "wallet" || txState === "pending";
+  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && !isBusy;
   // The bring-your-own path stays on the form while its login confirms; the
   // fields freeze so the success screen shows what was actually submitted.
-  const formLocked = txState === "pending";
+  const formLocked = isBusy;
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -217,7 +249,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     // and the reveal describe this login, and a rejection under any wallet
     // must bring the form back rather than leave "Waiting" on screen.
     const shown = () => shownAttemptRef.current === attempt;
-    setTxState("pending");
+    setTxState("wallet");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway. The BYO path
     // has no secret, so it stays on the form until the login confirms.
@@ -232,28 +264,43 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         { name: cleanName, sessionKeyPublic: signerAddress, scopes: selectedScopes, createdAt: Date.now(), txHash },
         identity,
       );
+    const loginArgs = buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName);
+    // The wallet's receipt and the registry read race; whichever lands first confirms, once.
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      setAwaitedGrant(null);
+      commitRow();
+      if (shown()) {
+        setTxState("confirmed");
+        setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
+      }
+      onConfirmed?.(signerAddress);
+    };
+    // Confirming at the submitted expiry, not any expiry, keeps a renewal from matching the old grant.
+    setAwaitedGrant({ signer: signerAddress, permissions: loginArgs[2], expiry, finish });
     try {
       txHash = await execute({
         functionName: "login",
-        args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
+        args: loginArgs,
         metadata: { type: isExistingKey ? "authorizeSessionKey" : "createSessionKey", keyName: cleanName },
-        onConfirmed: () => {
-          if (isExistingKey) commitRow();
-          if (shown()) {
-            setTxState("confirmed");
-            setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
-          }
-          onConfirmed?.(signerAddress);
-        },
+        onConfirmed: finish,
         onReverted: () => {
+          finished = true;
+          setAwaitedGrant(null);
           if (!isExistingKey) onFailed?.(signerAddress, identity);
           if (shown()) setTxState("failed");
         },
       });
+      if (!finished && shown()) setTxState("pending");
       if (!isExistingKey) commitRow();
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.
+      if (finished) return;
+      finished = true;
+      setAwaitedGrant(null);
       if (shown()) {
         shownAttemptRef.current = null;
         setGenerated(null);
@@ -349,6 +396,15 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
 
   const txBanners: Partial<Record<TxState, ReactNode>> = {
+    wallet: (
+      <Notice tone='info' className='flex items-center gap-2'>
+        <Loader2 className='h-4 w-4 animate-spin shrink-0' />
+        <span>
+          <b>Finish in your wallet.</b> Approve the transaction there. A Privy wallet shows &ldquo;Transaction
+          complete&rdquo; once it confirms; click <b>All Done</b> to finish here.
+        </span>
+      </Notice>
+    ),
     pending: (
       <Notice tone='info' className='flex items-center gap-2'>
         <Loader2 className='h-4 w-4 animate-spin shrink-0' />
@@ -395,7 +451,17 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className='sm:max-w-xl max-h-[85vh] overflow-y-auto'>
+      <DialogContent
+        className='sm:max-w-xl max-h-[85vh] overflow-y-auto'
+        // A wallet's own dialog (Privy's) sits outside this one: clicking Approve or All Done there must not
+        // dismiss the attempt in flight.
+        onEscapeKeyDown={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+      >
         {step === "form" && (
           <>
             <DialogHeader>
@@ -403,7 +469,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <DialogDescription>{formCopy.description}</DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
-            {txState === "failed" && txBanner}
+            {(txState === "wallet" || txState === "failed") && txBanner}
             {addressLocked && (
               <Notice tone='info' className='p-3'>
                 Authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. The session key
@@ -597,9 +663,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
             <DialogFooter>
               <Button variant='primary' size='compact' disabled={!canCreate} onClick={handleCreate}>
-                {txState === "pending" ? (
+                {isBusy ? (
                   <span className='flex items-center gap-2'>
-                    <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
+                    <Loader2 className='h-4 w-4 animate-spin' />{" "}
+                    {txState === "wallet" ? "Waiting for your wallet…" : "Waiting for confirmation…"}
                   </span>
                 ) : (
                   submitLabel
