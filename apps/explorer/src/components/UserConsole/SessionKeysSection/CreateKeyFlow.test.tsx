@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRendererNode } from "react-test-renderer";
 import type { Hex } from "viem";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -25,6 +25,13 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 
 const execute = vi.fn();
 vi.mock("@/hooks/useContractTransaction", () => ({ useContractTransaction: () => ({ execute }) }));
+// What the registry read-back returns; undefined (no grant) unless a test sets it.
+const registryReads = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock("wagmi", () => ({ useReadContracts: () => ({ data: registryReads.data }) }));
+
+beforeEach(() => {
+  registryReads.data = undefined;
+});
 
 const OWNER = "0x00000000000000000000000000000000000000aa" as Hex;
 const SIGNER = "0x00000000000000000000000000000000000000bb" as Hex;
@@ -81,5 +88,51 @@ describe("CreateKeyFlow success copy", () => {
     expect(text(renderer.toJSON())).toContain(
       `${SIGNER} is now authorized to act for ${OWNER} with Create data set, Terminate service.`,
     );
+  });
+});
+
+describe("CreateKeyFlow confirmation from the registry", () => {
+  // A wallet that never answers, like Privy's after its dialog is closed once the login was sent.
+  const submitWithSilentWallet = async () => {
+    execute.mockImplementation(() => new Promise(() => undefined));
+    const props = {
+      open: true,
+      onOpenChange: () => undefined,
+      network: "calibration" as const,
+      account: OWNER,
+      registry: REGISTRY,
+      prefillAddress: SIGNER,
+      prefillScopes: ["createDataSet" as const],
+      onCreated: () => undefined,
+    };
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<CreateKeyFlow {...props} />);
+    });
+    await act(async () => {
+      renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
+    });
+    const readBack = (expiry: bigint) => {
+      registryReads.data = [{ status: "success", result: expiry }];
+      act(() => renderer.update(<CreateKeyFlow {...props} />));
+    };
+    return { renderer, readBack };
+  };
+
+  it("confirms once the registry holds the grant at the submitted expiry", async () => {
+    const { renderer, readBack } = await submitWithSilentWallet();
+
+    readBack(2n ** 64n);
+
+    expect(text(renderer.toJSON())).toContain(`${SIGNER} is now authorized to act for ${OWNER} with Create data set.`);
+  });
+
+  it("keeps waiting while the registry only holds an older, shorter grant", async () => {
+    const { renderer, readBack } = await submitWithSilentWallet();
+
+    readBack(1n);
+
+    expect(text(renderer.toJSON())).not.toContain("is now authorized");
+    expect(text(renderer.toJSON())).toContain("Waiting for your wallet…");
   });
 });
