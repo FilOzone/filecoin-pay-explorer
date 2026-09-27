@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
-// Default: fake Privy (e2e/fake-privy.tsx). E2E_MODE=real logs in to the staging Privy app, where test
-// accounts are enabled. Its IDs and test creds, and optionally E2E_MODE, come from .env.e2e.local
-// (see .env.e2e.example); a shell export wins over the file.
+// Default: fake Privy (e2e/fake-privy.tsx) and no network (e2e/fixtures.ts). E2E_MODE=real logs in to the staging
+// Privy app, where test accounts are enabled, and uses the live network. Its IDs and test creds, and optionally
+// E2E_MODE, come from .env.e2e.local (see .env.e2e.example); a shell export wins over the file.
 const E2E_ENV = path.join(__dirname, ".env.e2e.local");
 if (existsSync(E2E_ENV)) process.loadEnvFile(E2E_ENV);
 process.env.E2E_MODE = process.env.E2E_MODE === "real" ? "real" : "mock";

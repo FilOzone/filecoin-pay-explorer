@@ -23,6 +23,13 @@ export const test = base.extend<{ noNetwork: undefined }>({
           return route.abort("blockedbyclient");
         },
       );
+      await context.routeWebSocket(
+        (url) => url.hostname !== "localhost",
+        (ws) => {
+          blocked.push(`WebSocket ${ws.url()}`);
+          ws.close();
+        },
+      );
       await installFakeChain(page);
       await use(undefined);
       // Balance polls can still be mid-answer when the test ends.
