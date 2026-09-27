@@ -5,12 +5,12 @@ export { expect };
 
 /**
  * Mock mode never leaves the machine: the fake chain answers RPC, Plausible gets an empty script, and any other
- * request off localhost is blocked and fails the test. Real mode (E2E_PRIVY=real) talks to the network as is.
+ * request off localhost is blocked and fails the test. Real mode (E2E_MODE=real) talks to the network as is.
  */
 export const test = base.extend<{ noNetwork: undefined }>({
   noNetwork: [
     async ({ context, page }, use) => {
-      if (process.env.E2E_PRIVY === "real") return use(undefined);
+      if (process.env.E2E_MODE === "real") return use(undefined);
       const blocked: string[] = [];
       await context.route(
         (url) => url.hostname !== "localhost",

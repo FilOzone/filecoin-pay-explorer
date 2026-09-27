@@ -6,9 +6,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/** Log in through the Privy modal: the staging app's test account when E2E_PRIVY=real, any email/code on the fake. */
+/** Log in through the Privy modal: the staging app's test account when E2E_MODE=real, any email/code on the fake. */
 export async function loginWithTestAccount(page: Page): Promise<void> {
-  const real = process.env.E2E_PRIVY === "real";
+  const real = process.env.E2E_MODE === "real";
   const email = real ? requireEnv("E2E_PRIVY_TEST_EMAIL") : "e2e@fake-privy.test";
   const otp = real ? requireEnv("E2E_PRIVY_TEST_OTP") : "000000";
 

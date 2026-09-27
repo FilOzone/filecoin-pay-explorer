@@ -55,7 +55,7 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter @filecoin-pay/explorer exec playwright install --with-deps chromium
 
-      # Fake Privy (E2E_PRIVY=mock); the real staging app is on demand only.
+      # Fake Privy (E2E_MODE=mock); the real staging app is on demand only.
       - name: Run E2E tests
         run: pnpm --filter @filecoin-pay/explorer test:e2e
         env:
