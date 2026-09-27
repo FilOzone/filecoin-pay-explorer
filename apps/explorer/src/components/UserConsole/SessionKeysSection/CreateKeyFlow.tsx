@@ -206,7 +206,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
   const isBusy = txState === "wallet" || txState === "pending";
-  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && !isBusy;
+  // A closed and reopened dialog must not send a second login for a key whose first one is still landing.
+  const signerAwaited =
+    signerMode === "own" && awaitedGrants.some((grant) => grant.signer.toLowerCase() === ownAddress.toLowerCase());
+  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && !isBusy && !signerAwaited;
   // The bring-your-own path stays on the form while its login confirms; the
   // fields freeze so the success screen shows what was actually submitted.
   const formLocked = isBusy;
@@ -671,7 +674,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
             <DialogFooter>
               <Button variant='primary' size='compact' disabled={!canCreate} onClick={handleCreate}>
-                {isBusy ? (
+                {isBusy || signerAwaited ? (
                   <span className='flex items-center gap-2'>
                     <Loader2 className='h-4 w-4 animate-spin' />{" "}
                     {txState === "wallet" ? "Waiting for your wallet…" : "Waiting for confirmation…"}

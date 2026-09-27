@@ -99,7 +99,7 @@ describe("CreateKeyFlow confirmation from the registry", () => {
       walletConfirmed = options.onConfirmed;
       return new Promise(() => undefined);
     });
-    const props = {
+    let props = {
       open: true,
       onOpenChange: () => undefined,
       network: "calibration" as const,
@@ -111,17 +111,32 @@ describe("CreateKeyFlow confirmation from the registry", () => {
       ...extra,
     };
     let renderer!: ReturnType<typeof create>;
+    const render = (next: Partial<typeof props> = {}) => {
+      props = { ...props, ...next };
+      act(() => renderer.update(<CreateKeyFlow {...props} />));
+    };
+    const authorize = () =>
+      act(async () => {
+        renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
+      });
     act(() => {
       renderer = create(<CreateKeyFlow {...props} />);
     });
-    await act(async () => {
-      renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
-    });
-    const readBack = (expiry: bigint) => {
-      registryReads.data = [{ status: "success", result: expiry }];
-      act(() => renderer.update(<CreateKeyFlow {...props} />));
+    await authorize();
+    return {
+      renderer,
+      authorize,
+      // One read per pending submission, in submission order.
+      readBack: (...expiries: bigint[]) => {
+        registryReads.data = expiries.map((result) => ({ status: "success", result }));
+        render();
+      },
+      reopen: (next: Partial<typeof props> = {}) => {
+        render({ open: false });
+        render({ open: true, ...next });
+      },
+      walletConfirms: () => act(() => walletConfirmed()),
     };
-    return { renderer, readBack, walletConfirms: () => act(() => walletConfirmed()) };
   };
 
   it("confirms once the registry holds the grant at the submitted expiry", async () => {
@@ -151,56 +166,24 @@ describe("CreateKeyFlow confirmation from the registry", () => {
     expect(onConfirmed.mock.calls).toEqual([[SIGNER]]);
   });
 
-  // Submits SIGNER, closes and reopens the dialog on `second`, and submits again before the first attempt answers.
-  const submitTwice = async (second: Hex) => {
-    const onCreated = vi.fn();
-    const props = {
-      onOpenChange: () => undefined,
-      network: "calibration" as const,
-      account: OWNER,
-      registry: REGISTRY,
-      prefillScopes: ["createDataSet" as const],
-      onCreated,
-    };
-    let renderer!: ReturnType<typeof create>;
-    const authorize = () =>
-      act(async () => {
-        renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
-      });
-    act(() => {
-      renderer = create(<CreateKeyFlow {...props} open prefillAddress={SIGNER} />);
-    });
-    await authorize();
-    act(() => renderer.update(<CreateKeyFlow {...props} open={false} prefillAddress={SIGNER} />));
-    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={second} />));
-    await authorize();
-    // One read per pending submission, in submission order.
-    const readBack = (...expiries: bigint[]) => {
-      registryReads.data = expiries.map((result) => ({ status: "success", result }));
-      act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={second} />));
-    };
-    return { onCreated, readBack };
-  };
+  it("holds Authorize when reopened on a key whose login is still pending", async () => {
+    const { renderer, reopen } = await submitWithSilentWallet();
 
-  it("keeps checking a resubmitted key after its earlier attempt is rejected", async () => {
-    let rejectFirst: () => void = () => undefined;
-    execute
-      .mockImplementationOnce(
-        () => new Promise((_resolve, reject) => (rejectFirst = () => reject(new Error("rejected")))),
-      )
-      .mockImplementation(() => new Promise(() => undefined));
-    const { onCreated, readBack } = await submitTwice(SIGNER);
+    reopen();
 
-    await act(async () => rejectFirst());
-    readBack(2n ** 64n);
-
-    expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
+    const held = renderer.root.find(
+      (node) =>
+        node.type === "button" && node.findAll((c) => c.children.includes("Waiting for confirmation…")).length > 0,
+    );
+    expect(held.props.disabled).toBe(true);
   });
 
   it("keeps checking the first key when a second one is submitted before it lands", async () => {
-    execute.mockImplementation(() => new Promise(() => undefined));
-    const { onCreated, readBack } = await submitTwice("0x00000000000000000000000000000000000000dd");
+    const onCreated = vi.fn();
+    const { authorize, readBack, reopen } = await submitWithSilentWallet({ onCreated });
 
+    reopen({ prefillAddress: "0x00000000000000000000000000000000000000dd" });
+    await authorize();
     readBack(2n ** 64n, 0n);
 
     expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
