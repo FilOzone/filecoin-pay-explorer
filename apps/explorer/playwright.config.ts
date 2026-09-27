@@ -15,6 +15,8 @@ const DEV_PORT = process.env.E2E_PRIVY === "real" ? 3000 : 0;
 export default defineConfig({
   testDir: "e2e",
   forbidOnly: Boolean(process.env.CI),
+  // Real mode signs in as one Privy test account whose single wallet sends real transactions.
+  workers: process.env.E2E_PRIVY === "real" ? 1 : undefined,
   use: {
     // Set in workers from the port `next dev` reports; see webServer.wait.
     baseURL: `http://localhost:${process.env.E2E_PORT}`,
