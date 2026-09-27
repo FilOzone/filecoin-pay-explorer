@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { decodeFunctionData, type Hex, keccak256, toBytes } from "viem";
-import { FWSS_PERMISSION_PREIMAGES } from "../src/utils/fwssPermissionPreimages";
+import { decodeFunctionData, type Hex } from "viem";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { loginWithTestAccount } from "./privy";
 
@@ -40,19 +39,22 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
           .__fakePrivyTransactions?.[0],
     );
     const tx = (await sent.jsonValue()) as { to: string; data: Hex };
-    // The contract's published address and ABI, and the FWSS type strings the permissions hash.
-    // Imported dynamically: the SDK is ESM-only and Playwright loads this spec as CommonJS.
+    // The contract's published address and ABI, and synapse-core's permission hashes.
+    // Imported dynamically: both are ESM-only and Playwright loads this spec as CommonJS.
     const { mainnet } = await import("@filoz/synapse-sdk");
+    const permission = await import("@filoz/synapse-core/session-key");
+    const permissionFor: Record<string, Hex> = {
+      createDataSet: permission.CreateDataSetPermission,
+      addPieces: permission.AddPiecesPermission,
+      schedulePieceRemovals: permission.SchedulePieceRemovalsPermission,
+      terminateService: permission.TerminateServicePermission,
+    };
     const registry = mainnet.contracts.sessionKeyRegistry;
     const { functionName, args } = decodeFunctionData({ abi: registry.abi, data: tx.data });
     expect(tx.to.toLowerCase()).toBe(registry.address.toLowerCase());
     expect(functionName).toBe("login");
     expect(`${args?.[0]}`.toLowerCase()).toBe(requested.get("authorize"));
-    expect(args?.[2]).toEqual(
-      `${requested.get("scopes")}`
-        .split(",")
-        .map((scope) => keccak256(toBytes(FWSS_PERMISSION_PREIMAGES[scope as keyof typeof FWSS_PERMISSION_PREIMAGES]))),
-    );
+    expect(args?.[2]).toEqual(`${requested.get("scopes")}`.split(",").map((scope) => permissionFor[scope]));
   });
 
   test("signs up from the funding link and sees deposit & approve pre-filled", async ({ page }) => {

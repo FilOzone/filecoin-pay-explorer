@@ -1,19 +1,20 @@
 /**
  * A "permission" in SessionKeyRegistry is the EIP-712 typehash of the FWSS
- * operation the key may sign. Constants below are keccak256 of the
- * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol`;
- * the unit tests recompute them from the preimages to guard against drift.
- *
- * Canonical source: `DefaultFwssPermissions` in `@filoz/synapse-core/session-key`.
- * The explorer pins `@filoz/synapse-sdk` 0.41, which neither re-exports that
- * module nor ships a synapse-core with the current `TerminateService` hash
- * (0.5.2 still has `DeleteDataSet`). Switch to the import once the SDK is
- * bumped to a version whose synapse-core is 0.7 or newer.
+ * operation the key may sign. The hashes come from
+ * `@filoz/synapse-core/session-key`; the unit tests recompute them from the
+ * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol` to
+ * guard against drift.
  *
  * NOTE: this module stays free of `@/` imports and side effects so its logic
  * stays unit-testable in isolation.
  */
 
+import {
+  AddPiecesPermission,
+  CreateDataSetPermission,
+  SchedulePieceRemovalsPermission,
+  TerminateServicePermission,
+} from "@filoz/synapse-core/session-key";
 import { type Address, type Hex, isAddress } from "viem";
 
 export type ScopeId = "createDataSet" | "addPieces" | "schedulePieceRemovals" | "terminateService";
@@ -33,26 +34,26 @@ export const SESSION_KEY_SCOPES: SessionKeyScope[] = [
     id: "createDataSet",
     label: "Create data set",
     description: "Key may create new Warm Storage data sets billed to your account.",
-    typehash: "0x25ebf20299107c91b4624d5bac3a16d32cabf0db23b450ee09ab7732983b1dc9",
+    typehash: CreateDataSetPermission,
   },
   {
     id: "addPieces",
     label: "Add pieces",
     description: "Key may add pieces to your existing data sets.",
-    typehash: "0x954bdc254591a7eab1b73f03842464d9283a08352772737094d710a4428fd183",
+    typehash: AddPiecesPermission,
   },
   {
     id: "schedulePieceRemovals",
     label: "Schedule piece removals",
     description: "Key may schedule pieces for removal from your data sets. Removed data is gone once the removal runs.",
-    typehash: "0x5415701e313bb627e755b16924727217bb356574fe20e7061442c200b0822b22",
+    typehash: SchedulePieceRemovalsPermission,
     destructive: true,
   },
   {
     id: "terminateService",
     label: "Terminate service",
     description: "Key may end storage service for whole data sets, which stops proving and payment for them.",
-    typehash: "0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc",
+    typehash: TerminateServicePermission,
     destructive: true,
   },
 ];
