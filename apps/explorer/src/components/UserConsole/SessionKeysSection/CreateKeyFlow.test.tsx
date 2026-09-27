@@ -151,9 +151,8 @@ describe("CreateKeyFlow confirmation from the registry", () => {
     expect(onConfirmed.mock.calls).toEqual([[SIGNER]]);
   });
 
-  it("keeps checking the first key when a second one is submitted before it lands", async () => {
-    execute.mockImplementation(() => new Promise(() => undefined));
-    const SECOND_SIGNER = "0x00000000000000000000000000000000000000dd" as Hex;
+  // Submits SIGNER, closes and reopens the dialog on `second`, and submits again before the first attempt answers.
+  const submitTwice = async (second: Hex) => {
     const onCreated = vi.fn();
     const props = {
       onOpenChange: () => undefined,
@@ -163,26 +162,46 @@ describe("CreateKeyFlow confirmation from the registry", () => {
       prefillScopes: ["createDataSet" as const],
       onCreated,
     };
-    const authorize = async () =>
+    let renderer!: ReturnType<typeof create>;
+    const authorize = () =>
       act(async () => {
         renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
       });
-    let renderer!: ReturnType<typeof create>;
     act(() => {
       renderer = create(<CreateKeyFlow {...props} open prefillAddress={SIGNER} />);
     });
     await authorize();
-    // Closed and reopened on a second link before the first login lands.
     act(() => renderer.update(<CreateKeyFlow {...props} open={false} prefillAddress={SIGNER} />));
-    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={SECOND_SIGNER} />));
+    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={second} />));
     await authorize();
+    // One read per pending submission, in submission order.
+    const readBack = (...expiries: bigint[]) => {
+      registryReads.data = expiries.map((result) => ({ status: "success", result }));
+      act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={second} />));
+    };
+    return { onCreated, readBack };
+  };
 
-    // One read per pending key, in submission order: the first has landed, the second has not.
-    registryReads.data = [
-      { status: "success", result: 2n ** 64n },
-      { status: "success", result: 0n },
-    ];
-    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={SECOND_SIGNER} />));
+  it("keeps checking a resubmitted key after its earlier attempt is rejected", async () => {
+    let rejectFirst: () => void = () => undefined;
+    execute
+      .mockImplementationOnce(
+        () => new Promise((_resolve, reject) => (rejectFirst = () => reject(new Error("rejected")))),
+      )
+      .mockImplementation(() => new Promise(() => undefined));
+    const { onCreated, readBack } = await submitTwice(SIGNER);
+
+    await act(async () => rejectFirst());
+    readBack(2n ** 64n);
+
+    expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
+  });
+
+  it("keeps checking the first key when a second one is submitted before it lands", async () => {
+    execute.mockImplementation(() => new Promise(() => undefined));
+    const { onCreated, readBack } = await submitTwice("0x00000000000000000000000000000000000000dd");
+
+    readBack(2n ** 64n, 0n);
 
     expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
   });

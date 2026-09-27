@@ -140,8 +140,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
   // Outlives the dialog: a closed dialog or a wallet that never answers still gets its row once the chain shows the
-  // grant. Keyed by signer, so a second attempt does not drop the first one's read.
-  const [awaitedGrants, setAwaitedGrants] = useState<Record<string, AwaitedGrant>>({});
+  // grant. One entry per submission, so a second attempt does not drop the first one's read.
+  const [awaitedGrants, setAwaitedGrants] = useState<AwaitedGrant[]>([]);
 
   const isExistingKey = prefillAddress != null && existingKey != null;
   // A known key with no live expiry and lapsed scopes is being renewed, not
@@ -173,9 +173,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   // Privy's embedded wallet answers only after its own receipt wait and an "All Done" click, and never if its
   // dialog is closed after sending, so the grant is read from the registry too.
-  const grantChecks = Object.values(awaitedGrants).flatMap((grant) =>
-    grant.permissions.map((permission) => ({ grant, permission })),
-  );
+  const grantChecks = awaitedGrants.flatMap((grant) => grant.permissions.map((permission) => ({ grant, permission })));
   const { data: grantReads } = useReadContracts({
     contracts: grantChecks.map(({ grant, permission }) => ({
       address: registry.address,
@@ -189,7 +187,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: grantChecks is derived from awaitedGrants
   useEffect(() => {
     if (grantReads?.length !== grantChecks.length) return;
-    for (const grant of Object.values(awaitedGrants)) {
+    for (const grant of awaitedGrants) {
       const landed = grantChecks.every(({ grant: checked }, i) => {
         const read = grantReads[i];
         return checked !== grant || (typeof read.result === "bigint" && read.result >= grant.expiry);
@@ -275,10 +273,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     const loginArgs = buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName);
     // The wallet's receipt and the registry read race; whichever lands first confirms, once.
     let finished = false;
-    const grantKey = signerAddress.toLowerCase();
     const settle = () => {
       finished = true;
-      setAwaitedGrants(({ [grantKey]: _settled, ...rest }) => rest);
+      setAwaitedGrants((grants) => grants.filter((pending) => pending !== grant));
     };
     const finish = () => {
       if (finished) return;
@@ -291,10 +288,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       onConfirmed?.(signerAddress);
     };
     // Confirming at the submitted expiry, not any expiry, keeps a renewal from matching the old grant.
-    setAwaitedGrants((grants) => ({
-      ...grants,
-      [grantKey]: { signer: signerAddress, permissions: loginArgs[2], expiry, finish },
-    }));
+    const grant: AwaitedGrant = { signer: signerAddress, permissions: loginArgs[2], expiry, finish };
+    setAwaitedGrants((grants) => [...grants, grant]);
     try {
       txHash = await execute({
         functionName: "login",
