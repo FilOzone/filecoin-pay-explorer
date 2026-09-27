@@ -1,20 +1,23 @@
 import type { Page, Route } from "@playwright/test";
-import { decodeFunctionData, encodeFunctionResult, type Hex, multicall3Abi } from "viem";
+import { decodeFunctionData, encodeFunctionResult, erc20Abi, type Hex, multicall3Abi, toFunctionSelector } from "viem";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
 
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
+const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
+const BALANCE_OF = toFunctionSelector("balanceOf(address)");
 
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
- * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain".
- * Every other RPC call still reaches the network.
+ * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
+ * zero FIL and USDFC for every wallet. Any other RPC call falls through to the route that blocks it (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet, calibration } = await import("@filoz/synapse-sdk");
   const registries = [mainnet, calibration].map((chain) => chain.contracts.sessionKeyRegistry);
+  const usdfc = [mainnet, calibration].map((chain) => chain.contracts.usdfc.address.toLowerCase());
   const registryAt = (to: string) => registries.find((r) => r.address.toLowerCase() === to.toLowerCase());
   const abi = registries[0].abi;
 
@@ -44,6 +47,17 @@ export async function installFakeChain(page: Page): Promise<void> {
     return encodeFunctionResult({ abi, functionName, result: expiryOf(txs, user, signer, permission) });
   };
 
+  // The console header's FIL balance (multicall3 getEthBalance) and USDFC balance; other tokens reach the guard.
+  const readBalance = (target: Hex, data: Hex): Hex | undefined => {
+    if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
+      return encodeFunctionResult({ abi: multicall3Abi, functionName: "getEthBalance", result: 0n });
+    }
+    if (usdfc.includes(target.toLowerCase()) && data.startsWith(BALANCE_OF)) {
+      return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: 0n });
+    }
+    return undefined;
+  };
+
   const answer = async (call: RpcCall): Promise<unknown> => {
     if (call.method === "eth_getTransactionReceipt") {
       const tx = (await sent()).find((t) => t.hash === call.params[0]);
@@ -71,11 +85,16 @@ export async function installFakeChain(page: Page): Promise<void> {
     if (to.toLowerCase() !== MULTICALL3) return undefined;
     const { functionName, args } = decodeFunctionData({ abi: multicall3Abi, data });
     if (functionName !== "aggregate3") return undefined;
-    const calls = args[0] as readonly { target: Hex; callData: Hex }[];
-    if (!calls.every((c) => registryAt(c.target))) return undefined;
     const txs = await sent();
-    const results = calls.map((c) => ({ success: true, returnData: readRegistry(txs, c.callData) ?? "0x" }));
-    return encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: results });
+    const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) =>
+      registryAt(c.target) ? readRegistry(txs, c.callData) : readBalance(c.target, c.callData),
+    );
+    if (!results.every((r): r is Hex => r !== undefined)) return undefined;
+    return encodeFunctionResult({
+      abi: multicall3Abi,
+      functionName: "aggregate3",
+      result: results.map((returnData) => ({ success: true, returnData })),
+    });
   };
 
   await page.route(

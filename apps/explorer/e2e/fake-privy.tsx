@@ -1,5 +1,5 @@
-// Stand-in for @privy-io/react-auth, aliased in by next.config.ts when E2E_PRIVY=mock.
-// Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:privy`.
+// Stand-in for @privy-io/react-auth, aliased in by next.config.ts when E2E_MODE=mock.
+// Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Hex, numberToHex } from "viem";
@@ -270,7 +270,7 @@ export function useLogout() {
 }
 
 const unsupported = (feature: string) => () => {
-  throw new Error(`fake Privy does not support ${feature}; run test:e2e:privy`);
+  throw new Error(`fake Privy does not support ${feature}; run test:e2e:real`);
 };
 
 export const useConnectWallet = (_callbacks?: unknown) => ({ connectWallet: unsupported("connectWallet") });

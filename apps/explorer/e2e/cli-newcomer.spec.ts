@@ -1,7 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { decodeFunctionData, type Hex } from "viem";
-import { installFakeChain } from "./fake-chain";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
+import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
@@ -10,17 +10,16 @@ const FUNDING_LINK = "/console?deposit=2&operator=fwss&network=mainnet";
 
 // Mock mode follows the CLI's default network, mainnet, against the fake Privy and fake chain. Against real
 // Privy the journeys sign real transactions, so they use calibration and the test account's funded wallet.
-const REAL_PRIVY = process.env.E2E_PRIVY === "real";
-const NETWORK = REAL_PRIVY ? "calibration" : "mainnet";
+const REAL_MODE = process.env.E2E_MODE === "real";
+const NETWORK = REAL_MODE ? "calibration" : "mainnet";
 // Real Privy waits for the receipt (about a minute on Filecoin) before it shows "Transaction complete".
-const WALLET_TIMEOUT = REAL_PRIVY ? 180_000 : 30_000;
+const WALLET_TIMEOUT = REAL_MODE ? 180_000 : 30_000;
 
 const privyDialog = (page: Page) => page.locator("#privy-dialog");
 
 /** Follows the `filecoin-pin login` link, signs up, and submits "Authorize as ..."; returns the link's query. */
 async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchParams> {
-  test.setTimeout(REAL_PRIVY ? 300_000 : 30_000);
-  if (!REAL_PRIVY) await installFakeChain(page);
+  test.setTimeout(REAL_MODE ? 300_000 : 30_000);
   const cli = await filecoinPin(baseURL);
   const link = consoleLink(await cli.run("login", "--network", NETWORK, "--no-browser", "--no-wait"), baseURL);
   await page.goto(link);
@@ -48,7 +47,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
   });
 
   test("reviews the key and is asked to send the registry login for it", async ({ page, baseURL }) => {
-    test.skip(REAL_PRIVY, "decodes the transaction the fake wallet records; real Privy signs and broadcasts it");
+    test.skip(REAL_MODE, "decodes the transaction the fake wallet records; real Privy signs and broadcasts it");
     const requested = await authorizeFromCli(page, `${baseURL}`);
     await privyDialog(page).getByRole("button", { name: "Approve" }).click();
 
