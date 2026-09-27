@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @filecoin-pay/types build && next build",
+  "git": {
+    "deploymentEnabled": false
+  }
+}
