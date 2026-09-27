@@ -45,7 +45,7 @@ export const keepReadyThroughResync = (
   chainId: number | undefined,
 ): ConsoleAccessState => {
   if (accessState !== "reconnecting" || lastReady === null) return accessState;
-  return lastReady.address === address && lastReady.chainId === chainId ? "ready" : accessState;
+  return lastReady.address.toLowerCase() === address?.toLowerCase() && lastReady.chainId === chainId ? "ready" : accessState;
 };
 
 /** The wallet and chain to compare the next reconnect against; any state but a reconnect resets it. */
