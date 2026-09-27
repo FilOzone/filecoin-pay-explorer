@@ -59,6 +59,7 @@ jobs:
       - name: Run E2E tests
         run: pnpm --filter @filecoin-pay/explorer test:e2e
         env:
+          NEXT_TELEMETRY_DISABLED: 1
           NEXT_PUBLIC_SUBGRAPH_URL_MAINNET: https://placeholder.invalid/mainnet
           NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION: https://placeholder.invalid/calibration
 

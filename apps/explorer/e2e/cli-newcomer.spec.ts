@@ -1,7 +1,7 @@
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { decodeFunctionData, type Hex } from "viem";
-import { installFakeChain } from "./fake-chain";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
+import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
@@ -20,7 +20,6 @@ const privyDialog = (page: Page) => page.locator("#privy-dialog");
 /** Follows the `filecoin-pin login` link, signs up, and submits "Authorize as ..."; returns the link's query. */
 async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchParams> {
   test.setTimeout(REAL_PRIVY ? 300_000 : 30_000);
-  if (!REAL_PRIVY) await installFakeChain(page);
   const cli = await filecoinPin(baseURL);
   const link = consoleLink(await cli.run("login", "--network", NETWORK, "--no-browser", "--no-wait"), baseURL);
   await page.goto(link);

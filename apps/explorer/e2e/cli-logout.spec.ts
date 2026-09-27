@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 // The link `filecoin-pin logout` prints for the saved session key (filecoin-pin 2.1.1).
