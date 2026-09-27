@@ -93,8 +93,12 @@ describe("CreateKeyFlow success copy", () => {
 
 describe("CreateKeyFlow confirmation from the registry", () => {
   // A wallet that never answers, like Privy's after its dialog is closed once the login was sent.
-  const submitWithSilentWallet = async () => {
-    execute.mockImplementation(() => new Promise(() => undefined));
+  const submitWithSilentWallet = async (extra: Partial<React.ComponentProps<typeof CreateKeyFlow>> = {}) => {
+    let walletConfirmed = () => undefined;
+    execute.mockImplementation((options: { onConfirmed: () => undefined }) => {
+      walletConfirmed = options.onConfirmed;
+      return new Promise(() => undefined);
+    });
     const props = {
       open: true,
       onOpenChange: () => undefined,
@@ -104,6 +108,7 @@ describe("CreateKeyFlow confirmation from the registry", () => {
       prefillAddress: SIGNER,
       prefillScopes: ["createDataSet" as const],
       onCreated: () => undefined,
+      ...extra,
     };
     let renderer!: ReturnType<typeof create>;
     act(() => {
@@ -116,7 +121,7 @@ describe("CreateKeyFlow confirmation from the registry", () => {
       registryReads.data = [{ status: "success", result: expiry }];
       act(() => renderer.update(<CreateKeyFlow {...props} />));
     };
-    return { renderer, readBack };
+    return { renderer, readBack, walletConfirms: () => act(() => walletConfirmed()) };
   };
 
   it("confirms once the registry holds the grant at the submitted expiry", async () => {
@@ -134,5 +139,51 @@ describe("CreateKeyFlow confirmation from the registry", () => {
 
     expect(text(renderer.toJSON())).not.toContain("is now authorized");
     expect(text(renderer.toJSON())).toContain("Waiting for your wallet…");
+  });
+
+  it("confirms once when both the wallet receipt and the registry land", async () => {
+    const onConfirmed = vi.fn();
+    const { readBack, walletConfirms } = await submitWithSilentWallet({ onConfirmed });
+
+    readBack(2n ** 64n);
+    walletConfirms();
+
+    expect(onConfirmed.mock.calls).toEqual([[SIGNER]]);
+  });
+
+  it("keeps checking the first key when a second one is submitted before it lands", async () => {
+    execute.mockImplementation(() => new Promise(() => undefined));
+    const SECOND_SIGNER = "0x00000000000000000000000000000000000000dd" as Hex;
+    const onCreated = vi.fn();
+    const props = {
+      onOpenChange: () => undefined,
+      network: "calibration" as const,
+      account: OWNER,
+      registry: REGISTRY,
+      prefillScopes: ["createDataSet" as const],
+      onCreated,
+    };
+    const authorize = async () =>
+      act(async () => {
+        renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
+      });
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<CreateKeyFlow {...props} open prefillAddress={SIGNER} />);
+    });
+    await authorize();
+    // Closed and reopened on a second link before the first login lands.
+    act(() => renderer.update(<CreateKeyFlow {...props} open={false} prefillAddress={SIGNER} />));
+    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={SECOND_SIGNER} />));
+    await authorize();
+
+    // One read per pending key, in submission order: the first has landed, the second has not.
+    registryReads.data = [
+      { status: "success", result: 2n ** 64n },
+      { status: "success", result: 0n },
+    ];
+    act(() => renderer.update(<CreateKeyFlow {...props} open prefillAddress={SECOND_SIGNER} />));
+
+    expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
   });
 });
