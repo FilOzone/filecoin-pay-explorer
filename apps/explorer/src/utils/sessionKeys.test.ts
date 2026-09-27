@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { keccak256, toBytes } from "viem";
 import { describe, it } from "vitest";
+import { FWSS_PERMISSION_PREIMAGES } from "./fwssPermissionPreimages";
 import {
   buildEnvSnippet,
   buildLoginArgs,
@@ -20,15 +21,12 @@ import {
   scopeStatusWord,
 } from "./sessionKeys";
 
-const CREATE_PREIMAGE =
-  "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)";
-const ADD_PREIMAGE =
-  "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)" +
-  "Cid(bytes data)" +
-  "MetadataEntry(string key,string value)" +
-  "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)";
-const REMOVE_PREIMAGE = "SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)";
-const TERMINATE_PREIMAGE = "TerminateService(uint256 dataSetId)";
+const {
+  createDataSet: CREATE_PREIMAGE,
+  addPieces: ADD_PREIMAGE,
+  schedulePieceRemovals: REMOVE_PREIMAGE,
+  terminateService: TERMINATE_PREIMAGE,
+} = FWSS_PERMISSION_PREIMAGES;
 
 const SIGNER = "0x8ba1f109551bD432803012645Ac136ddd64DBA72" as const;
 const ACCOUNT = "0xF39FD6e51aad88F6F4ce6aB8827279cffFb92266" as const;

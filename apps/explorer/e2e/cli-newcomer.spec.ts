@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { decodeFunctionData, type Hex } from "viem";
+import { decodeFunctionData, type Hex, keccak256, toBytes } from "viem";
+import { FWSS_PERMISSION_PREIMAGES } from "../src/utils/fwssPermissionPreimages";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { loginWithTestAccount } from "./privy";
 
@@ -39,7 +40,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
           .__fakePrivyTransactions?.[0],
     );
     const tx = (await sent.jsonValue()) as { to: string; data: Hex };
-    // The contract's published address and ABI; typehash values are unit-tested in sessionKeys.test.ts.
+    // The contract's published address and ABI, and the FWSS type strings the permissions hash.
     // Imported dynamically: the SDK is ESM-only and Playwright loads this spec as CommonJS.
     const { mainnet } = await import("@filoz/synapse-sdk");
     const registry = mainnet.contracts.sessionKeyRegistry;
@@ -47,7 +48,11 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     expect(tx.to.toLowerCase()).toBe(registry.address.toLowerCase());
     expect(functionName).toBe("login");
     expect(`${args?.[0]}`.toLowerCase()).toBe(requested.get("authorize"));
-    expect(args?.[2]).toHaveLength(`${requested.get("scopes")}`.split(",").length);
+    expect(args?.[2]).toEqual(
+      `${requested.get("scopes")}`
+        .split(",")
+        .map((scope) => keccak256(toBytes(FWSS_PERMISSION_PREIMAGES[scope as keyof typeof FWSS_PERMISSION_PREIMAGES]))),
+    );
   });
 
   test("signs up from the funding link and sees deposit & approve pre-filled", async ({ page }) => {
