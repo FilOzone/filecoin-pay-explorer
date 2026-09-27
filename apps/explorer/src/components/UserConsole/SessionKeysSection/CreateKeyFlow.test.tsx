@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRendererNode } from "react-test-renderer";
 import type { Hex } from "viem";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -25,6 +25,13 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 
 const execute = vi.fn();
 vi.mock("@/hooks/useContractTransaction", () => ({ useContractTransaction: () => ({ execute }) }));
+// What the registry read-back returns; undefined (no grant) unless a test sets it.
+const registryReads = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock("wagmi", () => ({ useReadContracts: () => ({ data: registryReads.data }) }));
+
+beforeEach(() => {
+  registryReads.data = undefined;
+});
 
 const OWNER = "0x00000000000000000000000000000000000000aa" as Hex;
 const SIGNER = "0x00000000000000000000000000000000000000bb" as Hex;
@@ -81,5 +88,104 @@ describe("CreateKeyFlow success copy", () => {
     expect(text(renderer.toJSON())).toContain(
       `${SIGNER} is now authorized to act for ${OWNER} with Create data set, Terminate service.`,
     );
+  });
+});
+
+describe("CreateKeyFlow confirmation from the registry", () => {
+  // A wallet that never answers, like Privy's after its dialog is closed once the login was sent.
+  const submitWithSilentWallet = async (extra: Partial<React.ComponentProps<typeof CreateKeyFlow>> = {}) => {
+    let walletConfirmed = () => undefined;
+    execute.mockImplementation((options: { onConfirmed: () => undefined }) => {
+      walletConfirmed = options.onConfirmed;
+      return new Promise(() => undefined);
+    });
+    let props = {
+      open: true,
+      onOpenChange: () => undefined,
+      network: "calibration" as const,
+      account: OWNER,
+      registry: REGISTRY,
+      prefillAddress: SIGNER,
+      prefillScopes: ["createDataSet" as const],
+      onCreated: () => undefined,
+      ...extra,
+    };
+    let renderer!: ReturnType<typeof create>;
+    const render = (next: Partial<typeof props> = {}) => {
+      props = { ...props, ...next };
+      act(() => renderer.update(<CreateKeyFlow {...props} />));
+    };
+    const authorize = () =>
+      act(async () => {
+        renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick();
+      });
+    act(() => {
+      renderer = create(<CreateKeyFlow {...props} />);
+    });
+    await authorize();
+    return {
+      renderer,
+      authorize,
+      // One read per pending submission, in submission order.
+      readBack: (...expiries: bigint[]) => {
+        registryReads.data = expiries.map((result) => ({ status: "success", result }));
+        render();
+      },
+      reopen: (next: Partial<typeof props> = {}) => {
+        render({ open: false });
+        render({ open: true, ...next });
+      },
+      walletConfirms: () => act(() => walletConfirmed()),
+    };
+  };
+
+  it("confirms once the registry holds the grant at the submitted expiry", async () => {
+    const { renderer, readBack } = await submitWithSilentWallet();
+
+    readBack(2n ** 64n);
+
+    expect(text(renderer.toJSON())).toContain(`${SIGNER} is now authorized to act for ${OWNER} with Create data set.`);
+  });
+
+  it("keeps waiting while the registry only holds an older, shorter grant", async () => {
+    const { renderer, readBack } = await submitWithSilentWallet();
+
+    readBack(1n);
+
+    expect(text(renderer.toJSON())).not.toContain("is now authorized");
+    expect(text(renderer.toJSON())).toContain("Waiting for your wallet…");
+  });
+
+  it("confirms once when both the wallet receipt and the registry land", async () => {
+    const onConfirmed = vi.fn();
+    const { readBack, walletConfirms } = await submitWithSilentWallet({ onConfirmed });
+
+    readBack(2n ** 64n);
+    walletConfirms();
+
+    expect(onConfirmed.mock.calls).toEqual([[SIGNER]]);
+  });
+
+  it("holds Authorize when reopened on a key whose login is still pending", async () => {
+    const { renderer, reopen } = await submitWithSilentWallet();
+
+    reopen();
+
+    const held = renderer.root.find(
+      (node) =>
+        node.type === "button" && node.findAll((c) => c.children.includes("Waiting for confirmation…")).length > 0,
+    );
+    expect(held.props.disabled).toBe(true);
+  });
+
+  it("keeps checking the first key when a second one is submitted before it lands", async () => {
+    const onCreated = vi.fn();
+    const { authorize, readBack, reopen } = await submitWithSilentWallet({ onCreated });
+
+    reopen({ prefillAddress: "0x00000000000000000000000000000000000000dd" });
+    await authorize();
+    readBack(2n ** 64n, 0n);
+
+    expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
   });
 });

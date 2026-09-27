@@ -1,11 +1,39 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { decodeFunctionData, type Hex } from "viem";
+import { installFakeChain } from "./fake-chain";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { loginWithTestAccount } from "./privy";
 
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
 // (filecoin-pin buildFundingUrl, with its default 2 USDFC suggestion).
 const FUNDING_LINK = "/console?deposit=2&operator=fwss&network=mainnet";
+
+// Mock mode follows the CLI's default network, mainnet, against the fake Privy and fake chain. Against real
+// Privy the journeys sign real transactions, so they use calibration and the test account's funded wallet.
+const REAL_PRIVY = process.env.E2E_PRIVY === "real";
+const NETWORK = REAL_PRIVY ? "calibration" : "mainnet";
+// Real Privy waits for the receipt (about a minute on Filecoin) before it shows "Transaction complete".
+const WALLET_TIMEOUT = REAL_PRIVY ? 180_000 : 30_000;
+
+const privyDialog = (page: Page) => page.locator("#privy-dialog");
+
+/** Follows the `filecoin-pin login` link, signs up, and submits "Authorize as ..."; returns the link's query. */
+async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchParams> {
+  test.setTimeout(REAL_PRIVY ? 300_000 : 30_000);
+  if (!REAL_PRIVY) await installFakeChain(page);
+  const cli = await filecoinPin(baseURL);
+  const link = consoleLink(await cli.run("login", "--network", NETWORK, "--no-browser", "--no-wait"), baseURL);
+  await page.goto(link);
+  await loginWithTestAccount(page);
+  // The embedded wallet starts on mainnet.
+  if (NETWORK === "calibration") {
+    await page.getByRole("button", { name: /Switch network/ }).click();
+    await page.getByText("Calibration", { exact: true }).last().click();
+  }
+  await page.getByRole("button", { name: "Review & authorize" }).click();
+  await page.getByRole("button", { name: /^Authorize as / }).click();
+  return new URL(link, baseURL).searchParams;
+}
 
 test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`", () => {
   test("signs up by email from the link and sees the key pre-filled for review", async ({ page, baseURL }) => {
@@ -20,18 +48,9 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
   });
 
   test("reviews the key and is asked to send the registry login for it", async ({ page, baseURL }) => {
-    test.skip(
-      process.env.E2E_PRIVY === "real",
-      "reads the transaction the fake wallet records; the real embedded wallet signs and broadcasts it",
-    );
-    const cli = await filecoinPin(`${baseURL}`);
-    const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
-    const requested = new URL(link, baseURL).searchParams;
-    await page.goto(link);
-    await loginWithTestAccount(page);
-
-    await page.getByRole("button", { name: "Review & authorize" }).click();
-    await page.getByRole("button", { name: /^Authorize as / }).click();
+    test.skip(REAL_PRIVY, "decodes the transaction the fake wallet records; real Privy signs and broadcasts it");
+    const requested = await authorizeFromCli(page, `${baseURL}`);
+    await privyDialog(page).getByRole("button", { name: "Approve" }).click();
 
     const sent = await page.waitForFunction(
       () =>
@@ -55,6 +74,34 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     expect(functionName).toBe("login");
     expect(`${args?.[0]}`.toLowerCase()).toBe(requested.get("authorize"));
     expect(args?.[2]).toEqual(`${requested.get("scopes")}`.split(",").map((scope) => permissionFor[scope]));
+  });
+
+  test("is told to finish in the wallet while it sends", async ({ page, baseURL }) => {
+    await authorizeFromCli(page, `${baseURL}`);
+    await privyDialog(page).getByRole("button", { name: "Approve" }).click();
+
+    await expect(privyDialog(page).getByText("Loading...")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "New session key" })).toContainText("All Done");
+  });
+
+  test("sees the key registered after clicking All Done", async ({ page, baseURL }) => {
+    await authorizeFromCli(page, `${baseURL}`);
+    await privyDialog(page).getByRole("button", { name: "Approve" }).click();
+    await privyDialog(page).getByRole("button", { name: "All Done" }).click({ timeout: WALLET_TIMEOUT });
+
+    await expect(page.getByRole("heading", { name: "Session key registered" })).toBeVisible();
+  });
+
+  test("still sees the key registered after closing the wallet dialog", async ({ page, baseURL }) => {
+    await authorizeFromCli(page, `${baseURL}`);
+    await privyDialog(page).getByRole("button", { name: "Approve" }).click();
+    await expect(privyDialog(page).getByText("Loading...")).toBeVisible();
+    // The login is already sent; real Privy leaves the request unsettled when closed now.
+    await privyDialog(page).getByRole("button", { name: "close modal" }).click();
+
+    await expect(page.getByRole("heading", { name: "Session key registered" })).toBeVisible({
+      timeout: WALLET_TIMEOUT,
+    });
   });
 
   test("signs up from the funding link and sees deposit & approve pre-filled", async ({ page }) => {
