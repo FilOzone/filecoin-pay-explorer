@@ -17,6 +17,7 @@ export async function installFakeChain(page: Page): Promise<void> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet, calibration } = await import("@filoz/synapse-sdk");
   const registries = [mainnet, calibration].map((chain) => chain.contracts.sessionKeyRegistry);
+  const usdfc = [mainnet, calibration].map((chain) => chain.contracts.usdfc.address.toLowerCase());
   const registryAt = (to: string) => registries.find((r) => r.address.toLowerCase() === to.toLowerCase());
   const abi = registries[0].abi;
 
@@ -46,12 +47,12 @@ export async function installFakeChain(page: Page): Promise<void> {
     return encodeFunctionResult({ abi, functionName, result: expiryOf(txs, user, signer, permission) });
   };
 
-  // The console header's FIL balance (multicall3 getEthBalance) and USDFC balance (ERC-20 balanceOf).
+  // The console header's FIL balance (multicall3 getEthBalance) and USDFC balance; other tokens reach the guard.
   const readBalance = (target: Hex, data: Hex): Hex | undefined => {
     if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
       return encodeFunctionResult({ abi: multicall3Abi, functionName: "getEthBalance", result: 0n });
     }
-    if (data.startsWith(BALANCE_OF)) {
+    if (usdfc.includes(target.toLowerCase()) && data.startsWith(BALANCE_OF)) {
       return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: 0n });
     }
     return undefined;
