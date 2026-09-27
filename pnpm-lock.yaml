@@ -38,6 +38,9 @@ importers:
       '@filecoin-project/squid-evm-funding':
         specifier: ^0.3.3
         version: 0.3.3(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      '@filoz/synapse-core':
+        specifier: ^0.9.0
+        version: 0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))
