@@ -406,43 +406,43 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(amountInput(renderer).props.value).toBe("10");
   });
 
-  it.each([
-    "destination account switch",
-    "dialog unmount",
-  ])("invalidates the reviewed context before a source send on %s", async (change) => {
-    let continueExecution!: () => void;
-    const paused = new Promise<void>((resolve) => {
-      continueExecution = resolve;
-    });
-    let contextError: unknown;
-    state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
-      await paused;
-      try {
-        input.assertCurrentContext();
-      } catch (error) {
-        contextError = error;
-        throw error;
+  it.each(["destination account switch", "dialog unmount"])(
+    "invalidates the reviewed context before a source send on %s",
+    async (change) => {
+      let continueExecution!: () => void;
+      const paused = new Promise<void>((resolve) => {
+        continueExecution = resolve;
+      });
+      let contextError: unknown;
+      state.execute.mockImplementationOnce(async (input: ExecuteSquidDepositInput) => {
+        await paused;
+        try {
+          input.assertCurrentContext();
+        } catch (error) {
+          contextError = error;
+          throw error;
+        }
+        throw new Error("expected reviewed context invalidation");
+      });
+
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+      await reachExecution(renderer);
+
+      if (change === "dialog unmount") {
+        await act(async () => renderer.unmount());
+      } else {
+        state.liveRecipient = OTHER;
       }
-      throw new Error("expected reviewed context invalidation");
-    });
-
-    let renderer!: ReactTestRenderer;
-    await act(async () => {
-      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
-    });
-    await reachExecution(renderer);
-
-    if (change === "dialog unmount") {
-      await act(async () => renderer.unmount());
-    } else {
-      state.liveRecipient = OTHER;
-    }
-    await act(async () => {
-      continueExecution();
-      await vi.waitFor(() => expect(contextError).toBeInstanceOf(Error));
-    });
-    expect(contextError).toMatchObject({ message: expect.stringContaining("Funding details changed after review") });
-  });
+      await act(async () => {
+        continueExecution();
+        await vi.waitFor(() => expect(contextError).toBeInstanceOf(Error));
+      });
+      expect(contextError).toMatchObject({ message: expect.stringContaining("Funding details changed after review") });
+    },
+  );
 
   it("renders another tab's pending marker immediately after its storage event", async () => {
     let renderer!: ReactTestRenderer;

@@ -9,13 +9,16 @@
     "lint": "biome check --write",
     "format": "biome format --write",
     "test": "vitest run",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:privy": "E2E_PRIVY=real playwright test"
   },
   "dependencies": {
     "@filecoin-foundation/ui-filecoin": "^0.9.0",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
     "@filecoin-project/squid-evm-funding": "^0.3.3",
+    "@filoz/synapse-core": "^0.9.0",
     "@filoz/synapse-sdk": "^0.41.0",
     "@phosphor-icons/react": "^2.1.10",
     "@privy-io/react-auth": "^3.43.0",
@@ -37,6 +40,7 @@
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
+    "@playwright/test": "^1.63.0",
     "@svgr/webpack": "^8.1.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
@@ -45,6 +49,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-test-renderer": "19.3.0",
+    "filecoin-pin": "^2.1.1",
     "frontmatter-markdown-loader": "^3.7.0",
     "jsdom": "^30.1.1",
     "react-test-renderer": "19.3.0",

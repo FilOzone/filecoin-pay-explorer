@@ -1,7 +1,7 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
@@ -13,7 +13,14 @@ import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States"
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
-import { type ConsoleAccessState, getConsoleAccessState, getConsoleDisplayAccessState } from "./console-access";
+import {
+  type ConsoleAccessState,
+  getConsoleAccessState,
+  getConsoleDisplayAccessState,
+  keepReadyThroughResync,
+  type ReadyConnection,
+  rememberReadyConnection,
+} from "./console-access";
 
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
@@ -34,12 +41,16 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { isTopUpActive } = useTopUpActivity();
-  const walletAccessState = getConsoleAccessState({
-    isConnected,
-    isReconnecting,
-    hasAddress: Boolean(address),
+  const [lastReady, setLastReady] = useState<ReadyConnection | null>(null);
+  const walletAccessState = keepReadyThroughResync(
+    getConsoleAccessState({ isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    lastReady,
+    address,
     chainId,
-  });
+  );
+  useEffect(() => {
+    setLastReady((previous) => rememberReadyConnection(walletAccessState, address, chainId, previous));
+  }, [walletAccessState, address, chainId]);
   const displayAccessState = getConsoleDisplayAccessState(walletAccessState, isTopUpActive);
 
   return (

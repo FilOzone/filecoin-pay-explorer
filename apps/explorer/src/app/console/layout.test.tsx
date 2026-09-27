@@ -4,7 +4,12 @@ import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { ConsoleContent } from "./(console)/ConsoleContent";
 import { ConsoleWalletControls } from "./(console)/ConsoleWalletControls";
-import { getConsoleAccessState, getConsoleDisplayAccessState } from "./(console)/console-access";
+import {
+  getConsoleAccessState,
+  getConsoleDisplayAccessState,
+  keepReadyThroughResync,
+  rememberReadyConnection,
+} from "./(console)/console-access";
 
 vi.mock("@/components/shared/Balance", () => ({ default: () => <span>Filecoin balance</span> }));
 vi.mock("@/components/shared/ChainSwitcher", () => ({ default: () => <span>Filecoin network</span> }));
@@ -86,4 +91,44 @@ describe("console access and continuity", () => {
     });
     expect(renderer.root.findByType("span").children).toEqual(["1"]);
   });
+});
+
+// Privy's wagmi sync calls reconnect() whenever its user or wallet list changes, even when the
+// selected wallet stays the same. That re-sync must not unmount the page the user is on.
+describe("same-wallet re-sync", () => {
+  const WALLET = "0x00000000000000000000000000000000000000aa";
+  const OTHER = "0x00000000000000000000000000000000000000cc";
+  const lastReady = { address: WALLET, chainId: 314 };
+
+  it("stays ready when a reconnect keeps the last ready wallet and chain", () => {
+    expect(keepReadyThroughResync("reconnecting", lastReady, WALLET, 314)).toBe("ready");
+  });
+
+  it.each([
+    ["nothing was ready before (first restore)", null, WALLET, 314],
+    ["the chain changed", lastReady, WALLET, 314159],
+    ["the account changed", lastReady, OTHER, 314],
+    ["the chain is not known yet", lastReady, WALLET, undefined],
+  ])("still shows reconnecting when %s", (_case, previous, address, chainId) => {
+    expect(keepReadyThroughResync("reconnecting", previous, address, chainId)).toBe("reconnecting");
+  });
+
+  it("passes every other state through", () => {
+    expect(keepReadyThroughResync("not-connected", lastReady, WALLET, 314)).toBe("not-connected");
+  });
+
+  it("remembers the wallet and chain a ready console showed", () => {
+    expect(rememberReadyConnection("ready", WALLET, 314, null)).toEqual({ address: WALLET, chainId: 314 });
+  });
+
+  it("keeps the remembered wallet through a reconnect", () => {
+    expect(rememberReadyConnection("reconnecting", WALLET, 314, lastReady)).toBe(lastReady);
+  });
+
+  it.each(["not-connected", "unsupported-chain", "squid-source"] as const)(
+    "forgets the remembered wallet on %s, so the next restore shows reconnecting",
+    (state) => {
+      expect(rememberReadyConnection(state, WALLET, 314, lastReady)).toBeNull();
+    },
+  );
 });

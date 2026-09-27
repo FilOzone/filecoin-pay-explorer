@@ -1,0 +1,71 @@
+name: E2E
+
+on:
+  pull_request:
+    paths:
+      - "apps/explorer/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main, staging]
+    paths:
+      - "apps/explorer/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Explorer E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build types
+        run: pnpm build --filter @filecoin-pay/types
+
+      - name: Install Chromium
+        run: pnpm --filter @filecoin-pay/explorer exec playwright install --with-deps chromium
+
+      # Fake Privy (E2E_PRIVY=mock); the real staging app is on demand only.
+      - name: Run E2E tests
+        run: pnpm --filter @filecoin-pay/explorer test:e2e
+        env:
+          NEXT_PUBLIC_SUBGRAPH_URL_MAINNET: https://placeholder.invalid/mainnet
+          NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION: https://placeholder.invalid/calibration
+
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: explorer-e2e-traces
+          path: apps/explorer/test-results/
+          retention-days: 7

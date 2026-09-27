@@ -341,13 +341,13 @@ describe("AddServiceDialog", () => {
     expect(mocks.dialogContentProps?.showCloseButton).toBe(false);
     const preventEscape = vi.fn();
     const preventOutside = vi.fn();
+    const { onEscapeKeyDown, onPointerDownOutside } = mocks.dialogContentProps as Record<
+      string,
+      (event: { preventDefault: () => void }) => void
+    >;
     act(() => {
-      (mocks.dialogContentProps?.onEscapeKeyDown as (event: { preventDefault: () => void }) => void)({
-        preventDefault: preventEscape,
-      });
-      (mocks.dialogContentProps?.onPointerDownOutside as (event: { preventDefault: () => void }) => void)({
-        preventDefault: preventOutside,
-      });
+      onEscapeKeyDown({ preventDefault: preventEscape });
+      onPointerDownOutside({ preventDefault: preventOutside });
     });
     expect([preventEscape.mock.calls.length, preventOutside.mock.calls.length]).toEqual([1, 1]);
     const cancel = renderer.root

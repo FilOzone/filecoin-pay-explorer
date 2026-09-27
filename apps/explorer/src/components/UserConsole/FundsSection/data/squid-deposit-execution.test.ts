@@ -1061,38 +1061,38 @@ describe("executeSquidDeposit", () => {
     expect(onBroadcast).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "destination account changed",
-    "dialog unmounted",
-  ])("rechecks the live context after transaction preparation when the %s", async (change) => {
-    const wallet = fakeWallet();
-    const source = fakeSource({ allowance: request.sourceAmount });
-    let mounted = true;
-    let liveRecipient: Address = RECIPIENT;
-    // The plan check prices the route from Squid's gas limit; the send simulates it, and that is when the context moves.
-    source.estimateGas.mockImplementationOnce(async () => {
-      if (change === "dialog unmounted") mounted = false;
-      else liveRecipient = OWNER;
-      return 599_399n;
-    });
-    const assertCurrentContext = () => {
-      if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
-    };
-    await expect(
-      executeSquidDeposit({
-        ...signingChecks,
-        approvalRequired: false,
-        assertCurrentContext,
-        destinationClient: fakeDestination(),
-        quote,
-        request,
-        sourceClient: source,
-        squid: { integratorId: "id" },
-        walletClient: wallet,
-      }),
-    ).rejects.toThrow("Funding details changed after review");
-    expect(wallet.sendTransaction).not.toHaveBeenCalled();
-  });
+  it.each(["destination account changed", "dialog unmounted"])(
+    "rechecks the live context after transaction preparation when the %s",
+    async (change) => {
+      const wallet = fakeWallet();
+      const source = fakeSource({ allowance: request.sourceAmount });
+      let mounted = true;
+      let liveRecipient: Address = RECIPIENT;
+      // The plan check prices the route from Squid's gas limit; the send simulates it, and that is when the context moves.
+      source.estimateGas.mockImplementationOnce(async () => {
+        if (change === "dialog unmounted") mounted = false;
+        else liveRecipient = OWNER;
+        return 599_399n;
+      });
+      const assertCurrentContext = () => {
+        if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
+      };
+      await expect(
+        executeSquidDeposit({
+          ...signingChecks,
+          approvalRequired: false,
+          assertCurrentContext,
+          destinationClient: fakeDestination(),
+          quote,
+          request,
+          sourceClient: source,
+          squid: { integratorId: "id" },
+          walletClient: wallet,
+        }),
+      ).rejects.toThrow("Funding details changed after review");
+      expect(wallet.sendTransaction).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [
