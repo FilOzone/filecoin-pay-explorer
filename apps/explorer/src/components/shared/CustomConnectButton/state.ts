@@ -16,13 +16,15 @@ export const getWalletEntryState = ({
   walletsReady,
   authenticated,
   isConnected,
+  isExiting = false,
 }: {
   ready: boolean;
   walletsReady: boolean;
   authenticated: boolean;
   isConnected: boolean;
+  isExiting?: boolean;
 }): WalletEntryState => {
-  if (!ready || !walletsReady) return "loading";
+  if (!ready || !walletsReady || isExiting) return "loading";
   if (isConnected) return "connected";
   if (authenticated) return "preparing";
   return "login";

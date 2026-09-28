@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   confirmActive: vi.fn(),
   connectors: [] as unknown[],
   connectWallet: vi.fn(),
+  isExiting: false,
   login: vi.fn(),
   logout: vi.fn<() => Promise<void>>(),
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
@@ -53,7 +54,7 @@ vi.mock("@privy-io/wagmi", () => ({
   useSetActiveWallet: () => ({ setActiveWallet: mocks.setActiveWallet }),
 }));
 vi.mock("@/components/UserConsole/ActiveWalletGuardContext", () => ({
-  useActiveWalletGuard: () => ({ confirmActive: mocks.confirmActive }),
+  useActiveWalletGuard: () => ({ confirmActive: mocks.confirmActive, isExiting: mocks.isExiting }),
 }));
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: mocks.address, isConnected: false }),
@@ -66,6 +67,7 @@ describe("CustomConnectButton", () => {
     vi.clearAllMocks();
     mocks.address = undefined;
     mocks.connectors = [];
+    mocks.isExiting = false;
     mocks.logout.mockResolvedValue(undefined);
     mocks.privy = { authenticated: false, error: new Error("invalid app id"), ready: false };
     mocks.wallets = [];
@@ -102,6 +104,19 @@ describe("CustomConnectButton", () => {
     });
 
     expect(mocks.logout).toHaveBeenCalledOnce();
+  });
+
+  it("shows the loading state, not preparing, while a forced exit is settling", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.isExiting = true;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(1);
+    expect(renderer.root.findAllByType("button")).toHaveLength(0);
   });
 
   it("opens the login and connect-only flows directly", async () => {

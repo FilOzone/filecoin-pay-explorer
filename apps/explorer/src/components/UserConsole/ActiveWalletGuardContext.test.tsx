@@ -4,6 +4,7 @@ import { ActiveWalletGuardProvider, useActiveWalletGuard } from "./ActiveWalletG
 
 const wagmi = vi.hoisted(() => ({
   address: undefined as string | undefined,
+  isConnected: false,
   disconnect: vi.fn(),
 }));
 const privy = vi.hoisted(() => ({
@@ -12,7 +13,7 @@ const privy = vi.hoisted(() => ({
 }));
 
 vi.mock("wagmi", () => ({
-  useConnection: () => ({ address: wagmi.address }),
+  useConnection: () => ({ address: wagmi.address, isConnected: wagmi.isConnected }),
   useDisconnect: () => ({ mutate: wagmi.disconnect }),
 }));
 vi.mock("@privy-io/react-auth", () => ({
@@ -23,11 +24,12 @@ vi.mock("@privy-io/react-auth", () => ({
 const ADDRESS_A = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B = "0x2222222222222222222222222222222222222222";
 
-let confirmActive!: (address: string) => void;
+let guard!: ReturnType<typeof useActiveWalletGuard>;
 function Consumer() {
-  confirmActive = useActiveWalletGuard().confirmActive;
+  guard = useActiveWalletGuard();
   return null;
 }
+const confirmActive = (address: string) => guard.confirmActive(address);
 
 const render = () => (
   <ActiveWalletGuardProvider>
@@ -38,6 +40,7 @@ const render = () => (
 describe("ActiveWalletGuardProvider", () => {
   beforeEach(() => {
     wagmi.address = undefined;
+    wagmi.isConnected = false;
     wagmi.disconnect.mockReset();
     privy.authenticated = false;
     privy.logout.mockClear();
@@ -95,6 +98,53 @@ describe("ActiveWalletGuardProvider", () => {
 
     expect(privy.logout).toHaveBeenCalledOnce();
     expect(wagmi.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("marks the guard as exiting until the connection and Privy session both actually settle", async () => {
+    privy.authenticated = true;
+    wagmi.address = ADDRESS_A;
+    wagmi.isConnected = true;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(render());
+    });
+
+    wagmi.address = ADDRESS_B;
+    await act(async () => renderer.update(render()));
+    expect(guard.isExiting).toBe(true);
+
+    // wagmi settles first; Privy's logout hasn't resolved yet, so exiting must still hold.
+    wagmi.isConnected = false;
+    await act(async () => renderer.update(render()));
+    expect(guard.isExiting).toBe(true);
+
+    privy.authenticated = false;
+    await act(async () => renderer.update(render()));
+    expect(guard.isExiting).toBe(false);
+  });
+
+  it("stops exiting after a bounded wait if disconnect or logout never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      privy.authenticated = true;
+      wagmi.address = ADDRESS_A;
+      wagmi.isConnected = true;
+      let renderer!: ReturnType<typeof create>;
+      act(() => {
+        renderer = create(render());
+      });
+
+      wagmi.address = ADDRESS_B;
+      act(() => renderer.update(render()));
+      expect(guard.isExiting).toBe(true);
+
+      act(() => {
+        vi.runAllTimers();
+      });
+      expect(guard.isExiting).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not call Privy logout for a connect-only session's unconfirmed drift", async () => {

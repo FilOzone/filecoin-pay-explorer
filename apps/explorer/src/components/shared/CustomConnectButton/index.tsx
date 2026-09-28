@@ -29,7 +29,7 @@ const CustomConnectButton = () => {
   // Privy registers connectors after reporting wallets, so connector changes retry activation.
   const connectors = useConnectors();
   const { setActiveWallet } = useSetActiveWallet();
-  const { confirmActive } = useActiveWalletGuard();
+  const { confirmActive, isExiting } = useActiveWalletGuard();
   const [pendingActivation, setPendingActivation] = useState<string>();
 
   // setActiveWallet is a no-op until the wallet's connector is registered.
@@ -73,7 +73,7 @@ const CustomConnectButton = () => {
     },
   });
   const { exit } = useWalletExit();
-  const state = getWalletEntryState({ ready, walletsReady, authenticated, isConnected });
+  const state = getWalletEntryState({ ready, walletsReady, authenticated, isConnected, isExiting });
 
   if (error) {
     console.error("Privy failed to initialize", error);
