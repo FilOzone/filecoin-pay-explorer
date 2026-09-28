@@ -141,7 +141,7 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
-  it("logs in first and continues only after authentication completes", async () => {
+  it("logs in first and continues only after authentication completes, without flagging the recipient as changed", async () => {
     privy.authenticated = false;
     chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
     privy.fund.mockResolvedValue({ status: "submitted" });

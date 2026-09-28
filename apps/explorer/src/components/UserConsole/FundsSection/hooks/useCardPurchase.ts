@@ -251,6 +251,7 @@ export function useCardPurchase({
     }
   };
 
+  // Funding login authenticates the connected recipient; isCurrent prevents attribution if it changes.
   const { login } = useLogin({
     onComplete: () => {
       const intent = continueAfterLogin.current;

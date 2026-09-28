@@ -28,12 +28,7 @@ export const getWalletEntryState = ({
   return "login";
 };
 
-/**
- * A Privy session and a browser-extension wallet both leave by logging the
- * console out: the extension keeps its own site permission and nothing here
- * can revoke it, so the menu does not send the user into the extension. Only
- * a connect-only session over a remote protocol is a real disconnect.
- */
+// Injected wallets retain site permission, so leaving the console logs out without revoking access.
 export const getWalletExitAction = (authenticated: boolean, connectorType?: string): WalletExitAction => {
   if (authenticated || connectorType === "injected") return "logout";
   return "disconnect";
@@ -44,29 +39,17 @@ export const exitWalletSession = async ({
   logout,
   disconnect,
   disconnectConnection,
-  pauseSelection,
-  resumeSelection,
 }: {
   authenticated: boolean;
   logout: () => Promise<void>;
-  /** Privy's own disconnect for the wallet. */
   disconnect?: () => void;
-  /** Drops wagmi's connection; Privy's disconnect leaves it in place for an extension wallet. */
+  /** Prevents wagmi from restoring the connection after Privy exits. */
   disconnectConnection?: () => Promise<void>;
-  pauseSelection?: () => void;
-  resumeSelection?: () => void;
 }) => {
-  // Pause before leaving so neither a logout nor a reload silently reselects the wallet.
-  pauseSelection?.();
-  try {
-    if (authenticated) return await logout();
+  if (authenticated) await logout();
+  else {
     if (!disconnect) throw new Error("Connected wallet was not found");
     disconnect();
-    // Privy keeps an extension wallet in its list after disconnect, so the wagmi bridge never
-    // re-selects and the console would stay connected; drop the connection directly.
-    await disconnectConnection?.();
-  } catch (error) {
-    resumeSelection?.();
-    throw error;
   }
+  await disconnectConnection?.();
 };
