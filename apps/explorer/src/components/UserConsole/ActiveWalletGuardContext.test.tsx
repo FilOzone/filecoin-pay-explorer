@@ -6,10 +6,18 @@ const wagmi = vi.hoisted(() => ({
   address: undefined as string | undefined,
   disconnect: vi.fn(),
 }));
+const privy = vi.hoisted(() => ({
+  authenticated: false,
+  logout: vi.fn(async () => undefined),
+}));
 
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: wagmi.address }),
   useDisconnect: () => ({ mutate: wagmi.disconnect }),
+}));
+vi.mock("@privy-io/react-auth", () => ({
+  usePrivy: () => ({ authenticated: privy.authenticated }),
+  useLogout: () => ({ logout: privy.logout }),
 }));
 
 const ADDRESS_A = "0x1111111111111111111111111111111111111111";
@@ -31,6 +39,8 @@ describe("ActiveWalletGuardProvider", () => {
   beforeEach(() => {
     wagmi.address = undefined;
     wagmi.disconnect.mockReset();
+    privy.authenticated = false;
+    privy.logout.mockClear();
   });
 
   it("accepts the first address a page load connects to", async () => {
@@ -69,6 +79,36 @@ describe("ActiveWalletGuardProvider", () => {
     wagmi.address = ADDRESS_B;
     await act(async () => renderer.update(render()));
 
+    expect(wagmi.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("ends the authenticated Privy session too, not just the wagmi connection, on unconfirmed drift", async () => {
+    privy.authenticated = true;
+    wagmi.address = ADDRESS_A;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(render());
+    });
+
+    wagmi.address = ADDRESS_B;
+    await act(async () => renderer.update(render()));
+
+    expect(privy.logout).toHaveBeenCalledOnce();
+    expect(wagmi.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("does not call Privy logout for a connect-only session's unconfirmed drift", async () => {
+    privy.authenticated = false;
+    wagmi.address = ADDRESS_A;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(render());
+    });
+
+    wagmi.address = ADDRESS_B;
+    await act(async () => renderer.update(render()));
+
+    expect(privy.logout).not.toHaveBeenCalled();
     expect(wagmi.disconnect).toHaveBeenCalledOnce();
   });
 

@@ -2,13 +2,9 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount, logoutFromConsole } from "./privy";
 
-// Regression coverage for the console getting stuck on "Preparing your wallet" after logging out of
-// one identity and into another: a race between Privy's embedded-wallet reconnect and its own
-// connector-registration effect, both real @privy-io/wagmi code that runs under the fake Privy here.
+// Regression coverage for the console getting stuck on "Preparing your wallet" after switching identities.
 
-// A fresh e2e wallet has no subgraph or notification history; without these, the console's own
-// background polls for it are just slow requests the test can outlast, and `fixtures.ts` fails any
-// test that leaves one still in flight when it ends. These give an empty-but-valid answer instead.
+// A fresh e2e wallet has no subgraph or notification history; these stub that empty state.
 async function stubAccountBackgroundRequests(page: Page): Promise<void> {
   await page.route(
     (url) => url.hostname === "api.goldsky.com",

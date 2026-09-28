@@ -1,5 +1,6 @@
 "use client";
 
+import { useLogout, usePrivy } from "@privy-io/react-auth";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { useConnection, useDisconnect } from "wagmi";
 
@@ -14,6 +15,8 @@ const ActiveWalletGuardContext = createContext<ActiveWalletGuard | null>(null);
 export function ActiveWalletGuardProvider({ children }: { children: ReactNode }) {
   const { address } = useConnection();
   const { mutate: disconnect } = useDisconnect();
+  const { authenticated } = usePrivy();
+  const { logout } = useLogout();
   const lastKnownGoodAddress = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -24,12 +27,14 @@ export function ActiveWalletGuardProvider({ children }: { children: ReactNode })
     }
     const confirmed = lastKnownGoodAddress.current;
     if (confirmed && confirmed.toLowerCase() !== address.toLowerCase()) {
+      // An authenticated session must end fully, or it reads as "preparing" forever, not "not connected".
+      if (authenticated) void logout();
       disconnect({});
       lastKnownGoodAddress.current = undefined;
       return;
     }
     lastKnownGoodAddress.current = address;
-  }, [address, disconnect]);
+  }, [address, authenticated, disconnect, logout]);
 
   const confirmActive = useCallback((confirmedAddress: string) => {
     lastKnownGoodAddress.current = confirmedAddress;
