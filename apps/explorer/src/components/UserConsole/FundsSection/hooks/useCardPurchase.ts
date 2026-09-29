@@ -295,7 +295,8 @@ export function useCardPurchase({
     if (authenticated) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
-    login();
+    // This only runs when a wallet is already connected, so offer only wallet methods.
+    login({ loginMethods: ["wallet"] });
   };
 
   const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";

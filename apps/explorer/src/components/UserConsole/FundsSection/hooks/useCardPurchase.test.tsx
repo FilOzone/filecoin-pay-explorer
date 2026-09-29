@@ -152,7 +152,8 @@ describe("useCardPurchase", () => {
     act(() => {
       void latest.buyWithCard();
     });
-    expect(privy.login).toHaveBeenCalledOnce();
+    // Only the already-connected wallet may authenticate here; email or Google would be a different identity.
+    expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
     expect(privy.fund).not.toHaveBeenCalled();
     await act(async () => {
       await privy.onLoginComplete?.();
