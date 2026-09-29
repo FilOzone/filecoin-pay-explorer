@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConnection, useConnectors } from "wagmi";
 import { useActiveWalletGuard } from "@/components/UserConsole/ActiveWalletGuardContext";
+import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
@@ -51,6 +52,17 @@ const CustomConnectButton = () => {
     confirmActive(address);
     setPendingActivation(address);
   };
+
+  // A session restored on page load may never reconnect its embedded wallet to wagmi (a known
+  // wagmi/Privy reconnect gap), which otherwise strands the user on "preparing" with only reload or
+  // logout as options. Retry once through the same activation path a fresh login already uses.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activateUsedWallet is stable for this effect's purposes, see the comment above its definition
+  useEffect(() => {
+    if (!authenticated || !walletsReady || isConnected || pendingActivation) return;
+    const embeddedWallet = wallets.find(isPrivyEmbeddedWallet);
+    if (embeddedWallet) activateUsedWallet(embeddedWallet.address);
+  }, [authenticated, walletsReady, isConnected, pendingActivation, wallets]);
+
   const { login } = useLogin({
     onComplete: ({ user, loginAccount }) => {
       if (loginAccount?.type === "wallet") {

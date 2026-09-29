@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   logout: vi.fn<() => Promise<void>>(),
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
   setActiveWallet: vi.fn(async () => undefined),
-  wallets: [] as { address: string }[],
+  wallets: [] as { address: string; walletClientType?: string }[],
   walletsReady: false,
   loginOnComplete: undefined as LoginOnComplete | undefined,
   loginOnError: undefined as ((code: string) => void) | undefined,
@@ -57,7 +57,7 @@ vi.mock("@/components/UserConsole/ActiveWalletGuardContext", () => ({
   useActiveWalletGuard: () => ({ confirmActive: mocks.confirmActive, isExiting: mocks.isExiting }),
 }));
 vi.mock("wagmi", () => ({
-  useConnection: () => ({ address: mocks.address, isConnected: false }),
+  useConnection: () => ({ address: mocks.address, isConnected: !!mocks.address }),
   useConnectors: () => mocks.connectors,
   useDisconnect: () => ({ mutateAsync: vi.fn(async () => undefined) }),
 }));
@@ -104,6 +104,72 @@ describe("CustomConnectButton", () => {
     });
 
     expect(mocks.logout).toHaveBeenCalledOnce();
+  });
+
+  it("retries activation for a restored session whose embedded wallet never reconnected to wagmi", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "privy" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0x1234000000000000000000000000000000abcd");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({
+      address: "0x1234000000000000000000000000000000abcd",
+      walletClientType: "privy",
+    });
+  });
+
+  it("does not retry activation for a restored session without an embedded wallet", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "metamask" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).not.toHaveBeenCalled();
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
+  });
+
+  it("targets the embedded wallet, not just the first entry, when a restored session also has an external wallet linked", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [
+      { address: "0x1111000000000000000000000000000000ext1", walletClientType: "metamask" },
+      { address: "0x2222000000000000000000000000000000priv", walletClientType: "privy" },
+    ];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0x2222000000000000000000000000000000priv");
+    expect(mocks.confirmActive).not.toHaveBeenCalledWith("0x1111000000000000000000000000000000ext1");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({
+      address: "0x2222000000000000000000000000000000priv",
+      walletClientType: "privy",
+    });
+  });
+
+  it("resolves out of preparing once the retried activation actually connects", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "privy" }];
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByType("button").some((button) => button.children.includes("Reload"))).toBe(true);
+
+    // The retried setActiveWallet call succeeded and wagmi picked up the connection.
+    mocks.address = "0x1234000000000000000000000000000000abcd";
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByType("button")).toHaveLength(0);
   });
 
   it("shows the loading state, not preparing, while a forced exit is settling", async () => {
