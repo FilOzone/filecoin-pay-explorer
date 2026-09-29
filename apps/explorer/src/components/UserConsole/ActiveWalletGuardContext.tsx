@@ -2,6 +2,7 @@
 
 import { useLogout, usePrivy } from "@privy-io/react-auth";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useConnection, useDisconnect } from "wagmi";
 
 // Caps how long a forced exit hides the console's normal state, in case disconnect or logout never settles.
@@ -36,6 +37,9 @@ export function ActiveWalletGuardProvider({ children }: { children: ReactNode })
       // An authenticated session must end fully, or it reads as "preparing" forever, not "not connected".
       if (authenticated) void logout();
       disconnect({});
+      toast.error("Wallet account changed", {
+        description: "Your wallet switched accounts, so we ended the session. Log in again to continue.",
+      });
       lastKnownGoodAddress.current = undefined;
       setIsExiting(true);
       return;

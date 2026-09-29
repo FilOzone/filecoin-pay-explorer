@@ -11,6 +11,7 @@ const privy = vi.hoisted(() => ({
   authenticated: false,
   logout: vi.fn(async () => undefined),
 }));
+const sonner = vi.hoisted(() => ({ toastError: vi.fn() }));
 
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: wagmi.address, isConnected: wagmi.isConnected }),
@@ -20,6 +21,7 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => ({ authenticated: privy.authenticated }),
   useLogout: () => ({ logout: privy.logout }),
 }));
+vi.mock("sonner", () => ({ toast: { error: sonner.toastError } }));
 
 const ADDRESS_A = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B = "0x2222222222222222222222222222222222222222";
@@ -44,6 +46,7 @@ describe("ActiveWalletGuardProvider", () => {
     wagmi.disconnect.mockReset();
     privy.authenticated = false;
     privy.logout.mockClear();
+    sonner.toastError.mockClear();
   });
 
   it("accepts the first address a page load connects to", async () => {
@@ -70,6 +73,7 @@ describe("ActiveWalletGuardProvider", () => {
     await act(async () => renderer.update(render()));
 
     expect(wagmi.disconnect).not.toHaveBeenCalled();
+    expect(sonner.toastError).not.toHaveBeenCalled();
   });
 
   it("disconnects an address change nobody confirmed", async () => {
@@ -83,6 +87,9 @@ describe("ActiveWalletGuardProvider", () => {
     await act(async () => renderer.update(render()));
 
     expect(wagmi.disconnect).toHaveBeenCalledOnce();
+    expect(sonner.toastError).toHaveBeenCalledWith("Wallet account changed", {
+      description: "Your wallet switched accounts, so we ended the session. Log in again to continue.",
+    });
   });
 
   it("ends the authenticated Privy session too, not just the wagmi connection, on unconfirmed drift", async () => {
