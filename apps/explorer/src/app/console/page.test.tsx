@@ -35,7 +35,7 @@ vi.mock("@/components/shared", () => ({
 vi.mock("@/components/UserConsole/providers/ConsoleProviders", () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("@/components/UserConsole/TopUpActivityContext", () => ({
+vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({
     isTopUpActive: topUpState.isTopUpActive,
   }),

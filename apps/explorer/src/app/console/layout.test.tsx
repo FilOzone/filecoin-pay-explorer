@@ -22,21 +22,48 @@ describe("console account", () => {
   const embedded = { address: ACCOUNT, walletClientType: "privy" };
 
   it("waits for Privy's wallets, even with a stored account, so hydration renders the same card", () => {
-    expect(getConsoleAccountState({ account: external, address: ACCOUNT, wallets: [], walletsReady: false })).toBe(
-      "connecting",
-    );
-    expect(getConsoleAccountState({ account: null, address: undefined, wallets: [], walletsReady: false })).toBe(
-      "connecting",
-    );
+    expect(
+      getConsoleAccountState({
+        privyFailed: false,
+        account: external,
+        address: ACCOUNT,
+        wallets: [],
+        walletsReady: false,
+      }),
+    ).toBe("connecting");
+    expect(
+      getConsoleAccountState({
+        privyFailed: false,
+        account: null,
+        address: undefined,
+        wallets: [],
+        walletsReady: false,
+      }),
+    ).toBe("connecting");
+  });
+
+  it("shows the gate, which explains the failure, when Privy cannot start", () => {
+    expect(
+      getConsoleAccountState({
+        privyFailed: true,
+        account: external,
+        address: undefined,
+        wallets: [],
+        walletsReady: false,
+      }),
+    ).toBe("none");
   });
 
   it("shows the gate without an account", () => {
-    expect(getConsoleAccountState({ account: null, address: OTHER, wallets: [], walletsReady: true })).toBe("none");
+    expect(
+      getConsoleAccountState({ privyFailed: false, account: null, address: OTHER, wallets: [], walletsReady: true }),
+    ).toBe("none");
   });
 
   it("is active only while wagmi is on the console account", () => {
     expect(
       getConsoleAccountState({
+        privyFailed: false,
         account: external,
         address: ACCOUNT.toLowerCase(),
         wallets: [{ address: ACCOUNT }],
@@ -49,6 +76,7 @@ describe("console account", () => {
     // wagmi follows the extension before Privy drops the old account, so the account is still listed.
     expect(
       getConsoleAccountState({
+        privyFailed: false,
         account: external,
         address: OTHER,
         wallets: [{ address: ACCOUNT }],
@@ -60,21 +88,34 @@ describe("console account", () => {
   it("reports an extension account that is no longer available as switched", () => {
     expect(
       getConsoleAccountState({
+        privyFailed: false,
         account: external,
         address: undefined,
         wallets: [{ address: OTHER }],
         walletsReady: true,
       }),
     ).toBe("switched");
-    expect(getConsoleAccountState({ account: external, address: undefined, wallets: [], walletsReady: true })).toBe(
-      "switched",
-    );
+    expect(
+      getConsoleAccountState({
+        privyFailed: false,
+        account: external,
+        address: undefined,
+        wallets: [],
+        walletsReady: true,
+      }),
+    ).toBe("switched");
   });
 
   it("treats a missing embedded wallet as not ready yet, since it cannot switch accounts", () => {
-    expect(getConsoleAccountState({ account: embedded, address: undefined, wallets: [], walletsReady: true })).toBe(
-      "none",
-    );
+    expect(
+      getConsoleAccountState({
+        privyFailed: false,
+        account: embedded,
+        address: undefined,
+        wallets: [],
+        walletsReady: true,
+      }),
+    ).toBe("none");
   });
 
   it.each([

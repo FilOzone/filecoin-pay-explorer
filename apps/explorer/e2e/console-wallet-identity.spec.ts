@@ -82,3 +82,41 @@ test("continuing as the extension's new account opens the console for that accou
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
   await expect(page.getByText(newAccount).first()).toBeVisible();
 });
+
+const walletMenu = (page: Page) => page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])');
+
+async function connectAndOpenCardPurchase(page: Page): Promise<string> {
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  const account = (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await page.getByRole("button", { name: "Verify wallet to buy USDC with card" }).click();
+  return account;
+}
+
+test("verifying a connected wallet for card purchases signs in as that wallet and buys for it", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  const account = await connectAndOpenCardPurchase(page);
+
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
+
+  const purchase = page.getByRole("dialog", { name: "buy usdc" });
+  const [start, end] = account.split("...");
+  await expect(purchase).toContainText(start);
+  await expect(purchase).toContainText(end);
+  await purchase.getByRole("button", { name: "close modal" }).click();
+  await expect(page.getByRole("button", { name: "Buy USDC with card", exact: true })).toBeEnabled();
+});
+
+test("rejecting the wallet's sign-in leaves card purchases unverified", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await connectAndOpenCardPurchase(page);
+
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Reject" }).click();
+
+  await expect(page.getByRole("button", { name: "Verify wallet to buy USDC with card" })).toBeEnabled();
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toBeHidden();
+});

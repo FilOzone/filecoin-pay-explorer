@@ -16,14 +16,18 @@ export type ConsoleAccessState =
 export const getConsoleAccountState = ({
   account,
   address,
+  privyFailed,
   wallets,
   walletsReady,
 }: {
   account: ConsoleAccount | null;
   address: string | undefined;
+  privyFailed: boolean;
   wallets: readonly { address: string }[];
   walletsReady: boolean;
 }): ConsoleAccountState => {
+  // The gate explains that login is unavailable; waiting for wallets would load forever.
+  if (privyFailed) return "none";
   // Privy's wallets load after hydration, so checking them first keeps the server and first client render identical.
   if (!walletsReady) return "connecting";
   if (!account) return "none";

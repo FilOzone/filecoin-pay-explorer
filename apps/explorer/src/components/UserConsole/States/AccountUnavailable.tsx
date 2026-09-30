@@ -6,14 +6,11 @@ import { WalletIcon } from "@phosphor-icons/react";
 import { type ConnectedWallet, useConnectWallet, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  isUserCancelledFlow,
-  WALLET_EXIT_LABEL,
-  type WalletExitAction,
-} from "@/components/shared/CustomConnectButton/state";
+import { isUserCancelledFlow } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { type ConsoleAccount, useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { formatAddress } from "@/utils/formatter";
+import { ExitLink } from "./ExitLink";
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
 
@@ -100,34 +97,6 @@ function WalletLocked({ account }: { account: ConsoleAccount }) {
         <ExitLink action={walletExit.action} exit={walletExit.exit} />
       </div>
     </EmptyStateCard>
-  );
-}
-
-function ExitLink({ action, exit }: { action: WalletExitAction; exit: () => Promise<void> }) {
-  const [isExiting, setIsExiting] = useState(false);
-  const pendingLabel = action === "logout" ? "Logging out…" : "Disconnecting…";
-
-  const handleExit = async () => {
-    setIsExiting(true);
-    try {
-      await exit();
-    } catch (error) {
-      setIsExiting(false);
-      toast.error(action === "logout" ? "Unable to log out" : "Unable to disconnect wallet", {
-        description: describeError(error),
-      });
-    }
-  };
-
-  return (
-    <button
-      className='text-sm text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50'
-      type='button'
-      disabled={isExiting}
-      onClick={() => void handleExit()}
-    >
-      {isExiting ? pendingLabel : WALLET_EXIT_LABEL[action]}
-    </button>
   );
 }
 

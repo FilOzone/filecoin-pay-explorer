@@ -1,7 +1,6 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
-import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
-import { useWallets } from "@privy-io/react-auth";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { type ReactNode, useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
@@ -11,8 +10,8 @@ import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { FundingHost } from "@/components/UserConsole/FundingHost";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import ConsoleProviders from "@/components/UserConsole/providers/ConsoleProviders";
-import { AccountUnavailable, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
-import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
+import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
+import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
@@ -28,7 +27,7 @@ import {
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
     case "reconnecting":
-      return <LoadingStateCard message='Connecting your wallet...' />;
+      return <ConnectingWallet />;
     case "not-connected":
       return <NotConnected />;
     case "account-switched":
@@ -47,9 +46,16 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { account } = useConsoleAccount();
   const { ready: walletsReady, wallets } = useWallets();
+  const { error: privyError } = usePrivy();
   const { isTopUpActive } = useTopUpActivity();
   const [lastReady, setLastReady] = useState<ReadyConnection | null>(null);
-  const accountState = getConsoleAccountState({ account, address, wallets, walletsReady });
+  const accountState = getConsoleAccountState({
+    account,
+    address,
+    privyFailed: Boolean(privyError),
+    wallets,
+    walletsReady,
+  });
   const walletAccessState = keepReadyThroughResync(
     getConsoleAccessState({ accountState, isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
     lastReady,

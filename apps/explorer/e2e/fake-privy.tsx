@@ -20,11 +20,24 @@ function sentTransactions(): SentTransaction[] {
 }
 
 type PendingSend = { tx: Record<string, unknown>; resolve: (hash: Hex) => void; reject: (error: unknown) => void };
+type PendingSignature = {
+  sign: () => Promise<Hex>;
+  resolve: (signature: Hex) => void;
+  reject: (error: unknown) => void;
+};
+type PendingFund = { address: string; reject: (error: unknown) => void };
 
 // The provider lives outside React, so a send reaches the dialog in PrivyProvider through a window event.
 function requestSend(tx: Record<string, unknown>): Promise<Hex> {
   return new Promise((resolve, reject) => {
     window.dispatchEvent(new CustomEvent<PendingSend>("fake-privy:send", { detail: { tx, resolve, reject } }));
+  });
+}
+
+// The extension's signature popup lives outside React too, so it reaches PrivyProvider the same way.
+function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
+  return new Promise((resolve, reject) => {
+    window.dispatchEvent(new CustomEvent<PendingSignature>("fake-privy:sign", { detail: { sign, resolve, reject } }));
   });
 }
 
@@ -103,6 +116,7 @@ function createExtension(disconnect: () => void) {
     meta: { id: "io.metamask", name: "MetaMask", icon: undefined },
     getEthereumProvider: async () => wallet.provider,
     switchChain: wallet.switchChain,
+    sign: (message: string) => requestSignature(() => accounts[selected].signMessage({ message })),
     disconnect,
   });
   const switchAccount = () => {
@@ -121,6 +135,7 @@ type Wallet = {
   meta: { id: string; name: string; icon: undefined };
   getEthereumProvider: () => Promise<ReturnType<typeof createProvider>["provider"]>;
   switchChain: (id: number) => Promise<void>;
+  sign?: (message: string) => Promise<Hex>;
   disconnect?: () => void;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
@@ -135,6 +150,8 @@ type FakePrivy = {
   onLogin: Set<LoginComplete>;
   connectWallet: () => void;
   onConnect: Set<ConnectSuccess>;
+  loginWithWallet: (address: string, walletClientType: string) => void;
+  fund: (address: string) => Promise<never>;
 };
 
 const FakePrivyContext = createContext<FakePrivy | null>(null);
@@ -228,6 +245,53 @@ function TransactionModal({ pending, onClose }: { pending: PendingSend; onClose:
   );
 }
 
+// Stands in for the extension's popup: Sign signs with the selected account, Reject rejects as MetaMask does.
+function SignatureModal({ pending, onClose }: { pending: PendingSignature; onClose: () => void }) {
+  return (
+    <div role='dialog' aria-label='signature request' id='privy-dialog'>
+      <h3>Signature request</h3>
+      <button
+        type='button'
+        onClick={async () => {
+          pending.resolve(await pending.sign());
+          onClose();
+        }}
+      >
+        Sign
+      </button>
+      <button
+        type='button'
+        onClick={() => {
+          pending.reject(Object.assign(new Error("User rejected the request."), { code: 4001 }));
+          onClose();
+        }}
+      >
+        Reject
+      </button>
+    </div>
+  );
+}
+
+// Privy's card purchase: it shows where the USDC goes, and closing it rejects with "User exited flow" as Privy does.
+function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => void }) {
+  return (
+    <div role='dialog' aria-label='buy usdc' id='privy-dialog'>
+      <button
+        type='button'
+        aria-label='close modal'
+        onClick={() => {
+          pending.reject(new Error("User exited flow"));
+          onClose();
+        }}
+      >
+        ✕
+      </button>
+      <h3>Buy USDC</h3>
+      <p>Destination: {pending.address}</p>
+    </div>
+  );
+}
+
 // Like real Privy: portaled to <body> above the console's own modal dialogs, which make the page behind them inert.
 const overlay = (dialog: ReactNode) =>
   createPortal(
@@ -245,10 +309,17 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     createExtension(() => setWallets((current) => current.filter((wallet) => wallet.connectorType !== "injected"))),
   );
   const [pendingSend, setPendingSend] = useState<PendingSend | null>(null);
+  const [pendingSignature, setPendingSignature] = useState<PendingSignature | null>(null);
+  const [pendingFund, setPendingFund] = useState<PendingFund | null>(null);
   useEffect(() => {
     const onSend = (event: Event) => setPendingSend((event as CustomEvent<PendingSend>).detail);
     window.addEventListener("fake-privy:send", onSend);
     return () => window.removeEventListener("fake-privy:send", onSend);
+  }, []);
+  useEffect(() => {
+    const onSign = (event: Event) => setPendingSignature((event as CustomEvent<PendingSignature>).detail);
+    window.addEventListener("fake-privy:sign", onSign);
+    return () => window.removeEventListener("fake-privy:sign", onSign);
   }, []);
   useEffect(() => {
     // Like MetaMask, the provider announces the new account and Privy then replaces the extension's wallet.
@@ -285,6 +356,12 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       setWallets([]);
     },
     onConnect,
+    // A verified wallet signs in as its own Privy user, with no embedded wallet.
+    loginWithWallet: (address, walletClientType) => {
+      const walletAccount = { type: "wallet", address, walletClientType };
+      setUser({ id: `did:privy:fake-${address}`, wallet: walletAccount, linkedAccounts: [walletAccount] });
+    },
+    fund: (address) => new Promise((_resolve, reject) => setPendingFund({ address, reject })),
     // Connects without a modal, as if the user picked the extension in Privy's wallet list.
     connectWallet: () => {
       const wallet = extension.current();
@@ -298,6 +375,9 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       {children}
       {modalOpen && overlay(<LoginModal onDone={completeLogin} onClose={() => setModalOpen(false)} />)}
       {pendingSend && overlay(<TransactionModal pending={pendingSend} onClose={() => setPendingSend(null)} />)}
+      {pendingSignature &&
+        overlay(<SignatureModal pending={pendingSignature} onClose={() => setPendingSignature(null)} />)}
+      {pendingFund && overlay(<FundModal pending={pendingFund} onClose={() => setPendingFund(null)} />)}
     </FakePrivyContext.Provider>
   );
 }
@@ -348,8 +428,17 @@ export const useConnectOrCreateWallet = (_callbacks?: unknown) => ({
   connectOrCreateWallet: unsupported("connectOrCreateWallet"),
 });
 export const useExportWallet = () => ({ exportWallet: unsupported("exportWallet") });
-export const useLoginWithSiwe = () => ({
-  generateSiweMessage: unsupported("generateSiweMessage"),
-  loginWithSiwe: unsupported("loginWithSiwe"),
-});
-export const useFiatOnramp = () => ({ fund: unsupported("fund") });
+// The message ends with the signing address, which is all the fake login needs from it.
+export function useLoginWithSiwe() {
+  const { loginWithWallet } = useFakePrivy();
+  return {
+    generateSiweMessage: async ({ address }: { address: string }) =>
+      `localhost wants you to sign in with your Ethereum account:\n${address}`,
+    loginWithSiwe: async ({ message, walletClientType }: { message: string; walletClientType?: string }) =>
+      loginWithWallet(message.split("\n").at(-1) ?? "", walletClientType ?? ""),
+  };
+}
+export function useFiatOnramp() {
+  const { fund } = useFakePrivy();
+  return { fund: (options: { destination: { address: string } }) => fund(options.destination.address) };
+}
