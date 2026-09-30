@@ -108,6 +108,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       <DirectSquidDepositDialog
         accountId={address.toLowerCase()}
         initialSource={cardSource}
+        onBuyWithCard={isMainnet ? () => launch.openAddFunds() : undefined}
         onOpenChange={(open) => {
           if (open) launch.openSquid();
           else {

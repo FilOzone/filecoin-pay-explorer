@@ -26,6 +26,9 @@ const state = vi.hoisted(() => ({
 }));
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as const,
+  connectorType: "injected",
+  meta: { name: "MetaMask" },
+  walletClientType: "metamask",
   getEthereumProvider: vi.fn(
     async (): Promise<{ request: (args: { method: string }) => Promise<unknown> }> => ({
       // The fake provider is already on Base, the dialog's default source network.
@@ -43,6 +46,13 @@ const wallet = vi.hoisted(() => ({
 const connectedWallets = vi.hoisted(() => ({
   current: [] as (typeof wallet)[],
 }));
+const payers = vi.hoisted(() => ({
+  // Accounts each wallet can sign for, as readConnectedAccounts reports them; undefined until loaded.
+  accounts: undefined as Record<string, `0x${string}`[]> | undefined,
+  connectWallet: vi.fn(),
+  connectWalletOnSuccess: undefined as ((params: { wallet: { address: string } }) => void) | undefined,
+  refetchAccounts: vi.fn(),
+}));
 const topUp = vi.hoisted(() => ({ setActive: vi.fn() }));
 const query = vi.hoisted(() => ({
   allowance: 100_000_000n,
@@ -57,6 +67,8 @@ const query = vi.hoisted(() => ({
   budgetIsError: false,
   budgetIsFetching: false,
   inventory: {} as Record<string, bigint | null>,
+  // Per-payer inventories, keyed by lowercase address; payers without one read `inventory`.
+  inventories: {} as Record<string, Record<string, bigint | null>>,
   nativeBalance: 10n ** 18n,
   recipientFil: 0n,
   recipientFilIsError: false,
@@ -109,7 +121,13 @@ const query = vi.hoisted(() => ({
 }));
 connectedWallets.current.push(wallet);
 
-vi.mock("@privy-io/react-auth", () => ({ useWallets: () => ({ wallets: connectedWallets.current }) }));
+vi.mock("@privy-io/react-auth", () => ({
+  useConnectWallet: ({ onSuccess }: { onSuccess: (params: { wallet: { address: string } }) => void }) => {
+    payers.connectWalletOnSuccess = onSuccess;
+    return { connectWallet: payers.connectWallet };
+  },
+  useWallets: () => ({ wallets: connectedWallets.current }),
+}));
 vi.mock("wagmi", () => ({
   useAccount: () => ({ address: state.liveRecipient }),
   usePublicClient: ({ chainId }: { chainId: number }) => ({ chain: { id: chainId } }),
@@ -119,9 +137,11 @@ vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({ setTopUpActive: topUp.setActive }),
 }));
-vi.mock("@tanstack/react-query", () => ({
-  queryOptions: (options: unknown) => options,
-  useQuery: ({ enabled, queryKey }: { enabled?: boolean; queryKey: readonly unknown[] }) => {
+vi.mock("@tanstack/react-query", () => {
+  const useQuery = ({ enabled, queryKey }: { enabled?: boolean; queryKey: readonly unknown[] }) => {
+    if (queryKey[0] === "direct-squid-payer-accounts") {
+      return { data: payers.accounts, refetch: payers.refetchAccounts };
+    }
     if (queryKey[0] === "squid-payment-tokens") {
       return {
         data: query.tokens.filter((token) => token.chainId === queryKey[1]),
@@ -131,7 +151,7 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     if (queryKey[0] === "squid" && queryKey[1] === "source-token-balances") {
-      return { data: query.inventory, isPending: false };
+      return { data: query.inventories[String(queryKey[2]).toLowerCase()] ?? query.inventory, isPending: false };
     }
     if (queryKey[0] === "direct-squid-deposit-balances") {
       return {
@@ -166,9 +186,15 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     return { data: query.quote, error: null, isFetching: false };
-  },
-  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
-}));
+  };
+  return {
+    queryOptions: (options: unknown) => options,
+    useQueries: ({ queries }: { queries: { enabled?: boolean; queryKey: readonly unknown[] }[] }) =>
+      queries.map(useQuery),
+    useQuery,
+    useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+  };
+});
 vi.mock("../data/squid-deposit-route", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../data/squid-deposit-route")>();
   return {
@@ -287,6 +313,10 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.budgetIsError = false;
     query.budgetIsFetching = false;
     query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
+    query.inventories = {};
+    payers.accounts = undefined;
+    payers.connectWallet.mockReset();
+    payers.refetchAccounts.mockReset();
     query.nativeBalance = 10n ** 18n;
     query.recipientFil = 0n;
     query.recipientFilIsError = false;
@@ -1238,5 +1268,168 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toContain(
       "The wallet did not switch to Filecoin",
     );
+  });
+
+  describe("paying account", () => {
+    const funded = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 0n };
+    const empty = { [USDC.toLowerCase()]: 0n, [USDT.toLowerCase()]: 0n };
+    // The console account's own MetaMask, which has also connected OWNER to the site.
+    const consoleMetaMask = { ...wallet, address: RECIPIENT } as unknown as typeof wallet;
+    let siteAccounts: string[];
+
+    const render = async (props: { onBuyWithCard?: () => void } = {}) => {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open {...props} />);
+      });
+      return renderer;
+    };
+    const payerSelect = (renderer: ReactTestRenderer) =>
+      renderer.root.findAll(
+        (node) =>
+          typeof node.props.onValueChange === "function" && [RECIPIENT, OWNER, OTHER].includes(node.props.value),
+      )[0];
+
+    beforeEach(() => {
+      siteAccounts = [RECIPIENT, OWNER];
+      wallet.getEthereumProvider.mockResolvedValue({
+        request: vi.fn(async ({ method }: { method: string }) => {
+          if (method === "eth_chainId") return `0x${state.walletChainId.toString(16)}`;
+          if (method === "wallet_requestPermissions") return [];
+          return siteAccounts;
+        }),
+      });
+    });
+
+    it("shows a single paying account as a value instead of a dropdown", async () => {
+      const renderer = await render();
+
+      expect(renderer.root.findAll((node) => node.props.id === "direct-squid-wallet")).toHaveLength(0);
+      expect(JSON.stringify(renderer.toJSON())).toContain("0x1111...1111 · MetaMask");
+    });
+
+    it("defaults to a connected account that holds funds when the console account holds none", async () => {
+      connectedWallets.current = [consoleMetaMask];
+      payers.accounts = { [RECIPIENT.toLowerCase()]: [RECIPIENT, OWNER] };
+      query.inventories = { [RECIPIENT.toLowerCase()]: empty, [OWNER.toLowerCase()]: funded };
+      try {
+        const renderer = await render();
+        expect(payerSelect(renderer).props.value).toBe(OWNER);
+
+        await reachExecution(renderer);
+        const input = state.execute.mock.calls[0]?.[0] as ExecuteSquidDepositInput;
+        expect(input.request.owner).toBe(OWNER);
+        expect(input.request.recipient).toBe(RECIPIENT);
+        // MetaMask keeps the console account selected; the payer only has to stay connected to the site.
+        await expect(input.getCurrentOwner()).resolves.toBe(OWNER);
+        siteAccounts = [RECIPIENT];
+        await expect(input.getCurrentOwner()).resolves.toBeUndefined();
+      } finally {
+        connectedWallets.current = [wallet];
+      }
+    });
+
+    it("pays for a card purchase from the console account it landed in", async () => {
+      connectedWallets.current = [consoleMetaMask];
+      payers.accounts = { [RECIPIENT.toLowerCase()]: [RECIPIENT, OWNER] };
+      // The console account's balance read has not caught up with the purchase yet.
+      query.inventories = { [RECIPIENT.toLowerCase()]: empty, [OWNER.toLowerCase()]: funded };
+      try {
+        let renderer!: ReactTestRenderer;
+        await act(async () => {
+          renderer = create(
+            <DirectSquidDepositDialog
+              accountId='account'
+              initialSource={{ amount: 5_000_000n, chainId: 8453, decimals: 6, token: USDC }}
+              onOpenChange={vi.fn()}
+              open
+            />,
+          );
+        });
+        expect(payerSelect(renderer).props.value).toBe(RECIPIENT);
+      } finally {
+        connectedWallets.current = [wallet];
+      }
+    });
+
+    it("keeps the account the user picked while balances refetch", async () => {
+      connectedWallets.current = [consoleMetaMask];
+      payers.accounts = { [RECIPIENT.toLowerCase()]: [RECIPIENT, OWNER] };
+      query.inventories = { [RECIPIENT.toLowerCase()]: empty, [OWNER.toLowerCase()]: funded };
+      try {
+        const renderer = await render();
+        await act(async () => payerSelect(renderer).props.onValueChange(RECIPIENT));
+
+        query.inventories = { [RECIPIENT.toLowerCase()]: empty, [OWNER.toLowerCase()]: { ...funded } };
+        await act(async () => {
+          renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+        });
+        expect(payerSelect(renderer).props.value).toBe(RECIPIENT);
+      } finally {
+        connectedWallets.current = [wallet];
+      }
+    });
+
+    it("pays with a wallet connected from the form, and ignores connections it did not start", async () => {
+      const rabby = { ...wallet, address: OTHER, meta: { name: "Rabby" }, walletClientType: "rabby" };
+      const renderer = await render();
+      connectedWallets.current = [wallet, rabby as unknown as typeof wallet];
+      try {
+        await act(async () => payers.connectWalletOnSuccess?.({ wallet: { address: OTHER } }));
+        expect(payerSelect(renderer).props.value).toBe(OWNER);
+
+        await act(async () => button(renderer, "Connect another wallet")?.props.onClick());
+        expect(payers.connectWallet).toHaveBeenCalledOnce();
+        await act(async () => payers.connectWalletOnSuccess?.({ wallet: { address: OTHER } }));
+        expect(payerSelect(renderer).props.value).toBe(OTHER);
+      } finally {
+        connectedWallets.current = [wallet];
+      }
+    });
+
+    it("connects another account from the same extension and pays with it", async () => {
+      payers.refetchAccounts.mockResolvedValue({ data: { [OWNER.toLowerCase()]: [OWNER, OTHER] } });
+      const renderer = await render();
+
+      // The label renders as "+ Add another ", "MetaMask", " account".
+      await act(async () => button(renderer, "Add another")?.props.onClick());
+      payers.accounts = { [OWNER.toLowerCase()]: [OWNER, OTHER] };
+      await act(async () => {
+        renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+      });
+
+      const provider = await wallet.getEthereumProvider.mock.results[0]?.value;
+      expect(provider.request).toHaveBeenCalledWith({
+        method: "wallet_requestPermissions",
+        params: [{ eth_accounts: {} }],
+      });
+      expect(payerSelect(renderer).props.value).toBe(OTHER);
+    });
+
+    it("offers a way forward when the paying account cannot cover the amount", async () => {
+      query.tokenBalance = 50_000_000n;
+      const onBuyWithCard = vi.fn();
+      const renderer = await render({ onBuyWithCard });
+      await act(async () => {
+        amountInput(renderer).props.onChange({ target: { value: "100" } });
+      });
+
+      const recovery = renderer.root
+        .findByProps({ "aria-label": "Not enough funds" })
+        .findAllByType("p")
+        .map((paragraph) => paragraph.children.join(""));
+      expect(recovery[0]).toBe("0x1111...1111 doesn't have enough USDC.");
+      expect(recovery[1]).toContain("Nothing has been sent");
+      expect(button(renderer, "Review")?.props.disabled).toBe(true);
+      await act(async () => button(renderer, "Buy USDC with card")?.props.onClick());
+      expect(onBuyWithCard).toHaveBeenCalledOnce();
+    });
+
+    it("says what Review is waiting for", async () => {
+      const renderer = await render();
+
+      expect(JSON.stringify(renderer.toJSON())).toContain("Enter an amount.");
+      expect(button(renderer, "Review")?.props["aria-describedby"]).toBe("direct-squid-review-blocker");
+    });
   });
 });
