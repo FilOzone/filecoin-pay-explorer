@@ -5,12 +5,14 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useConnection } from "wagmi";
 import { CustomConnectButton } from "@/components/shared";
 import { getWalletEntryState } from "@/components/shared/CustomConnectButton/state";
+import { useActiveWalletGuard } from "@/components/UserConsole/ActiveWalletGuardContext";
 
 const NotConnected = () => {
   const { ready, authenticated, error } = usePrivy();
   const { ready: walletsReady } = useWallets();
   const { isConnected } = useConnection();
-  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated, isConnected });
+  const { isExiting } = useActiveWalletGuard();
+  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated, isConnected, isExiting });
 
   if (!error && walletEntryState === "loading") return <LoadingStateCard message='Loading wallet...' />;
 

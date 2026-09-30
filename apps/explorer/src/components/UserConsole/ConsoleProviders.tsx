@@ -5,7 +5,7 @@ import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
-import { consoleWalletSelector } from "./console-wallet";
+import { ActiveWalletGuardProvider } from "./ActiveWalletGuardContext";
 import { FundingLaunchProvider } from "./FundingLaunchContext";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
@@ -35,12 +35,14 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
-      <WagmiProvider config={config} setActiveWalletForWagmi={consoleWalletSelector}>
-        <SynapseProvider>
-          <TopUpActivityProvider>
-            <FundingLaunchProvider>{children}</FundingLaunchProvider>
-          </TopUpActivityProvider>
-        </SynapseProvider>
+      <WagmiProvider config={config}>
+        <ActiveWalletGuardProvider>
+          <SynapseProvider>
+            <TopUpActivityProvider>
+              <FundingLaunchProvider>{children}</FundingLaunchProvider>
+            </TopUpActivityProvider>
+          </SynapseProvider>
+        </ActiveWalletGuardProvider>
       </WagmiProvider>
     </PrivyProvider>
   );

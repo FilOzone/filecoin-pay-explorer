@@ -28,6 +28,21 @@ describe("getWalletEntryState", () => {
       "connected",
     );
   });
+
+  it("shows loading instead of preparing or connected while a forced exit is settling", () => {
+    expect(
+      getWalletEntryState({
+        ready: true,
+        walletsReady: true,
+        authenticated: true,
+        isConnected: false,
+        isExiting: true,
+      }),
+    ).toBe("loading");
+    expect(
+      getWalletEntryState({ ready: true, walletsReady: true, authenticated: true, isConnected: true, isExiting: true }),
+    ).toBe("loading");
+  });
 });
 
 describe("getWalletExitAction", () => {
@@ -39,45 +54,37 @@ describe("getWalletExitAction", () => {
     expect(getWalletExitAction(false, "wallet_connect_v2")).toBe("disconnect");
   });
 
-  it("calls only the exit operation for the active session type", async () => {
+  it("calls only the exit operation for the active session type, then always drops the wagmi connection", async () => {
     const logout = vi.fn(async () => undefined);
     const disconnect = vi.fn();
-    const pauseSelection = vi.fn();
+    const disconnectConnection = vi.fn(async () => undefined);
 
-    await exitWalletSession({ authenticated: true, logout, disconnect, pauseSelection });
-    expect(pauseSelection).toHaveBeenCalledOnce();
+    await exitWalletSession({ authenticated: true, logout, disconnect, disconnectConnection });
     expect(logout).toHaveBeenCalledOnce();
     expect(disconnect).not.toHaveBeenCalled();
+    expect(disconnectConnection).toHaveBeenCalledOnce();
 
     logout.mockClear();
-    pauseSelection.mockClear();
-    const disconnectConnection = vi.fn(async () => undefined);
-    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection, pauseSelection });
+    disconnectConnection.mockClear();
+    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
     expect(disconnectConnection).toHaveBeenCalledOnce();
-    expect(pauseSelection).toHaveBeenCalledOnce();
-    expect(pauseSelection.mock.invocationCallOrder[0]).toBeLessThan(disconnect.mock.invocationCallOrder[0]);
     expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(disconnectConnection.mock.invocationCallOrder[0]);
   });
 
-  it("restores wallet selection when a connect-only wallet cannot be disconnected", async () => {
-    const resumeSelection = vi.fn();
+  it("does not drop the wagmi connection when a connect-only wallet has no disconnect callback", async () => {
+    const disconnectConnection = vi.fn(async () => undefined);
 
     await expect(
-      exitWalletSession({
-        authenticated: false,
-        logout: async () => undefined,
-        pauseSelection: vi.fn(),
-        resumeSelection,
-      }),
+      exitWalletSession({ authenticated: false, logout: async () => undefined, disconnectConnection }),
     ).rejects.toThrow("Connected wallet was not found");
-    expect(resumeSelection).toHaveBeenCalledOnce();
+    expect(disconnectConnection).not.toHaveBeenCalled();
   });
 
-  it("restores wallet selection when logout fails", async () => {
+  it("does not drop the wagmi connection when logout fails", async () => {
     const error = new Error("logout failed");
-    const resumeSelection = vi.fn();
+    const disconnectConnection = vi.fn(async () => undefined);
 
     await expect(
       exitWalletSession({
@@ -85,11 +92,10 @@ describe("getWalletExitAction", () => {
         logout: async () => {
           throw error;
         },
-        pauseSelection: vi.fn(),
-        resumeSelection,
+        disconnectConnection,
       }),
     ).rejects.toThrow(error);
-    expect(resumeSelection).toHaveBeenCalledOnce();
+    expect(disconnectConnection).not.toHaveBeenCalled();
   });
 });
 

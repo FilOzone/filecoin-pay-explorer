@@ -13,7 +13,7 @@ import { ArrowUpRightIcon, Check, Copy, KeyRound, LogOut, Wallet } from "lucide-
 import { useState } from "react";
 import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
+import { useBalance, useConnection, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
@@ -25,7 +25,7 @@ import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
   const { constants } = useSynapse();
-  const { address } = useAccount();
+  const { address } = useConnection();
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());

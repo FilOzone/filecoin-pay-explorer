@@ -4,6 +4,7 @@ import NotConnected from "./NotConnected";
 
 const mocks = vi.hoisted(() => ({
   isConnected: false,
+  isExiting: false,
   privy: { authenticated: false, error: null as Error | null, ready: false },
   walletsReady: false,
 }));
@@ -34,9 +35,13 @@ vi.mock("@privy-io/react-auth", () => ({
 }));
 vi.mock("wagmi", () => ({ useConnection: () => ({ isConnected: mocks.isConnected }) }));
 vi.mock("@/components/shared", () => ({ CustomConnectButton: () => <button type='button'>Wallet actions</button> }));
+vi.mock("@/components/UserConsole/ActiveWalletGuardContext", () => ({
+  useActiveWalletGuard: () => ({ isExiting: mocks.isExiting }),
+}));
 
 beforeEach(() => {
   mocks.isConnected = false;
+  mocks.isExiting = false;
   mocks.privy = { authenticated: false, error: null, ready: false };
   mocks.walletsReady = false;
 });
@@ -60,5 +65,16 @@ describe("NotConnected", () => {
 
     for (const copy of expected) expect(markup).toContain(copy);
     for (const copy of unexpected) expect(markup).not.toContain(copy);
+  });
+
+  it("shows the loading copy, not preparing, while a forced exit is settling", () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.isExiting = true;
+
+    const markup = renderToStaticMarkup(<NotConnected />);
+
+    expect(markup).toContain("Loading wallet...");
+    expect(markup).not.toContain("Preparing your wallet");
   });
 });
