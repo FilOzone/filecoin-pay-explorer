@@ -28,7 +28,7 @@ test("logging in with a different identity after logout reaches the console, not
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "second@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -41,7 +41,7 @@ test("logging out and back in with the same identity reconnects without getting 
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -56,11 +56,11 @@ test("an extension account switch pauses the console until the wallet switches b
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await switchExtensionAccount(page);
-  await expect(page.getByRole("heading", { name: "Your wallet switched accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your wallet is using a different account" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeHidden();
 
   await switchExtensionAccount(page);
@@ -71,12 +71,12 @@ test("continuing as the extension's new account opens the console for that accou
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await switchExtensionAccount(page);
-  const continueButton = page.getByRole("button", { name: /^Continue as / });
-  const newAccount = (await continueButton.textContent())?.replace("Continue as ", "") ?? "";
+  const continueButton = page.getByRole("button", { name: /^Use / });
+  const newAccount = (await continueButton.textContent())?.replace("Use ", "") ?? "";
   await continueButton.click();
 
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();

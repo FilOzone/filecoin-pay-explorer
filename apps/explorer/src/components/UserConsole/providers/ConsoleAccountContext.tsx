@@ -60,7 +60,7 @@ function getSessionAccount(user: User | null): ConsoleAccount | null {
 }
 
 /**
- * Owns the console account and the wagmi connection that follows it. Only the gate, "Continue as",
+ * Owns the console account and the wagmi connection that follows it. Only the gate, "Use account",
  * and exits change the account; logging in, verifying, or connecting another wallet never does.
  */
 export function ConsoleAccountProvider({ children }: { children: ReactNode }) {

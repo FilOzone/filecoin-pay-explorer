@@ -76,10 +76,10 @@ describe("AccountUnavailable", () => {
     mocks.wallets = [SWITCHED_TO];
     const renderer = await render();
 
-    expect(renderer.root.findByType("h2").children).toEqual(["Your wallet switched accounts"]);
+    expect(renderer.root.findByType("h2").children).toEqual(["Your wallet is using a different account"]);
     expect(mocks.selectAccount).not.toHaveBeenCalled();
 
-    await clickButton(renderer, "Continue as 0x2222...2222");
+    await clickButton(renderer, "Use 0x2222...2222");
     expect(mocks.selectAccount).toHaveBeenCalledWith(SWITCHED_TO);
     expect(mocks.logout).not.toHaveBeenCalled();
   });
@@ -89,7 +89,7 @@ describe("AccountUnavailable", () => {
     mocks.wallets = [SWITCHED_TO];
     const renderer = await render();
 
-    await clickButton(renderer, "Continue as");
+    await clickButton(renderer, "Use 0x2222...2222");
 
     expect(mocks.logout).toHaveBeenCalledOnce();
     expect(mocks.selectAccount).toHaveBeenCalledWith(SWITCHED_TO);
@@ -103,7 +103,7 @@ describe("AccountUnavailable", () => {
     mocks.wallets = [SWITCHED_TO];
     const renderer = await render();
 
-    await clickButton(renderer, "Continue as");
+    await clickButton(renderer, "Use 0x2222...2222");
 
     // Selecting the new account here would let it buy by card on the previous account's login.
     expect(mocks.selectAccount).not.toHaveBeenCalled();
@@ -114,6 +114,7 @@ describe("AccountUnavailable", () => {
     mocks.wallets = [SWITCHED_TO];
     const renderer = await render();
 
+    // Same label as the header menu for this session: an extension wallet logs out.
     await clickButton(renderer, "Log out");
 
     expect(SWITCHED_TO.disconnect).toHaveBeenCalledOnce();
@@ -124,11 +125,11 @@ describe("AccountUnavailable", () => {
     mocks.wallets = [{ address: "0x3333333333333333333333333333333333333333", walletClientType: "privy" }];
     const renderer = await render();
 
-    expect(renderer.root.findByType("h2").children).toEqual(["Your wallet is locked or disconnected"]);
-    await clickButton(renderer, "Reconnect");
+    expect(renderer.root.findByType("h2").children).toEqual(["Reconnect your wallet"]);
+    await clickButton(renderer, "Reconnect wallet");
     expect(mocks.connectWallet).toHaveBeenCalledOnce();
 
-    await clickButton(renderer, "Log out");
+    await clickButton(renderer, "Disconnect");
     expect(mocks.clearAccount).toHaveBeenCalledOnce();
   });
 });

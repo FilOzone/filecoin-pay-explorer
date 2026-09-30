@@ -58,23 +58,41 @@ const CustomConnectButton = () => {
     );
 
   return (
-    <div className='flex flex-col items-center gap-2'>
-      <Button
-        variant='primary'
-        onClick={() => login({ loginMethods: ["email", "google"] })}
-        type='button'
-        size='compact'
-      >
-        Log in
-      </Button>
-      <button className='text-sm text-primary hover:underline' type='button' onClick={() => connectWallet()}>
-        Connect a wallet without an account
-      </button>
-      {/* Visible rather than a tooltip: the difference matters before choosing, and touch screens can't hover. */}
-      <p className='max-w-xs text-center text-xs text-muted-foreground'>
-        Log in with email or Google to buy with a card right away. A connected wallet signs once before its first card
-        purchase.
-      </p>
+    <div className='flex w-full max-w-md flex-col gap-3 text-left'>
+      <div className='rounded-lg border border-primary/30 bg-primary/5 p-4'>
+        <div className='mb-2 flex items-center justify-between gap-3'>
+          <h3 className='font-medium'>Email or Google</h3>
+          <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>New to crypto</span>
+        </div>
+        <p className='mb-4 text-sm text-muted-foreground'>
+          We’ll create a wallet for you, and you can pay by card right away.
+        </p>
+        <Button
+          className='w-full'
+          variant='primary'
+          onClick={() => login({ loginMethods: ["email", "google"] })}
+          type='button'
+        >
+          Continue with email or Google
+        </Button>
+      </div>
+
+      <div className='flex items-center gap-3 text-xs text-muted-foreground' aria-hidden='true'>
+        <span className='h-px flex-1 bg-border' />
+        or
+        <span className='h-px flex-1 bg-border' />
+      </div>
+
+      <div className='rounded-lg border p-4'>
+        <h3 className='mb-2 font-medium'>Existing crypto wallet</h3>
+        <p className='mb-4 text-sm text-muted-foreground'>
+          Use MetaMask or another wallet you already control. No sign-up needed. Card payments need a one-time
+          signature.
+        </p>
+        <Button className='w-full' variant='ghost' type='button' onClick={() => connectWallet()}>
+          Connect existing wallet
+        </Button>
+      </div>
     </div>
   );
 };
