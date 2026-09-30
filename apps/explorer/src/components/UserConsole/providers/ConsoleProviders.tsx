@@ -4,9 +4,9 @@ import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
+import { FundingLaunchProvider } from "../FundingLaunchContext";
+import { TopUpActivityProvider } from "../TopUpActivityContext";
 import { ConsoleAccountProvider } from "./ConsoleAccountContext";
-import { FundingLaunchProvider } from "./FundingLaunchContext";
-import { TopUpActivityProvider } from "./TopUpActivityContext";
 
 export const PRIVY_CONFIG = {
   loginMethods: ["email", "google", "wallet"],
