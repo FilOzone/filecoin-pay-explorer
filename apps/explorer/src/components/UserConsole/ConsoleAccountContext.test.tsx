@@ -1,0 +1,140 @@
+import type { ReactNode } from "react";
+import { act, create } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ConsoleAccountProvider, useConsoleAccount } from "./ConsoleAccountContext";
+
+type WalletStub = { address: string; walletClientType: string };
+type Selector = (params: { wallets: WalletStub[]; user: null }) => WalletStub | undefined;
+
+const EMBEDDED = { address: "0x1111111111111111111111111111111111111111", walletClientType: "privy" };
+const METAMASK = { address: "0x2222222222222222222222222222222222222222", walletClientType: "metamask" };
+const OTHER_METAMASK = { address: "0x3333333333333333333333333333333333333333", walletClientType: "metamask" };
+const STORAGE_KEY = "filecoin-pay:console-account:v1";
+
+const mocks = vi.hoisted(() => ({
+  user: null as null | { linkedAccounts: object[]; wallet?: { address: string; walletClientType?: string } },
+  selector: undefined as Selector | undefined,
+}));
+
+vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => ({ user: mocks.user }) }));
+vi.mock("@privy-io/wagmi", () => ({
+  WagmiProvider: ({
+    children,
+    setActiveWalletForWagmi,
+  }: {
+    children: ReactNode;
+    setActiveWalletForWagmi: Selector;
+  }) => {
+    mocks.selector = setActiveWalletForWagmi;
+    return children;
+  },
+}));
+vi.mock("@/services/wagmi/config", () => ({ config: {} }));
+
+const stored = new Map<string, string>();
+
+let latest!: ReturnType<typeof useConsoleAccount>;
+function Probe() {
+  latest = useConsoleAccount();
+  return null;
+}
+
+const render = () =>
+  act(() => {
+    create(
+      <ConsoleAccountProvider>
+        <Probe />
+      </ConsoleAccountProvider>,
+    );
+  });
+
+const selectForWagmi = (wallets: WalletStub[]) => mocks.selector?.({ wallets, user: null });
+
+beforeEach(() => {
+  stored.clear();
+  mocks.user = null;
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      removeItem: (key: string) => stored.delete(key),
+      setItem: (key: string, value: string) => stored.set(key, value),
+    },
+  });
+});
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("ConsoleAccountProvider", () => {
+  it("starts without an account and connects no wallet to wagmi", () => {
+    render();
+
+    expect(latest.account).toBeNull();
+    expect(selectForWagmi([EMBEDDED, METAMASK])).toBeUndefined();
+  });
+
+  it("uses the embedded wallet of an email or Google login", () => {
+    mocks.user = { linkedAccounts: [{ type: "email" }, { type: "wallet", ...EMBEDDED }], wallet: EMBEDDED };
+    render();
+
+    expect(latest.account).toEqual(EMBEDDED);
+  });
+
+  it("uses the wallet a login verified when the user has no embedded wallet", () => {
+    mocks.user = { linkedAccounts: [{ type: "wallet", ...METAMASK }], wallet: METAMASK };
+    render();
+
+    expect(latest.account).toEqual(METAMASK);
+  });
+
+  it("keeps wagmi on the console account however many wallets connect, in any order", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+
+    expect(selectForWagmi([METAMASK])).toBe(METAMASK);
+    expect(selectForWagmi([EMBEDDED, METAMASK])).toBe(METAMASK);
+    expect(selectForWagmi([METAMASK, EMBEDDED])).toBe(METAMASK);
+  });
+
+  it("matches the account's wallet regardless of address case", () => {
+    render();
+    act(() =>
+      latest.selectAccount({ address: "0xabcdef0000000000000000000000000000000001", walletClientType: "metamask" }),
+    );
+    const checksummed = { address: "0xABCDEF0000000000000000000000000000000001", walletClientType: "metamask" };
+
+    expect(selectForWagmi([checksummed])).toBe(checksummed);
+  });
+
+  it("disconnects wagmi instead of following the extension to another account", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+
+    expect(selectForWagmi([OTHER_METAMASK, EMBEDDED])).toBeUndefined();
+  });
+
+  it("keeps a chosen account over the Privy login, and restores it after a reload", () => {
+    mocks.user = { linkedAccounts: [{ type: "wallet", ...EMBEDDED }], wallet: EMBEDDED };
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    expect(latest.account).toEqual(METAMASK);
+
+    render();
+    expect(latest.account).toEqual(METAMASK);
+  });
+
+  it("forgets the chosen account on exit", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    act(() => latest.clearAccount());
+
+    expect(latest.account).toBeNull();
+    expect(stored.has(STORAGE_KEY)).toBe(false);
+  });
+
+  it("ignores a stored value that is not an account", () => {
+    stored.set(STORAGE_KEY, JSON.stringify({ address: "not-an-address", walletClientType: "metamask" }));
+    render();
+
+    expect(latest.account).toBeNull();
+  });
+});

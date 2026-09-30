@@ -1,6 +1,6 @@
 "use client";
 
-import { useFiatOnramp, useLogin, usePrivy } from "@privy-io/react-auth";
+import { type ConnectedWallet, useFiatOnramp, useLoginWithSiwe, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -133,11 +133,12 @@ export function useCardPurchase({
   onPurchased: (amount: bigint) => void;
 }) {
   const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
   const { fund } = useFiatOnramp();
+  const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "waiting">("idle");
-  const continueAfterLogin = useRef<LoginContext | null>(null);
+  const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "verifying" | "waiting">("idle");
   const pendingPurchase = useRef<PurchaseContext | null>(null);
   const isMounted = useRef(true);
   const latestContext = useRef(contextKey);
@@ -251,28 +252,38 @@ export function useCardPurchase({
     }
   };
 
-  // Funding login authenticates the connected recipient; isCurrent prevents attribution if it changes.
-  const { login } = useLogin({
-    onComplete: () => {
-      const intent = continueAfterLogin.current;
-      continueAfterLogin.current = null;
-      if (!intent) return;
-      if (!isCurrent(intent)) {
-        if (isMounted.current) {
-          setStatus("idle");
-          toast.error("Wallet changed during login", {
-            description: "Return to Add funds from the account you want to fund.",
-          });
-        }
-        return;
-      }
-      void purchase(intent);
-    },
-    onError: () => {
-      continueAfterLogin.current = null;
+  // Signs in as the recipient itself, so card funding never adds another wallet or identity. Headless SIWE
+  // settles only after Privy is signed in, unlike Privy's modal flows, whose login callbacks may never fire.
+  const verifyThenPurchase = async (wallet: ConnectedWallet, intent: LoginContext) => {
+    setStatus("verifying");
+    try {
+      const chainId = Number(wallet.chainId.replace("eip155:", ""));
+      const message = await generateSiweMessage({ address: getAddress(wallet.address), chainId: `eip155:${chainId}` });
+      const signature = await wallet.sign(message);
+      await loginWithSiwe({
+        message,
+        signature,
+        walletClientType: wallet.walletClientType,
+        connectorType: wallet.connectorType,
+      });
+    } catch (error) {
       if (isMounted.current) setStatus("idle");
-    },
-  });
+      if (!isFundingExit(error)) {
+        toast.error("Unable to verify wallet", { description: error instanceof Error ? error.message : undefined });
+      }
+      return;
+    }
+    if (!isCurrent(intent)) {
+      if (isMounted.current) {
+        setStatus("idle");
+        toast.error("Wallet changed during login", {
+          description: "Return to Add funds from the account you want to fund.",
+        });
+      }
+      return;
+    }
+    await purchase(intent);
+  };
 
   // A purchase that never lands would otherwise pin this account on "Check for
   // purchased USDC" for good; the picker asks for confirmation before calling this.
@@ -290,26 +301,29 @@ export function useCardPurchase({
   };
 
   const buyWithCard = () => {
-    if (status === "opening" || status === "waiting") return;
+    if (status === "opening" || status === "verifying" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (authenticated) return purchase();
-    continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
-    setStatus("opening");
-    // This only runs when a wallet is already connected, so offer only wallet methods.
-    login({ loginMethods: ["wallet"] });
+    const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === address.toLowerCase());
+    if (!recipientWallet) {
+      toast.error("Card purchase unavailable", { description: "Reconnect your wallet and try again." });
+      return;
+    }
+    return verifyThenPurchase(recipientWallet, { contextKey, recipient: getAddress(address) });
   };
 
-  const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
+  const purchaseLabel = authenticated ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
   const statusMessages = {
     delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
     idle: null,
     opening: "Opening card purchase…",
+    verifying: "Confirm the sign-in message in your wallet…",
     waiting: "Waiting for Base USDC to arrive…",
   };
   return {
     buyWithCard,
     canStartOver: status === "delayed",
-    isBusy: status === "opening" || status === "waiting",
+    isBusy: status === "opening" || status === "verifying" || status === "waiting",
     label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],

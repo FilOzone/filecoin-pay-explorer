@@ -1,7 +1,39 @@
+import type { ConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { isSupportedChainId } from "@/utils/network";
 
-export type ConsoleAccessState = "reconnecting" | "not-connected" | "unsupported-chain" | "squid-source" | "ready";
+export type ConsoleAccountState = "none" | "connecting" | "active" | "switched";
+
+export type ConsoleAccessState =
+  | "reconnecting"
+  | "not-connected"
+  | "account-switched"
+  | "unsupported-chain"
+  | "squid-source"
+  | "ready";
+
+/** Compares the wagmi connection with the console account, so nothing renders for another address. */
+export const getConsoleAccountState = ({
+  account,
+  address,
+  wallets,
+  walletsReady,
+}: {
+  account: ConsoleAccount | null;
+  address: string | undefined;
+  wallets: readonly { address: string }[];
+  walletsReady: boolean;
+}): ConsoleAccountState => {
+  // Privy's wallets load after hydration, so checking them first keeps the server and first client render identical.
+  if (!walletsReady) return "connecting";
+  if (!account) return "none";
+  const accountAddress = account.address.toLowerCase();
+  if (address?.toLowerCase() === accountAddress) return "active";
+  if (wallets.some((wallet) => wallet.address.toLowerCase() === accountAddress)) return "connecting";
+  // An embedded wallet can't switch accounts, so a missing one is still being created or its session ended.
+  if (account.walletClientType === "privy") return "none";
+  return "switched";
+};
 
 export const getConsoleDisplayAccessState = (
   walletAccessState: ConsoleAccessState,
@@ -9,17 +41,21 @@ export const getConsoleDisplayAccessState = (
 ): ConsoleAccessState => (walletAccessState === "squid-source" && isTopUpActive ? "ready" : walletAccessState);
 
 export const getConsoleAccessState = ({
+  accountState,
   isConnected,
   isReconnecting,
   hasAddress,
   chainId,
 }: {
+  accountState: ConsoleAccountState;
   isConnected: boolean;
   isReconnecting?: boolean;
   hasAddress: boolean;
   chainId: number | undefined;
 }): ConsoleAccessState => {
-  if (isReconnecting) return "reconnecting";
+  if (accountState === "none") return "not-connected";
+  if (accountState === "switched") return "account-switched";
+  if (accountState === "connecting" || isReconnecting) return "reconnecting";
   if (!isConnected || !hasAddress) {
     return "not-connected";
   }

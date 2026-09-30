@@ -1,21 +1,24 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
+import { useWallets } from "@privy-io/react-auth";
 import { type ReactNode, useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
+import { useConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
 import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { FundingHost } from "@/components/UserConsole/FundingHost";
-import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { AccountUnavailable, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
   type ConsoleAccessState,
   getConsoleAccessState,
+  getConsoleAccountState,
   getConsoleDisplayAccessState,
   keepReadyThroughResync,
   type ReadyConnection,
@@ -28,6 +31,8 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
       return <LoadingStateCard message='Connecting your wallet...' />;
     case "not-connected":
       return <NotConnected />;
+    case "account-switched":
+      return <AccountUnavailable />;
     case "unsupported-chain":
     // A Squid source chain only reaches here with no top-up in progress:
     // getConsoleDisplayAccessState reports an active one as "ready".
@@ -40,10 +45,13 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
 
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { address, isConnected, isReconnecting, chainId } = useConnection();
+  const { account } = useConsoleAccount();
+  const { ready: walletsReady, wallets } = useWallets();
   const { isTopUpActive } = useTopUpActivity();
   const [lastReady, setLastReady] = useState<ReadyConnection | null>(null);
+  const accountState = getConsoleAccountState({ account, address, wallets, walletsReady });
   const walletAccessState = keepReadyThroughResync(
-    getConsoleAccessState({ isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    getConsoleAccessState({ accountState, isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
     lastReady,
     address,
     chainId,
@@ -72,7 +80,8 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
-            <FundingHost />
+            {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
+            {accountState === "active" ? <FundingHost /> : null}
           </div>
         </Container>
       </div>
