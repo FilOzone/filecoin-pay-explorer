@@ -12,7 +12,7 @@ vi.mock("@privy-io/react-auth", () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
-vi.mock("@/components/UserConsole/ConsoleAccountContext", () => ({
+vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({ clearAccount: mocks.clearAccount }),
 }));
 

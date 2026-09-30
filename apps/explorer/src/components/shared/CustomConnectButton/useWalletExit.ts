@@ -1,7 +1,7 @@
 "use client";
 
 import { type ConnectedWallet, useLogout, usePrivy } from "@privy-io/react-auth";
-import { useConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
+import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { exitWalletSession, getWalletExitAction } from "./state";
 
 type ExitableWallet = Pick<ConnectedWallet, "connectorType" | "disconnect">;

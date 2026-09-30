@@ -3,7 +3,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { toast } from "sonner";
-import { useConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
+import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
@@ -58,19 +58,23 @@ const CustomConnectButton = () => {
     );
 
   return (
-    <div className='flex w-full max-w-xs flex-col gap-4'>
-      <div className='flex flex-col gap-1'>
-        <Button variant='primary' onClick={() => login({ loginMethods: ["email", "google"] })} type='button'>
-          Continue with email or Google
-        </Button>
-        <p className='text-sm text-muted-foreground'>We create a wallet for you. You can pay by card.</p>
-      </div>
-      <div className='flex flex-col gap-1'>
-        <Button variant='ghost' onClick={() => connectWallet()} type='button'>
-          Connect a wallet
-        </Button>
-        <p className='text-sm text-muted-foreground'>Use MetaMask or another wallet you already have. No sign-up.</p>
-      </div>
+    <div className='flex flex-col items-center gap-2'>
+      <Button
+        variant='primary'
+        onClick={() => login({ loginMethods: ["email", "google"] })}
+        type='button'
+        size='compact'
+      >
+        Log in
+      </Button>
+      <button className='text-sm text-primary hover:underline' type='button' onClick={() => connectWallet()}>
+        Connect a wallet without an account
+      </button>
+      {/* Visible rather than a tooltip: the difference matters before choosing, and touch screens can't hover. */}
+      <p className='max-w-xs text-center text-xs text-muted-foreground'>
+        Log in with email or Google to buy with a card right away. A connected wallet signs once before its first card
+        purchase.
+      </p>
     </div>
   );
 };

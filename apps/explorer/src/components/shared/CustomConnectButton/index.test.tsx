@@ -40,7 +40,7 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => mocks.privy,
   useWallets: () => ({ ready: mocks.walletsReady, wallets: [] }),
 }));
-vi.mock("@/components/UserConsole/ConsoleAccountContext", () => ({
+vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({ clearAccount: mocks.clearAccount, selectAccount: mocks.selectAccount }),
 }));
 
@@ -88,17 +88,18 @@ describe("CustomConnectButton", () => {
     expect(mocks.clearAccount).toHaveBeenCalledOnce();
   });
 
-  it("offers email or Google sign-in, and a wallet connection without sign-up", async () => {
+  it("offers email or Google login, and a wallet connection without an account", async () => {
     mocks.privy = { authenticated: false, error: null, ready: true };
     mocks.walletsReady = true;
     const renderer = await render();
 
-    await act(async () => findButton(renderer, "Continue with email or Google")?.props.onClick());
-    await act(async () => findButton(renderer, "Connect a wallet")?.props.onClick());
+    await act(async () => findButton(renderer, "Log in")?.props.onClick());
+    await act(async () => findButton(renderer, "Connect a wallet without an account")?.props.onClick());
 
-    // A wallet enters through "Connect a wallet" only, so there is one way in per kind of account.
+    // A wallet enters through the connect link only, so there is one way in per kind of account.
     expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ["email", "google"] });
     expect(mocks.connectWallet).toHaveBeenCalledOnce();
+    expect(JSON.stringify(renderer.toJSON())).toContain("A connected wallet signs once before its first card");
   });
 
   it("makes the wallet a connect-only flow just connected the console account", async () => {

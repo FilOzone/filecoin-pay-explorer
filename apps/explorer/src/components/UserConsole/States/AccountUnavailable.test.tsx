@@ -42,7 +42,7 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => ({ authenticated: mocks.authenticated }),
   useWallets: () => ({ wallets: mocks.wallets }),
 }));
-vi.mock("@/components/UserConsole/ConsoleAccountContext", () => ({
+vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({
     account: ACCOUNT,
     clearAccount: mocks.clearAccount,

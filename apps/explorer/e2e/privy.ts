@@ -12,7 +12,7 @@ export async function loginWithTestAccount(page: Page, options: { email?: string
   const email = real ? requireEnv("E2E_PRIVY_TEST_EMAIL") : (options.email ?? "e2e@fake-privy.test");
   const otp = real ? requireEnv("E2E_PRIVY_TEST_OTP") : "000000";
 
-  await page.getByRole("button", { name: "Continue with email or Google" }).click();
+  await page.getByRole("button", { name: "Log in" }).click();
   const modal = page.getByRole("dialog", { name: "log in or sign up" });
   await modal.getByPlaceholder(/email/i).fill(email);
   await modal.getByRole("button", { name: /submit/i }).click();

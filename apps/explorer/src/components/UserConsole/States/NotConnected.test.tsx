@@ -46,9 +46,9 @@ describe("NotConnected", () => {
       { authenticated: true, ready: true },
       true,
       ["Preparing your wallet", "You&#x27;re signed in"],
-      ["Open your Filecoin Pay account"],
+      ["Access the Filecoin Pay console"],
     ],
-    ["login is needed", { authenticated: false, ready: true }, true, ["Open your Filecoin Pay account"], []],
+    ["login is needed", { authenticated: false, ready: true }, true, ["Access the Filecoin Pay console"], []],
   ] as const)("shows the %s copy", (_label, privy, walletsReady, expected, unexpected) => {
     mocks.privy = { ...privy, error: null };
     mocks.walletsReady = walletsReady;

@@ -7,7 +7,7 @@ import { type ConnectedWallet, useConnectWallet, useLogout, usePrivy, useWallets
 import { toast } from "sonner";
 import { isUserCancelledFlow } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
-import { type ConsoleAccount, useConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
+import { type ConsoleAccount, useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { formatAddress } from "@/utils/formatter";
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
@@ -50,13 +50,13 @@ function WalletSwitched({ account, replacement }: { account: ConsoleAccount; rep
       titleTag='h2'
       icon={WalletIcon}
       title='Your wallet switched accounts'
-      description={`Your wallet is now on ${formatAddress(replacement.address)}. The console is still showing ${formatAddress(account.address)}, and nothing was signed from the new account. Switch back in your wallet, or continue with the new account.`}
+      description={`Switch back to ${formatAddress(account.address)} in your wallet to keep going, or continue with the new account.`}
     >
       <div className='flex flex-col items-center gap-2'>
-        <Button variant='primary' type='button' onClick={() => void continueWithReplacement()}>
+        <Button variant='primary' size='compact' type='button' onClick={() => void continueWithReplacement()}>
           Continue as {formatAddress(replacement.address)}
         </Button>
-        <LogOutButton exit={exit} />
+        <LogOutLink exit={exit} />
       </div>
     </EmptyStateCard>
   );
@@ -80,27 +80,26 @@ function WalletLocked({ account }: { account: ConsoleAccount }) {
       description={`Unlock your wallet or reconnect ${formatAddress(account.address)} to continue.`}
     >
       <div className='flex flex-col items-center gap-2'>
-        <Button variant='primary' type='button' onClick={() => connectWallet()}>
+        <Button variant='primary' size='compact' type='button' onClick={() => connectWallet()}>
           Reconnect
         </Button>
-        <LogOutButton exit={exit} />
+        <LogOutLink exit={exit} />
       </div>
     </EmptyStateCard>
   );
 }
 
-function LogOutButton({ exit }: { exit: () => Promise<void> }) {
+function LogOutLink({ exit }: { exit: () => Promise<void> }) {
   return (
-    <Button
-      variant='ghost'
-      size='compact'
+    <button
+      className='text-sm text-primary hover:underline'
       type='button'
       onClick={() =>
         void exit().catch((error: unknown) => toast.error("Unable to log out", { description: describeError(error) }))
       }
     >
       Log out
-    </Button>
+    </button>
   );
 }
 

@@ -1,4 +1,4 @@
-import type { ConsoleAccount } from "@/components/UserConsole/ConsoleAccountContext";
+import type { ConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { isSupportedChainId } from "@/utils/network";
 
