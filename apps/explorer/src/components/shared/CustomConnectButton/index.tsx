@@ -4,10 +4,17 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { useConnection } from "wagmi";
+import { setConsoleExited } from "@/components/UserConsole/console-wallet";
 import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
+
+// Choosing to come back undoes a previous exit, so the wallet can be selected again.
+const enter = (open: () => void) => {
+  setConsoleExited(false);
+  open();
+};
 
 const CustomConnectButton = () => {
   const { ready, authenticated, error } = usePrivy();
@@ -58,10 +65,10 @@ const CustomConnectButton = () => {
 
   return (
     <div className='flex flex-col items-center gap-2'>
-      <Button variant='primary' onClick={() => login()} type='button' size='compact'>
+      <Button variant='primary' onClick={() => enter(login)} type='button' size='compact'>
         Log in
       </Button>
-      <button className='text-sm text-primary hover:underline' type='button' onClick={() => connectWallet()}>
+      <button className='text-sm text-primary hover:underline' type='button' onClick={() => enter(connectWallet)}>
         Connect a wallet without an account
       </button>
     </div>

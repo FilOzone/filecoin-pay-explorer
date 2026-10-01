@@ -154,7 +154,6 @@ type FakePrivy = {
   onLogin: Set<LoginComplete>;
   connectWallet: () => void;
   onConnect: Set<ConnectSuccess>;
-  loginWithWallet: (address: string, walletClientType: string) => void;
   fund: (address: string) => Promise<never>;
 };
 
@@ -366,21 +365,32 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     onLogin,
     // Wallet-only login, as the card purchase asks for: the connected extension signs in as its selected account.
     openLogin: (options) => {
+      // Like real Privy, which refuses to log in over an existing login.
+      if (user) return;
       if (!options?.loginMethods?.every((method) => method === "wallet")) return setModalOpen(true);
-      const wallet = extension.current();
-      wallet.sign?.("Sign in to Filecoin Pay").then(
-        () => {
-          const walletAccount = { type: "wallet", address: wallet.address, walletClientType: wallet.walletClientType };
-          const walletUser: User = {
-            id: `did:privy:fake-${wallet.address}`,
-            wallet: walletAccount,
-            linkedAccounts: [walletAccount],
-          };
-          setUser(walletUser);
-          for (const listener of onLogin) listener({ user: walletUser, isNewUser: false, loginAccount: walletAccount });
-        },
-        () => undefined,
-      );
+      extension
+        .current()
+        .sign?.("Sign in to Filecoin Pay")
+        .then(
+          () => {
+            // Whichever account approved the signature is the one that signed in.
+            const wallet = extension.current();
+            const walletAccount = {
+              type: "wallet",
+              address: wallet.address,
+              walletClientType: wallet.walletClientType,
+            };
+            const walletUser: User = {
+              id: `did:privy:fake-${wallet.address}`,
+              wallet: walletAccount,
+              linkedAccounts: [walletAccount],
+            };
+            setUser(walletUser);
+            for (const listener of onLogin)
+              listener({ user: walletUser, isNewUser: false, loginAccount: walletAccount });
+          },
+          () => undefined,
+        );
     },
     // Like real Privy, an extension stays connected after logout; only the embedded wallet goes.
     logout: async () => {
@@ -388,11 +398,6 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       setWallets((current) => current.filter((wallet) => wallet.connectorType === "injected"));
     },
     onConnect,
-    // A verified wallet signs in as its own Privy user, with no embedded wallet.
-    loginWithWallet: (address, walletClientType) => {
-      const walletAccount = { type: "wallet", address, walletClientType };
-      setUser({ id: `did:privy:fake-${address}`, wallet: walletAccount, linkedAccounts: [walletAccount] });
-    },
     fund: (address) => new Promise((_resolve, reject) => setPendingFund({ address, reject })),
     // Connects without a modal, as if the user picked the extension in Privy's wallet list.
     connectWallet: () => {
@@ -460,16 +465,6 @@ export const useConnectOrCreateWallet = (_callbacks?: unknown) => ({
   connectOrCreateWallet: unsupported("connectOrCreateWallet"),
 });
 export const useExportWallet = () => ({ exportWallet: unsupported("exportWallet") });
-// The message ends with the signing address, which is all the fake login needs from it.
-export function useLoginWithSiwe() {
-  const { loginWithWallet } = useFakePrivy();
-  return {
-    generateSiweMessage: async ({ address }: { address: string }) =>
-      `localhost wants you to sign in with your Ethereum account:\n${address}`,
-    loginWithSiwe: async ({ message, walletClientType }: { message: string; walletClientType?: string }) =>
-      loginWithWallet(message.split("\n").at(-1) ?? "", walletClientType ?? ""),
-  };
-}
 export function useFiatOnramp() {
   const { fund } = useFakePrivy();
   return { fund: (options: { destination: { address: string } }) => fund(options.destination.address) };

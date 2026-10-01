@@ -1,27 +1,12 @@
 import type { Page } from "@playwright/test";
+import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
-import { loginWithTestAccount } from "./privy";
+import { loginWithTestAccount, stubAccountBackgroundRequests } from "./privy";
 
 // The console account follows the wallet while idle, stays on an email user's own wallet when another wallet
 // connects, and never acts for an account other than the one an action started with.
 
 test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
-
-// A fresh e2e wallet has no subgraph or notification history; these stub that empty state.
-async function stubAccountBackgroundRequests(page: Page): Promise<void> {
-  await page.route(
-    (url) => url.hostname === "api.goldsky.com",
-    (route) => {
-      const query = route.request().postData() ?? "";
-      const data = query.includes("GetAccountTokens") ? { userTokens: [] } : { accounts: [] };
-      return route.fulfill({ json: { data } });
-    },
-  );
-  await page.route(
-    (url) => url.hostname === "notification-api-production.filoz.workers.dev",
-    (route) => route.fulfill({ json: { subscribed: false } }),
-  );
-}
 
 const walletMenu = (page: Page) => page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])');
 const consoleAccount = async (page: Page) => (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
@@ -95,7 +80,7 @@ test("an extension switch during card sign-in never opens a purchase for either 
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toBeHidden();
 });
 
-test("a card sign-in for one account does not carry over to the account the wallet switches to", async ({ page }) => {
+test("after a switch, the new account signs in for itself before buying by card", async ({ page }) => {
   const first = await startCardLogin(page);
   await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
   await page.getByRole("dialog", { name: "buy usdc" }).getByRole("button", { name: "close modal" }).click();
@@ -105,7 +90,13 @@ test("a card sign-in for one account does not carry over to the account the wall
   await walletMenu(page).click();
   await page.getByRole("menuitem", { name: "Add funds" }).click();
 
-  await expect(page.getByRole("button", { name: "Log in to buy USDC with card" })).toBeVisible();
+  await page.getByRole("button", { name: "Log in to buy USDC with card" }).click();
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
+
+  const [start, end] = (await consoleAccount(page)).split("...");
+  const purchase = page.getByRole("dialog", { name: "buy usdc" });
+  await expect(purchase).toContainText(start);
+  await expect(purchase).toContainText(end);
 });
 
 test("a wallet user who signed in for card purchases leaves the console on Log out", async ({ page }) => {
@@ -118,4 +109,21 @@ test("a wallet user who signed in for card purchases leaves the console on Log o
   await page.getByRole("menuitem", { name: "Log out" }).click();
 
   await expect(page.getByRole("button", { name: "Connect a wallet without an account" })).toBeVisible();
+});
+
+test("an account switch closes a form opened for the previous account", async ({ page, baseURL }) => {
+  const cli = await filecoinPin(`${baseURL}`);
+  const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
+  await stubAccountBackgroundRequests(page);
+  await page.goto(link);
+  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Review & authorize" }).click();
+  const first = await consoleAccount(page);
+  const [start] = first.split("...");
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
+
+  await fire(page, "fake-privy:switch-account");
+
+  await expect.poll(() => consoleAccount(page)).not.toBe(first);
+  await expect(page.getByRole("button", { name: /^Authorize as / })).toBeHidden();
 });

@@ -26,3 +26,19 @@ export async function logoutFromConsole(page: Page): Promise<void> {
   await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
   await page.getByRole("menuitem", { name: "Log out" }).click();
 }
+
+// A fresh e2e wallet has no subgraph or notification history; these stub that empty state.
+export async function stubAccountBackgroundRequests(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.hostname === "api.goldsky.com",
+    (route) => {
+      const query = route.request().postData() ?? "";
+      const data = query.includes("GetAccountTokens") ? { userTokens: [] } : { accounts: [] };
+      return route.fulfill({ json: { data } });
+    },
+  );
+  await page.route(
+    (url) => url.hostname === "notification-api-production.filoz.workers.dev",
+    (route) => route.fulfill({ json: { subscribed: false } }),
+  );
+}

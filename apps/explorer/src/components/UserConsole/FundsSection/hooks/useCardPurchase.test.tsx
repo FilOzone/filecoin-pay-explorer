@@ -11,7 +11,6 @@ const privy = vi.hoisted(() => ({
   // The address the Privy login signed in as; the recipient unless a test says otherwise.
   loggedInAs: "0x1111111111111111111111111111111111111111" as string,
   fund: vi.fn(),
-  logout: vi.fn(async () => undefined),
   login: vi.fn(),
   onLoginComplete: undefined as (() => void) | undefined,
   onLoginError: undefined as (() => void) | undefined,
@@ -43,8 +42,7 @@ vi.mock("@privy-io/react-auth", () => ({
   },
   usePrivy: () => ({
     authenticated: privy.authenticated,
-    user: privy.authenticated ? { wallet: { address: privy.loggedInAs } } : null,
-    logout: privy.logout,
+    user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loggedInAs }] } : null,
   }),
 }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => queries }));
@@ -69,7 +67,6 @@ beforeEach(() => {
   onPurchased.mockReset();
   privy.authenticated = true;
   privy.loggedInAs = ADDRESS;
-  privy.logout.mockClear();
   privy.fund.mockReset();
   privy.login.mockReset();
   queries.invalidateQueries.mockReset();
@@ -170,18 +167,17 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(2n);
   });
 
-  it("ends a login made as another account and asks this account to log in, without buying", async () => {
+  it("treats a login made as another account as no login for this one", async () => {
     privy.loggedInAs = OTHER;
     await act(async () => {
       create(<Harness />);
     });
     expect(latest.label).toBe("Log in to buy USDC with card");
 
-    await act(async () => {
-      await latest.buyWithCard();
+    act(() => {
+      void latest.buyWithCard();
     });
 
-    expect(privy.logout).toHaveBeenCalledOnce();
     expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
     expect(privy.fund).not.toHaveBeenCalled();
   });

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
 import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
@@ -132,9 +133,9 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated, user, logout } = usePrivy();
-  // A login carries over when the wallet switches accounts, so it only counts for the account it signed in as.
-  const loggedInAsRecipient = authenticated && user?.wallet?.address.toLowerCase() === address.toLowerCase();
+  const { user } = usePrivy();
+  // A login only counts for its own wallets, never for an account the extension switched to.
+  const loggedInAsRecipient = isLinkedWallet(user, address);
   const { fund } = useFiatOnramp();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
   const queryClient = useQueryClient();
@@ -291,13 +292,12 @@ export function useCardPurchase({
     setStatus("idle");
   };
 
-  const buyWithCard = async () => {
+  const buyWithCard = () => {
     if (status === "opening" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (loggedInAsRecipient) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
-    if (authenticated) await logout();
     // This only runs when a wallet is already connected, so offer only wallet methods.
     login({ loginMethods: ["wallet"] });
   };
