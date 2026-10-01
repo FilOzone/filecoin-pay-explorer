@@ -8,7 +8,10 @@ const OTHER = "0x2222222222222222222222222222222222222222" as const;
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const privy = vi.hoisted(() => ({
   authenticated: true,
+  // The address the Privy login signed in as; the recipient unless a test says otherwise.
+  loggedInAs: "0x1111111111111111111111111111111111111111" as string,
   fund: vi.fn(),
+  logout: vi.fn(async () => undefined),
   login: vi.fn(),
   onLoginComplete: undefined as (() => void) | undefined,
   onLoginError: undefined as (() => void) | undefined,
@@ -38,7 +41,11 @@ vi.mock("@privy-io/react-auth", () => ({
     privy.onLoginError = onError;
     return { login: privy.login };
   },
-  usePrivy: () => ({ authenticated: privy.authenticated }),
+  usePrivy: () => ({
+    authenticated: privy.authenticated,
+    user: privy.authenticated ? { wallet: { address: privy.loggedInAs } } : null,
+    logout: privy.logout,
+  }),
 }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => queries }));
 vi.mock("wagmi", () => ({ usePublicClient: () => chain }));
@@ -61,6 +68,8 @@ beforeEach(() => {
   chain.readContract.mockReset();
   onPurchased.mockReset();
   privy.authenticated = true;
+  privy.loggedInAs = ADDRESS;
+  privy.logout.mockClear();
   privy.fund.mockReset();
   privy.login.mockReset();
   queries.invalidateQueries.mockReset();
@@ -159,6 +168,22 @@ describe("useCardPurchase", () => {
       await privy.onLoginComplete?.();
     });
     expect(onPurchased).toHaveBeenCalledWith(2n);
+  });
+
+  it("ends a login made as another account and asks this account to log in, without buying", async () => {
+    privy.loggedInAs = OTHER;
+    await act(async () => {
+      create(<Harness />);
+    });
+    expect(latest.label).toBe("Log in to buy USDC with card");
+
+    await act(async () => {
+      await latest.buyWithCard();
+    });
+
+    expect(privy.logout).toHaveBeenCalledOnce();
+    expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
+    expect(privy.fund).not.toHaveBeenCalled();
   });
 
   it("does not continue login after the wallet changes", async () => {

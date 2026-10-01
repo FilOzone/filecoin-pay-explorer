@@ -132,7 +132,9 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated } = usePrivy();
+  const { authenticated, user, logout } = usePrivy();
+  // A login carries over when the wallet switches accounts, so it only counts for the account it signed in as.
+  const loggedInAsRecipient = authenticated && user?.wallet?.address.toLowerCase() === address.toLowerCase();
   const { fund } = useFiatOnramp();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
   const queryClient = useQueryClient();
@@ -289,17 +291,18 @@ export function useCardPurchase({
     setStatus("idle");
   };
 
-  const buyWithCard = () => {
+  const buyWithCard = async () => {
     if (status === "opening" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
-    if (authenticated) return purchase();
+    if (loggedInAsRecipient) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
+    if (authenticated) await logout();
     // This only runs when a wallet is already connected, so offer only wallet methods.
     login({ loginMethods: ["wallet"] });
   };
 
-  const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
+  const purchaseLabel = loggedInAsRecipient ? "Buy USDC with card" : "Log in to buy USDC with card";
   const statusMessages = {
     delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
     idle: null,

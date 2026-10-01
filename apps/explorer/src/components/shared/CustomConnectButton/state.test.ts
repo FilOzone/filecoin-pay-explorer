@@ -28,21 +28,6 @@ describe("getWalletEntryState", () => {
       "connected",
     );
   });
-
-  it("shows loading instead of preparing or connected while a forced exit is settling", () => {
-    expect(
-      getWalletEntryState({
-        ready: true,
-        walletsReady: true,
-        authenticated: true,
-        isConnected: false,
-        isExiting: true,
-      }),
-    ).toBe("loading");
-    expect(
-      getWalletEntryState({ ready: true, walletsReady: true, authenticated: true, isConnected: true, isExiting: true }),
-    ).toBe("loading");
-  });
 });
 
 describe("getWalletExitAction", () => {

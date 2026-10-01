@@ -5,7 +5,7 @@ import { WagmiProvider } from "@privy-io/wagmi";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
-import { ActiveWalletGuardProvider } from "./ActiveWalletGuardContext";
+import { isPrivyEmbeddedWallet } from "./console-wallet";
 import { FundingLaunchProvider } from "./FundingLaunchContext";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
@@ -35,14 +35,16 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
-      <WagmiProvider config={config}>
-        <ActiveWalletGuardProvider>
-          <SynapseProvider>
-            <TopUpActivityProvider>
-              <FundingLaunchProvider>{children}</FundingLaunchProvider>
-            </TopUpActivityProvider>
-          </SynapseProvider>
-        </ActiveWalletGuardProvider>
+      {/* wagmi holds the login's own wallet, else the extension, so connecting another wallet never replaces it. */}
+      <WagmiProvider
+        config={config}
+        setActiveWalletForWagmi={({ wallets }) => wallets.find(isPrivyEmbeddedWallet) ?? wallets[0]}
+      >
+        <SynapseProvider>
+          <TopUpActivityProvider>
+            <FundingLaunchProvider>{children}</FundingLaunchProvider>
+          </TopUpActivityProvider>
+        </SynapseProvider>
       </WagmiProvider>
     </PrivyProvider>
   );
