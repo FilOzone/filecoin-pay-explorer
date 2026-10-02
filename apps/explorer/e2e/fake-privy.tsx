@@ -2,7 +2,7 @@
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Hex, numberToHex } from "viem";
+import { type Hex, numberToHex, verifyMessage } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
@@ -20,6 +20,12 @@ function sentTransactions(): SentTransaction[] {
 }
 
 type PendingSend = { tx: Record<string, unknown>; resolve: (hash: Hex) => void; reject: (error: unknown) => void };
+type PendingSignature = {
+  sign: () => Promise<Hex>;
+  resolve: (signature: Hex) => void;
+  reject: (error: unknown) => void;
+};
+type PendingFund = { address: string; reject: (error: unknown) => void };
 
 // The provider lives outside React, so a send reaches the dialog in PrivyProvider through a window event.
 function requestSend(tx: Record<string, unknown>): Promise<Hex> {
@@ -28,7 +34,18 @@ function requestSend(tx: Record<string, unknown>): Promise<Hex> {
   });
 }
 
-function createProvider(currentAccount: () => PrivateKeyAccount) {
+// The extension's signature popup lives outside React too, so it reaches PrivyProvider the same way.
+function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
+  return new Promise((resolve, reject) => {
+    window.dispatchEvent(new CustomEvent<PendingSignature>("fake-privy:sign", { detail: { sign, resolve, reject } }));
+  });
+}
+
+// An extension passes `prompt` to show its popup before each signature; the embedded wallet signs directly.
+function createProvider(
+  currentAccount: () => PrivateKeyAccount,
+  prompt: (sign: () => Promise<Hex>) => Promise<Hex> = (sign) => sign(),
+) {
   let chainId = DEFAULT_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
   const emit = (event: string, ...args: unknown[]) => {
@@ -47,8 +64,15 @@ function createProvider(currentAccount: () => PrivateKeyAccount) {
         return numberToHex(chainId);
       case "wallet_switchEthereumChain":
         return switchChain(Number((params[0] as { chainId: Hex }).chainId));
-      case "personal_sign":
-        return currentAccount().signMessage({ message: { raw: params[0] as Hex } });
+      case "personal_sign": {
+        const [message, address] = params as [Hex, string | undefined];
+        const account = currentAccount();
+        // A wallet signs only as an account connected to the site, and this fake connects one at a time.
+        if (address && address.toLowerCase() !== account.address.toLowerCase()) {
+          throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
+        }
+        return prompt(() => account.signMessage({ message: { raw: message } }));
+      }
       case "eth_signTypedData_v4":
         return currentAccount().signTypedData(JSON.parse(params[1] as string));
       // Goes through the fake Privy transaction dialog; nothing is signed or broadcast.
@@ -92,7 +116,7 @@ function createEmbeddedWallet(): Wallet {
 function createExtension(disconnect: () => void) {
   const accounts = [privateKeyToAccount(generatePrivateKey()), privateKeyToAccount(generatePrivateKey())];
   let selected = 0;
-  const wallet = createProvider(() => accounts[selected]);
+  const wallet = createProvider(() => accounts[selected], requestSignature);
   const current = (): Wallet => ({
     address: accounts[selected].address,
     walletClientType: "metamask",
@@ -137,6 +161,8 @@ type FakePrivy = {
   onLogin: Set<LoginComplete>;
   connectWallet: () => void;
   onConnect: Set<ConnectSuccess>;
+  loginWithWallet: (address: string, walletClientType: string) => void;
+  fund: (address: string) => Promise<never>;
 };
 
 const FakePrivyContext = createContext<FakePrivy | null>(null);
@@ -230,6 +256,53 @@ function TransactionModal({ pending, onClose }: { pending: PendingSend; onClose:
   );
 }
 
+// Stands in for the extension's popup: Sign signs with the selected account, Reject rejects as MetaMask does.
+function SignatureModal({ pending, onClose }: { pending: PendingSignature; onClose: () => void }) {
+  return (
+    <div role='dialog' aria-label='signature request' id='privy-dialog'>
+      <h3>Signature request</h3>
+      <button
+        type='button'
+        onClick={async () => {
+          pending.resolve(await pending.sign());
+          onClose();
+        }}
+      >
+        Sign
+      </button>
+      <button
+        type='button'
+        onClick={() => {
+          pending.reject(Object.assign(new Error("User rejected the request."), { code: 4001 }));
+          onClose();
+        }}
+      >
+        Reject
+      </button>
+    </div>
+  );
+}
+
+// Privy's card purchase: it shows where the USDC goes, and closing it rejects with "User exited flow" as Privy does.
+function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => void }) {
+  return (
+    <div role='dialog' aria-label='buy usdc' id='privy-dialog'>
+      <button
+        type='button'
+        aria-label='close modal'
+        onClick={() => {
+          pending.reject(new Error("User exited flow"));
+          onClose();
+        }}
+      >
+        ✕
+      </button>
+      <h3>Buy USDC</h3>
+      <p>Destination: {pending.address}</p>
+    </div>
+  );
+}
+
 // Like real Privy: portaled to <body> above the console's own modal dialogs, which make the page behind them inert.
 const overlay = (dialog: ReactNode) =>
   createPortal(
@@ -247,10 +320,17 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     createExtension(() => setWallets((current) => current.filter((wallet) => wallet.connectorType !== "injected"))),
   );
   const [pendingSend, setPendingSend] = useState<PendingSend | null>(null);
+  const [pendingSignature, setPendingSignature] = useState<PendingSignature | null>(null);
+  const [pendingFund, setPendingFund] = useState<PendingFund | null>(null);
   useEffect(() => {
     const onSend = (event: Event) => setPendingSend((event as CustomEvent<PendingSend>).detail);
     window.addEventListener("fake-privy:send", onSend);
     return () => window.removeEventListener("fake-privy:send", onSend);
+  }, []);
+  useEffect(() => {
+    const onSign = (event: Event) => setPendingSignature((event as CustomEvent<PendingSignature>).detail);
+    window.addEventListener("fake-privy:sign", onSign);
+    return () => window.removeEventListener("fake-privy:sign", onSign);
   }, []);
   useEffect(() => {
     // Like MetaMask, the provider announces the new account and Privy then replaces the extension's wallet.
@@ -307,6 +387,12 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       setWallets((current) => current.filter((wallet) => wallet.connectorType === "injected"));
     },
     onConnect,
+    // A verified wallet signs in as its own Privy user, with no embedded wallet.
+    loginWithWallet: (address, walletClientType) => {
+      const walletAccount = { type: "wallet", address, walletClientType };
+      setUser({ id: `did:privy:fake-${address}`, wallet: walletAccount, linkedAccounts: [walletAccount] });
+    },
+    fund: (address) => new Promise((_resolve, reject) => setPendingFund({ address, reject })),
     // Connects without a modal, as if the user picked the extension in Privy's wallet list.
     connectWallet: () => {
       const wallet = extension.current();
@@ -320,6 +406,9 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       {children}
       {modalOpen && overlay(<LoginModal onDone={completeLogin} onClose={() => setModalOpen(false)} />)}
       {pendingSend && overlay(<TransactionModal pending={pendingSend} onClose={() => setPendingSend(null)} />)}
+      {pendingSignature &&
+        overlay(<SignatureModal pending={pendingSignature} onClose={() => setPendingSignature(null)} />)}
+      {pendingFund && overlay(<FundModal pending={pendingFund} onClose={() => setPendingFund(null)} />)}
     </FakePrivyContext.Provider>
   );
 }
@@ -370,4 +459,30 @@ export const useConnectOrCreateWallet = (_callbacks?: unknown) => ({
   connectOrCreateWallet: unsupported("connectOrCreateWallet"),
 });
 export const useExportWallet = () => ({ exportWallet: unsupported("exportWallet") });
-export const useFiatOnramp = () => ({ fund: unsupported("fund") });
+// The message ends with the signing address, which is all the fake login needs from it.
+export function useLoginWithSiwe() {
+  const { loginWithWallet } = useFakePrivy();
+  return {
+    generateSiweMessage: async ({ address }: { address: string }) =>
+      `localhost wants you to sign in with your Ethereum account:\n${address}`,
+    // Like Privy, the login fails unless the account named in the message made the signature.
+    loginWithSiwe: async ({
+      message,
+      signature,
+      walletClientType,
+    }: {
+      message: string;
+      signature: Hex;
+      walletClientType?: string;
+    }) => {
+      const address = (message.split("\n").at(-1) ?? "") as Hex;
+      if (!(await verifyMessage({ address, message, signature })))
+        throw new Error("Invalid signature for this account.");
+      loginWithWallet(address, walletClientType ?? "");
+    },
+  };
+}
+export function useFiatOnramp() {
+  const { fund } = useFakePrivy();
+  return { fund: (options: { destination: { address: string } }) => fund(options.destination.address) };
+}
