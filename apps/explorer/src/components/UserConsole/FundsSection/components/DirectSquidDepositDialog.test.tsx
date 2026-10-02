@@ -49,6 +49,7 @@ const connectedWallets = vi.hoisted(() => ({
 const payers = vi.hoisted(() => ({
   // Accounts each wallet can sign for, as readConnectedAccounts reports them; undefined until loaded.
   accounts: undefined as Record<string, `0x${string}`[]> | undefined,
+  accountsPending: false,
   connectWallet: vi.fn(),
   connectWalletOnSuccess: undefined as ((params: { wallet: { address: string } }) => void) | undefined,
   refetchAccounts: vi.fn(),
@@ -140,7 +141,7 @@ vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
 vi.mock("@tanstack/react-query", () => {
   const useQuery = ({ enabled, queryKey }: { enabled?: boolean; queryKey: readonly unknown[] }) => {
     if (queryKey[0] === "direct-squid-payer-accounts") {
-      return { data: payers.accounts, refetch: payers.refetchAccounts };
+      return { data: payers.accounts, isPending: payers.accountsPending, refetch: payers.refetchAccounts };
     }
     if (queryKey[0] === "squid-payment-tokens") {
       return {
@@ -315,6 +316,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     query.inventory = { [USDC.toLowerCase()]: 200_000_000n, [USDT.toLowerCase()]: 300_000_000n };
     query.inventories = {};
     payers.accounts = undefined;
+    payers.accountsPending = false;
     payers.connectWallet.mockReset();
     payers.refetchAccounts.mockReset();
     query.nativeBalance = 10n ** 18n;
@@ -1299,6 +1301,25 @@ describe("DirectSquidDepositDialog safety integration", () => {
           return siteAccounts;
         }),
       });
+    });
+
+    it("waits for the connected accounts before choosing the default payer", async () => {
+      connectedWallets.current = [consoleMetaMask];
+      payers.accountsPending = true;
+      query.inventories = { [RECIPIENT.toLowerCase()]: empty, [OWNER.toLowerCase()]: funded };
+      try {
+        const renderer = await render();
+
+        payers.accountsPending = false;
+        payers.accounts = { [RECIPIENT.toLowerCase()]: [RECIPIENT, OWNER] };
+        await act(async () => {
+          renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
+        });
+
+        expect(payerSelect(renderer).props.value).toBe(OWNER);
+      } finally {
+        connectedWallets.current = [wallet];
+      }
     });
 
     it("shows a single paying account as a value instead of a dropdown", async () => {

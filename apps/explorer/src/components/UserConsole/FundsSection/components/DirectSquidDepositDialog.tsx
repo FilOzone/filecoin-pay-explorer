@@ -462,13 +462,24 @@ export function DirectSquidDepositDialog({
     initializedSelectionScope.current = "";
   }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending]);
 
-  // Picked once per network, after every account's balances answer, so a refetch never moves the payer.
+  // Picked once per network, after the connected accounts are known and every account's balances answer, so a
+  // refetch never moves the payer.
   useEffect(() => {
-    if (!open || pending || payingAddress !== "" || payers.length === 0 || !areInventoriesSettled) return;
+    if (!open || pending || payingAddress !== "" || payers.length === 0) return;
+    if (connectedAccountsQuery.isPending || !areInventoriesSettled) return;
     // A card purchase lands in the console account, which payers list first, so that account pays for it.
     const defaultPayer = initialSourceToken ? payers[0]?.address : chooseDefaultPayer(payers, inventories);
     if (defaultPayer) setPayingAddress(defaultPayer);
-  }, [areInventoriesSettled, initialSourceToken, inventories, open, payers, payingAddress, pending]);
+  }, [
+    areInventoriesSettled,
+    connectedAccountsQuery.isPending,
+    initialSourceToken,
+    inventories,
+    open,
+    payers,
+    payingAddress,
+    pending,
+  ]);
 
   useEffect(() => {
     // The token follows the payer's balances, so it waits for the payer default.
