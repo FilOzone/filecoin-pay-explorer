@@ -101,7 +101,7 @@ pnpm workspaces manage package dependencies, and Turbo orchestrates builds, test
 
 ### Prerequisites
 
-- Node.js 22 or newer
+- Node.js 24 or newer
 - pnpm 9 or newer; the repository pins pnpm 9.15.2
 
 Install dependencies from the repository root:
