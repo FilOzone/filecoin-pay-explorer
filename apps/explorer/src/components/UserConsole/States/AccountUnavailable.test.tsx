@@ -22,8 +22,16 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
-  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <button type='button' onClick={onClick}>
+  Button: ({
+    children,
+    disabled,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    disabled?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button disabled={disabled} type='button' onClick={onClick}>
       {children}
     </button>
   ),
@@ -84,7 +92,7 @@ describe("AccountUnavailable", () => {
     expect(mocks.logout).not.toHaveBeenCalled();
   });
 
-  it("ends the previous account's Privy login after continuing as the new account", async () => {
+  it("ends the previous account's Privy login before using the new account", async () => {
     mocks.authenticated = true;
     mocks.wallets = [SWITCHED_TO];
     const renderer = await render();
@@ -108,6 +116,29 @@ describe("AccountUnavailable", () => {
     // Selecting the new account here would let it buy by card on the previous account's login.
     expect(mocks.selectAccount).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith("Unable to log out", { description: "logout failed" });
+  });
+
+  it("does not select a replacement the extension switched away from during logout", async () => {
+    mocks.authenticated = true;
+    let finishLogout!: () => void;
+    mocks.logout.mockReturnValue(new Promise<void>((resolve) => (finishLogout = resolve)));
+    mocks.wallets = [SWITCHED_TO];
+    const renderer = await render();
+
+    await clickButton(renderer, "Use 0x2222...2222");
+    const third = { ...SWITCHED_TO, address: "0x4444444444444444444444444444444444444444" };
+    mocks.wallets = [third];
+    await act(async () => {
+      renderer.update(<AccountUnavailable />);
+    });
+    await act(async () => finishLogout());
+
+    expect(mocks.selectAccount).not.toHaveBeenCalled();
+    // The prompt for the new replacement starts fresh, not stuck on "Switching account…".
+    const useThird = renderer.root
+      .findAllByType("button")
+      .find((candidate) => candidate.children.join("").includes("Use 0x4444...4444"));
+    expect(useThird?.props.disabled).toBeFalsy();
   });
 
   it("logs out from the switched wallet and forgets the account", async () => {

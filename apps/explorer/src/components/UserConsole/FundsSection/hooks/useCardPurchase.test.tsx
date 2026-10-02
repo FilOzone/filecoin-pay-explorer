@@ -8,10 +8,14 @@ const OTHER = "0x2222222222222222222222222222222222222222" as const;
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const privy = vi.hoisted(() => ({
   authenticated: true,
+  // The wallet the Privy login belongs to.
+  loginOwner: "0x1111111111111111111111111111111111111111",
+  logout: vi.fn<() => Promise<void>>(),
   fund: vi.fn(),
   generateSiweMessage: vi.fn<(params: { address: string; chainId: string }) => Promise<string>>(),
   loginWithSiwe: vi.fn<(params: { message: string; signature: string }) => Promise<void>>(),
-  sign: vi.fn<(message: string) => Promise<string>>(),
+  // The extension's personal_sign, called with [message, address].
+  sign: vi.fn<(params: unknown[]) => Promise<string>>(),
 }));
 const chain = vi.hoisted(() => ({ readContract: vi.fn() }));
 const account = vi.hoisted(() => ({ address: "0x1111111111111111111111111111111111111111" }));
@@ -34,14 +38,21 @@ const locks = {
 vi.mock("@privy-io/react-auth", () => ({
   useFiatOnramp: () => ({ fund: privy.fund }),
   useLoginWithSiwe: () => ({ generateSiweMessage: privy.generateSiweMessage, loginWithSiwe: privy.loginWithSiwe }),
-  usePrivy: () => ({ authenticated: privy.authenticated }),
+  usePrivy: () => ({
+    authenticated: privy.authenticated,
+    logout: privy.logout,
+    user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loginOwner }] } : null,
+  }),
   useWallets: () => ({
     wallets: [
       {
         address: ADDRESS,
         chainId: "eip155:314",
         connectorType: "injected",
-        sign: privy.sign,
+        getEthereumProvider: async () => ({
+          request: ({ method, params }: { method: string; params: unknown[] }) =>
+            method === "personal_sign" ? privy.sign(params) : Promise.reject(new Error(`unexpected ${method}`)),
+        }),
         walletClientType: "metamask",
       },
     ],
@@ -68,6 +79,8 @@ beforeEach(() => {
   chain.readContract.mockReset();
   onPurchased.mockReset();
   privy.authenticated = true;
+  privy.loginOwner = ADDRESS;
+  privy.logout.mockReset().mockResolvedValue(undefined);
   privy.fund.mockReset();
   privy.generateSiweMessage.mockReset().mockResolvedValue("siwe message");
   privy.loginWithSiwe.mockReset().mockResolvedValue(undefined);
@@ -163,7 +176,8 @@ describe("useCardPurchase", () => {
 
     // The recipient signs in as itself; any other method would add a second wallet or identity.
     expect(privy.generateSiweMessage).toHaveBeenCalledWith({ address: ADDRESS, chainId: "eip155:314" });
-    expect(privy.sign).toHaveBeenCalledWith("siwe message");
+    // The recipient is named, so the wallet signs as it rather than as whichever account it has selected.
+    expect(privy.sign).toHaveBeenCalledWith(["0x73697765206d657373616765", ADDRESS]);
     expect(privy.loginWithSiwe).toHaveBeenCalledWith({
       message: "siwe message",
       signature: "0xsignature",
@@ -173,6 +187,25 @@ describe("useCardPurchase", () => {
     expect(privy.fund).toHaveBeenCalledOnce();
     expect(privy.fund.mock.calls[0][0].destination.address).toBe(ADDRESS);
     expect(onPurchased).toHaveBeenCalledWith(2n);
+  });
+
+  it("does not buy on a login that belongs to another wallet, and ends it before verifying", async () => {
+    privy.loginOwner = OTHER;
+    chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    expect(latest.label).toBe("Verify wallet to buy USDC with card");
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.logout).toHaveBeenCalledOnce();
+    expect(privy.logout.mock.invocationCallOrder[0]).toBeLessThan(
+      privy.generateSiweMessage.mock.invocationCallOrder[0],
+    );
+    expect(privy.generateSiweMessage).toHaveBeenCalledWith({ address: ADDRESS, chainId: "eip155:314" });
+    expect(privy.fund.mock.calls[0][0].destination.address).toBe(ADDRESS);
   });
 
   it("shows the sign-in step while the wallet signs, not the purchase", async () => {

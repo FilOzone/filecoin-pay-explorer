@@ -4,7 +4,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
 import { type ConnectedWallet, useConnectWallet, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { isUserCancelledFlow } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
@@ -22,7 +22,8 @@ const AccountUnavailable = () => {
   // An extension exposes one account at a time, so its current account replaces the missing one.
   const replacement = wallets.find((wallet) => wallet.walletClientType === account.walletClientType);
   return replacement ? (
-    <WalletSwitched account={account} replacement={replacement} />
+    // Keyed by the replacement, so a further switch starts a fresh prompt instead of reusing a pending one.
+    <WalletSwitched account={account} key={replacement.address} replacement={replacement} />
   ) : (
     <WalletLocked account={account} />
   );
@@ -34,6 +35,13 @@ function WalletSwitched({ account, replacement }: { account: ConsoleAccount; rep
   const { selectAccount } = useConsoleAccount();
   const walletExit = useWalletExit(replacement);
   const [isSwitching, setIsSwitching] = useState(false);
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const continueWithReplacement = async () => {
     setIsSwitching(true);
@@ -47,6 +55,8 @@ function WalletSwitched({ account, replacement }: { account: ConsoleAccount; rep
         return;
       }
     }
+    // The extension switched again while logging out, so this replacement is no longer the wallet's account.
+    if (!isMounted.current) return;
     selectAccount(replacement);
   };
 

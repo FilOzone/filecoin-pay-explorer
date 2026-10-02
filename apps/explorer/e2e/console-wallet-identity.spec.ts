@@ -120,3 +120,56 @@ test("rejecting the wallet's sign-in leaves card purchases unverified", async ({
   await expect(page.getByRole("button", { name: "Verify wallet to buy USDC with card" })).toBeEnabled();
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toBeHidden();
 });
+
+test("after a switch, the extension's new account verifies for itself before buying by card", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await connectAndOpenCardPurchase(page);
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
+  await page.getByRole("dialog", { name: "buy usdc" }).getByRole("button", { name: "close modal" }).click();
+
+  await switchExtensionAccount(page);
+  await page.getByRole("button", { name: /^Use / }).click();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+  const newAccount = (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+
+  // The previous account's login does not carry over to the new one.
+  await page.getByRole("button", { name: "Verify wallet to buy USDC with card" }).click();
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
+  const [start, end] = newAccount.split("...");
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
+});
+
+test("an email account opens the card purchase without another sign-in", async ({ page }) => {
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  const account = (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+
+  await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
+
+  test.skip(process.env.E2E_MODE === "real", "the fake's card purchase window shows the destination");
+  await expect(page.getByRole("dialog", { name: "signature request" })).toBeHidden();
+  const [start, end] = account.split("...");
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
+});
+
+test("after the site's access is revoked, Disconnect leaves the console", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:revoke-extension")));
+  await expect(page.getByRole("heading", { name: "Reconnect your wallet" })).toBeVisible();
+  await page.getByRole("button", { name: "Disconnect" }).click();
+
+  await expect(page.getByRole("button", { name: "Connect existing wallet" })).toBeVisible();
+});

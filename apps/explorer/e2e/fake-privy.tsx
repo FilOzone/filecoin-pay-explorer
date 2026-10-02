@@ -2,7 +2,7 @@
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Hex, numberToHex } from "viem";
+import { type Hex, numberToHex, verifyMessage } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
@@ -41,7 +41,11 @@ function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
   });
 }
 
-function createProvider(currentAccount: () => PrivateKeyAccount) {
+// An extension passes `prompt` to show its popup before each signature; the embedded wallet signs directly.
+function createProvider(
+  currentAccount: () => PrivateKeyAccount,
+  prompt: (sign: () => Promise<Hex>) => Promise<Hex> = (sign) => sign(),
+) {
   let chainId = DEFAULT_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
   const emit = (event: string, ...args: unknown[]) => {
@@ -60,8 +64,15 @@ function createProvider(currentAccount: () => PrivateKeyAccount) {
         return numberToHex(chainId);
       case "wallet_switchEthereumChain":
         return switchChain(Number((params[0] as { chainId: Hex }).chainId));
-      case "personal_sign":
-        return currentAccount().signMessage({ message: { raw: params[0] as Hex } });
+      case "personal_sign": {
+        const [message, address] = params as [Hex, string | undefined];
+        const account = currentAccount();
+        // A wallet signs only as an account connected to the site, and this fake connects one at a time.
+        if (address && address.toLowerCase() !== account.address.toLowerCase()) {
+          throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
+        }
+        return prompt(() => account.signMessage({ message: { raw: message } }));
+      }
       case "eth_signTypedData_v4":
         return currentAccount().signTypedData(JSON.parse(params[1] as string));
       // Goes through the fake Privy transaction dialog; nothing is signed or broadcast.
@@ -105,7 +116,7 @@ function createEmbeddedWallet(): Wallet {
 function createExtension(disconnect: () => void) {
   const accounts = [privateKeyToAccount(generatePrivateKey()), privateKeyToAccount(generatePrivateKey())];
   let selected = 0;
-  const wallet = createProvider(() => accounts[selected]);
+  const wallet = createProvider(() => accounts[selected], requestSignature);
   const current = (): Wallet => ({
     address: accounts[selected].address,
     walletClientType: "metamask",
@@ -116,7 +127,6 @@ function createExtension(disconnect: () => void) {
     meta: { id: "io.metamask", name: "MetaMask", icon: undefined },
     getEthereumProvider: async () => wallet.provider,
     switchChain: wallet.switchChain,
-    sign: (message: string) => requestSignature(() => accounts[selected].signMessage({ message })),
     disconnect,
   });
   const switchAccount = () => {
@@ -124,7 +134,9 @@ function createExtension(disconnect: () => void) {
     wallet.emit("accountsChanged", [accounts[selected].address]);
     return current();
   };
-  return { current, switchAccount };
+  // Like revoking the site's access in MetaMask: the provider reports no accounts.
+  const revoke = () => wallet.emit("accountsChanged", []);
+  return { current, revoke, switchAccount };
 }
 
 type Wallet = {
@@ -135,7 +147,6 @@ type Wallet = {
   meta: { id: string; name: string; icon: undefined };
   getEthereumProvider: () => Promise<ReturnType<typeof createProvider>["provider"]>;
   switchChain: (id: number) => Promise<void>;
-  sign?: (message: string) => Promise<Hex>;
   disconnect?: () => void;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
@@ -330,6 +341,15 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     window.addEventListener("fake-privy:switch-account", onSwitch);
     return () => window.removeEventListener("fake-privy:switch-account", onSwitch);
   }, [extension]);
+  useEffect(() => {
+    // With no accounts left, Privy drops the extension's wallet.
+    const onRevoke = () => {
+      extension.revoke();
+      setWallets((current) => current.filter((wallet) => wallet.connectorType !== "injected"));
+    };
+    window.addEventListener("fake-privy:revoke-extension", onRevoke);
+    return () => window.removeEventListener("fake-privy:revoke-extension", onRevoke);
+  }, [extension]);
 
   const completeLogin = (email: string) => {
     setModalOpen(false);
@@ -351,9 +371,10 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     wallets,
     onLogin,
     openLogin: () => setModalOpen(true),
+    // Like real Privy, an extension stays connected after logout; only the embedded wallet goes.
     logout: async () => {
       setUser(null);
-      setWallets([]);
+      setWallets((current) => current.filter((wallet) => wallet.connectorType === "injected"));
     },
     onConnect,
     // A verified wallet signs in as its own Privy user, with no embedded wallet.
@@ -434,8 +455,21 @@ export function useLoginWithSiwe() {
   return {
     generateSiweMessage: async ({ address }: { address: string }) =>
       `localhost wants you to sign in with your Ethereum account:\n${address}`,
-    loginWithSiwe: async ({ message, walletClientType }: { message: string; walletClientType?: string }) =>
-      loginWithWallet(message.split("\n").at(-1) ?? "", walletClientType ?? ""),
+    // Like Privy, the login fails unless the account named in the message made the signature.
+    loginWithSiwe: async ({
+      message,
+      signature,
+      walletClientType,
+    }: {
+      message: string;
+      signature: Hex;
+      walletClientType?: string;
+    }) => {
+      const address = (message.split("\n").at(-1) ?? "") as Hex;
+      if (!(await verifyMessage({ address, message, signature })))
+        throw new Error("Invalid signature for this account.");
+      loginWithWallet(address, walletClientType ?? "");
+    },
   };
 }
 export function useFiatOnramp() {

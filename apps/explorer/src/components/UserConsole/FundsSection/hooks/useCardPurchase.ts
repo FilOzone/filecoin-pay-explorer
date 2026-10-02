@@ -4,7 +4,7 @@ import { type ConnectedWallet, useFiatOnramp, useLoginWithSiwe, usePrivy, useWal
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
+import { erc20Abi, getAddress, isAddress, type PublicClient, toHex } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
 import { config } from "@/services/wagmi/config";
@@ -132,8 +132,13 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated } = usePrivy();
+  const { authenticated, logout, user } = usePrivy();
   const { wallets } = useWallets();
+  // A Privy login only counts for its own wallets, never for an account the extension switched to.
+  const isLoggedInAsRecipient =
+    user?.linkedAccounts.some(
+      (account) => account.type === "wallet" && account.address.toLowerCase() === address.toLowerCase(),
+    ) ?? false;
   const { fund } = useFiatOnramp();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
@@ -257,9 +262,14 @@ export function useCardPurchase({
   const verifyThenPurchase = async (wallet: ConnectedWallet, intent: LoginContext) => {
     setStatus("verifying");
     try {
+      // A login that belongs to another wallet must end first; Privy also refuses to log in over one.
+      if (authenticated) await logout();
       const chainId = Number(wallet.chainId.replace("eip155:", ""));
-      const message = await generateSiweMessage({ address: getAddress(wallet.address), chainId: `eip155:${chainId}` });
-      const signature = await wallet.sign(message);
+      const message = await generateSiweMessage({ address: intent.recipient, chainId: `eip155:${chainId}` });
+      // Privy's wallet.sign() signs with the extension's selected account, so the recipient is named here instead:
+      // the wallet signs as it or refuses.
+      const provider = await wallet.getEthereumProvider();
+      const signature = await provider.request({ method: "personal_sign", params: [toHex(message), intent.recipient] });
       await loginWithSiwe({
         message,
         signature,
@@ -303,7 +313,7 @@ export function useCardPurchase({
   const buyWithCard = () => {
     if (status === "opening" || status === "verifying" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
-    if (authenticated) return purchase();
+    if (isLoggedInAsRecipient) return purchase();
     const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === address.toLowerCase());
     if (!recipientWallet) {
       toast.error("Card purchase unavailable", { description: "Reconnect your wallet and try again." });
@@ -312,7 +322,7 @@ export function useCardPurchase({
     return verifyThenPurchase(recipientWallet, { contextKey, recipient: getAddress(address) });
   };
 
-  const purchaseLabel = authenticated ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
+  const purchaseLabel = isLoggedInAsRecipient ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
   const statusMessages = {
     delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
     idle: null,
