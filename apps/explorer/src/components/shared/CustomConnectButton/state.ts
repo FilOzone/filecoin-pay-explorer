@@ -34,13 +34,18 @@ export const exitWalletSession = async ({
   authenticated,
   logout,
   disconnect,
+  disconnectConnection,
   clearAccount,
 }: {
   authenticated: boolean;
   logout: () => Promise<void>;
   disconnect?: () => void;
+  /** wagmi's disconnect, which asks an extension like MetaMask to revoke the site's access. */
+  disconnectConnection: () => Promise<void>;
   clearAccount: () => void;
 }) => {
+  // Runs while wagmi still holds the console account; once the account is cleared there is nothing to revoke.
+  await disconnectConnection();
   if (authenticated) await logout();
   else disconnect?.();
   clearAccount();

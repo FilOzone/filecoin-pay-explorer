@@ -25,9 +25,10 @@ describe("getWalletExitAction", () => {
   it("ends only the active session type, then clears the console account", async () => {
     const logout = vi.fn(async () => undefined);
     const disconnect = vi.fn();
+    const disconnectConnection = vi.fn(async () => undefined);
     const clearAccount = vi.fn();
 
-    await exitWalletSession({ authenticated: true, logout, disconnect, clearAccount });
+    await exitWalletSession({ authenticated: true, logout, disconnect, disconnectConnection, clearAccount });
     expect(logout).toHaveBeenCalledOnce();
     expect(disconnect).not.toHaveBeenCalled();
     expect(clearAccount).toHaveBeenCalledOnce();
@@ -35,16 +36,33 @@ describe("getWalletExitAction", () => {
 
     logout.mockClear();
     clearAccount.mockClear();
-    await exitWalletSession({ authenticated: false, logout, disconnect, clearAccount });
+    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection, clearAccount });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
     expect(clearAccount).toHaveBeenCalledOnce();
   });
 
+  it("disconnects wagmi before the account is cleared, so an extension can revoke the site's access", async () => {
+    const logout = vi.fn(async () => undefined);
+    const disconnectConnection = vi.fn(async () => undefined);
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({ authenticated: true, logout, disconnectConnection, clearAccount });
+
+    expect(disconnectConnection).toHaveBeenCalledOnce();
+    expect(disconnectConnection.mock.invocationCallOrder[0]).toBeLessThan(logout.mock.invocationCallOrder[0]);
+    expect(disconnectConnection.mock.invocationCallOrder[0]).toBeLessThan(clearAccount.mock.invocationCallOrder[0]);
+  });
+
   it("clears the console account when its wallet is already gone", async () => {
     const clearAccount = vi.fn();
 
-    await exitWalletSession({ authenticated: false, logout: async () => undefined, clearAccount });
+    await exitWalletSession({
+      authenticated: false,
+      logout: async () => undefined,
+      disconnectConnection: async () => undefined,
+      clearAccount,
+    });
 
     expect(clearAccount).toHaveBeenCalledOnce();
   });
@@ -59,6 +77,7 @@ describe("getWalletExitAction", () => {
         logout: async () => {
           throw error;
         },
+        disconnectConnection: async () => undefined,
         clearAccount,
       }),
     ).rejects.toThrow(error);

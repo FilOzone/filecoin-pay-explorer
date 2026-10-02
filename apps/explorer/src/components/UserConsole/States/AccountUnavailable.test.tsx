@@ -32,6 +32,7 @@ vi.mock("@privy-io/react-auth", () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
+vi.mock("wagmi", () => ({ useDisconnect: () => ({ mutateAsync: vi.fn(async () => undefined) }) }));
 vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({
     account: ACCOUNT,

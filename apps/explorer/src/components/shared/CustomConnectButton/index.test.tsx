@@ -40,6 +40,7 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => mocks.privy,
   useWallets: () => ({ ready: mocks.walletsReady, wallets: [] }),
 }));
+vi.mock("wagmi", () => ({ useDisconnect: () => ({ mutateAsync: vi.fn(async () => undefined) }) }));
 vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({ clearAccount: mocks.clearAccount, selectAccount: mocks.selectAccount }),
 }));
