@@ -3,87 +3,17 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
-import { type ConnectedWallet, useConnectWallet, useLogout, usePrivy, useWallets } from "@privy-io/react-auth";
-import { useEffect, useRef, useState } from "react";
+import { useConnectWallet } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { isUserCancelledFlow } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
-import { type ConsoleAccount, useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
+import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { formatAddress } from "@/utils/formatter";
 import { ExitLink } from "./ExitLink";
 
-const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
-
-// Shown when the console account's wallet is gone: the extension switched accounts, locked, or disconnected.
+// Shown when the console account's wallet exposes no account: it locked or disconnected.
 const AccountUnavailable = () => {
   const { account } = useConsoleAccount();
-  const { wallets } = useWallets();
-  if (!account) return null;
-  // An extension exposes one account at a time, so its current account replaces the missing one.
-  const replacement = wallets.find((wallet) => wallet.walletClientType === account.walletClientType);
-  return replacement ? (
-    // Keyed by the replacement, so a further switch starts a fresh prompt instead of reusing a pending one.
-    <WalletSwitched account={account} key={replacement.address} replacement={replacement} />
-  ) : (
-    <WalletLocked account={account} />
-  );
-};
-
-function WalletSwitched({ account, replacement }: { account: ConsoleAccount; replacement: ConnectedWallet }) {
-  const { authenticated } = usePrivy();
-  const { logout } = useLogout();
-  const { selectAccount } = useConsoleAccount();
-  const walletExit = useWalletExit(replacement);
-  const [isSwitching, setIsSwitching] = useState(false);
-  const isMounted = useRef(true);
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-
-  const continueWithReplacement = async () => {
-    setIsSwitching(true);
-    // A Privy login belongs to the account that verified it, so it must end before the new account takes over.
-    if (authenticated) {
-      try {
-        await logout();
-      } catch (error) {
-        toast.error("Unable to log out", { description: describeError(error) });
-        setIsSwitching(false);
-        return;
-      }
-    }
-    // The extension switched again while logging out, so this replacement is no longer the wallet's account.
-    if (!isMounted.current) return;
-    selectAccount(replacement);
-  };
-
-  return (
-    <EmptyStateCard
-      titleTag='h2'
-      icon={WalletIcon}
-      title='Your wallet is using a different account'
-      description={`Filecoin Pay is open for ${formatAddress(account.address)}, but your wallet is currently using ${formatAddress(replacement.address)}. To keep using ${formatAddress(account.address)}, switch back in your wallet.`}
-    >
-      <div className='flex flex-col items-center gap-2'>
-        <Button
-          variant='primary'
-          size='compact'
-          type='button'
-          disabled={isSwitching}
-          onClick={() => void continueWithReplacement()}
-        >
-          {isSwitching ? "Switching account…" : `Use ${formatAddress(replacement.address)}`}
-        </Button>
-        <ExitLink action={walletExit.action} exit={walletExit.exit} />
-      </div>
-    </EmptyStateCard>
-  );
-}
-
-function WalletLocked({ account }: { account: ConsoleAccount }) {
   const walletExit = useWalletExit();
   // The console account reconnects on its own once its wallet is back, so success needs no handling.
   const { connectWallet } = useConnectWallet({
@@ -92,6 +22,7 @@ function WalletLocked({ account }: { account: ConsoleAccount }) {
       toast.error("Unable to connect wallet", { description: code });
     },
   });
+  if (!account) return null;
 
   return (
     <EmptyStateCard
@@ -108,6 +39,6 @@ function WalletLocked({ account }: { account: ConsoleAccount }) {
       </div>
     </EmptyStateCard>
   );
-}
+};
 
 export default AccountUnavailable;

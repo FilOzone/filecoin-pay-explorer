@@ -5,12 +5,16 @@ import {
   type LinkedAccountWithMetadata,
   type User,
   usePrivy,
+  useWallets,
   type WalletWithMetadata,
 } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
-import { createContext, type ReactNode, use, useCallback, useMemo, useState } from "react";
+import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { isAddress } from "viem";
+import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
+import { formatAddress } from "@/utils/formatter";
 
 /** The account the console shows and signs for. */
 export type ConsoleAccount = { address: string; walletClientType: string };
@@ -60,8 +64,8 @@ function getSessionAccount(user: User | null): ConsoleAccount | null {
 }
 
 /**
- * Owns the console account and the wagmi connection that follows it. Only the gate, "Use account",
- * and exits change the account; logging in, verifying, or connecting another wallet never does.
+ * Owns the console account and the wagmi connection that follows it. Only the gate, the account's own
+ * extension switching accounts, and exits change it; logging in, verifying, or connecting another wallet never does.
  */
 export function ConsoleAccountProvider({ children }: { children: ReactNode }) {
   const { user } = usePrivy();
@@ -91,10 +95,42 @@ export function ConsoleAccountProvider({ children }: { children: ReactNode }) {
   return (
     <ConsoleAccountContext value={value}>
       <WagmiProvider config={config} setActiveWalletForWagmi={selectWalletForWagmi}>
+        <KeepConsoleWallet />
         {children}
       </WagmiProvider>
     </ConsoleAccountContext>
   );
+}
+
+// Keeps the console account in step with its wallet and ends a Privy login that no longer owns the account.
+function KeepConsoleWallet() {
+  const { account, selectAccount } = useConsoleAccount();
+  const { wallets } = useWallets();
+  const { authenticated, user, logout } = usePrivy();
+
+  const accountAddress = account?.address.toLowerCase();
+  const accountWalletIsGone = !wallets.some((wallet) => wallet.address.toLowerCase() === accountAddress);
+  // An extension exposes one account at a time, so its current account replaces the missing one.
+  // An embedded wallet can't switch accounts, so it is never replaced.
+  const replacement =
+    account && account.walletClientType !== "privy" && accountWalletIsGone
+      ? wallets.find((wallet) => wallet.walletClientType === account.walletClientType)
+      : undefined;
+  useEffect(() => {
+    if (!replacement) return;
+    selectAccount(replacement);
+    // Anything open for the previous account closes, so say why.
+    toast.info(`Switched to ${formatAddress(replacement.address)}`, {
+      description: "Your wallet changed accounts.",
+    });
+  }, [replacement, selectAccount]);
+
+  const walletOnlyLogin = user?.linkedAccounts.every((linked) => linked.type === "wallet") ?? false;
+  useEffect(() => {
+    if (authenticated && walletOnlyLogin && account && !isLinkedWallet(user, account.address)) void logout();
+  }, [authenticated, walletOnlyLogin, user, account, logout]);
+
+  return null;
 }
 
 export function useConsoleAccount(): ConsoleAccountContextValue {

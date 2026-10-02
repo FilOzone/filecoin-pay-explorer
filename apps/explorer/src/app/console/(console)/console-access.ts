@@ -2,12 +2,12 @@ import type { ConsoleAccount } from "@/components/UserConsole/providers/ConsoleA
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { isSupportedChainId } from "@/utils/network";
 
-export type ConsoleAccountState = "none" | "connecting" | "active" | "switched";
+export type ConsoleAccountState = "none" | "connecting" | "active" | "unavailable";
 
 export type ConsoleAccessState =
   | "reconnecting"
   | "not-connected"
-  | "account-switched"
+  | "account-unavailable"
   | "unsupported-chain"
   | "squid-source"
   | "ready";
@@ -23,7 +23,7 @@ export const getConsoleAccountState = ({
   account: ConsoleAccount | null;
   address: string | undefined;
   privyFailed: boolean;
-  wallets: readonly { address: string }[];
+  wallets: readonly { address: string; walletClientType: string }[];
   walletsReady: boolean;
 }): ConsoleAccountState => {
   // The gate explains that login is unavailable; waiting for wallets would load forever.
@@ -36,7 +36,9 @@ export const getConsoleAccountState = ({
   if (wallets.some((wallet) => wallet.address.toLowerCase() === accountAddress)) return "connecting";
   // An embedded wallet can't switch accounts, so a missing one is still being created or its session ended.
   if (account.walletClientType === "privy") return "none";
-  return "switched";
+  // The extension switched accounts; the console follows it to the new one.
+  if (wallets.some((wallet) => wallet.walletClientType === account.walletClientType)) return "connecting";
+  return "unavailable";
 };
 
 export const getConsoleDisplayAccessState = (
@@ -58,7 +60,7 @@ export const getConsoleAccessState = ({
   chainId: number | undefined;
 }): ConsoleAccessState => {
   if (accountState === "none") return "not-connected";
-  if (accountState === "switched") return "account-switched";
+  if (accountState === "unavailable") return "account-unavailable";
   if (accountState === "connecting" || isReconnecting) return "reconnecting";
   if (!isConnected || !hasAddress) {
     return "not-connected";

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { act, create } from "react-test-renderer";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConsoleAccountProvider, useConsoleAccount } from "./ConsoleAccountContext";
 
@@ -13,10 +14,16 @@ const STORAGE_KEY = "filecoin-pay:console-account:v1";
 
 const mocks = vi.hoisted(() => ({
   user: null as null | { linkedAccounts: object[]; wallet?: { address: string; walletClientType?: string } },
+  logout: vi.fn(async () => undefined),
   selector: undefined as Selector | undefined,
+  wallets: [] as WalletStub[],
 }));
 
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => ({ user: mocks.user }) }));
+vi.mock("@privy-io/react-auth", () => ({
+  usePrivy: () => ({ authenticated: mocks.user !== null, user: mocks.user, logout: mocks.logout }),
+  useWallets: () => ({ wallets: mocks.wallets }),
+}));
+vi.mock("sonner", () => ({ toast: { info: vi.fn() } }));
 vi.mock("@privy-io/wagmi", () => ({
   WagmiProvider: ({
     children,
@@ -51,8 +58,10 @@ const render = () =>
 const selectForWagmi = (wallets: WalletStub[]) => mocks.selector?.({ wallets, user: null });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   stored.clear();
   mocks.user = null;
+  mocks.wallets = [];
   vi.stubGlobal("window", {
     localStorage: {
       getItem: (key: string) => stored.get(key) ?? null,
@@ -136,5 +145,66 @@ describe("ConsoleAccountProvider", () => {
     render();
 
     expect(latest.account).toBeNull();
+  });
+});
+
+describe("KeepConsoleWallet", () => {
+  const RABBY = { address: "0x4444444444444444444444444444444444444444", walletClientType: "rabby_wallet" };
+
+  it("follows the account's extension to its new account and says so", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [EMBEDDED, OTHER_METAMASK];
+    render();
+
+    expect(latest.account).toEqual(OTHER_METAMASK);
+    expect(toast.info).toHaveBeenCalledOnce();
+    expect(toast.info).toHaveBeenCalledWith("Switched to 0x3333...3333", {
+      description: "Your wallet changed accounts.",
+    });
+  });
+
+  it("stays on the account while its wallet is connected, whatever else connects", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [RABBY, METAMASK, EMBEDDED];
+    render();
+
+    expect(latest.account).toEqual(METAMASK);
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("does not follow a different extension when the account's own wallet is locked", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [RABBY];
+    render();
+
+    expect(latest.account).toEqual(METAMASK);
+  });
+
+  it("never replaces an embedded wallet that is still being created", () => {
+    mocks.user = { linkedAccounts: [{ type: "email" }, { type: "wallet", ...EMBEDDED }], wallet: EMBEDDED };
+    mocks.wallets = [{ address: OTHER_METAMASK.address, walletClientType: "privy" }];
+    render();
+
+    expect(latest.account).toEqual(EMBEDDED);
+  });
+
+  it("ends a wallet's login once the console follows the extension to another account", () => {
+    mocks.user = { linkedAccounts: [{ type: "wallet", ...METAMASK }], wallet: METAMASK };
+    mocks.wallets = [OTHER_METAMASK];
+    render();
+
+    expect(latest.account).toEqual(OTHER_METAMASK);
+    expect(mocks.logout).toHaveBeenCalled();
+  });
+
+  it("keeps an email login while the console uses a wallet it did not verify", () => {
+    mocks.user = { linkedAccounts: [{ type: "email" }, { type: "wallet", ...EMBEDDED }], wallet: EMBEDDED };
+    render();
+    act(() => latest.selectAccount(METAMASK));
+
+    expect(mocks.logout).not.toHaveBeenCalled();
   });
 });

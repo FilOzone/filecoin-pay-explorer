@@ -30,7 +30,7 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
       return <ConnectingWallet />;
     case "not-connected":
       return <NotConnected />;
-    case "account-switched":
+    case "account-unavailable":
       return <AccountUnavailable />;
     case "unsupported-chain":
     // A Squid source chain only reaches here with no top-up in progress:

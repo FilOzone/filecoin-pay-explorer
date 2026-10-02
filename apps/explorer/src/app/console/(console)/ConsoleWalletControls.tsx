@@ -14,7 +14,7 @@ export function ConsoleWalletControls({ accessState, chainId, isTopUpActive }: C
   switch (accessState) {
     case "reconnecting":
     case "not-connected":
-    case "account-switched":
+    case "account-unavailable":
       return null;
     case "unsupported-chain":
       return <UnsupportedNetworkBadge />;

@@ -66,7 +66,7 @@ describe("console account", () => {
         privyFailed: false,
         account: external,
         address: ACCOUNT.toLowerCase(),
-        wallets: [{ address: ACCOUNT }],
+        wallets: [{ address: ACCOUNT, walletClientType: "metamask" }],
         walletsReady: true,
       }),
     ).toBe("active");
@@ -79,22 +79,34 @@ describe("console account", () => {
         privyFailed: false,
         account: external,
         address: OTHER,
-        wallets: [{ address: ACCOUNT }],
+        wallets: [{ address: ACCOUNT, walletClientType: "metamask" }],
         walletsReady: true,
       }),
     ).toBe("connecting");
   });
 
-  it("reports an extension account that is no longer available as switched", () => {
+  it("waits while the console follows the extension to its new account", () => {
     expect(
       getConsoleAccountState({
         privyFailed: false,
         account: external,
         address: undefined,
-        wallets: [{ address: OTHER }],
+        wallets: [{ address: OTHER, walletClientType: "metamask" }],
         walletsReady: true,
       }),
-    ).toBe("switched");
+    ).toBe("connecting");
+  });
+
+  it("reports the account as unavailable when its extension exposes no account", () => {
+    expect(
+      getConsoleAccountState({
+        privyFailed: false,
+        account: external,
+        address: undefined,
+        wallets: [{ address: OTHER, walletClientType: "privy" }],
+        walletsReady: true,
+      }),
+    ).toBe("unavailable");
     expect(
       getConsoleAccountState({
         privyFailed: false,
@@ -103,7 +115,7 @@ describe("console account", () => {
         wallets: [],
         walletsReady: true,
       }),
-    ).toBe("switched");
+    ).toBe("unavailable");
   });
 
   it("treats a missing embedded wallet as not ready yet, since it cannot switch accounts", () => {
@@ -120,7 +132,7 @@ describe("console account", () => {
 
   it.each([
     ["none", "not-connected"],
-    ["switched", "account-switched"],
+    ["unavailable", "account-unavailable"],
     ["connecting", "reconnecting"],
   ] as const)("keeps pages unmounted while the account is %s", (accountState, expected) => {
     expect(getConsoleAccessState({ accountState, isConnected: true, hasAddress: true, chainId: 314 })).toBe(expected);
