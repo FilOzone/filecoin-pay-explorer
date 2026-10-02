@@ -4,15 +4,27 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomConnectButton from ".";
 
+type LoginAccount = { type: string; address?: string; walletClientType?: string };
+type LoginOnComplete = (params: {
+  user: { linkedAccounts: LoginAccount[] };
+  loginAccount: LoginAccount | null;
+}) => void;
+
 const mocks = vi.hoisted(() => ({
+  address: undefined as string | undefined,
+  confirmActive: vi.fn(),
+  connectors: [] as unknown[],
   connectWallet: vi.fn(),
+  isExiting: false,
   login: vi.fn(),
   logout: vi.fn<() => Promise<void>>(),
-  pause: vi.fn(),
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
-  resume: vi.fn(),
+  setActiveWallet: vi.fn(async () => undefined),
+  wallets: [] as { address: string; walletClientType?: string }[],
   walletsReady: false,
+  loginOnComplete: undefined as LoginOnComplete | undefined,
   loginOnError: undefined as ((code: string) => void) | undefined,
+  connectWalletOnSuccess: undefined as ((params: { wallet: { address: string } }) => void) | undefined,
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -25,28 +37,40 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   ),
 }));
 vi.mock("@privy-io/react-auth", () => ({
-  useConnectWallet: () => ({ connectWallet: mocks.connectWallet }),
-  useLogin: ({ onError }: { onError: (code: string) => void }) => {
+  useConnectWallet: ({ onSuccess }: { onSuccess: (params: { wallet: { address: string } }) => void }) => {
+    mocks.connectWalletOnSuccess = onSuccess;
+    return { connectWallet: mocks.connectWallet };
+  },
+  useLogin: ({ onComplete, onError }: { onComplete: LoginOnComplete; onError: (code: string) => void }) => {
+    mocks.loginOnComplete = onComplete;
     mocks.loginOnError = onError;
     return { login: mocks.login };
   },
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => mocks.privy,
-  useWallets: () => ({ ready: mocks.walletsReady }),
+  useWallets: () => ({ ready: mocks.walletsReady, wallets: mocks.wallets }),
 }));
-vi.mock("@/components/UserConsole/console-wallet", () => ({
-  consoleWalletSelector: { pause: mocks.pause, resume: mocks.resume },
+vi.mock("@privy-io/wagmi", () => ({
+  useSetActiveWallet: () => ({ setActiveWallet: mocks.setActiveWallet }),
+}));
+vi.mock("@/components/UserConsole/ActiveWalletGuardContext", () => ({
+  useActiveWalletGuard: () => ({ confirmActive: mocks.confirmActive, isExiting: mocks.isExiting }),
 }));
 vi.mock("wagmi", () => ({
-  useConnection: () => ({ isConnected: false }),
-  useDisconnect: () => ({ disconnectAsync: vi.fn(async () => undefined) }),
+  useConnection: () => ({ address: mocks.address, isConnected: !!mocks.address }),
+  useConnectors: () => mocks.connectors,
+  useDisconnect: () => ({ mutateAsync: vi.fn(async () => undefined) }),
 }));
 
 describe("CustomConnectButton", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.address = undefined;
+    mocks.connectors = [];
+    mocks.isExiting = false;
     mocks.logout.mockResolvedValue(undefined);
     mocks.privy = { authenticated: false, error: new Error("invalid app id"), ready: false };
+    mocks.wallets = [];
     mocks.walletsReady = false;
   });
 
@@ -61,7 +85,7 @@ describe("CustomConnectButton", () => {
     expect(consoleError).toHaveBeenCalledWith("Privy failed to initialize", mocks.privy.error);
   });
 
-  it("pauses wallet auto-selection before leaving an authenticated session that is still preparing", async () => {
+  it("logs out an authenticated session that is still preparing", async () => {
     mocks.privy = { authenticated: true, error: null, ready: true };
     mocks.walletsReady = true;
     let renderer!: ReturnType<typeof create>;
@@ -79,13 +103,89 @@ describe("CustomConnectButton", () => {
       logoutButton?.props.onClick();
     });
 
-    expect(mocks.pause).toHaveBeenCalledOnce();
     expect(mocks.logout).toHaveBeenCalledOnce();
-    expect(mocks.pause.mock.invocationCallOrder[0]).toBeLessThan(mocks.logout.mock.invocationCallOrder[0]);
-    expect(mocks.resume).not.toHaveBeenCalled();
   });
 
-  it("resumes wallet auto-selection before opening either wallet flow", async () => {
+  it("retries activation for a restored session whose embedded wallet never reconnected to wagmi", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "privy" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0x1234000000000000000000000000000000abcd");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({
+      address: "0x1234000000000000000000000000000000abcd",
+      walletClientType: "privy",
+    });
+  });
+
+  it("does not retry activation for a restored session without an embedded wallet", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "metamask" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).not.toHaveBeenCalled();
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
+  });
+
+  it("targets the embedded wallet, not just the first entry, when a restored session also has an external wallet linked", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [
+      { address: "0x1111000000000000000000000000000000ext1", walletClientType: "metamask" },
+      { address: "0x2222000000000000000000000000000000priv", walletClientType: "privy" },
+    ];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0x2222000000000000000000000000000000priv");
+    expect(mocks.confirmActive).not.toHaveBeenCalledWith("0x1111000000000000000000000000000000ext1");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({
+      address: "0x2222000000000000000000000000000000priv",
+      walletClientType: "privy",
+    });
+  });
+
+  it("resolves out of preparing once the retried activation actually connects", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0x1234000000000000000000000000000000abcd", walletClientType: "privy" }];
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByType("button").some((button) => button.children.includes("Reload"))).toBe(true);
+
+    // The retried setActiveWallet call succeeded and wagmi picked up the connection.
+    mocks.address = "0x1234000000000000000000000000000000abcd";
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByType("button")).toHaveLength(0);
+  });
+
+  it("shows the loading state, not preparing, while a forced exit is settling", async () => {
+    mocks.privy = { authenticated: true, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.isExiting = true;
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(1);
+    expect(renderer.root.findAllByType("button")).toHaveLength(0);
+  });
+
+  it("opens the login and connect-only flows directly", async () => {
     mocks.privy = { authenticated: false, error: null, ready: true };
     mocks.walletsReady = true;
     let renderer!: ReturnType<typeof create>;
@@ -97,9 +197,162 @@ describe("CustomConnectButton", () => {
     await act(async () => loginButton.props.onClick());
     await act(async () => connectButton.props.onClick());
 
-    expect(mocks.resume).toHaveBeenCalledTimes(2);
-    expect(mocks.resume.mock.invocationCallOrder[0]).toBeLessThan(mocks.login.mock.invocationCallOrder[0]);
-    expect(mocks.resume.mock.invocationCallOrder[1]).toBeLessThan(mocks.connectWallet.mock.invocationCallOrder[0]);
+    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(mocks.connectWallet).toHaveBeenCalledOnce();
+  });
+
+  it("activates the wallet a wallet-based login just used, instead of Privy's own sticky selection", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0xAAAA000000000000000000000000000000AAAA" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.loginOnComplete?.({
+        user: { linkedAccounts: [] },
+        loginAccount: { type: "wallet", address: "0xaaaa000000000000000000000000000000aaaa" },
+      });
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0xaaaa000000000000000000000000000000aaaa");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({ address: "0xAAAA000000000000000000000000000000AAAA" });
+  });
+
+  it("activates the embedded wallet Privy attached to an email or social login", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0xCCCC000000000000000000000000000000CCCC" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.loginOnComplete?.({
+        user: {
+          linkedAccounts: [
+            { type: "email" },
+            { type: "wallet", walletClientType: "privy", address: "0xcccc000000000000000000000000000000cccc" },
+          ],
+        },
+        loginAccount: { type: "email" },
+      });
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0xcccc000000000000000000000000000000cccc");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({ address: "0xCCCC000000000000000000000000000000CCCC" });
+  });
+
+  it("does not try to activate a wallet for a login with no linked wallet yet", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.loginOnComplete?.({ user: { linkedAccounts: [{ type: "email" }] }, loginAccount: { type: "email" } });
+    });
+
+    expect(mocks.confirmActive).not.toHaveBeenCalled();
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
+  });
+
+  it("activates the wallet a connect-only flow just connected", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0xBBBB000000000000000000000000000000BBBB" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.connectWalletOnSuccess?.({ wallet: { address: "0xbbbb000000000000000000000000000000bbbb" } });
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0xbbbb000000000000000000000000000000bbbb");
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({ address: "0xBBBB000000000000000000000000000000BBBB" });
+  });
+
+  it("keeps retrying activation until Privy reports the wallet, instead of losing the race", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [];
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.loginOnComplete?.({
+        user: {
+          linkedAccounts: [
+            { type: "wallet", walletClientType: "privy", address: "0xdddd000000000000000000000000000000dddd" },
+          ],
+        },
+        loginAccount: { type: "email" },
+      });
+    });
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0xdddd000000000000000000000000000000dddd");
+
+    mocks.wallets = [{ address: "0xDDDD000000000000000000000000000000DDDD" }];
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith({ address: "0xDDDD000000000000000000000000000000DDDD" });
+  });
+
+  it("retries setActiveWallet as wagmi connectors register, since it can silently no-op before its connector exists", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0xEEEE000000000000000000000000000000EEEE" }];
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<CustomConnectButton />);
+    });
+
+    await act(async () => {
+      mocks.loginOnComplete?.({
+        user: { linkedAccounts: [] },
+        loginAccount: { type: "wallet", address: "0xeeee000000000000000000000000000000eeee" },
+      });
+    });
+    expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1);
+
+    mocks.connectors = [{}];
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+    expect(mocks.setActiveWallet).toHaveBeenCalledTimes(2);
+
+    mocks.address = "0xEEEE000000000000000000000000000000EEEE";
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+    mocks.connectors = [{}, {}];
+    await act(async () => {
+      renderer.update(<CustomConnectButton />);
+    });
+    expect(mocks.setActiveWallet).toHaveBeenCalledTimes(2);
+  });
+
+  it("confirms the wallet synchronously, before any deferred activation, so a concurrent Privy reconnect cannot be mistaken for unconfirmed drift", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    mocks.wallets = [{ address: "0xFFFF000000000000000000000000000000FFFF" }];
+    await act(async () => {
+      create(<CustomConnectButton />);
+    });
+
+    mocks.loginOnComplete?.({
+      user: { linkedAccounts: [] },
+      loginAccount: { type: "wallet", address: "0xffff000000000000000000000000000000ffff" },
+    });
+
+    expect(mocks.confirmActive).toHaveBeenCalledWith("0xffff000000000000000000000000000000ffff");
   });
 });
 

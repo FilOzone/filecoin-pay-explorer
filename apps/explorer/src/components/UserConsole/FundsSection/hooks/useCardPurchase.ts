@@ -251,6 +251,7 @@ export function useCardPurchase({
     }
   };
 
+  // Funding login authenticates the connected recipient; isCurrent prevents attribution if it changes.
   const { login } = useLogin({
     onComplete: () => {
       const intent = continueAfterLogin.current;
@@ -294,7 +295,8 @@ export function useCardPurchase({
     if (authenticated) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
-    login();
+    // This only runs when a wallet is already connected, so offer only wallet methods.
+    login({ loginMethods: ["wallet"] });
   };
 
   const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
@@ -308,6 +310,7 @@ export function useCardPurchase({
     buyWithCard,
     canStartOver: status === "delayed",
     isBusy: status === "opening" || status === "waiting",
+    isOpening: status === "opening",
     label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],

@@ -18,6 +18,7 @@ const dialogs = vi.hoisted(() => ({
 const card = vi.hoisted(() => ({
   buyWithCard: vi.fn(),
   isBusy: false,
+  isOpening: false,
   onPurchased: undefined as ((amount: bigint) => void) | undefined,
   statusMessage: null as string | null,
 }));
@@ -128,6 +129,8 @@ beforeEach(() => {
   dialogs.squidOpen = false;
   dialogs.squidInitialSource = undefined;
   card.buyWithCard.mockClear();
+  card.isOpening = false;
+  card.isBusy = false;
   dialogs.onSquidOpenChange = undefined;
 });
 
@@ -150,13 +153,15 @@ describe("FundingHost", () => {
     expect(dialogs.squidOpen).toBe(true);
   });
 
-  it("keeps the picker open while Privy starts a card purchase", async () => {
+  it("removes the picker during card checkout and still continues to Squid", async () => {
     const renderer = await renderHost();
     act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
     act(() => dialogs.onSelect?.("card"));
 
     expect(card.buyWithCard).toHaveBeenCalledOnce();
-    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
+    card.isOpening = true;
+    await rerenderHost(renderer);
+    expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
 
     act(() => card.onPurchased?.(12_500_000n));
     expect(dialogs.squidOpen).toBe(true);
@@ -166,6 +171,21 @@ describe("FundingHost", () => {
       decimals: 6,
       token: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
     });
+  });
+
+  it.each([false, true])("restores the picker after checkout with busy=%s", async (isBusy) => {
+    const renderer = await renderHost();
+    act(() => renderer.root.findByProps({ "data-open": true }).props.onClick());
+    card.isOpening = true;
+    await rerenderHost(renderer);
+    expect(renderer.root.findAll((node) => node.type === "div" && "data-picker-open" in node.props)).toHaveLength(0);
+
+    // Cancellation/failure returns to idle; a submitted purchase waits for funds.
+    card.isOpening = false;
+    card.isBusy = isBusy;
+    await rerenderHost(renderer);
+    expect(find(renderer, "data-picker-open").props["data-picker-open"]).toBe(true);
+    expect(dialogs.squidOpen).toBe(false);
   });
 
   it("opens Squid directly and closes it on cancellation", async () => {
