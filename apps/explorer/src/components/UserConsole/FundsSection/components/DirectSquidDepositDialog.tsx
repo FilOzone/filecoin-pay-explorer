@@ -1007,7 +1007,12 @@ export function DirectSquidDepositDialog({
               ) : null}
               <div className='flex gap-2'>
                 {pending.transactionHash ? (
-                  <Button disabled={isBusy} onClick={() => void resume()} type='button' variant='primary'>
+                  <Button
+                    disabled={isBusy || connectedAccountsQuery.isPending}
+                    onClick={() => void resume()}
+                    type='button'
+                    variant='primary'
+                  >
                     Check again
                   </Button>
                 ) : null}
