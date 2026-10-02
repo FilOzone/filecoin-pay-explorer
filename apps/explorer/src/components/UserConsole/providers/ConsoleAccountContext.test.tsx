@@ -14,7 +14,9 @@ const STORAGE_KEY = "filecoin-pay:console-account:v1";
 
 const mocks = vi.hoisted(() => ({
   user: null as null | { linkedAccounts: object[]; wallet?: { address: string; walletClientType?: string } },
+  address: undefined as string | undefined,
   logout: vi.fn(async () => undefined),
+  setActiveWallet: vi.fn(async () => undefined),
   selector: undefined as Selector | undefined,
   wallets: [] as WalletStub[],
 }));
@@ -35,7 +37,9 @@ vi.mock("@privy-io/wagmi", () => ({
     mocks.selector = setActiveWalletForWagmi;
     return children;
   },
+  useSetActiveWallet: () => ({ setActiveWallet: mocks.setActiveWallet }),
 }));
+vi.mock("wagmi", () => ({ useConnection: () => ({ address: mocks.address }) }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 
 const stored = new Map<string, string>();
@@ -62,6 +66,7 @@ beforeEach(() => {
   stored.clear();
   mocks.user = null;
   mocks.wallets = [];
+  mocks.address = undefined;
   vi.stubGlobal("window", {
     localStorage: {
       getItem: (key: string) => stored.get(key) ?? null,
@@ -206,5 +211,25 @@ describe("KeepConsoleWallet", () => {
     act(() => latest.selectAccount(METAMASK));
 
     expect(mocks.logout).not.toHaveBeenCalled();
+  });
+
+  it("puts wagmi back on the account when a stale reconnect lands on another wallet", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [EMBEDDED, METAMASK];
+    mocks.address = EMBEDDED.address;
+    render();
+
+    expect(mocks.setActiveWallet).toHaveBeenCalledWith(METAMASK);
+  });
+
+  it("leaves wagmi alone while it holds the account", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [EMBEDDED, METAMASK];
+    mocks.address = METAMASK.address;
+    render();
+
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
   });
 });

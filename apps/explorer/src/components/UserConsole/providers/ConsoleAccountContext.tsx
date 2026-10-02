@@ -8,10 +8,11 @@ import {
   useWallets,
   type WalletWithMetadata,
 } from "@privy-io/react-auth";
-import { WagmiProvider } from "@privy-io/wagmi";
+import { useSetActiveWallet, WagmiProvider } from "@privy-io/wagmi";
 import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { isAddress } from "viem";
+import { useConnection } from "wagmi";
 import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
@@ -107,13 +108,22 @@ function KeepConsoleWallet() {
   const { account, selectAccount } = useConsoleAccount();
   const { wallets } = useWallets();
   const { authenticated, user, logout } = usePrivy();
+  const { address } = useConnection();
+  const { setActiveWallet } = useSetActiveWallet();
 
   const accountAddress = account?.address.toLowerCase();
-  const accountWalletIsGone = !wallets.some((wallet) => wallet.address.toLowerCase() === accountAddress);
+  const accountWallet = wallets.find((wallet) => wallet.address.toLowerCase() === accountAddress);
+  // A reconnect that started before the account changed can land after it, so wagmi is put back on the account.
+  useEffect(() => {
+    if (accountWallet && address && address.toLowerCase() !== accountWallet.address.toLowerCase()) {
+      void setActiveWallet(accountWallet);
+    }
+  }, [accountWallet, address, setActiveWallet]);
+
   // An extension exposes one account at a time, so its current account replaces the missing one.
   // An embedded wallet can't switch accounts, so it is never replaced.
   const replacement =
-    account && account.walletClientType !== "privy" && accountWalletIsGone
+    account && account.walletClientType !== "privy" && !accountWallet
       ? wallets.find((wallet) => wallet.walletClientType === account.walletClientType)
       : undefined;
   useEffect(() => {
