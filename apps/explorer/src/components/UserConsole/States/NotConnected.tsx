@@ -18,11 +18,11 @@ const NotConnected = () => {
     <EmptyStateCard
       titleTag='h2'
       icon={WalletIcon}
-      title={isPreparing ? "Preparing your wallet" : "Access the Filecoin Pay console"}
+      title={isPreparing ? "Preparing your wallet" : "How would you like to continue?"}
       description={
         isPreparing
           ? "You're signed in. We're connecting your wallet to Filecoin Pay."
-          : "Connect your wallet to access the Filecoin Pay console and manage your payment rails, deposits, and authorized services."
+          : "Manage your payment rails, deposits, and authorized services in the Filecoin Pay console."
       }
     >
       <CustomConnectButton />

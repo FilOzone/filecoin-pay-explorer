@@ -89,6 +89,20 @@ describe("CustomConnectButton", () => {
     expect(mocks.clearAccount).toHaveBeenCalledOnce();
   });
 
+  it("offers email or Google login, and a wallet connection that verifies before card payments", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    const renderer = await render();
+
+    await act(async () => findButton(renderer, "Continue with email or Google")?.props.onClick());
+    await act(async () => findButton(renderer, "Connect existing wallet")?.props.onClick());
+
+    // A wallet enters through the connect action only, so there is one way in per kind of account.
+    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ["email", "google"] });
+    expect(mocks.connectWallet).toHaveBeenCalledOnce();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Card payments need a one-time");
+  });
+
   it("makes the wallet a connect-only flow just connected the console account", async () => {
     mocks.privy = { authenticated: false, error: null, ready: true };
     mocks.walletsReady = true;
