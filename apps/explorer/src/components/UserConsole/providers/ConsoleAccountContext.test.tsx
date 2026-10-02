@@ -223,6 +223,16 @@ describe("KeepConsoleWallet", () => {
     expect(mocks.setActiveWallet).toHaveBeenCalledWith(METAMASK);
   });
 
+  it("leaves wagmi alone when the extension switches accounts before Privy lists the new one", () => {
+    render();
+    act(() => latest.selectAccount(METAMASK));
+    mocks.wallets = [METAMASK];
+    mocks.address = OTHER_METAMASK.address;
+    render();
+
+    expect(mocks.setActiveWallet).not.toHaveBeenCalled();
+  });
+
   it("leaves wagmi alone while it holds the account", () => {
     render();
     act(() => latest.selectAccount(METAMASK));

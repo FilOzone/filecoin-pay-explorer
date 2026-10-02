@@ -113,12 +113,15 @@ function KeepConsoleWallet() {
 
   const accountAddress = account?.address.toLowerCase();
   const accountWallet = wallets.find((wallet) => wallet.address.toLowerCase() === accountAddress);
-  // A reconnect that started before the account changed can land after it, so wagmi is put back on the account.
+  // A reconnect that started before the account changed can land on another listed wallet, so wagmi is put back.
+  // An unlisted address is the extension switching accounts; reactivating the old one would open its connect prompt.
+  const wagmiOnOtherWallet =
+    address !== undefined &&
+    address.toLowerCase() !== accountAddress &&
+    wallets.some((wallet) => wallet.address.toLowerCase() === address.toLowerCase());
   useEffect(() => {
-    if (accountWallet && address && address.toLowerCase() !== accountWallet.address.toLowerCase()) {
-      void setActiveWallet(accountWallet);
-    }
-  }, [accountWallet, address, setActiveWallet]);
+    if (accountWallet && wagmiOnOtherWallet) void setActiveWallet(accountWallet);
+  }, [accountWallet, wagmiOnOtherWallet, setActiveWallet]);
 
   // An extension exposes one account at a time, so its current account replaces the missing one.
   // An embedded wallet can't switch accounts, so it is never replaced.
