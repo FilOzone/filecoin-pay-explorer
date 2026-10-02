@@ -588,9 +588,11 @@ export function DirectSquidDepositDialog({
   // Privy calls every useConnectWallet subscriber, so only act on the connect this dialog started.
   const isConnectingPayer = useRef(false);
   const { connectWallet } = useConnectWallet({
-    onSuccess: ({ wallet }) => {
+    onSuccess: async ({ wallet }) => {
       if (!isConnectingPayer.current) return;
       isConnectingPayer.current = false;
+      // Connecting a wallet that is already known can still add accounts to it, so read them again.
+      await connectedAccountsQuery.refetch();
       choosePayer(getAddress(wallet.address));
     },
     onError: (code) => {
