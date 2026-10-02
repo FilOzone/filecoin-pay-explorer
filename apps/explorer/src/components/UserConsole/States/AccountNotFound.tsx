@@ -3,8 +3,8 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { WalletIcon } from "@phosphor-icons/react";
 import { ArrowDownCircle } from "lucide-react";
 import { useState } from "react";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import AddServiceDialog from "../AddServiceDialog";
-import { useFundingLaunch } from "../FundingLaunchContext";
 
 const AccountNotFound = () => {
   const { openAddFunds } = useFundingLaunch();

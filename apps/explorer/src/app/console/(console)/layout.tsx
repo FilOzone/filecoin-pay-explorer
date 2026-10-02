@@ -6,11 +6,11 @@ import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
-import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { FundingHost } from "@/components/UserConsole/FundingHost";
+import ConsoleProviders from "@/components/UserConsole/providers/ConsoleProviders";
+import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
-import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
