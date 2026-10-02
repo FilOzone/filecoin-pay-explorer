@@ -62,6 +62,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
     lastReady,
     address,
     chainId,
+    isTopUpActive,
   );
   useEffect(() => {
     setLastReady((previous) => rememberReadyConnection(walletAccessState, address, chainId, previous));
