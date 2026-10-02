@@ -350,6 +350,16 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     window.addEventListener("fake-privy:revoke-extension", onRevoke);
     return () => window.removeEventListener("fake-privy:revoke-extension", onRevoke);
   }, [extension]);
+  useEffect(() => {
+    // Connects the extension from outside the app's own buttons, as Privy's wallet list or a pay-with flow would.
+    const onConnectExtension = () => {
+      const wallet = extension.current();
+      setWallets((current) => [...current.filter((candidate) => candidate.connectorType !== "injected"), wallet]);
+      for (const listener of onConnect) listener({ wallet });
+    };
+    window.addEventListener("fake-privy:connect-extension", onConnectExtension);
+    return () => window.removeEventListener("fake-privy:connect-extension", onConnectExtension);
+  }, [extension, onConnect]);
 
   const completeLogin = (email: string) => {
     setModalOpen(false);

@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount, logoutFromConsole } from "./privy";
 
@@ -70,6 +71,39 @@ test("an extension account switch while idle moves the console to the new accoun
   await expect(page.getByText(/^Switched to /)).toBeVisible();
 });
 
+test("an email user's console stays on their own wallet when an extension connects and switches", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  const own = await consoleAccount(page);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-extension")));
+  await switchExtensionAccount(page);
+
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+  expect(await consoleAccount(page)).toBe(own);
+});
+
+test("an account switch closes a form opened for the previous account", async ({ page, baseURL }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  const cli = await filecoinPin(`${baseURL}`);
+  const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
+  await stubAccountBackgroundRequests(page);
+  await page.goto(link);
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
+  await page.getByRole("button", { name: "Review & authorize" }).click();
+  const first = await consoleAccount(page);
+  const [start] = first.split("...");
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
+
+  await switchExtensionAccount(page);
+
+  await expect.poll(() => consoleAccount(page)).not.toBe(first);
+  await expect(page.getByRole("button", { name: /^Authorize as / })).toBeHidden();
+});
+
 async function connectAndOpenCardPurchase(page: Page): Promise<string> {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
@@ -94,6 +128,17 @@ test("verifying a connected wallet for card purchases signs in as that wallet an
   await expect(purchase).toContainText(end);
   await purchase.getByRole("button", { name: "close modal" }).click();
   await expect(page.getByRole("button", { name: "Buy USDC with card", exact: true })).toBeEnabled();
+});
+
+test("an extension switch during card verification never opens a purchase for either account", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  const first = await connectAndOpenCardPurchase(page);
+
+  await switchExtensionAccount(page);
+  await page.getByRole("dialog", { name: "signature request" }).getByRole("button", { name: "Sign" }).click();
+
+  await expect.poll(() => consoleAccount(page)).not.toBe(first);
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toBeHidden();
 });
 
 test("rejecting the wallet's sign-in leaves card purchases unverified", async ({ page }) => {
