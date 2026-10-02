@@ -1,6 +1,5 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
-import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { type ReactNode, useEffect, useState } from "react";
 import { useConnection } from "wagmi";
@@ -12,7 +11,7 @@ import { FundingHost } from "@/components/UserConsole/FundingHost";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import ConsoleProviders from "@/components/UserConsole/providers/ConsoleProviders";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
-import { AccountUnavailable, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
+import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
@@ -28,7 +27,7 @@ import {
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
     case "reconnecting":
-      return <LoadingStateCard message='Connecting your wallet...' />;
+      return <ConnectingWallet />;
     case "not-connected":
       return <NotConnected />;
     case "account-unavailable":
