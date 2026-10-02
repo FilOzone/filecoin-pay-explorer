@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { erc20Abi, getAddress, isAddress, type PublicClient, toHex } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
 import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
@@ -135,10 +136,7 @@ export function useCardPurchase({
   const { authenticated, logout, user } = usePrivy();
   const { wallets } = useWallets();
   // A Privy login only counts for its own wallets, never for an account the extension switched to.
-  const isLoggedInAsRecipient =
-    user?.linkedAccounts.some(
-      (account) => account.type === "wallet" && account.address.toLowerCase() === address.toLowerCase(),
-    ) ?? false;
+  const isLoggedInAsRecipient = isLinkedWallet(user, address);
   const { fund } = useFiatOnramp();
   const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
