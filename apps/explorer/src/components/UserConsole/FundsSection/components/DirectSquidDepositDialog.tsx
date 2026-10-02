@@ -640,6 +640,11 @@ export function DirectSquidDepositDialog({
     }
   };
 
+  const buyWithCard = async () => {
+    if (isSubmitting.current || !(await restoreFilecoin())) return;
+    onBuyWithCard?.();
+  };
+
   const close = async () => {
     if (isSubmitting.current || !(await restoreFilecoin())) return;
     onOpenChange(false);
@@ -1264,7 +1269,7 @@ export function DirectSquidDepositDialog({
                   </p>
                   {onBuyWithCard ? (
                     <div>
-                      <Button onClick={onBuyWithCard} size='compact' type='button' variant='tertiary'>
+                      <Button onClick={() => void buyWithCard()} size='compact' type='button' variant='tertiary'>
                         Buy USDC with card
                       </Button>
                     </div>
