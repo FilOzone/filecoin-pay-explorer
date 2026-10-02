@@ -8,12 +8,14 @@ const OTHER = "0x2222222222222222222222222222222222222222" as const;
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const privy = vi.hoisted(() => ({
   authenticated: true,
-  // The address the Privy login signed in as; the recipient unless a test says otherwise.
-  loggedInAs: "0x1111111111111111111111111111111111111111" as string,
+  // The wallet the Privy login belongs to.
+  loginOwner: "0x1111111111111111111111111111111111111111",
+  logout: vi.fn<() => Promise<void>>(),
   fund: vi.fn(),
-  login: vi.fn(),
-  onLoginComplete: undefined as (() => void) | undefined,
-  onLoginError: undefined as (() => void) | undefined,
+  generateSiweMessage: vi.fn<(params: { address: string; chainId: string }) => Promise<string>>(),
+  loginWithSiwe: vi.fn<(params: { message: string; signature: string }) => Promise<void>>(),
+  // wagmi's signMessage, which asks the wallet to sign as `account`.
+  sign: vi.fn<(params: { account: string; message: string }) => Promise<string>>(),
 }));
 const chain = vi.hoisted(() => ({ readContract: vi.fn() }));
 const account = vi.hoisted(() => ({ address: "0x1111111111111111111111111111111111111111" }));
@@ -35,17 +37,25 @@ const locks = {
 
 vi.mock("@privy-io/react-auth", () => ({
   useFiatOnramp: () => ({ fund: privy.fund }),
-  useLogin: ({ onComplete, onError }: { onComplete: () => void; onError: () => void }) => {
-    privy.onLoginComplete = onComplete;
-    privy.onLoginError = onError;
-    return { login: privy.login };
-  },
+  useLoginWithSiwe: () => ({ generateSiweMessage: privy.generateSiweMessage, loginWithSiwe: privy.loginWithSiwe }),
   usePrivy: () => ({
-    user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loggedInAs }] } : null,
+    authenticated: privy.authenticated,
+    logout: privy.logout,
+    user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loginOwner }] } : null,
+  }),
+  useWallets: () => ({
+    wallets: [
+      {
+        address: ADDRESS,
+        chainId: "eip155:314",
+        connectorType: "injected",
+        walletClientType: "metamask",
+      },
+    ],
   }),
 }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => queries }));
-vi.mock("wagmi", () => ({ usePublicClient: () => chain }));
+vi.mock("wagmi", () => ({ usePublicClient: () => chain, useSignMessage: () => ({ mutateAsync: privy.sign }) }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => account }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 vi.mock("sonner", () => ({ toast }));
@@ -65,9 +75,12 @@ beforeEach(() => {
   chain.readContract.mockReset();
   onPurchased.mockReset();
   privy.authenticated = true;
-  privy.loggedInAs = ADDRESS;
+  privy.loginOwner = ADDRESS;
+  privy.logout.mockReset().mockResolvedValue(undefined);
   privy.fund.mockReset();
-  privy.login.mockReset();
+  privy.generateSiweMessage.mockReset().mockResolvedValue("siwe message");
+  privy.loginWithSiwe.mockReset().mockResolvedValue(undefined);
+  privy.sign.mockReset().mockResolvedValue("0xsignature");
   queries.invalidateQueries.mockReset();
   toast.error.mockReset();
   toast.info.mockReset();
@@ -146,7 +159,7 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
-  it("logs in first and continues only after authentication completes, without flagging the recipient as changed", async () => {
+  it("verifies the recipient wallet itself, then opens the purchase for the same recipient", async () => {
     privy.authenticated = false;
     chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
     privy.fund.mockResolvedValue({ status: "submitted" });
@@ -154,32 +167,92 @@ describe("useCardPurchase", () => {
       create(<Harness />);
     });
 
-    act(() => {
-      void latest.buyWithCard();
+    expect(latest.label).toBe("Verify wallet to buy USDC with card");
+    await act(async () => latest.buyWithCard());
+
+    // The recipient signs in as itself; any other method would add a second wallet or identity.
+    expect(privy.generateSiweMessage).toHaveBeenCalledWith({ address: ADDRESS, chainId: "eip155:314" });
+    // The recipient is named, so the wallet signs as it rather than as whichever account it has selected.
+    expect(privy.sign).toHaveBeenCalledWith({ account: ADDRESS, message: "siwe message" });
+    expect(privy.loginWithSiwe).toHaveBeenCalledWith({
+      message: "siwe message",
+      signature: "0xsignature",
+      walletClientType: "metamask",
+      connectorType: "injected",
     });
-    // Only the already-connected wallet may authenticate here; email or Google would be a different identity.
-    expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
-    expect(privy.fund).not.toHaveBeenCalled();
-    expect(latest.isOpening).toBe(true);
-    await act(async () => {
-      await privy.onLoginComplete?.();
-    });
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(privy.fund.mock.calls[0][0].destination.address).toBe(ADDRESS);
     expect(onPurchased).toHaveBeenCalledWith(2n);
-    expect(latest.isOpening).toBe(false);
   });
 
-  it("ends the opening state when login is cancelled", async () => {
-    privy.authenticated = false;
+  it("does not buy on a login that belongs to another wallet, and ends it before verifying", async () => {
+    privy.loginOwner = OTHER;
+    chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
     await act(async () => {
       create(<Harness />);
     });
+
+    expect(latest.label).toBe("Verify wallet to buy USDC with card");
+    await act(async () => latest.buyWithCard());
+
+    expect(privy.logout).toHaveBeenCalledOnce();
+    expect(privy.logout.mock.invocationCallOrder[0]).toBeLessThan(
+      privy.generateSiweMessage.mock.invocationCallOrder[0],
+    );
+    expect(privy.generateSiweMessage).toHaveBeenCalledWith({ address: ADDRESS, chainId: "eip155:314" });
+    expect(privy.fund.mock.calls[0][0].destination.address).toBe(ADDRESS);
+  });
+
+  it("shows the sign-in step while the wallet signs, not the purchase", async () => {
+    privy.authenticated = false;
+    let sign!: (signature: string) => void;
+    privy.sign.mockReturnValue(new Promise((resolve) => (sign = resolve)));
+    await act(async () => {
+      create(<Harness />);
+    });
+
     act(() => {
       void latest.buyWithCard();
     });
-    expect(latest.isOpening).toBe(true);
-    act(() => privy.onLoginError?.());
+    await act(async () => {});
+
+    expect(latest.isBusy).toBe(true);
+    expect(latest.statusMessage).toBe("Confirm the sign-in message in your wallet…");
+    // The signature is the wallet's own popup, not a Privy dialog.
     expect(latest.isOpening).toBe(false);
+    expect(privy.fund).not.toHaveBeenCalled();
+    await act(async () => sign("0xsignature"));
+  });
+
+  it("returns to idle quietly when the wallet rejects the sign-in", async () => {
+    privy.authenticated = false;
+    privy.sign.mockRejectedValue(Object.assign(new Error("User rejected the request."), { code: 4001 }));
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    await act(async () => latest.buyWithCard());
+
     expect(latest.isBusy).toBe(false);
+    expect(latest.isOpening).toBe(false);
+    expect(latest.statusMessage).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(privy.loginWithSiwe).not.toHaveBeenCalled();
+    expect(privy.fund).not.toHaveBeenCalled();
+  });
+
+  it("returns to idle and reports why when Privy cannot verify the wallet", async () => {
+    privy.authenticated = false;
+    privy.loginWithSiwe.mockRejectedValue(new Error("Invalid signature"));
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    await act(async () => latest.buyWithCard());
+
+    expect(latest.isBusy).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith("Unable to verify wallet", { description: "Invalid signature" });
     expect(privy.fund).not.toHaveBeenCalled();
   });
 
@@ -211,39 +284,18 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
-  it("treats a login made as another account as no login for this one", async () => {
-    privy.loggedInAs = OTHER;
+  it("does not open the purchase when the wallet changes during verification", async () => {
+    privy.authenticated = false;
+    privy.loginWithSiwe.mockImplementation(async () => {
+      account.address = OTHER;
+    });
     await act(async () => {
       create(<Harness />);
     });
-    expect(latest.label).toBe("Log in to buy USDC with card");
 
-    act(() => {
-      void latest.buyWithCard();
-    });
+    await act(async () => latest.buyWithCard());
 
-    expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
-    expect(privy.fund).not.toHaveBeenCalled();
-  });
-
-  it("does not continue login after the wallet changes", async () => {
-    privy.authenticated = false;
-    let renderer!: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(<Harness />);
-    });
-
-    act(() => {
-      void latest.buyWithCard();
-    });
-    account.address = OTHER;
-    await act(async () => {
-      renderer.update(<Harness />);
-    });
-    await act(async () => {
-      await privy.onLoginComplete?.();
-    });
-
+    expect(latest.isBusy).toBe(false);
     expect(privy.fund).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith("Wallet changed during login", {
       description: "Return to Add funds from the account you want to fund.",
