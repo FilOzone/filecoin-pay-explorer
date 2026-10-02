@@ -934,14 +934,10 @@ export function DirectSquidDepositDialog({
       label: describePayer(candidate, recipient),
     };
   });
-  // One action per extension, since each one's picker connects more of its own accounts.
-  const extensionWallets = [
-    ...new Map(
-      wallets
-        .filter((wallet) => wallet.connectorType === "injected")
-        .map((wallet) => [wallet.walletClientType, wallet] as const),
-    ).values(),
-  ];
+  // Only the console account's own extension offers its account picker; other wallets go through "Connect another wallet".
+  const consoleExtensionWallet = wallets.find(
+    (wallet) => wallet.connectorType === "injected" && wallet.address.toLowerCase() === recipient?.toLowerCase(),
+  );
   const isBusy = stage !== null;
   const hasRecipientFil = recipientFilStatus === "funded";
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
@@ -1096,10 +1092,14 @@ export function DirectSquidDepositDialog({
           {!stage && !pending && (!reviewed || !reviewedSourceChain) ? (
             <>
               <PayingAccountField
-                addAccountActions={extensionWallets.map((wallet) => ({
-                  walletName: wallet.meta.name,
-                  onAdd: () => void addExtensionAccount(wallet),
-                }))}
+                addAccountAction={
+                  consoleExtensionWallet
+                    ? {
+                        walletName: consoleExtensionWallet.meta.name,
+                        onAdd: () => void addExtensionAccount(consoleExtensionWallet),
+                      }
+                    : undefined
+                }
                 disabled={isBusy}
                 onConnectWallet={connectPayerWallet}
                 onValueChange={choosePayer}
