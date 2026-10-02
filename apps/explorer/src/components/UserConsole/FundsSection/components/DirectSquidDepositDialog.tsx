@@ -23,12 +23,12 @@ import { toast } from "sonner";
 import { type Address, createWalletClient, custom, formatUnits, getAddress, type Hash, parseUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
-import { useTopUpActivity } from "../../TopUpActivityContext";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import {

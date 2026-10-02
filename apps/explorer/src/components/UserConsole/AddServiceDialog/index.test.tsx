@@ -76,7 +76,7 @@ vi.mock("@filecoin-pay/ui/components/select", () => ({
   SelectValue: () => null,
 }));
 vi.mock("@/components/shared/CopyButton", () => ({ default: () => null }));
-vi.mock("@/components/UserConsole/FundingLaunchContext", () => ({
+vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
   useFundingLaunch: () => ({ isSquidOpen: mocks.isSquidOpen, openSquid: mocks.openSquid }),
 }));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));

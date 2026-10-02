@@ -2,10 +2,10 @@
 
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
+import { ActiveWalletGuardProvider } from "@/components/UserConsole/ActiveWalletGuardContext";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
-import { ActiveWalletGuardProvider } from "./ActiveWalletGuardContext";
 import { FundingLaunchProvider } from "./FundingLaunchContext";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
