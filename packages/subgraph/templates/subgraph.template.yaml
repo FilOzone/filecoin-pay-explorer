@@ -62,6 +62,75 @@ dataSources:
           handler: handleAccountLockupSettled
       file: ./src/payments.ts
 
+  - kind: ethereum
+    name: FilecoinWarmStorageService
+    network: "{{network}}"
+    source:
+      abi: FilecoinWarmStorageService
+      address: "{{fwssContractAddress}}"
+      startBlock: {{fwssContractStartBlock}}
+    context:
+      pdpVerifierAddress:
+        type: Bytes
+        data: "{{pdpVerifierAddress}}"
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - DataSet
+        - Piece
+        - Account
+        - Rail
+      abis:
+        - name: FilecoinWarmStorageService
+          file: ./config/FilecoinWarmStorageService-abi.json
+        - name: PDPVerifier
+          file: ./config/PDPVerifier-abi.json
+      eventHandlers:
+        - event: DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])
+          handler: handleDataSetCreated
+        - event: PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])
+          handler: handlePieceAdded
+        # A pre-upgrade PieceAdded that didn't carry pieceCid; handleLegacyPieceAdded
+        # backfills it via PDPVerifier.getPieceCid so old datasets aren't undercounted.
+        - event: PieceAdded(indexed uint256,indexed uint256,string[],string[])
+          handler: handleLegacyPieceAdded
+        - event: DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)
+          handler: handleDataSetServiceProviderChanged
+        - event: PDPPaymentTerminated(indexed uint256,uint256,uint256)
+          handler: handlePDPPaymentTerminated
+        - event: CDNPaymentTerminated(indexed uint256,uint256,uint256,uint256)
+          handler: handleCDNPaymentTerminated
+        - event: ServiceTerminated(indexed address,indexed uint256,uint256,uint256,uint256)
+          handler: handleServiceTerminated
+      file: ./src/warmStorage.ts
+
+  # Scoped to PiecesRemoved only: proving-health events (PossessionProven,
+  # NextProvingPeriod, faults) stay out of this subgraph. Starts at the FWSS
+  # start block since no FWSS-tracked dataset's pieces can be removed earlier.
+  - kind: ethereum
+    name: PDPVerifier
+    network: "{{network}}"
+    source:
+      abi: PDPVerifier
+      address: "{{pdpVerifierAddress}}"
+      startBlock: {{fwssContractStartBlock}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - DataSet
+        - Piece
+      abis:
+        - name: PDPVerifier
+          file: ./config/PDPVerifier-abi.json
+      eventHandlers:
+        - event: PiecesRemoved(indexed uint256,uint256[])
+          handler: handlePiecesRemoved
+      file: ./src/warmStorage.ts
+
 templates:
 
   # Token Transfer events from FilecoinPay capture fee-auction purchases (burnForFees)
