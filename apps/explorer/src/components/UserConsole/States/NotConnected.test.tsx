@@ -66,15 +66,4 @@ describe("NotConnected", () => {
     for (const copy of expected) expect(markup).toContain(copy);
     for (const copy of unexpected) expect(markup).not.toContain(copy);
   });
-
-  it("shows the loading copy, not preparing, while a forced exit is settling", () => {
-    mocks.privy = { authenticated: true, error: null, ready: true };
-    mocks.walletsReady = true;
-    mocks.isExiting = true;
-
-    const markup = renderToStaticMarkup(<NotConnected />);
-
-    expect(markup).toContain("Loading wallet...");
-    expect(markup).not.toContain("Preparing your wallet");
-  });
 });

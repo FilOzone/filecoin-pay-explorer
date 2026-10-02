@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
 import { usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
 import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
@@ -132,7 +133,9 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated } = usePrivy();
+  const { user } = usePrivy();
+  // A login only counts for its own wallets, never for an account the extension switched to.
+  const loggedInAsRecipient = isLinkedWallet(user, address);
   const { fund } = useFiatOnramp();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
   const queryClient = useQueryClient();
@@ -292,14 +295,14 @@ export function useCardPurchase({
   const buyWithCard = () => {
     if (status === "opening" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
-    if (authenticated) return purchase();
+    if (loggedInAsRecipient) return purchase();
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
     // This only runs when a wallet is already connected, so offer only wallet methods.
     login({ loginMethods: ["wallet"] });
   };
 
-  const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
+  const purchaseLabel = loggedInAsRecipient ? "Buy USDC with card" : "Log in to buy USDC with card";
   const statusMessages = {
     delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
     idle: null,
