@@ -82,7 +82,8 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={displayAccessState}>
-              <ConsoleContent accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
+              {/* Keyed by account, so nothing started for one account survives a switch to another. */}
+              <ConsoleContent key={account?.address} accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
