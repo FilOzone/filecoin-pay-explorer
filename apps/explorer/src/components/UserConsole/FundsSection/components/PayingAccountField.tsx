@@ -15,15 +15,12 @@ export type PayingAccountOption = {
 const describe = (option: PayingAccountOption) => `${formatAddress(option.address)} · ${option.label}`;
 
 export function PayingAccountField({
-  addAccountAction,
   disabled,
   onConnectWallet,
   onValueChange,
   options,
   value,
 }: {
-  /** Present when the console account's extension can connect more of its accounts to the site. */
-  addAccountAction?: { walletName: string; onAdd: () => void };
   disabled: boolean;
   onConnectWallet: () => void;
   onValueChange: (address: string) => void;
@@ -58,16 +55,6 @@ export function PayingAccountField({
         </p>
       ) : null}
       <div className='flex flex-wrap gap-x-4 gap-y-1'>
-        {addAccountAction ? (
-          <button
-            className='text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50'
-            disabled={disabled}
-            onClick={addAccountAction.onAdd}
-            type='button'
-          >
-            + Add another {addAccountAction.walletName} account
-          </button>
-        ) : null}
         <button
           className='text-xs text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50'
           disabled={disabled}

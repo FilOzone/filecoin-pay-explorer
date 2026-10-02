@@ -605,23 +605,6 @@ export function DirectSquidDepositDialog({
     connectWallet();
   };
 
-  // The extension's own account picker connects more of its accounts; the first new one becomes the payer.
-  const addExtensionAccount = async (wallet: ConnectedWallet) => {
-    const known = new Set(payers.map((candidate) => candidate.address.toLowerCase()));
-    try {
-      const provider = await wallet.getEthereumProvider();
-      await provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
-      const refreshed = await connectedAccountsQuery.refetch();
-      const added = listSquidPayers(walletsRef.current, refreshed.data, recipient).find(
-        (candidate) => !known.has(candidate.address.toLowerCase()),
-      );
-      if (added) choosePayer(added.address);
-    } catch (failure) {
-      if (isUserRejectedRequest(failure)) return;
-      toast.error("Unable to add an account", { description: walletErrorMessage(failure, "") || undefined });
-    }
-  };
-
   const restoreFilecoin = async () => {
     if (!hasSwitchedToSource.current) return true;
     if (!payingWallet) {
@@ -936,10 +919,6 @@ export function DirectSquidDepositDialog({
       label: describePayer(candidate, recipient),
     };
   });
-  // Only the console account's own extension offers its account picker; other wallets go through "Connect another wallet".
-  const consoleExtensionWallet = wallets.find(
-    (wallet) => wallet.connectorType === "injected" && wallet.address.toLowerCase() === recipient?.toLowerCase(),
-  );
   const isBusy = stage !== null;
   const hasRecipientFil = recipientFilStatus === "funded";
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
@@ -1094,14 +1073,6 @@ export function DirectSquidDepositDialog({
           {!stage && !pending && (!reviewed || !reviewedSourceChain) ? (
             <>
               <PayingAccountField
-                addAccountAction={
-                  consoleExtensionWallet
-                    ? {
-                        walletName: consoleExtensionWallet.meta.name,
-                        onAdd: () => void addExtensionAccount(consoleExtensionWallet),
-                      }
-                    : undefined
-                }
                 disabled={isBusy}
                 onConnectWallet={connectPayerWallet}
                 onValueChange={choosePayer}

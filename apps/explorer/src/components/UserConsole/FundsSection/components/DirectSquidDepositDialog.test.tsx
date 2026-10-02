@@ -1387,42 +1387,18 @@ describe("DirectSquidDepositDialog safety integration", () => {
       }
     });
 
-    it("connects another account from the console account's extension and pays with it", async () => {
+    it("reads the connected accounts again after connecting a wallet, then pays with the connected one", async () => {
       connectedWallets.current = [consoleMetaMask];
       payers.refetchAccounts.mockResolvedValue({ data: { [RECIPIENT.toLowerCase()]: [RECIPIENT, OTHER] } });
       try {
         const renderer = await render();
 
-        // The label renders as "+ Add another ", "MetaMask", " account".
-        await act(async () => button(renderer, "Add another")?.props.onClick());
+        await act(async () => button(renderer, "Connect another wallet")?.props.onClick());
         payers.accounts = { [RECIPIENT.toLowerCase()]: [RECIPIENT, OTHER] };
-        await act(async () => {
-          renderer.update(<DirectSquidDepositDialog accountId='account' onOpenChange={vi.fn()} open />);
-        });
+        await act(async () => payers.connectWalletOnSuccess?.({ wallet: { address: OTHER } }));
 
-        const provider = await wallet.getEthereumProvider.mock.results[0]?.value;
-        expect(provider.request).toHaveBeenCalledWith({
-          method: "wallet_requestPermissions",
-          params: [{ eth_accounts: {} }],
-        });
+        expect(payers.refetchAccounts).toHaveBeenCalledOnce();
         expect(payerSelect(renderer).props.value).toBe(OTHER);
-      } finally {
-        connectedWallets.current = [wallet];
-      }
-    });
-
-    it("offers account adding only for the console account's extension", async () => {
-      const brave = { ...wallet, address: OTHER, meta: { name: "Brave Wallet" }, walletClientType: "brave_wallet" };
-      connectedWallets.current = [brave as unknown as typeof wallet, consoleMetaMask];
-      try {
-        const renderer = await render();
-        const addAccountButtons = renderer.root.findAll(
-          (node) => node.type === "button" && JSON.stringify(node.props.children).includes("Add another"),
-        );
-
-        expect(addAccountButtons).toHaveLength(1);
-        expect(JSON.stringify(addAccountButtons[0]?.props.children)).toContain("MetaMask");
-        expect(button(renderer, "Connect another wallet")).toBeDefined();
       } finally {
         connectedWallets.current = [wallet];
       }
