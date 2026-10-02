@@ -21,7 +21,13 @@ vi.mock("@filecoin-pay/ui/components/dropdown-menu", () => ({
 const privy = vi.hoisted(() => ({
   authenticated: false,
   exportWallet: vi.fn(async () => undefined),
-  wallets: [] as { address: string; connectorType: string; walletClientType: string; disconnect: () => void }[],
+  wallets: [] as {
+    address: string;
+    connectorType: string;
+    walletClientType: string;
+    meta: { name: string };
+    disconnect: () => void;
+  }[],
 }));
 
 vi.mock("@privy-io/react-auth", () => ({
@@ -81,7 +87,15 @@ describe("Balance", () => {
 
   it("offers the key export only for a Privy embedded wallet, and asks Privy for that wallet's key", async () => {
     privy.authenticated = true;
-    privy.wallets = [{ address: ADDRESS, connectorType: "embedded", walletClientType: "privy", disconnect: vi.fn() }];
+    privy.wallets = [
+      {
+        address: ADDRESS,
+        connectorType: "embedded",
+        walletClientType: "privy",
+        meta: { name: "Privy Wallet" },
+        disconnect: vi.fn(),
+      },
+    ];
     const renderer = render();
 
     const exportItem = menuItem(renderer, "Export key");
@@ -89,6 +103,7 @@ describe("Balance", () => {
     await act(async () => exportItem?.props.onClick());
     expect(privy.exportWallet).toHaveBeenCalledWith({ address: ADDRESS });
     expect(menuItem(renderer, "Log out")).toBeDefined();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Filecoin Pay wallet");
   });
 
   it("hides the key export for an external wallet", () => {
@@ -97,14 +112,22 @@ describe("Balance", () => {
         address: "0x2222222222222222222222222222222222222222",
         connectorType: "embedded",
         walletClientType: "privy",
+        meta: { name: "Privy Wallet" },
         disconnect: vi.fn(),
       },
-      { address: ADDRESS, connectorType: "injected", walletClientType: "metamask", disconnect: vi.fn() },
+      {
+        address: ADDRESS,
+        connectorType: "injected",
+        walletClientType: "metamask",
+        meta: { name: "MetaMask" },
+        disconnect: vi.fn(),
+      },
     ];
     const renderer = render();
 
     expect(menuItem(renderer, "Export key")).toBeUndefined();
     expect(menuItem(renderer, "Log out")).toBeDefined();
+    expect(JSON.stringify(renderer.toJSON())).toContain("MetaMask");
   });
 
   it("opens the shared funding host from the wallet menu", () => {

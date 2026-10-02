@@ -29,7 +29,7 @@ test("logging in with a different identity after logout reaches the console, not
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "second@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -42,7 +42,7 @@ test("logging out and back in with the same identity reconnects without getting 
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -60,7 +60,7 @@ test("an extension account switch while idle moves the console to the new accoun
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const first = await consoleAccount(page);
 
@@ -92,7 +92,7 @@ test("an account switch closes a form opened for the previous account", async ({
   const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
   await stubAccountBackgroundRequests(page);
   await page.goto(link);
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await page.getByRole("button", { name: "Review & authorize" }).click();
   const first = await consoleAccount(page);
   const [start] = first.split("...");
@@ -108,12 +108,12 @@ test("after the site's access is revoked, Disconnect leaves the console", async 
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:revoke-extension")));
   await expect(page.getByRole("heading", { name: "Reconnect your wallet" })).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
 
-  await expect(page.getByRole("button", { name: "Connect a wallet without an account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect existing wallet" })).toBeVisible();
 });
