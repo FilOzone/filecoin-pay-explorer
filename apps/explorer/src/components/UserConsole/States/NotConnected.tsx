@@ -2,17 +2,13 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useConnection } from "wagmi";
 import { CustomConnectButton } from "@/components/shared";
 import { getWalletEntryState } from "@/components/shared/CustomConnectButton/state";
-import { useActiveWalletGuard } from "@/components/UserConsole/ActiveWalletGuardContext";
 
 const NotConnected = () => {
   const { ready, authenticated, error } = usePrivy();
   const { ready: walletsReady } = useWallets();
-  const { isConnected } = useConnection();
-  const { isExiting } = useActiveWalletGuard();
-  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated, isConnected, isExiting });
+  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated });
 
   if (!error && walletEntryState === "loading") return <LoadingStateCard message='Loading wallet...' />;
 
