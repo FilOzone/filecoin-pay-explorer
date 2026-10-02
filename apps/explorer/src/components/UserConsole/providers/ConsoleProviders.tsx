@@ -1,11 +1,10 @@
 "use client";
 
 import { type PrivyClientConfig, PrivyProvider } from "@privy-io/react-auth";
-import { WagmiProvider } from "@privy-io/wagmi";
-import { ActiveWalletGuardProvider } from "@/components/UserConsole/ActiveWalletGuardContext";
 import { mainnet } from "@/constants/chains";
 import { SynapseProvider } from "@/context/Synapse";
 import { config } from "@/services/wagmi/config";
+import { ConsoleAccountProvider } from "./ConsoleAccountContext";
 import { FundingLaunchProvider } from "./FundingLaunchContext";
 import { TopUpActivityProvider } from "./TopUpActivityContext";
 
@@ -35,15 +34,13 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
-      <WagmiProvider config={config}>
-        <ActiveWalletGuardProvider>
-          <SynapseProvider>
-            <TopUpActivityProvider>
-              <FundingLaunchProvider>{children}</FundingLaunchProvider>
-            </TopUpActivityProvider>
-          </SynapseProvider>
-        </ActiveWalletGuardProvider>
-      </WagmiProvider>
+      <ConsoleAccountProvider>
+        <SynapseProvider>
+          <TopUpActivityProvider>
+            <FundingLaunchProvider>{children}</FundingLaunchProvider>
+          </TopUpActivityProvider>
+        </SynapseProvider>
+      </ConsoleAccountProvider>
     </PrivyProvider>
   );
 };
