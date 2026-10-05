@@ -339,17 +339,6 @@ describe("AddServiceDialog", () => {
     act(() => mocks.dialogOpenChange?.(false));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.dialogContentProps?.showCloseButton).toBe(false);
-    const preventEscape = vi.fn();
-    const preventOutside = vi.fn();
-    const { onEscapeKeyDown, onPointerDownOutside } = mocks.dialogContentProps as Record<
-      string,
-      (event: { preventDefault: () => void }) => void
-    >;
-    act(() => {
-      onEscapeKeyDown({ preventDefault: preventEscape });
-      onPointerDownOutside({ preventDefault: preventOutside });
-    });
-    expect([preventEscape.mock.calls.length, preventOutside.mock.calls.length]).toEqual([1, 1]);
     const cancel = renderer.root
       .findAllByProps({ "data-variant": "ghost" })
       .find((button) => button.children.includes("Cancel"));

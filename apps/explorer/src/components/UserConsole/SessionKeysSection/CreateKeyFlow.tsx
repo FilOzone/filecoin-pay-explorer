@@ -375,6 +375,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   const handleOpenChange = (next: boolean) => {
+    // A wallet's own dialog (Privy's) sits outside this one: clicking Approve or All Done there must not
+    // dismiss the attempt in flight.
+    if (!next && isBusy) return;
     if (!next && step === "reveal" && generated) {
       // Every dismissal path except the explicit Done button warns first:
       // once this dialog closes, the secret is gone for good.
@@ -462,17 +465,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className='sm:max-w-xl max-h-[85vh] overflow-y-auto'
-        // A wallet's own dialog (Privy's) sits outside this one: clicking Approve or All Done there must not
-        // dismiss the attempt in flight.
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-      >
+      <DialogContent className='sm:max-w-xl max-h-[85vh] overflow-y-auto'>
         {step === "form" && (
           <>
             <DialogHeader>
