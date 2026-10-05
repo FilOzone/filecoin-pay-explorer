@@ -1,5 +1,6 @@
 "use client";
 
+import { useRadixLayerCloseGuard } from "@filecoin-pay/ui/hooks/use-radix-layer-close-guard";
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import {
   Description,
@@ -67,8 +68,9 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left";
 }) {
   const { open, onOpenChange } = useSheetContext();
+  const onClose = useRadixLayerCloseGuard(() => onOpenChange(false));
   return (
-    <HeadlessDialog open={open} onClose={() => onOpenChange(false)} className='relative z-50'>
+    <HeadlessDialog open={open} onClose={onClose} className='relative z-50'>
       <DialogBackdrop
         transition
         data-slot='sheet-overlay'
