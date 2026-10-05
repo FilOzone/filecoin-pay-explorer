@@ -80,6 +80,8 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   const chooseMethod = (method: AddFundsMethod) => {
     if (method === "card") {
+      // The picker stays open: it shows the purchase status and Start over, and it
+      // refuses to close while the purchase is busy so Privy's modal above it cannot dismiss it.
       void card.buyWithCard();
       return;
     }
@@ -90,9 +92,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   return (
     <>
-      {/* Remove the picker's scroll/focus lock while Privy owns login or checkout.
-          Keep the purchase hook mounted and the launch intent so the picker returns afterward. */}
-      {isMainnet && !card.isOpening ? (
+      {isMainnet ? (
         <AddFundsDialog
           cardLabel={card.label}
           cardStatus={card.statusMessage}

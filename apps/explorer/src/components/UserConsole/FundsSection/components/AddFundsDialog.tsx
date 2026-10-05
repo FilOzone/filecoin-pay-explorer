@@ -102,7 +102,9 @@ export function AddFundsDialog({
   squidAvailable,
   squidDisabledReason,
 }: AddFundsDialogProps) {
-  // Keep the purchase status visible while waiting for funds to arrive.
+  // Privy's funding modal opens above this picker. While the purchase is busy, Escape, a click
+  // in that modal or the close button must not dismiss the picker, which carries the purchase
+  // status and Start over.
   const handleOpenChange = (next: boolean) => {
     if (!next && isBusy) return;
     onOpenChange(next);

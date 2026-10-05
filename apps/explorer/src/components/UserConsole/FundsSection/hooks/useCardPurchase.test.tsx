@@ -155,55 +155,10 @@ describe("useCardPurchase", () => {
     // Only the already-connected wallet may authenticate here; email or Google would be a different identity.
     expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
     expect(privy.fund).not.toHaveBeenCalled();
-    expect(latest.isOpening).toBe(true);
     await act(async () => {
       await privy.onLoginComplete?.();
     });
     expect(onPurchased).toHaveBeenCalledWith(2n);
-    expect(latest.isOpening).toBe(false);
-  });
-
-  it("ends the opening state when login is cancelled", async () => {
-    privy.authenticated = false;
-    await act(async () => {
-      create(<Harness />);
-    });
-    act(() => {
-      void latest.buyWithCard();
-    });
-    expect(latest.isOpening).toBe(true);
-    act(() => privy.onLoginError?.());
-    expect(latest.isOpening).toBe(false);
-    expect(latest.isBusy).toBe(false);
-    expect(privy.fund).not.toHaveBeenCalled();
-  });
-
-  it("ends the opening state while a submitted purchase still waits for funds", async () => {
-    let resolveBalance!: (balance: bigint) => void;
-    chain.readContract.mockResolvedValueOnce(10n).mockImplementationOnce(
-      () =>
-        new Promise<bigint>((resolve) => {
-          resolveBalance = resolve;
-        }),
-    );
-    privy.fund.mockResolvedValue({ status: "submitted" });
-    await act(async () => {
-      create(<Harness />);
-    });
-
-    let purchase!: Promise<void>;
-    await act(async () => {
-      purchase = latest.buyWithCard() as Promise<void>;
-    });
-    expect(latest.isOpening).toBe(false);
-    expect(latest.isBusy).toBe(true);
-    expect(latest.statusMessage).toBe("Waiting for Base USDC to arrive…");
-
-    await act(async () => {
-      resolveBalance(25n);
-      await purchase;
-    });
-    expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
   it("does not continue login after the wallet changes", async () => {
@@ -336,14 +291,12 @@ describe("useCardPurchase", () => {
     });
     expect(privy.fund).toHaveBeenCalledOnce();
     expect(stored.size).toBe(0);
-    expect(latest.isOpening).toBe(true);
 
     await act(async () => {
       rejectFunding(new Error("User exited flow"));
       await purchase;
     });
     expect(latest.label).toBe("Buy USDC with card");
-    expect(latest.isOpening).toBe(false);
     expect(stored.size).toBe(0);
 
     await act(async () => renderer.unmount());
@@ -402,7 +355,6 @@ describe("useCardPurchase", () => {
     privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));
     await act(async () => latest.buyWithCard());
     expect(toast.error).toHaveBeenCalledWith("Card purchase failed", { description: "Provider unavailable" });
-    expect(latest.isOpening).toBe(false);
 
     vi.mocked(toast.error).mockClear();
     privy.fund.mockRejectedValueOnce(undefined);
