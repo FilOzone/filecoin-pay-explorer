@@ -375,8 +375,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   const handleOpenChange = (next: boolean) => {
-    // A wallet's own dialog (Privy's) sits outside this one: clicking Approve or All Done there must not
-    // dismiss the attempt in flight.
+    // Dismissing while busy would abandon the attempt in flight.
     if (!next && isBusy) return;
     if (!next && step === "reveal" && generated) {
       // Every dismissal path except the explicit Done button warns first:

@@ -81,7 +81,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const chooseMethod = (method: AddFundsMethod) => {
     if (method === "card") {
       // The picker stays open: it shows the purchase status and Start over, and it
-      // refuses to close while the purchase is busy so Privy's modal above it cannot dismiss it.
+      // refuses to close while the purchase is busy.
       void card.buyWithCard();
       return;
     }
