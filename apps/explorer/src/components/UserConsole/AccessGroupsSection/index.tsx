@@ -38,12 +38,6 @@ type MockMember = {
    * P0 open question (PRD §15) — this column shows the slot, not a design.
    */
   fetchToken: "issued" | "none";
-  /**
-   * Write is PER-IDENTITY, never a group property: it is this identity's own
-   * SessionKeyRegistry grant (the server checks the exact signer), cannot be
-   * handed onward by the member, and is managed under Session Keys.
-   */
-  ownWriteKey: string | null;
 };
 
 type MockGroup = {
@@ -67,7 +61,6 @@ const INITIAL_GROUPS: MockGroup[] = [
         kind: "agent",
         added: "Sep 28",
         fetchToken: "issued",
-        ownWriteKey: "0x5929…c41a",
       },
       {
         label: "anna (research)",
@@ -75,7 +68,6 @@ const INITIAL_GROUPS: MockGroup[] = [
         kind: "person",
         added: "Sep 28",
         fetchToken: "none",
-        ownWriteKey: null,
       },
       {
         label: "reviewer (external)",
@@ -83,7 +75,6 @@ const INITIAL_GROUPS: MockGroup[] = [
         kind: "person",
         added: "Oct 05",
         fetchToken: "issued",
-        ownWriteKey: null,
       },
     ],
   },
@@ -99,7 +90,6 @@ const INITIAL_GROUPS: MockGroup[] = [
         kind: "person",
         added: "Oct 02",
         fetchToken: "issued",
-        ownWriteKey: null,
       },
     ],
   },
@@ -241,10 +231,11 @@ const GroupDetail = ({
         <MockChip />
       </div>
 
-      <Notice tone='info' title='Three independent axes — a member can hold any combination.'>
+      <Notice tone='info' title='Read access only — two things a member can hold here.'>
         <b>Decrypt</b> (this group&apos;s key — what membership grants) · <b>Fetch restricted</b> (a /download token for
-        pieces the owner retrieval-restricted; open pieces need nothing) · <b>Write</b> (the identity&apos;s OWN session
-        key — never granted by the group, never transferable to others; the registry checks the exact signer).
+        pieces the owner retrieval-restricted; open pieces need nothing).{" "}
+        <b>Write is deliberately absent from this page</b> — it is a per-identity SessionKeyRegistry credential managed
+        under Session Keys, never a group property.
       </Notice>
 
       <table className='w-full text-sm'>
@@ -256,14 +247,14 @@ const GroupDetail = ({
             <th className='py-2 pr-3'>Added</th>
             <th className='py-2 pr-3'>Decrypt</th>
             <th className='py-2 pr-3'>Fetch restricted</th>
-            <th className='py-2 pr-3'>Write (own credential)</th>
+
             <th className='py-2' />
           </tr>
         </thead>
         <tbody>
           {group.members.length === 0 && (
             <tr>
-              <td colSpan={8} className='py-4 text-center text-xs text-muted-foreground'>
+              <td colSpan={7} className='py-4 text-center text-xs text-muted-foreground'>
                 No members yet. This group is just a name so far — its key becomes real at the first member grant or the
                 first upload under the label. Deleting it now would lose nothing.
               </td>
@@ -290,15 +281,6 @@ const GroupDetail = ({
                     no token — can&apos;t fetch this group&apos;s restricted pieces ({group.restricted})
                     <span className='text-muted-foreground'> — no action exists yet: token contract open, PRD §15</span>
                   </span>
-                )}
-              </td>
-              <td className='py-2 pr-3 text-xs'>
-                {m.ownWriteKey ? (
-                  <span>
-                    own session key <span className='font-mono'>{m.ownWriteKey}</span>
-                  </span>
-                ) : (
-                  <span className='text-muted-foreground'>none</span>
                 )}
               </td>
               <td className='py-2 text-right'>
@@ -427,7 +409,6 @@ const AccessGroupsSection = () => {
                           kind: "person",
                           added: "today",
                           fetchToken: "none",
-                          ownWriteKey: null,
                         },
                       ],
                     }
