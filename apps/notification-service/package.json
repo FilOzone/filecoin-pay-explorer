@@ -39,7 +39,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@filecoin-pay/configs": "workspace:^",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "drizzle-kit": "1.0.0-rc.4",
     "react": "^19.3.0",
