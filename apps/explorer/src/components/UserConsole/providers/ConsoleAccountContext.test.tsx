@@ -205,8 +205,16 @@ describe("KeepConsoleWallet", () => {
     expect(mocks.logout).toHaveBeenCalled();
   });
 
-  it("keeps an email login while the console uses a wallet it did not verify", () => {
+  it("ends an email login whose wallet is not the console account", () => {
     mocks.user = { linkedAccounts: [{ type: "email" }, { type: "wallet", ...EMBEDDED }], wallet: EMBEDDED };
+    render();
+    act(() => latest.selectAccount(METAMASK));
+
+    expect(mocks.logout).toHaveBeenCalled();
+  });
+
+  it("keeps an email login while its embedded wallet is still being created", () => {
+    mocks.user = { linkedAccounts: [{ type: "email" }] };
     render();
     act(() => latest.selectAccount(METAMASK));
 

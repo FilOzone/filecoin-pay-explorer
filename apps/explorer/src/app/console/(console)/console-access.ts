@@ -82,11 +82,14 @@ export type ReadyConnection = { address: string; chainId: number };
  */
 export const keepReadyThroughResync = (
   accessState: ConsoleAccessState,
+  accountState: ConsoleAccountState,
   lastReady: ReadyConnection | null,
   address: string | undefined,
   chainId: number | undefined,
 ): ConsoleAccessState => {
-  if (accessState !== "reconnecting" || lastReady === null) return accessState;
+  // Only the console account's own re-sync counts: while wagmi still holds a previous account,
+  // pages for the new one must not mount.
+  if (accessState !== "reconnecting" || accountState !== "active" || lastReady === null) return accessState;
   return lastReady.address.toLowerCase() === address?.toLowerCase() && lastReady.chainId === chainId
     ? "ready"
     : accessState;

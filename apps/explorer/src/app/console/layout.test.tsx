@@ -231,7 +231,7 @@ describe("same-wallet re-sync", () => {
   const lastReady = { address: WALLET, chainId: 314 };
 
   it("stays ready when a reconnect keeps the last ready wallet and chain", () => {
-    expect(keepReadyThroughResync("reconnecting", lastReady, WALLET, 314)).toBe("ready");
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, 314)).toBe("ready");
   });
 
   it.each([
@@ -240,11 +240,16 @@ describe("same-wallet re-sync", () => {
     ["the account changed", lastReady, OTHER, 314],
     ["the chain is not known yet", lastReady, WALLET, undefined],
   ])("still shows reconnecting when %s", (_case, previous, address, chainId) => {
-    expect(keepReadyThroughResync("reconnecting", previous, address, chainId)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "active", previous, address, chainId)).toBe("reconnecting");
+  });
+
+  // The console account changed, but Privy has not moved wagmi off the previous account yet.
+  it("still shows reconnecting while wagmi holds an account other than the console account", () => {
+    expect(keepReadyThroughResync("reconnecting", "connecting", lastReady, WALLET, 314)).toBe("reconnecting");
   });
 
   it("passes every other state through", () => {
-    expect(keepReadyThroughResync("not-connected", lastReady, WALLET, 314)).toBe("not-connected");
+    expect(keepReadyThroughResync("not-connected", "active", lastReady, WALLET, 314)).toBe("not-connected");
   });
 
   it("remembers the wallet and chain a ready console showed", () => {
