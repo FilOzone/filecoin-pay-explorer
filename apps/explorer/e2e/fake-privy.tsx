@@ -267,6 +267,12 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("fake-privy:switch-account", onSwitch);
   }, [extension]);
   useEffect(() => {
+    // Like switching networks in the extension; the console sees it through the provider's chainChanged.
+    const onSwitchChain = (event: Event) => void extension.current().switchChain((event as CustomEvent<number>).detail);
+    window.addEventListener("fake-privy:switch-chain", onSwitchChain);
+    return () => window.removeEventListener("fake-privy:switch-chain", onSwitchChain);
+  }, [extension]);
+  useEffect(() => {
     // With no accounts left, Privy drops the extension's wallet.
     const onRevoke = () => {
       extension.revoke();
