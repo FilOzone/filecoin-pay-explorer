@@ -280,7 +280,9 @@ const GroupDetail = ({
       </table>
       <p className='text-xs text-muted-foreground'>
         Coverage: {group.covers} · {group.restricted} — open pieces are fetchable by anyone (decrypt still requires the
-        group key).
+        group key). Counts as reported at upload: proposed source is an indexed scope commitment (salted label hash) in
+        on-chain piece metadata — never the raw group name; the envelope header stays ground truth. (Open: PRD §15
+        &quot;Group coverage index&quot;.)
       </p>
 
       <div className='rounded-lg border p-4'>
