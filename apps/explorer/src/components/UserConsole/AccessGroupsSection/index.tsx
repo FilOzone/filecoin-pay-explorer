@@ -8,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Notice } from "@/components/shared/Notice";
 
@@ -20,6 +22,9 @@ import { Notice } from "@/components/shared/Notice";
  * model (PRD rev 2026-10-06): account master key -> group (scope) keys ->
  * piece keys. Groups are user groups/roles — never folders.
  */
+
+/** Reuse detection must survive case tricks and Unicode homoglyphs (journey finding P1): NFKC-fold then casefold. */
+const normalizeLabel = (label: string) => label.trim().normalize("NFKC").toLowerCase();
 
 type MockMember = {
   label: string;
@@ -139,7 +144,7 @@ const StopIssuingDialog = ({
         <Button variant='ghost' onClick={() => onClose(false)}>
           Cancel
         </Button>
-        <Button variant='primary' className='bg-red-600 hover:bg-red-700' onClick={() => onClose(true)}>
+        <Button variant='primary' onClick={() => onClose(true)}>
           Stop issuing
         </Button>
       </DialogFooter>
@@ -151,18 +156,21 @@ const CreateGroupDialog = ({
   open,
   existingNames,
   onClose,
+  onOpenExisting,
 }: {
   open: boolean;
   existingNames: string[];
   onClose: (name: string | null) => void;
+  onOpenExisting: (name: string) => void;
 }) => {
   const [name, setName] = useState("");
-  const isReuse = existingNames.includes(name.trim());
+  const existingMatch = existingNames.find((n) => normalizeLabel(n) === normalizeLabel(name));
+  const isReuse = name.trim() !== "" && existingMatch !== undefined;
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose(null)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create access group</DialogTitle>
+          <DialogTitle>Create group</DialogTitle>
           <DialogDescription>
             A group is a named key. Everything you or your agents encrypt under the group&apos;s name is readable by its
             members — across data sets. Pick a unique, specific name. Creating mints nothing and signs nothing: the key
@@ -172,15 +180,29 @@ const CreateGroupDialog = ({
         <input
           type='text'
           value={name}
+          maxLength={64}
           onChange={(e) => setName(e.target.value)}
           placeholder='group name — e.g. research-partners-2026'
           className='w-full rounded-lg border px-3 py-2 font-mono text-sm'
         />
         {isReuse && (
-          <Notice tone='warn' title={`"${name.trim()}" already exists.`}>
-            Creating it again would re-create the same key — everyone who ever held it would read the new data. Add
-            members to the existing group instead, or pick a different name. (Best-effort check: the console can only
-            see groups with uploaded data or console records.)
+          <Notice tone='warn' title={`A group matching "${name.trim()}" already exists ("${existingMatch}").`}>
+            <p>
+              Creating it again would re-create the same key — everyone who ever held it would read the new data.
+              (Matching ignores case and Unicode look-alikes; the real canonicalization rules are a keysmith-spec item.
+              Best-effort check: the console can only see groups with uploaded data or console records.)
+            </p>
+            <Button
+              variant='ghost'
+              size='compact'
+              className='mt-2'
+              onClick={() => {
+                onClose(null);
+                onOpenExisting(existingMatch ?? name.trim());
+              }}
+            >
+              Open &quot;{existingMatch}&quot; instead →
+            </Button>
           </Notice>
         )}
         <DialogFooter>
@@ -239,10 +261,18 @@ const GroupDetail = ({
           </tr>
         </thead>
         <tbody>
+          {group.members.length === 0 && (
+            <tr>
+              <td colSpan={8} className='py-4 text-center text-xs text-muted-foreground'>
+                No members yet. This group is just a name so far — its key becomes real at the first member grant or the
+                first upload under the label. Deleting it now would lose nothing.
+              </td>
+            </tr>
+          )}
           {group.members.map((m) => (
             <tr key={m.key} className='border-b'>
               <td className='py-2 pr-3 font-medium'>{m.label}</td>
-              <td className='py-2 pr-3 font-mono text-xs'>{m.key}</td>
+              <td className='max-w-[220px] break-all py-2 pr-3 font-mono text-xs'>{m.key}</td>
               <td className='py-2 pr-3'>
                 <KindPill kind={m.kind} />
               </td>
@@ -257,7 +287,8 @@ const GroupDetail = ({
                   </span>
                 ) : (
                   <span className='text-amber-700'>
-                    no token — can&apos;t fetch the restricted {group.restricted.split(" ")[0]} pieces
+                    no token — can&apos;t fetch this group&apos;s restricted pieces ({group.restricted})
+                    <span className='text-muted-foreground'> — no action exists yet: token contract open, PRD §15</span>
                   </span>
                 )}
               </td>
@@ -299,7 +330,9 @@ const GroupDetail = ({
           <Button
             variant='primary'
             size='compact'
-            disabled={memberKey.trim() === ""}
+            disabled={
+              memberKey.trim() === "" || group.members.some((m) => normalizeLabel(m.key) === normalizeLabel(memberKey))
+            }
             onClick={() => {
               onAddMember(memberKey.trim());
               setMemberKey("");
@@ -312,6 +345,19 @@ const GroupDetail = ({
             nothing on chain
           </span>
         </div>
+        {group.members.some((m) => normalizeLabel(m.key) === normalizeLabel(memberKey)) && memberKey.trim() !== "" && (
+          <p className='mt-2 text-xs text-amber-700'>
+            Already a member — each key appears once; re-adding changes nothing.
+          </p>
+        )}
+        <p className='mt-2 text-xs text-muted-foreground'>
+          Adding an <b>agent</b>? Agents receive group keys through the session-key pairing flow — re-open the
+          agent&apos;s authorize link from{" "}
+          <Link href='/console/session-keys' className='underline'>
+            Session Keys
+          </Link>
+          . This box is for people&apos;s public keys.
+        </p>
       </div>
 
       <Notice tone='warn' title='"Stop issuing" is membership-going-forward, not revocation.'>
@@ -329,9 +375,19 @@ const GroupDetail = ({
 
 const AccessGroupsSection = () => {
   const [groups, setGroups] = useState<MockGroup[]>(INITIAL_GROUPS);
-  const [selected, setSelected] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [stopTarget, setStopTarget] = useState<{ group: string; member: MockMember } | null>(null);
+
+  // Selection lives in the URL (?group=) so browser Back returns to the list
+  // and F5 keeps the detail open (journey finding P1/J7) — the real build gets
+  // a route (/console/access/<group>, per the wireframes); a query param is
+  // the honest mock of that contract.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const selected = searchParams.get("group");
+  const openGroup = (name: string | null) =>
+    router.push(name === null ? pathname : `${pathname}?group=${encodeURIComponent(name)}`);
 
   const selectedGroup = groups.find((g) => g.name === selected);
 
@@ -339,13 +395,15 @@ const AccessGroupsSection = () => {
     <div className='flex flex-col gap-4'>
       <Notice tone='warn' title='Mock preview — nothing on this page is real.'>
         Fabricated data, no keys, no chain, no backend. POC for the encryption group model (PRD rev 2026-10-06): a group
-        is a named key derived from your account master key; members hold wrapped copies.
+        is a named key derived from your account master key; members hold wrapped copies. Not in this POC (reviewed in
+        the wireframes instead): the pairing flow&apos;s &quot;Enable encrypted uploads&quot; step, dataset-page group
+        links and the restrict-retrieval dialog, and the Session Keys reverse echo.
       </Notice>
 
       {selectedGroup ? (
         <GroupDetail
           group={selectedGroup}
-          onBack={() => setSelected(null)}
+          onBack={() => openGroup(null)}
           onStopIssuing={(member) => setStopTarget({ group: selectedGroup.name, member })}
           onAddMember={(key) =>
             setGroups((gs) =>
@@ -408,7 +466,7 @@ const AccessGroupsSection = () => {
                   <td className='py-2 pr-3'>{g.covers}</td>
                   <td className='py-2 pr-3'>{g.created}</td>
                   <td className='py-2 text-right'>
-                    <Button variant='ghost' size='compact' onClick={() => setSelected(g.name)}>
+                    <Button variant='ghost' size='compact' onClick={() => openGroup(g.name)}>
                       Open
                     </Button>
                   </td>
@@ -428,6 +486,7 @@ const AccessGroupsSection = () => {
       )}
 
       <CreateGroupDialog
+        onOpenExisting={(name) => openGroup(name)}
         open={createOpen}
         existingNames={groups.map((g) => g.name)}
         onClose={(name) => {
@@ -437,7 +496,7 @@ const AccessGroupsSection = () => {
               ...gs,
               { name, members: [], covers: "0 pieces", restricted: "nothing restricted yet", created: "today" },
             ]);
-            setSelected(name);
+            openGroup(name);
           }
         }}
       />
