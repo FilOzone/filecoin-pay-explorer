@@ -341,8 +341,9 @@ const GroupDetail = ({
             Add member
           </Button>
           <span className='text-xs text-muted-foreground'>
-            no wallet prompt — the group key derives from your keystore in page memory and wraps to the new member;
-            nothing on chain
+            their public key is only the envelope — the group key itself stays a pure derivation from your master key,
+            unchanged by membership; this seals a copy of it that only they can open. No wallet prompt, nothing on
+            chain.
           </span>
         </div>
         {group.members.some((m) => normalizeLabel(m.key) === normalizeLabel(memberKey)) && memberKey.trim() !== "" && (
