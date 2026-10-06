@@ -21,9 +21,10 @@ describe("console account", () => {
   const external = { address: ACCOUNT, walletClientType: "metamask" };
   const embedded = { address: ACCOUNT, walletClientType: "privy" };
 
-  it("waits for Privy's wallets, even with a stored account, so hydration renders the same card", () => {
+  it("waits for Privy's wallets before hydration, even with no account, so the server and client render the same card", () => {
     expect(
       getConsoleAccountState({
+        hydrated: false,
         privyFailed: false,
         account: external,
         address: ACCOUNT,
@@ -33,6 +34,7 @@ describe("console account", () => {
     ).toBe("connecting");
     expect(
       getConsoleAccountState({
+        hydrated: false,
         privyFailed: false,
         account: null,
         address: undefined,
@@ -42,9 +44,36 @@ describe("console account", () => {
     ).toBe("connecting");
   });
 
+  it("waits for Privy's wallets while a stored account is set", () => {
+    expect(
+      getConsoleAccountState({
+        hydrated: true,
+        privyFailed: false,
+        account: external,
+        address: undefined,
+        wallets: [],
+        walletsReady: false,
+      }),
+    ).toBe("connecting");
+  });
+
+  it("leaves the connecting card once an exit clears the account, even if wallets never load", () => {
+    expect(
+      getConsoleAccountState({
+        hydrated: true,
+        privyFailed: false,
+        account: null,
+        address: undefined,
+        wallets: [],
+        walletsReady: false,
+      }),
+    ).toBe("none");
+  });
+
   it("shows the gate, which explains the failure, when Privy cannot start", () => {
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: true,
         account: external,
         address: undefined,
@@ -56,13 +85,21 @@ describe("console account", () => {
 
   it("shows the gate without an account", () => {
     expect(
-      getConsoleAccountState({ privyFailed: false, account: null, address: OTHER, wallets: [], walletsReady: true }),
+      getConsoleAccountState({
+        hydrated: true,
+        privyFailed: false,
+        account: null,
+        address: OTHER,
+        wallets: [],
+        walletsReady: true,
+      }),
     ).toBe("none");
   });
 
   it("is active only while wagmi is on the console account", () => {
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: external,
         address: ACCOUNT.toLowerCase(),
@@ -76,6 +113,7 @@ describe("console account", () => {
     // wagmi follows the extension before Privy drops the old account, so the account is still listed.
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: external,
         address: OTHER,
@@ -88,6 +126,7 @@ describe("console account", () => {
   it("waits while the console follows the extension to its new account", () => {
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: external,
         address: undefined,
@@ -100,6 +139,7 @@ describe("console account", () => {
   it("reports the account as unavailable when its extension exposes no account", () => {
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: external,
         address: undefined,
@@ -109,6 +149,7 @@ describe("console account", () => {
     ).toBe("unavailable");
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: external,
         address: undefined,
@@ -121,6 +162,7 @@ describe("console account", () => {
   it("treats a missing embedded wallet as not ready yet, since it cannot switch accounts", () => {
     expect(
       getConsoleAccountState({
+        hydrated: true,
         privyFailed: false,
         account: embedded,
         address: undefined,
@@ -231,7 +273,7 @@ describe("same-wallet re-sync", () => {
   const lastReady = { address: WALLET, chainId: 314 };
 
   it("stays ready when a reconnect keeps the last ready wallet and chain", () => {
-    expect(keepReadyThroughResync("reconnecting", lastReady, WALLET, 314)).toBe("ready");
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, 314)).toBe("ready");
   });
 
   it.each([
@@ -240,11 +282,16 @@ describe("same-wallet re-sync", () => {
     ["the account changed", lastReady, OTHER, 314],
     ["the chain is not known yet", lastReady, WALLET, undefined],
   ])("still shows reconnecting when %s", (_case, previous, address, chainId) => {
-    expect(keepReadyThroughResync("reconnecting", previous, address, chainId)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "active", previous, address, chainId)).toBe("reconnecting");
+  });
+
+  // The console account changed, but Privy has not moved wagmi off the previous account yet.
+  it("still shows reconnecting while wagmi holds an account other than the console account", () => {
+    expect(keepReadyThroughResync("reconnecting", "connecting", lastReady, WALLET, 314)).toBe("reconnecting");
   });
 
   it("passes every other state through", () => {
-    expect(keepReadyThroughResync("not-connected", lastReady, WALLET, 314)).toBe("not-connected");
+    expect(keepReadyThroughResync("not-connected", "active", lastReady, WALLET, 314)).toBe("not-connected");
   });
 
   it("remembers the wallet and chain a ready console showed", () => {

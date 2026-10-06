@@ -16,12 +16,14 @@ export type ConsoleAccessState =
 export const getConsoleAccountState = ({
   account,
   address,
+  hydrated,
   privyFailed,
   wallets,
   walletsReady,
 }: {
   account: ConsoleAccount | null;
   address: string | undefined;
+  hydrated: boolean;
   privyFailed: boolean;
   wallets: readonly { address: string; walletClientType: string }[];
   walletsReady: boolean;
@@ -29,7 +31,8 @@ export const getConsoleAccountState = ({
   // The gate explains that login is unavailable; waiting for wallets would load forever.
   if (privyFailed) return "none";
   // Privy's wallets load after hydration, so checking them first keeps the server and first client render identical.
-  if (!walletsReady) return "connecting";
+  // Once hydrated, a cleared account (an exit) has nothing to wait for, even if the wallets never load.
+  if (!walletsReady && !(hydrated && !account)) return "connecting";
   if (!account) return "none";
   const accountAddress = account.address.toLowerCase();
   if (address?.toLowerCase() === accountAddress) return "active";
@@ -82,11 +85,14 @@ export type ReadyConnection = { address: string; chainId: number };
  */
 export const keepReadyThroughResync = (
   accessState: ConsoleAccessState,
+  accountState: ConsoleAccountState,
   lastReady: ReadyConnection | null,
   address: string | undefined,
   chainId: number | undefined,
 ): ConsoleAccessState => {
-  if (accessState !== "reconnecting" || lastReady === null) return accessState;
+  // Only the console account's own re-sync counts: while wagmi still holds a previous account,
+  // pages for the new one must not mount.
+  if (accessState !== "reconnecting" || accountState !== "active" || lastReady === null) return accessState;
   return lastReady.address.toLowerCase() === address?.toLowerCase() && lastReady.chainId === chainId
     ? "ready"
     : accessState;

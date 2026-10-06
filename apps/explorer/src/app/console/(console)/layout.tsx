@@ -1,7 +1,7 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
@@ -48,16 +48,23 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { ready: walletsReady, wallets } = useWallets();
   const { error: privyError } = usePrivy();
   const { isTopUpActive } = useTopUpActivity();
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [lastReady, setLastReady] = useState<ReadyConnection | null>(null);
   const accountState = getConsoleAccountState({
     account,
     address,
+    hydrated,
     privyFailed: Boolean(privyError),
     wallets,
     walletsReady,
   });
   const walletAccessState = keepReadyThroughResync(
     getConsoleAccessState({ accountState, isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    accountState,
     lastReady,
     address,
     chainId,
