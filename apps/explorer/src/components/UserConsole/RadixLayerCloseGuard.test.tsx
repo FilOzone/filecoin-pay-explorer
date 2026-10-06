@@ -53,14 +53,12 @@ describe("useRadixLayerCloseGuard", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("closes again on the next press once the layer is gone", () => {
+  it("closes on Escape after a press that a Radix layer blocked", () => {
     body.style.pointerEvents = "none";
     fire("pointerdown");
     fire("pointerup");
     vi.runAllTimers();
-    body.style.pointerEvents = "";
-    fire("pointerdown");
-    close();
+    close(); // Escape: Headless closes without a new pointerdown
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
