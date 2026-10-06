@@ -464,10 +464,12 @@ const AccessGroupsSection = () => {
 
           <Notice tone='info' title='Where this data lives — and what clearing your browser costs: nothing.'>
             Keys are never stored anywhere: they derive in page memory from your master key, which the wallet re-creates
-            on demand. Group records (labels, members, dates) live in a backend issuance service — never browser storage
-            — because labels are derivation inputs: lose a used group&apos;s label and the envelope headers of its
-            uploaded pieces still recover it; a never-used group&apos;s lost label loses nothing at all. (Backend state
-            model: open eng question, PRD §15.)
+            on demand. Group records (labels, members, dates) live in THIS browser — the session-keys pattern, no
+            backend, by principle (a server-side member list would hand the operator your collaborator graph). Clearing
+            the browser: group names rebuild from your pieces&apos; own envelope headers (&quot;Sync from data&quot;);
+            member rows are bookkeeping and do not come back — the capability already left with each grant, and cycling
+            is the control. Optional durable backup: an encrypted records manifest stored in your own dataset. (PRD
+            §15.)
           </Notice>
         </>
       )}
