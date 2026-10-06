@@ -165,7 +165,8 @@ const CreateGroupDialog = ({
           <DialogTitle>Create access group</DialogTitle>
           <DialogDescription>
             A group is a named key. Everything you or your agents encrypt under the group&apos;s name is readable by its
-            members — across data sets. Pick a unique, specific name.
+            members — across data sets. Pick a unique, specific name. Creating mints nothing and signs nothing: the key
+            is a pure derivation from your master key, realized at first use (first member, first upload).
           </DialogDescription>
         </DialogHeader>
         <input
@@ -187,7 +188,7 @@ const CreateGroupDialog = ({
             Cancel
           </Button>
           <Button variant='primary' disabled={name.trim() === "" || isReuse} onClick={() => onClose(name.trim())}>
-            Create — sign with wallet
+            Create group
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -304,10 +305,11 @@ const GroupDetail = ({
               setMemberKey("");
             }}
           >
-            Add — sign with wallet
+            Add member
           </Button>
           <span className='text-xs text-muted-foreground'>
-            one re-derive in page memory; the group key wraps to the new member; nothing on chain
+            no wallet prompt — the group key derives from your keystore in page memory and wraps to the new member;
+            nothing on chain
           </span>
         </div>
       </div>
