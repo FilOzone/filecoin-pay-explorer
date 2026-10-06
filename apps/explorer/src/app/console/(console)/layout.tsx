@@ -58,6 +58,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
   });
   const walletAccessState = keepReadyThroughResync(
     getConsoleAccessState({ accountState, isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    accountState,
     lastReady,
     address,
     chainId,
