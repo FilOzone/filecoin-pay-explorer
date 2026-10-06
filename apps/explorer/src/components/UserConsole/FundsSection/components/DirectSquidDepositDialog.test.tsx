@@ -116,7 +116,7 @@ vi.mock("wagmi", () => ({
 }));
 vi.mock("wagmi/actions", () => ({ getAccount: () => ({ address: state.liveRecipient }) }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
-vi.mock("../../TopUpActivityContext", () => ({
+vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({ setTopUpActive: topUp.setActive }),
 }));
 vi.mock("@tanstack/react-query", () => ({

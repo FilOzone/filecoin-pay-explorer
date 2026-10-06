@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
-import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import {
   DirectSquidDepositDialog,

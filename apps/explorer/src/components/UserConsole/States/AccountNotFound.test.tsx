@@ -1,6 +1,6 @@
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { FundingLaunchProvider, useFundingLaunch } from "../FundingLaunchContext";
+import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import AccountNotFound from "./AccountNotFound";
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({

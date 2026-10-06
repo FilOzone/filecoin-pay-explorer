@@ -47,7 +47,7 @@ Keep privileged service calls and non-public configuration on the server. Valida
 Before editing, inspect the closest route, shared layout, component, hook, and co-located tests. Useful starting points are:
 
 - `src/components/shared/SiteLayout.tsx` and `Providers.tsx` — application shell, network context, TanStack Query, tooltips, progress, and toasts
-- `src/components/UserConsole/ConsoleProviders.tsx` — console-only wagmi, RainbowKit, Synapse, and top-up activity state
+- `src/components/UserConsole/providers/` — console-only providers: Privy, the console account and the wagmi connection that follows it, Synapse, and funding state
 - `src/services/grapql/queries.ts` — shared GraphQL documents; keep the existing `grapql` spelling unless a task explicitly includes renaming it
 - `src/hooks/useGraphQLQuery.ts` — network-aware query and infinite-query wrappers
 - `src/constants/chains.ts`, `src/services/wagmi/config.tsx`, and `src/utils/network.ts` — Filecoin and wallet-chain definitions and checks
