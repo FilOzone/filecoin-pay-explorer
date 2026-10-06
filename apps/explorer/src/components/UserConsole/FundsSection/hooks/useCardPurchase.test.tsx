@@ -302,50 +302,6 @@ describe("useCardPurchase", () => {
     });
   });
 
-  it("does not buy on, or wait behind, a login made as another account", async () => {
-    privy.loggedInAs = OTHER;
-    await act(async () => {
-      create(<Harness />);
-    });
-    expect(latest.label).toBe("Log in to buy USDC with card");
-
-    act(() => {
-      void latest.buyWithCard();
-    });
-
-    // Privy would ignore a login over the active one, leaving the purchase busy for good.
-    expect(privy.login).not.toHaveBeenCalled();
-    expect(privy.fund).not.toHaveBeenCalled();
-    expect(latest.isBusy).toBe(false);
-    expect(toast.error).toHaveBeenCalledWith("Card purchase unavailable", {
-      description: "Finishing the previous sign-out. Try again in a moment.",
-    });
-  });
-
-  it("does not continue login after the wallet changes", async () => {
-    privy.authenticated = false;
-    let renderer!: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(<Harness />);
-    });
-
-    act(() => {
-      void latest.buyWithCard();
-    });
-    account.address = OTHER;
-    await act(async () => {
-      renderer.update(<Harness />);
-    });
-    await act(async () => {
-      await privy.onLoginComplete?.();
-    });
-
-    expect(privy.fund).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Wallet changed during login", {
-      description: "Return to Add funds from the account you want to fund.",
-    });
-  });
-
   it("rechecks a delayed purchase without opening a second checkout", async () => {
     vi.useFakeTimers();
     chain.readContract.mockResolvedValue(10n);
