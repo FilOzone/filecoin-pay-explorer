@@ -417,10 +417,12 @@ const AccessGroupsSection = () => {
             </tbody>
           </table>
 
-          <Notice tone='info' title='Where this data lives:'>
-            Membership rows are console bookkeeping (labels, dates) — the capability is the wrapped key already
-            delivered. The console derives group keys in page memory from your master key; it stores no key material.
-            (Backend state model: open eng question, PRD §15.)
+          <Notice tone='info' title='Where this data lives — and what clearing your browser costs: nothing.'>
+            Keys are never stored anywhere: they derive in page memory from your master key, which the wallet re-creates
+            on demand. Group records (labels, members, dates) live in a backend issuance service — never browser storage
+            — because labels are derivation inputs: lose a used group&apos;s label and the envelope headers of its
+            uploaded pieces still recover it; a never-used group&apos;s lost label loses nothing at all. (Backend state
+            model: open eng question, PRD §15.)
           </Notice>
         </>
       )}
