@@ -26,13 +26,26 @@ type MockMember = {
   key: string;
   kind: "agent" | "person";
   added: string;
-  canWrite: boolean;
+  /**
+   * Fetch access for RESTRICTED pieces (the 10-05 opt-in ACL): restricted
+   * pieces are served only from the authenticated /download endpoint, so a
+   * member needs a token on top of the decryption key. Token contract is a
+   * P0 open question (PRD §15) — this column shows the slot, not a design.
+   */
+  fetchToken: "issued" | "none";
+  /**
+   * Write is PER-IDENTITY, never a group property: it is this identity's own
+   * SessionKeyRegistry grant (the server checks the exact signer), cannot be
+   * handed onward by the member, and is managed under Session Keys.
+   */
+  ownWriteKey: string | null;
 };
 
 type MockGroup = {
   name: string;
   members: MockMember[];
   covers: string;
+  restricted: string;
   created: string;
 };
 
@@ -41,17 +54,49 @@ const INITIAL_GROUPS: MockGroup[] = [
     name: "research-partners",
     created: "Sep 28",
     covers: "500 pieces · 4 data sets",
+    restricted: "80 of 500 pieces restricted",
     members: [
-      { label: "build agent", key: "0x02b7f4…9e2c", kind: "agent", added: "Sep 28", canWrite: true },
-      { label: "anna (research)", key: "0x03d19a…44F0", kind: "person", added: "Sep 28", canWrite: false },
-      { label: "reviewer (external)", key: "0x0e77c2…1ab4", kind: "person", added: "Oct 05", canWrite: false },
+      {
+        label: "build agent",
+        key: "0x02b7f4…9e2c",
+        kind: "agent",
+        added: "Sep 28",
+        fetchToken: "issued",
+        ownWriteKey: "0x5929…c41a",
+      },
+      {
+        label: "anna (research)",
+        key: "0x03d19a…44F0",
+        kind: "person",
+        added: "Sep 28",
+        fetchToken: "none",
+        ownWriteKey: null,
+      },
+      {
+        label: "reviewer (external)",
+        key: "0x0e77c2…1ab4",
+        kind: "person",
+        added: "Oct 05",
+        fetchToken: "issued",
+        ownWriteKey: null,
+      },
     ],
   },
   {
     name: "finance",
     created: "Oct 02",
     covers: "12 pieces · 1 data set",
-    members: [{ label: "cfo laptop", key: "0x9b4410…caa2", kind: "person", added: "Oct 02", canWrite: false }],
+    restricted: "all 12 pieces restricted",
+    members: [
+      {
+        label: "cfo laptop",
+        key: "0x9b4410…caa2",
+        kind: "person",
+        added: "Oct 02",
+        fetchToken: "issued",
+        ownWriteKey: null,
+      },
+    ],
   },
 ];
 
@@ -173,6 +218,12 @@ const GroupDetail = ({
         <MockChip />
       </div>
 
+      <Notice tone='info' title='Three independent axes — a member can hold any combination.'>
+        <b>Decrypt</b> (this group&apos;s key — what membership grants) · <b>Fetch restricted</b> (a /download token for
+        pieces the owner retrieval-restricted; open pieces need nothing) · <b>Write</b> (the identity&apos;s OWN session
+        key — never granted by the group, never transferable to others; the registry checks the exact signer).
+      </Notice>
+
       <table className='w-full text-sm'>
         <thead>
           <tr className='border-b text-left text-xs uppercase tracking-wide text-muted-foreground'>
@@ -180,7 +231,9 @@ const GroupDetail = ({
             <th className='py-2 pr-3'>Key</th>
             <th className='py-2 pr-3'>Kind</th>
             <th className='py-2 pr-3'>Added</th>
-            <th className='py-2 pr-3'>Can write?</th>
+            <th className='py-2 pr-3'>Decrypt</th>
+            <th className='py-2 pr-3'>Fetch restricted</th>
+            <th className='py-2 pr-3'>Write (own credential)</th>
             <th className='py-2' />
           </tr>
         </thead>
@@ -194,12 +247,26 @@ const GroupDetail = ({
               </td>
               <td className='py-2 pr-3'>{m.added}</td>
               <td className='py-2 pr-3 text-xs'>
-                {m.canWrite ? (
+                <b className='text-green-700'>yes</b> <span className='text-muted-foreground'>(member)</span>
+              </td>
+              <td className='py-2 pr-3 text-xs'>
+                {m.fetchToken === "issued" ? (
                   <span>
-                    <b>yes</b> — also holds an addPieces session key
+                    token issued <span className='text-muted-foreground'>(mock — contract open, PRD §15)</span>
                   </span>
                 ) : (
-                  "read only"
+                  <span className='text-amber-700'>
+                    no token — can&apos;t fetch the restricted {group.restricted.split(" ")[0]} pieces
+                  </span>
+                )}
+              </td>
+              <td className='py-2 pr-3 text-xs'>
+                {m.ownWriteKey ? (
+                  <span>
+                    own session key <span className='font-mono'>{m.ownWriteKey}</span>
+                  </span>
+                ) : (
+                  <span className='text-muted-foreground'>none</span>
                 )}
               </td>
               <td className='py-2 text-right'>
@@ -211,6 +278,10 @@ const GroupDetail = ({
           ))}
         </tbody>
       </table>
+      <p className='text-xs text-muted-foreground'>
+        Coverage: {group.covers} · {group.restricted} — open pieces are fetchable by anyone (decrypt still requires the
+        group key).
+      </p>
 
       <div className='rounded-lg border p-4'>
         <p className='mb-2 text-sm font-semibold'>Add a member</p>
@@ -243,9 +314,10 @@ const GroupDetail = ({
         Anyone who held the key keeps reading existing data. Real revocation = stop issuing + cycle (epoch bump →
         re-encrypt → re-upload → new links) — cycling execution is deferred in v1.
       </Notice>
-      <Notice tone='info' title='Group key holders read everything under this name, across data sets.'>
-        Write is separate: writing also requires an addPieces session key — a SessionKeyRegistry grant, managed under
-        Session Keys. A member row saying &quot;yes&quot; just means the same identity also holds one.
+      <Notice tone='info' title='Write never travels with the group.'>
+        A group distributes READ capability only. Writing requires the identity&apos;s own SessionKeyRegistry grant
+        (create/add/delete scopes, managed under Session Keys) — the server authorizes the exact signing key, so a
+        member cannot delegate or share their write access with anyone, including other members of this group.
       </Notice>
     </div>
   );
@@ -279,7 +351,14 @@ const AccessGroupsSection = () => {
                       ...g,
                       members: [
                         ...g.members,
-                        { label: "new member", key, kind: "person", added: "today", canWrite: false },
+                        {
+                          label: "new member",
+                          key,
+                          kind: "person",
+                          added: "today",
+                          fetchToken: "none",
+                          ownWriteKey: null,
+                        },
                       ],
                     }
                   : g,
@@ -348,7 +427,10 @@ const AccessGroupsSection = () => {
         onClose={(name) => {
           setCreateOpen(false);
           if (name) {
-            setGroups((gs) => [...gs, { name, members: [], covers: "0 pieces", created: "today" }]);
+            setGroups((gs) => [
+              ...gs,
+              { name, members: [], covers: "0 pieces", restricted: "nothing restricted yet", created: "today" },
+            ]);
             setSelected(name);
           }
         }}
