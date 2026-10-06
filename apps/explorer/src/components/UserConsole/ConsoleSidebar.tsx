@@ -92,16 +92,26 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
         </SidebarLink>
       ) : null}
 
+      {/* Access section (POC grouping): both items manage who can touch the account's
+          data — session keys authorize WRITES (create/add/delete on chain), groups
+          hold READ capability (decryption keys). IAM-style section, per PM review. */}
+      <p className='mt-3 mb-0.5 pl-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground'>
+        Access
+      </p>
       <SidebarLink href='/console/session-keys' isActive={isSessionKeysActive} onNavigate={onNavigate}>
         <KeyRound className='size-4' />
-        Session Keys
+        <span className='flex items-baseline gap-1.5'>
+          Session Keys
+          <span className='text-[10px] font-medium text-muted-foreground'>write</span>
+        </span>
       </SidebarLink>
 
-      {/* MOCK — Access groups POC (encryption group model). Remove with the POC. */}
+      {/* MOCK — groups POC (encryption group model). Remove with the POC. */}
       <SidebarLink href='/console/access' isActive={isAccessActive} onNavigate={onNavigate}>
         <Users className='size-4' />
         <span className='flex items-baseline gap-1.5'>
-          Access groups
+          Groups
+          <span className='text-[10px] font-medium text-muted-foreground'>read</span>
           <span className='rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9px] font-semibold text-amber-700'>
             MOCK
           </span>

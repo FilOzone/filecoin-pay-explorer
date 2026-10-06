@@ -292,7 +292,7 @@ const AccessGroupsSection = () => {
           <div className='flex items-center justify-between'>
             <div>
               <h1 className='text-xl font-semibold'>
-                Access groups <MockChip />
+                Groups <span className='text-sm font-normal text-muted-foreground'>· read access</span> <MockChip />
               </h1>
               <p className='mt-1 text-sm text-muted-foreground'>
                 A group is a named key. Members hold it; everything you or your agents encrypt under the group&apos;s
