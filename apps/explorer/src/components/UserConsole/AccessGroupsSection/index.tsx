@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 
 /**
@@ -231,30 +232,28 @@ const GroupDetail = ({
         <MockChip />
       </div>
 
-      <Notice tone='info' title='Read access only — two things a member can hold here.'>
-        <b>Decrypt</b> (this group&apos;s key — what membership grants) · <b>Fetch restricted</b> (a /download token for
-        pieces the owner retrieval-restricted; open pieces need nothing).{" "}
-        <b>Write is deliberately absent from this page</b> — it is a per-identity SessionKeyRegistry credential managed
-        under Session Keys, never a group property.
+      <Notice tone='info' title='Membership IS decrypt capability.'>
+        Every member holds this group&apos;s key — that is what a member is, so there is no column for it. The only
+        per-member variable on this surface is <b>Fetch restricted</b> (a /download token for pieces the owner
+        retrieval-restricted; open pieces need nothing). <b>Write is deliberately absent</b> — a per-identity
+        SessionKeyRegistry credential managed under Session Keys, never a group property.
       </Notice>
 
       <table className='w-full text-sm'>
         <thead>
           <tr className='border-b text-left text-xs uppercase tracking-wide text-muted-foreground'>
             <th className='py-2 pr-3'>Member</th>
-            <th className='py-2 pr-3'>Key</th>
+            <th className='py-2 pr-3'>Their public key</th>
             <th className='py-2 pr-3'>Kind</th>
             <th className='py-2 pr-3'>Added</th>
-            <th className='py-2 pr-3'>Decrypt</th>
             <th className='py-2 pr-3'>Fetch restricted</th>
-
             <th className='py-2' />
           </tr>
         </thead>
         <tbody>
           {group.members.length === 0 && (
             <tr>
-              <td colSpan={7} className='py-4 text-center text-xs text-muted-foreground'>
+              <td colSpan={6} className='py-4 text-center text-xs text-muted-foreground'>
                 No members yet. This group is just a name so far — its key becomes real at the first member grant or the
                 first upload under the label. Deleting it now would lose nothing.
               </td>
@@ -263,14 +262,13 @@ const GroupDetail = ({
           {group.members.map((m) => (
             <tr key={m.key} className='border-b'>
               <td className='py-2 pr-3 font-medium'>{m.label}</td>
-              <td className='max-w-[220px] break-all py-2 pr-3 font-mono text-xs'>{m.key}</td>
+              <td className='max-w-[240px] py-2 pr-3 font-mono text-xs'>
+                <span className='break-all'>{m.key}</span> <CopyButton value={m.key} />
+              </td>
               <td className='py-2 pr-3'>
                 <KindPill kind={m.kind} />
               </td>
               <td className='py-2 pr-3'>{m.added}</td>
-              <td className='py-2 pr-3 text-xs'>
-                <b className='text-green-700'>yes</b> <span className='text-muted-foreground'>(member)</span>
-              </td>
               <td className='py-2 pr-3 text-xs'>
                 {m.fetchToken === "issued" ? (
                   <span>
