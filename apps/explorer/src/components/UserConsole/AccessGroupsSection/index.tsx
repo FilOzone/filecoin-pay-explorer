@@ -358,6 +358,13 @@ const GroupDetail = ({
           </Link>
           . This box is for people&apos;s public keys.
         </p>
+        <p className='mt-2 text-xs text-muted-foreground'>
+          <b>There is deliberately no &quot;copy key&quot; or &quot;download key&quot; here</b> (unlike a session
+          key&apos;s one-time reveal, which births a fresh secret for one consumer). A group key is shared, unexpiring,
+          and weakly revocable — it only ever leaves wrapped to a member&apos;s public key, openable by them alone.
+          Agents get it through pairing; a keypair-less consumer generates one first. Bare bearer delivery exists only
+          as the application-layer link share, with its tradeoffs stated.
+        </p>
       </div>
 
       <Notice tone='warn' title='"Stop issuing" is membership-going-forward, not revocation.'>
