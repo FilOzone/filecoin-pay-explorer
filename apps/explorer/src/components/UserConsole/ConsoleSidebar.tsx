@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@filecoin-pay/ui/lib/utils";
-import { Bell, BellOff, Compass, KeyRound, LayoutDashboard } from "lucide-react";
+import { Bell, BellOff, Compass, KeyRound, LayoutDashboard, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -66,6 +66,7 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
 
   const isAlertsActive = pathname.startsWith("/console/notifications");
   const isSessionKeysActive = pathname.startsWith("/console/session-keys");
+  const isAccessActive = pathname.startsWith("/console/access");
   const isDashboardActive = pathname === "/console";
 
   // Chrome (border, responsive visibility) belongs to the caller: this renders
@@ -94,6 +95,17 @@ export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
       <SidebarLink href='/console/session-keys' isActive={isSessionKeysActive} onNavigate={onNavigate}>
         <KeyRound className='size-4' />
         Session Keys
+      </SidebarLink>
+
+      {/* MOCK — Access groups POC (encryption group model). Remove with the POC. */}
+      <SidebarLink href='/console/access' isActive={isAccessActive} onNavigate={onNavigate}>
+        <Users className='size-4' />
+        <span className='flex items-baseline gap-1.5'>
+          Access groups
+          <span className='rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9px] font-semibold text-amber-700'>
+            MOCK
+          </span>
+        </span>
       </SidebarLink>
 
       <hr className='my-3 border-t' />
