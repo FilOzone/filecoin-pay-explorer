@@ -19,7 +19,7 @@ import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
-import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 

@@ -1,7 +1,7 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { FundingHost } from "./FundingHost";
-import { FundingLaunchProvider, useFundingLaunch } from "./FundingLaunchContext";
 import type { SquidDepositInitialSource } from "./FundsSection/components/DirectSquidDepositDialog";
 
 const wallet = vi.hoisted(() => ({
