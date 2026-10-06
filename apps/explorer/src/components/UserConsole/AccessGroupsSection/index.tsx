@@ -379,6 +379,38 @@ const AccessGroupsSection = () => {
 
   const selectedGroup = groups.find((g) => g.name === selected);
 
+  // Records export/import: bookkeeping ONLY — group names, member public keys,
+  // dates. Zero key material (keys re-derive from the wallet, always), so this
+  // file is optional convenience in user custody, not a recovery artifact
+  // anyone must guard. It replaces the per-piece envelope crawl as the
+  // designed restore path; the crawl is disaster archaeology (PRD §15).
+  const exportRecords = () => {
+    const blob = new Blob([JSON.stringify({ version: 1, kind: "foc-access-group-records", groups }, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "access-group-records.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const importRecords = (file: File) => {
+    void file.text().then((text) => {
+      const parsed: unknown = JSON.parse(text);
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "kind" in parsed &&
+        parsed.kind === "foc-access-group-records" &&
+        "groups" in parsed &&
+        Array.isArray(parsed.groups)
+      ) {
+        setGroups(parsed.groups as MockGroup[]);
+      }
+    });
+  };
+
   return (
     <div className='flex flex-col gap-4'>
       <Notice tone='warn' title='Mock preview — nothing on this page is real.'>
@@ -427,9 +459,27 @@ const AccessGroupsSection = () => {
                 name is readable by them — across data sets. One role per member grant.
               </p>
             </div>
-            <Button variant='primary' onClick={() => setCreateOpen(true)}>
-              Create group
-            </Button>
+            <div className='flex items-center gap-2'>
+              <Button variant='ghost' size='compact' onClick={exportRecords}>
+                Export records
+              </Button>
+              <label className='cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground'>
+                Import records
+                <input
+                  type='file'
+                  accept='application/json'
+                  className='hidden'
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importRecords(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <Button variant='primary' onClick={() => setCreateOpen(true)}>
+                Create group
+              </Button>
+            </div>
           </div>
 
           <table className='w-full text-sm'>
@@ -465,11 +515,11 @@ const AccessGroupsSection = () => {
           <Notice tone='info' title='Where this data lives — and what clearing your browser costs: nothing.'>
             Keys are never stored anywhere: they derive in page memory from your master key, which the wallet re-creates
             on demand. Group records (labels, members, dates) live in THIS browser — the session-keys pattern, no
-            backend, by principle (a server-side member list would hand the operator your collaborator graph). Clearing
-            the browser: group names rebuild from your pieces&apos; own envelope headers (&quot;Sync from data&quot;);
-            member rows are bookkeeping and do not come back — the capability already left with each grant, and cycling
-            is the control. Optional durable backup: an encrypted records manifest stored in your own dataset. (PRD
-            §15.)
+            backend, by principle (a server-side member list would hand the operator your collaborator graph).
+            Durability is the records file: <b>Export records</b> downloads a JSON of names, member public keys, and
+            dates — zero key material, so it is convenience in your custody, never a secret to guard; Import restores
+            everything including members. Without a file, a per-piece envelope crawl can rebuild used group NAMES only —
+            it is very expensive (one ranged fetch per piece) and is disaster archaeology, not a journey. (PRD §15.)
           </Notice>
         </>
       )}
