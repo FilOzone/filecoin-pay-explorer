@@ -90,7 +90,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
 
   return (
     <>
-      {/* Remove the picker's scroll/focus lock while Privy owns login or checkout.
+      {/* Remove the picker's scroll/focus lock while Privy owns checkout.
           Keep the purchase hook mounted and the launch intent so the picker returns afterward. */}
       {isMainnet && !card.isOpening ? (
         <AddFundsDialog
