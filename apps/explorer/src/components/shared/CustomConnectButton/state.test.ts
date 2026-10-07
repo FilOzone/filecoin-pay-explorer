@@ -67,6 +67,39 @@ describe("getWalletExitAction", () => {
     expect(clearAccount).toHaveBeenCalledOnce();
   });
 
+  it("still ends the session and clears the account when wagmi's disconnect fails", async () => {
+    const logout = vi.fn(async () => undefined);
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({
+      authenticated: true,
+      logout,
+      disconnectConnection: async () => {
+        throw new Error("provider unavailable");
+      },
+      clearAccount,
+    });
+
+    expect(logout).toHaveBeenCalledOnce();
+    expect(clearAccount).toHaveBeenCalledOnce();
+  });
+
+  it("still clears the account when the wallet's own disconnect fails", async () => {
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({
+      authenticated: false,
+      logout: async () => undefined,
+      disconnect: () => {
+        throw new Error("disconnect failed");
+      },
+      disconnectConnection: async () => undefined,
+      clearAccount,
+    });
+
+    expect(clearAccount).toHaveBeenCalledOnce();
+  });
+
   it("keeps the console account when logout fails", async () => {
     const error = new Error("logout failed");
     const clearAccount = vi.fn();
