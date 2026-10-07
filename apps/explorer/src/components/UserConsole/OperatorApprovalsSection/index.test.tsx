@@ -1,5 +1,6 @@
-import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OperatorApprovalsSection } from ".";
 
 const query = vi.hoisted(() => ({
@@ -35,16 +36,9 @@ vi.mock("./components", () => ({
 
 const account = { id: "0x1111111111111111111111111111111111111111" } as never;
 
-function render() {
-  let renderer!: ReturnType<typeof create>;
-  act(() => {
-    renderer = create(<OperatorApprovalsSection account={account} network='mainnet' />);
-  });
-  return renderer;
-}
+const dialogOpen = () => screen.getByTestId("add-service-dialog").dataset.open;
 
-const dialogOpen = (r: ReturnType<typeof create>) =>
-  r.root.findByProps({ "data-testid": "add-service-dialog" }).props["data-open"];
+afterEach(cleanup);
 
 describe("OperatorApprovalsSection Add Service", () => {
   beforeEach(() => {
@@ -60,12 +54,10 @@ describe("OperatorApprovalsSection Add Service", () => {
     ["populated", { data: { operatorApprovals: [{ id: "1" }] } }],
   ])("opens the dialog from the %s state", (_name, state) => {
     Object.assign(query, state);
-    const r = render();
-    expect(dialogOpen(r)).toBe("false");
+    render(<OperatorApprovalsSection account={account} network='mainnet' />);
+    expect(dialogOpen()).toBe("false");
 
-    act(() => {
-      r.root.findByType("button").props.onClick();
-    });
-    expect(dialogOpen(r)).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Add Service" }));
+    expect(dialogOpen()).toBe("true");
   });
 });
