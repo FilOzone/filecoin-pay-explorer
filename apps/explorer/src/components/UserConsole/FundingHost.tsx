@@ -35,7 +35,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   // closed during that render so nothing reopens on the new network.
   const previousChainId = useRef(chainId);
   const chainChanged = previousChainId.current !== chainId;
-  const { data } = useAccountTokens(address.toLowerCase(), 1, {
+  const { data } = useAccountTokens(address, 1, {
     enabled: isFilecoinChain,
     networkOverride: network,
     pageSize: CONSOLE_TOKEN_PAGE_SIZE,

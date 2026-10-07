@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OperatorApprovalsSection } from ".";
 
 const query = vi.hoisted(() => ({
-  data: undefined as { operatorApprovals: unknown[] } | undefined,
+  data: undefined as { pages: Array<{ operatorApprovals: unknown[] }> } | undefined,
   isLoading: false,
   isError: false,
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  fetchNextPage: vi.fn(),
 }));
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -16,7 +19,7 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     </button>
   ),
 }));
-vi.mock("@/hooks/useAccountDetails", () => ({ useAccountApprovals: () => query }));
+vi.mock("@/hooks/useAccountDetails", () => ({ useInfiniteAccountApprovals: () => query }));
 vi.mock("@/components/UserConsole/AddServiceDialog", () => ({
   default: ({ open }: { open: boolean }) => <div data-testid='add-service-dialog' data-open={String(open)} />,
 }));
@@ -35,12 +38,17 @@ vi.mock("./components", () => ({
   ApprovalsLoadingState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsErrorState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsEmptyState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
-  ApprovalsTable: ({ data }: { data: { id: string; onIncrease: (approval: { id: string }) => void }[] }) =>
-    data.map((approval) => (
-      <button key={approval.id} type='button' onClick={() => approval.onIncrease(approval)}>
-        Increase {approval.id}
-      </button>
-    )),
+  ApprovalsTable: ({ data }: { data: { id: string; onIncrease: (approval: { id: string }) => void }[] }) => (
+    <ul>
+      {data.map((approval) => (
+        <li key={approval.id}>
+          <button type='button' onClick={() => approval.onIncrease(approval)}>
+            Increase {approval.id}
+          </button>
+        </li>
+      ))}
+    </ul>
+  ),
 }));
 
 const account = { id: "0x1111111111111111111111111111111111111111" } as never;
@@ -55,13 +63,14 @@ describe("OperatorApprovalsSection Add Service", () => {
     query.data = undefined;
     query.isLoading = false;
     query.isError = false;
+    query.hasNextPage = false;
   });
 
   it.each([
     ["loading", { isLoading: true }],
     ["error", { isError: true }],
-    ["empty", { data: { operatorApprovals: [] } }],
-    ["populated", { data: { operatorApprovals: [{ id: "1" }] } }],
+    ["empty", { data: { pages: [{ operatorApprovals: [] }] } }],
+    ["populated", { data: { pages: [{ operatorApprovals: [{ id: "1" }] }] } }],
   ])("opens the dialog from the %s state", (_name, state) => {
     Object.assign(query, state);
     render(<OperatorApprovalsSection account={account} network='mainnet' />);
@@ -74,9 +83,10 @@ describe("OperatorApprovalsSection Add Service", () => {
 
 describe("OperatorApprovalsSection Increase", () => {
   beforeEach(() => {
-    query.data = { operatorApprovals: [{ id: "mainnet-approval" }] };
+    query.data = { pages: [{ operatorApprovals: [{ id: "mainnet-approval" }] }] };
     query.isLoading = false;
     query.isError = false;
+    query.hasNextPage = false;
   });
 
   it.each([
@@ -88,13 +98,43 @@ describe("OperatorApprovalsSection Increase", () => {
     expect(screen.getByTestId("increase-dialog").dataset).toMatchObject({ approval: "mainnet-approval", open: "true" });
 
     // Cached empty approvals render straight away, without a loading state in between.
-    query.data = { operatorApprovals: [] };
+    query.data = { pages: [{ operatorApprovals: [] }] };
     rerender(<OperatorApprovalsSection account={next.account} network={next.network} />);
     expect(screen.queryByTestId("increase-dialog")).toBeNull();
 
     // Switching back must not bring the old form back.
-    query.data = { operatorApprovals: [{ id: "mainnet-approval" }] };
+    query.data = { pages: [{ operatorApprovals: [{ id: "mainnet-approval" }] }] };
     rerender(<OperatorApprovalsSection account={account} network='mainnet' />);
     expect(screen.queryByTestId("increase-dialog")).toBeNull();
+  });
+});
+
+describe("OperatorApprovalsSection paging", () => {
+  beforeEach(() => {
+    query.isLoading = false;
+    query.isError = false;
+    query.fetchNextPage.mockReset();
+  });
+
+  it("lists approvals from every loaded page and loads the next one on request", () => {
+    query.data = { pages: [{ operatorApprovals: [{ id: "1" }, { id: "2" }] }, { operatorApprovals: [{ id: "3" }] }] };
+    query.hasNextPage = true;
+    render(<OperatorApprovalsSection account={account} network='mainnet' />);
+
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "Increase 1",
+      "Increase 2",
+      "Increase 3",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(query.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no Load more once the last page is loaded", () => {
+    query.data = { pages: [{ operatorApprovals: [{ id: "1" }] }] };
+    query.hasNextPage = false;
+    render(<OperatorApprovalsSection account={account} network='mainnet' />);
+
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 });
