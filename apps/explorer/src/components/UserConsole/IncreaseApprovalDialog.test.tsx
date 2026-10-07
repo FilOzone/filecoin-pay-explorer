@@ -1,5 +1,6 @@
-import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IncreaseApprovalDialog } from "./IncreaseApprovalDialog";
 
 const mocks = vi.hoisted(() => ({
@@ -39,7 +40,9 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
   DialogTitle: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@filecoin-pay/ui/components/label", () => ({
-  Label: ({ children }: { children: React.ReactNode }) => children,
+  Label: ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
+    <label htmlFor={htmlFor}>{children}</label>
+  ),
 }));
 vi.mock("wagmi", () => ({ useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }) }));
 vi.mock("@/hooks/useContractTransaction", () => ({
@@ -65,14 +68,13 @@ const approvalFixture = {
 const approval = approvalFixture as never;
 
 function renderDialog(onOpenChange = vi.fn()) {
-  let renderer!: ReturnType<typeof create>;
-  act(() => {
-    renderer = create(<IncreaseApprovalDialog approval={approval} open onOpenChange={onOpenChange} />);
-  });
-  const increase = () => renderer.root.findAllByType("button").find((b) => b.children.join("") === "Increase");
-  const type = (id: string, value: string) => act(() => renderer.root.findByProps({ id }).props.onChange(value));
+  render(<IncreaseApprovalDialog approval={approval} open onOpenChange={onOpenChange} />);
+  const increase = () => screen.getByRole("button", { name: "Increase" });
+  const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
   return { increase, type };
 }
+
+afterEach(cleanup);
 
 describe("IncreaseApprovalDialog", () => {
   beforeEach(() => {
@@ -81,24 +83,24 @@ describe("IncreaseApprovalDialog", () => {
   });
 
   it.each([
-    ["an exponent lockup", "lockupIncrease", "1e5"],
-    ["a decimal maximum lockup period", "maxLockupPeriodIncrease", "1.5"],
-  ])("disables Increase for %s instead of getting stuck", async (_name, id, value) => {
+    ["an exponent lockup", "Lockup Increase", "1e5"],
+    ["a decimal maximum lockup period", "Maximum Lockup Period Increase", "1.5"],
+  ])("disables Increase for %s instead of getting stuck", async (_name, label, value) => {
     const { increase, type } = renderDialog();
-    type("lockupIncrease", "1");
-    expect(increase()?.props.disabled).toBe(false);
+    type("Lockup Increase", "1");
+    expect(increase().hasAttribute("disabled")).toBe(false);
 
-    type(id, value);
-    expect(increase()?.props.disabled).toBe(true);
-    await act(async () => increase()?.props.onClick());
+    type(label, value);
+    expect(increase().hasAttribute("disabled")).toBe(true);
+    await act(async () => fireEvent.click(increase()));
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
   it("submits the summed allowances", async () => {
     const { increase, type } = renderDialog();
-    type("lockupIncrease", "1");
-    type("maxLockupPeriodIncrease", "5");
-    await act(async () => increase()?.props.onClick());
+    type("Lockup Increase", "1");
+    type("Maximum Lockup Period Increase", "5");
+    await act(async () => fireEvent.click(increase()));
 
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -111,9 +113,9 @@ describe("IncreaseApprovalDialog", () => {
     mocks.execute.mockRejectedValue(new Error("rejected"));
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { increase, type } = renderDialog();
-    type("lockupIncrease", "1");
-    await act(async () => increase()?.props.onClick());
-    expect(increase()?.props.disabled).toBe(false);
+    type("Lockup Increase", "1");
+    await act(async () => fireEvent.click(increase()));
+    expect(increase().hasAttribute("disabled")).toBe(false);
   });
 
   it("refuses close requests while the wallet signature is pending, but not while the receipt is tracked", async () => {
@@ -121,11 +123,8 @@ describe("IncreaseApprovalDialog", () => {
     let submit!: () => void;
     mocks.execute.mockReturnValue(new Promise<void>((resolve) => (submit = resolve)));
     const { increase, type } = renderDialog(onOpenChange);
-    type("lockupIncrease", "1");
-    let pending!: Promise<void>;
-    act(() => {
-      pending = increase()?.props.onClick();
-    });
+    type("Lockup Increase", "1");
+    fireEvent.click(increase());
 
     act(() => mocks.dialogOnOpenChange?.(false));
     expect(onOpenChange).not.toHaveBeenCalled();
@@ -133,10 +132,7 @@ describe("IncreaseApprovalDialog", () => {
 
     // Submitted: execute resolves while the receipt is still being tracked.
     mocks.isExecuting = true;
-    await act(async () => {
-      submit();
-      await pending;
-    });
+    await act(async () => submit());
     expect(mocks.contentProps?.showCloseButton).toBe(true);
     act(() => mocks.dialogOnOpenChange?.(false));
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -146,8 +142,8 @@ describe("IncreaseApprovalDialog", () => {
     const onOpenChange = vi.fn();
     mocks.execute.mockImplementation(async ({ onSubmitOnChain }) => onSubmitOnChain());
     const { increase, type } = renderDialog(onOpenChange);
-    type("lockupIncrease", "1");
-    await act(async () => increase()?.props.onClick());
+    type("Lockup Increase", "1");
+    await act(async () => fireEvent.click(increase()));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
