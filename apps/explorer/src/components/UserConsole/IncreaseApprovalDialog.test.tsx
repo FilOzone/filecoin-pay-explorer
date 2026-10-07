@@ -1,9 +1,8 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WithdrawDialog } from "./WithdrawDialog";
+import { IncreaseApprovalDialog } from "./IncreaseApprovalDialog";
 
 const mocks = vi.hoisted(() => ({
-  accountInfo: [0n, 0n, 10n * 10n ** 18n, 0n] as [bigint, bigint, bigint, bigint] | undefined,
   execute: vi.fn(),
   isExecuting: false,
   dialogOnOpenChange: undefined as ((open: boolean) => void) | undefined,
@@ -14,7 +13,7 @@ vi.mock("@filecoin-foundation/ui-filecoin/Badge", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
-  Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  Button: ({ children, variant: _variant, ...props }: React.ComponentProps<"button"> & { variant?: string }) => (
     <button {...props} type='button'>
       {children}
     </button>
@@ -42,12 +41,7 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("wagmi", () => ({
-  useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }),
-  usePublicClient: () => ({}),
-  useReadContract: () => ({ data: mocks.accountInfo, isLoading: false, isRefetching: false }),
-  useWalletClient: () => ({ data: {} }),
-}));
+vi.mock("wagmi", () => ({ useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }) }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
 }));
@@ -61,72 +55,76 @@ vi.mock("@/hooks/useSynapse", () => ({
   }),
 }));
 
-const userToken = {
-  id: "user-token",
-  token: { id: "0x3333333333333333333333333333333333333333", symbol: "USDFC", decimals: "18", name: "USDFC" },
-} as never;
+const approvalFixture = {
+  token: { id: "0x3333333333333333333333333333333333333333", symbol: "USDFC", decimals: "18" },
+  operator: { address: "0x4444444444444444444444444444444444444444" },
+  lockupAllowance: "100",
+  rateAllowance: "10",
+  maxLockupPeriod: "50",
+};
+const approval = approvalFixture as never;
 
 function renderDialog(onOpenChange = vi.fn()) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<WithdrawDialog onOpenChange={onOpenChange} open userToken={userToken} />);
+    renderer = create(<IncreaseApprovalDialog approval={approval} open onOpenChange={onOpenChange} />);
   });
-  const withdraw = () =>
-    renderer.root.findAllByType("button").find((button) => button.children.join("") === "Withdraw");
-  const type = (value: string) => act(() => renderer.root.findByProps({ id: "amount" }).props.onChange(value));
-  const text = () => JSON.stringify(renderer.toJSON());
-  return { renderer, type, withdraw, text };
+  const increase = () => renderer.root.findAllByType("button").find((b) => b.children.join("") === "Increase");
+  const type = (id: string, value: string) => act(() => renderer.root.findByProps({ id }).props.onChange(value));
+  return { increase, type };
 }
 
-describe("WithdrawDialog", () => {
+describe("IncreaseApprovalDialog", () => {
   beforeEach(() => {
-    mocks.accountInfo = [0n, 0n, 10n * 10n ** 18n, 0n];
     mocks.execute.mockReset();
     mocks.isExecuting = false;
   });
 
-  it("renders with an empty amount and enables withdrawal only for a valid amount within funds", () => {
-    const { type, withdraw, text } = renderDialog();
-    expect(withdraw()?.props.disabled).toBe(true);
-    expect(text()).not.toContain("Insufficient Available funds");
+  it.each([
+    ["an exponent lockup", "lockupIncrease", "1e5"],
+    ["a decimal maximum lockup period", "maxLockupPeriodIncrease", "1.5"],
+  ])("disables Increase for %s instead of getting stuck", async (_name, id, value) => {
+    const { increase, type } = renderDialog();
+    type("lockupIncrease", "1");
+    expect(increase()?.props.disabled).toBe(false);
 
-    type("5");
-    expect(withdraw()?.props.disabled).toBe(false);
-
-    type("20");
-    expect(withdraw()?.props.disabled).toBe(true);
-    expect(text()).toContain("Insufficient Available funds");
-
-    type("1e5");
-    expect(withdraw()?.props.disabled).toBe(true);
+    type(id, value);
+    expect(increase()?.props.disabled).toBe(true);
+    await act(async () => increase()?.props.onClick());
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 
-  it("withdraws the parsed amount", async () => {
-    const { type, withdraw } = renderDialog();
-    type("2.5");
-    await act(async () => withdraw()?.props.onClick());
+  it("submits the summed allowances", async () => {
+    const { increase, type } = renderDialog();
+    type("lockupIncrease", "1");
+    type("maxLockupPeriodIncrease", "5");
+    await act(async () => increase()?.props.onClick());
 
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "withdrawTo",
-        args: [
-          "0x3333333333333333333333333333333333333333",
-          "0x1111111111111111111111111111111111111111",
-          2_500_000_000_000_000_000n,
-        ],
+        args: [approvalFixture.token.id, approvalFixture.operator.address, true, 10n, 100n + 10n ** 18n, 55n],
       }),
     );
+  });
+
+  it("resets after a failed submission", async () => {
+    mocks.execute.mockRejectedValue(new Error("rejected"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { increase, type } = renderDialog();
+    type("lockupIncrease", "1");
+    await act(async () => increase()?.props.onClick());
+    expect(increase()?.props.disabled).toBe(false);
   });
 
   it("refuses close requests while the wallet signature is pending, but not while the receipt is tracked", async () => {
     const onOpenChange = vi.fn();
     let submit!: () => void;
     mocks.execute.mockReturnValue(new Promise<void>((resolve) => (submit = resolve)));
-    const { type, withdraw } = renderDialog(onOpenChange);
-    type("1");
+    const { increase, type } = renderDialog(onOpenChange);
+    type("lockupIncrease", "1");
     let pending!: Promise<void>;
     act(() => {
-      pending = withdraw()?.props.onClick();
+      pending = increase()?.props.onClick();
     });
 
     act(() => mocks.dialogOnOpenChange?.(false));
@@ -147,9 +145,9 @@ describe("WithdrawDialog", () => {
   it("closes deliberately once the transaction is submitted on chain", async () => {
     const onOpenChange = vi.fn();
     mocks.execute.mockImplementation(async ({ onSubmitOnChain }) => onSubmitOnChain());
-    const { type, withdraw } = renderDialog(onOpenChange);
-    type("1");
-    await act(async () => withdraw()?.props.onClick());
+    const { increase, type } = renderDialog(onOpenChange);
+    type("lockupIncrease", "1");
+    await act(async () => increase()?.props.onClick());
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
