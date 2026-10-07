@@ -35,25 +35,15 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     [data, handleIncrease],
   );
 
+  let content: React.ReactNode;
   if (isLoading) {
-    return <ApprovalsLoadingState onApprove={handleOpenApprove} />;
-  }
-
-  if (isError) {
-    return <ApprovalsErrorState onApprove={handleOpenApprove} />;
-  }
-
-  if (!data || data.operatorApprovals.length === 0) {
-    return (
-      <>
-        <ApprovalsEmptyState onApprove={handleOpenApprove} />
-        <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
-      </>
-    );
-  }
-
-  return (
-    <>
+    content = <ApprovalsLoadingState onApprove={handleOpenApprove} />;
+  } else if (isError) {
+    content = <ApprovalsErrorState onApprove={handleOpenApprove} />;
+  } else if (!data || data.operatorApprovals.length === 0) {
+    content = <ApprovalsEmptyState onApprove={handleOpenApprove} />;
+  } else {
+    content = (
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Authorized Services</h3>
@@ -67,6 +57,12 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
 
         <ApprovalsTable data={tableData} />
       </div>
+    );
+  }
+
+  return (
+    <>
+      {content}
 
       {/* Dialogs */}
       <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
