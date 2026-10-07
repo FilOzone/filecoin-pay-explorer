@@ -2,17 +2,13 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useConnection } from "wagmi";
 import { CustomConnectButton } from "@/components/shared";
 import { getWalletEntryState } from "@/components/shared/CustomConnectButton/state";
-import { useActiveWalletGuard } from "@/components/UserConsole/ActiveWalletGuardContext";
 
 const NotConnected = () => {
   const { ready, authenticated, error } = usePrivy();
   const { ready: walletsReady } = useWallets();
-  const { isConnected } = useConnection();
-  const { isExiting } = useActiveWalletGuard();
-  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated, isConnected, isExiting });
+  const walletEntryState = getWalletEntryState({ ready, walletsReady, authenticated });
 
   if (!error && walletEntryState === "loading") return <LoadingStateCard message='Loading wallet...' />;
 
@@ -22,11 +18,11 @@ const NotConnected = () => {
     <EmptyStateCard
       titleTag='h2'
       icon={WalletIcon}
-      title={isPreparing ? "Preparing your wallet" : "Access the Filecoin Pay console"}
+      title={isPreparing ? "Preparing your wallet" : "How would you like to continue?"}
       description={
         isPreparing
           ? "You're signed in. We're connecting your wallet to Filecoin Pay."
-          : "Connect your wallet to access the Filecoin Pay console and manage your payment rails, deposits, and authorized services."
+          : "Manage your payment rails, deposits, and authorized services in the Filecoin Pay console."
       }
     >
       <CustomConnectButton />
