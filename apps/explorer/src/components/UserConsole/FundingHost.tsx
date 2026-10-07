@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
-import { useFundingLaunch } from "./FundingLaunchContext";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import {
   DirectSquidDepositDialog,
@@ -81,7 +81,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const chooseMethod = (method: AddFundsMethod) => {
     if (method === "card") {
       // The picker stays open: it shows the purchase status and Start over, and it
-      // refuses to close while the purchase is busy so Privy's modal above it cannot dismiss it.
+      // refuses to close while the purchase is busy.
       void card.buyWithCard();
       return;
     }

@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import NotConnected from "./NotConnected";
 
 const mocks = vi.hoisted(() => ({
-  isConnected: false,
   privy: { authenticated: false, error: null as Error | null, ready: false },
   walletsReady: false,
 }));
@@ -32,11 +31,9 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => mocks.privy,
   useWallets: () => ({ ready: mocks.walletsReady }),
 }));
-vi.mock("wagmi", () => ({ useConnection: () => ({ isConnected: mocks.isConnected }) }));
 vi.mock("@/components/shared", () => ({ CustomConnectButton: () => <button type='button'>Wallet actions</button> }));
 
 beforeEach(() => {
-  mocks.isConnected = false;
   mocks.privy = { authenticated: false, error: null, ready: false };
   mocks.walletsReady = false;
 });
@@ -49,9 +46,9 @@ describe("NotConnected", () => {
       { authenticated: true, ready: true },
       true,
       ["Preparing your wallet", "You&#x27;re signed in"],
-      ["Access the Filecoin Pay console"],
+      ["How would you like to continue?"],
     ],
-    ["login is needed", { authenticated: false, ready: true }, true, ["Access the Filecoin Pay console"], []],
+    ["login is needed", { authenticated: false, ready: true }, true, ["How would you like to continue?"], []],
   ] as const)("shows the %s copy", (_label, privy, walletsReady, expected, unexpected) => {
     mocks.privy = { ...privy, error: null };
     mocks.walletsReady = walletsReady;

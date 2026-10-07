@@ -4,15 +4,18 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CustomConnectButton from ".";
 
+type ConnectedWalletStub = { address: string; walletClientType: string };
+
 const mocks = vi.hoisted(() => ({
+  clearAccount: vi.fn(),
   connectWallet: vi.fn(),
   login: vi.fn(),
   logout: vi.fn<() => Promise<void>>(),
-  pause: vi.fn(),
   privy: { authenticated: false, error: new Error("invalid app id") as Error | null, ready: false },
-  resume: vi.fn(),
+  selectAccount: vi.fn(),
   walletsReady: false,
   loginOnError: undefined as ((code: string) => void) | undefined,
+  connectWalletOnSuccess: undefined as ((params: { wallet: ConnectedWalletStub }) => void) | undefined,
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -25,22 +28,33 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   ),
 }));
 vi.mock("@privy-io/react-auth", () => ({
-  useConnectWallet: () => ({ connectWallet: mocks.connectWallet }),
+  useConnectWallet: ({ onSuccess }: { onSuccess: (params: { wallet: ConnectedWalletStub }) => void }) => {
+    mocks.connectWalletOnSuccess = onSuccess;
+    return { connectWallet: mocks.connectWallet };
+  },
   useLogin: ({ onError }: { onError: (code: string) => void }) => {
     mocks.loginOnError = onError;
     return { login: mocks.login };
   },
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => mocks.privy,
-  useWallets: () => ({ ready: mocks.walletsReady }),
+  useWallets: () => ({ ready: mocks.walletsReady, wallets: [] }),
 }));
-vi.mock("@/components/UserConsole/console-wallet", () => ({
-  consoleWalletSelector: { pause: mocks.pause, resume: mocks.resume },
+vi.mock("wagmi", () => ({ useDisconnect: () => ({ mutateAsync: vi.fn(async () => undefined) }) }));
+vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
+  useConsoleAccount: () => ({ clearAccount: mocks.clearAccount, selectAccount: mocks.selectAccount }),
 }));
-vi.mock("wagmi", () => ({
-  useConnection: () => ({ isConnected: false }),
-  useDisconnect: () => ({ disconnectAsync: vi.fn(async () => undefined) }),
-}));
+
+const render = async () => {
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(<CustomConnectButton />);
+  });
+  return renderer;
+};
+
+const findButton = (renderer: ReturnType<typeof create>, label: string) =>
+  renderer.root.findAllByType("button").find((button) => button.children.includes(label));
 
 describe("CustomConnectButton", () => {
   beforeEach(() => {
@@ -61,53 +75,49 @@ describe("CustomConnectButton", () => {
     expect(consoleError).toHaveBeenCalledWith("Privy failed to initialize", mocks.privy.error);
   });
 
-  it("pauses wallet auto-selection before leaving an authenticated session that is still preparing", async () => {
+  it("logs out a signed-in session whose wallet is still preparing", async () => {
     mocks.privy = { authenticated: true, error: null, ready: true };
     mocks.walletsReady = true;
-    let renderer!: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(<CustomConnectButton />);
-    });
+    const renderer = await render();
 
-    const buttons = renderer.root.findAllByType("button");
-    expect(buttons.some((button) => button.children.includes("Reload"))).toBe(true);
+    expect(findButton(renderer, "Reload")).toBeDefined();
     // The card around the button already says the wallet is preparing.
     expect(renderer.root.findAllByProps({ role: "status" })).toHaveLength(0);
-    const logoutButton = buttons.find((button) => button.children.includes("Log out"));
-    expect(logoutButton).toBeDefined();
-    await act(async () => {
-      logoutButton?.props.onClick();
-    });
+    await act(async () => findButton(renderer, "Log out")?.props.onClick());
 
-    expect(mocks.pause).toHaveBeenCalledOnce();
     expect(mocks.logout).toHaveBeenCalledOnce();
-    expect(mocks.pause.mock.invocationCallOrder[0]).toBeLessThan(mocks.logout.mock.invocationCallOrder[0]);
-    expect(mocks.resume).not.toHaveBeenCalled();
+    expect(mocks.clearAccount).toHaveBeenCalledOnce();
   });
 
-  it("resumes wallet auto-selection before opening either wallet flow", async () => {
+  it("offers email or Google login, and a wallet connection that verifies before card payments", async () => {
     mocks.privy = { authenticated: false, error: null, ready: true };
     mocks.walletsReady = true;
-    let renderer!: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(<CustomConnectButton />);
-    });
+    const renderer = await render();
 
-    const [loginButton, connectButton] = renderer.root.findAllByType("button");
-    await act(async () => loginButton.props.onClick());
-    await act(async () => connectButton.props.onClick());
+    await act(async () => findButton(renderer, "Continue with a Filecoin Pay wallet")?.props.onClick());
+    await act(async () => findButton(renderer, "Connect existing wallet")?.props.onClick());
 
-    expect(mocks.resume).toHaveBeenCalledTimes(2);
-    expect(mocks.resume.mock.invocationCallOrder[0]).toBeLessThan(mocks.login.mock.invocationCallOrder[0]);
-    expect(mocks.resume.mock.invocationCallOrder[1]).toBeLessThan(mocks.connectWallet.mock.invocationCallOrder[0]);
+    // A wallet enters through the connect action only, so there is one way in per kind of account.
+    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ["email", "google"] });
+    expect(mocks.connectWallet).toHaveBeenCalledOnce();
+    expect(JSON.stringify(renderer.toJSON())).toContain("Card payments need a one-time");
   });
-});
 
-describe("CustomConnectButton login errors", () => {
-  it("ignores a closed login modal but reports real login failures", () => {
+  it("makes the wallet a connect-only flow just connected the console account", async () => {
     mocks.privy = { authenticated: false, error: null, ready: true };
     mocks.walletsReady = true;
-    renderToStaticMarkup(<CustomConnectButton />);
+    await render();
+
+    const wallet = { address: "0xbbbb000000000000000000000000000000bbbb", walletClientType: "metamask" };
+    await act(async () => mocks.connectWalletOnSuccess?.({ wallet }));
+
+    expect(mocks.selectAccount).toHaveBeenCalledWith(wallet);
+  });
+
+  it("ignores a closed login modal but reports real login failures", async () => {
+    mocks.privy = { authenticated: false, error: null, ready: true };
+    mocks.walletsReady = true;
+    await render();
 
     mocks.loginOnError?.("exited_auth_flow");
     expect(toast.error).not.toHaveBeenCalled();

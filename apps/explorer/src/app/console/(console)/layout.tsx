@@ -1,21 +1,23 @@
 "use client";
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
-import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
-import { type ReactNode, useEffect, useState } from "react";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
 import { ConsoleHeader } from "@/components/UserConsole/ConsoleHeader";
 import { ConsoleNavDrawer } from "@/components/UserConsole/ConsoleNavDrawer";
-import ConsoleProviders from "@/components/UserConsole/ConsoleProviders";
 import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { FundingHost } from "@/components/UserConsole/FundingHost";
-import { NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
-import { useTopUpActivity } from "@/components/UserConsole/TopUpActivityContext";
+import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
+import ConsoleProviders from "@/components/UserConsole/providers/ConsoleProviders";
+import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
+import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
   type ConsoleAccessState,
   getConsoleAccessState,
+  getConsoleAccountState,
   getConsoleDisplayAccessState,
   keepReadyThroughResync,
   type ReadyConnection,
@@ -25,9 +27,11 @@ import {
 const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAccessState; children: ReactNode }) => {
   switch (accessState) {
     case "reconnecting":
-      return <LoadingStateCard message='Connecting your wallet...' />;
+      return <ConnectingWallet />;
     case "not-connected":
       return <NotConnected />;
+    case "account-unavailable":
+      return <AccountUnavailable />;
     case "unsupported-chain":
     // A Squid source chain only reaches here with no top-up in progress:
     // getConsoleDisplayAccessState reports an active one as "ready".
@@ -40,10 +44,27 @@ const ConsoleAccessGate = ({ accessState, children }: { accessState: ConsoleAcce
 
 const ConsoleShell = ({ children }: { children: ReactNode }) => {
   const { address, isConnected, isReconnecting, chainId } = useConnection();
+  const { account } = useConsoleAccount();
+  const { ready: walletsReady, wallets } = useWallets();
+  const { error: privyError } = usePrivy();
   const { isTopUpActive } = useTopUpActivity();
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const [lastReady, setLastReady] = useState<ReadyConnection | null>(null);
+  const accountState = getConsoleAccountState({
+    account,
+    address,
+    hydrated,
+    privyFailed: Boolean(privyError),
+    wallets,
+    walletsReady,
+  });
   const walletAccessState = keepReadyThroughResync(
-    getConsoleAccessState({ isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    getConsoleAccessState({ accountState, isConnected, isReconnecting, hasAddress: Boolean(address), chainId }),
+    accountState,
     lastReady,
     address,
     chainId,
@@ -68,11 +89,13 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             {/* BetaWarning sits above the row so it shows on every console page. */}
             <BetaWarning />
             <ConsoleAccessGate accessState={displayAccessState}>
-              <ConsoleContent accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
+              {/* Keyed by account, so nothing started for one account survives a switch to another. */}
+              <ConsoleContent key={account?.address} accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>
-            <FundingHost />
+            {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
+            {accountState === "active" ? <FundingHost /> : null}
           </div>
         </Container>
       </div>

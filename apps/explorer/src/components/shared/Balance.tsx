@@ -13,19 +13,19 @@ import { ArrowUpRightIcon, Check, Copy, KeyRound, LogOut, Wallet } from "lucide-
 import { useState } from "react";
 import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
+import { useBalance, useConnection, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
-import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
   const { constants } = useSynapse();
-  const { address } = useAccount();
+  const { address } = useConnection();
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
@@ -33,6 +33,8 @@ const Balance = () => {
   const { exportWallet } = useExportWallet();
   // Privy creates a separate embedded wallet per app for the same login, so the key is the only way to carry it elsewhere.
   const canExportKey = activeWallet !== undefined && isPrivyEmbeddedWallet(activeWallet);
+  const walletLabel =
+    activeWallet && isPrivyEmbeddedWallet(activeWallet) ? "Filecoin Pay wallet" : (activeWallet?.meta.name ?? "Wallet");
   const [copied, setCopied] = useState(false);
   const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
@@ -98,7 +100,8 @@ const Balance = () => {
   };
 
   return (
-    <DropdownMenu>
+    // Non-modal: a closing modal menu's aria-hidden would be saved by the Add funds dialog and restored on close.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
           <div className='flex min-w-0 items-center gap-3'>
@@ -131,7 +134,7 @@ const Balance = () => {
           </span>
         </div>
         <DropdownMenuSeparator className='sm:hidden' />
-        <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-zinc-600 py-2'>{walletLabel}</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}
           onClick={copyToClipboard}
