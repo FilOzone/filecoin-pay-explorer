@@ -45,8 +45,15 @@ export const exitWalletSession = async ({
   clearAccount: () => void;
 }) => {
   // Runs while wagmi still holds the console account; once the account is cleared there is nothing to revoke.
-  await disconnectConnection();
+  // A wallet provider that fails to disconnect must not block leaving the console, so the exit continues.
+  try {
+    await disconnectConnection();
+  } catch {}
   if (authenticated) await logout();
-  else disconnect?.();
+  else {
+    try {
+      disconnect?.();
+    } catch {}
+  }
   clearAccount();
 };
