@@ -41,6 +41,7 @@ vi.mock("@privy-io/react-auth", () => ({
     return { login: privy.login };
   },
   usePrivy: () => ({
+    authenticated: privy.authenticated,
     user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loggedInAs }] } : null,
   }),
 }));
@@ -211,7 +212,7 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
-  it("treats a login made as another account as no login for this one", async () => {
+  it("does not buy on, or wait behind, a login made as another account", async () => {
     privy.loggedInAs = OTHER;
     await act(async () => {
       create(<Harness />);
@@ -222,8 +223,13 @@ describe("useCardPurchase", () => {
       void latest.buyWithCard();
     });
 
-    expect(privy.login).toHaveBeenCalledWith({ loginMethods: ["wallet"] });
+    // Privy would ignore a login over the active one, leaving the purchase busy for good.
+    expect(privy.login).not.toHaveBeenCalled();
     expect(privy.fund).not.toHaveBeenCalled();
+    expect(latest.isBusy).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith("Card purchase unavailable", {
+      description: "Finishing the previous sign-out. Try again in a moment.",
+    });
   });
 
   it("does not continue login after the wallet changes", async () => {
