@@ -1,6 +1,9 @@
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
+// CI points the subgraph at placeholder.invalid, which the page's connect-src CSP refuses before any route can answer.
+test.use({ bypassCSP: true });
+
 // Regression: a value like 1.5 in the lockup period field threw after the dialog had entered its busy state, leaving
 // it on "Processing..." until it was closed and reopened.
 test("Increase stays unavailable for an unparsable lockup period instead of getting stuck", async ({ page }) => {
@@ -22,18 +25,15 @@ test("Increase stays unavailable for an unparsable lockup period instead of gett
     // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
     (url) => url.hostname === "api.goldsky.com" || url.hostname === "placeholder.invalid",
     (route) => {
-      // The subgraph is cross-origin, so the browser preflights the POST.
-      const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
-      if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
       const query = route.request().postData() ?? "";
       if (query.includes("GetAccountApprovals")) {
-        return route.fulfill({ headers: cors, json: { data: { operatorApprovals: [approval] } } });
+        return route.fulfill({ json: { data: { operatorApprovals: [approval] } } });
       }
       if (query.includes("GetAccountDetails")) {
         const account = { id: "0x1", address: "0x1", totalRails: "0", totalTokens: "0", totalApprovals: "1" };
-        return route.fulfill({ headers: cors, json: { data: { accounts: [account] } } });
+        return route.fulfill({ json: { data: { accounts: [account] } } });
       }
-      return route.fulfill({ headers: cors, json: { data: { accounts: [], userTokens: [], operatorApprovals: [] } } });
+      return route.fulfill({ json: { data: { accounts: [], userTokens: [], operatorApprovals: [] } } });
     },
   );
   await page.route(
