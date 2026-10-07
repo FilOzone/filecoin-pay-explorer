@@ -115,16 +115,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className='sm:max-w-500px'
-        showCloseButton={!isSubmitting}
-        onEscapeKeyDown={(event) => {
-          if (isSubmitting) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isSubmitting) event.preventDefault();
-        }}
-      >
+      <DialogContent className='sm:max-w-500px' showCloseButton={!isSubmitting}>
         <DialogHeader>
           <DialogTitle>Increase Approval</DialogTitle>
           <DialogDescription>Increase the allowances for this operator approval.</DialogDescription>

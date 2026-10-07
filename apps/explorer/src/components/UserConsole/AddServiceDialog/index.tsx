@@ -264,16 +264,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
 
   return (
     <Dialog open={open && !funding.isSquidOpen} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'
-        showCloseButton={!isBusy}
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-      >
+      <DialogContent className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto' showCloseButton={!isBusy}>
         <DialogHeader>
           <DialogTitle>Add a Service</DialogTitle>
           <DialogDescription>

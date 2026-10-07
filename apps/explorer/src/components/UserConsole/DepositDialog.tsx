@@ -420,16 +420,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
-        // The guard in `handleDialogOpenChange` already refuses these closes, but
-        // stopping them at the source means no dismissal is even attempted while
-        // a signature is pending, and the missing X says so before it is tried.
+        // `handleDialogOpenChange` refuses closes while busy; the missing X says so before it is tried.
         showCloseButton={!isBusy}
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
       >
         <DialogHeader>
           <DialogTitle>Deposit tokens</DialogTitle>

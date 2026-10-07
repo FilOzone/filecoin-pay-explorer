@@ -170,16 +170,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className='sm:max-w-125'
-        showCloseButton={!isSubmitting}
-        onEscapeKeyDown={(event) => {
-          if (isSubmitting) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isSubmitting) event.preventDefault();
-        }}
-      >
+      <DialogContent className='sm:max-w-125' showCloseButton={!isSubmitting}>
         <DialogHeader>
           <DialogTitle>Withdraw {currentToken?.symbol || "Tokens"}</DialogTitle>
           <DialogDescription>Withdraw {currentToken?.symbol || "Tokens"} from your account.</DialogDescription>
