@@ -79,9 +79,9 @@ export const getConsoleAccessState = ({
 export type ReadyConnection = { address: string; chainId: number };
 
 /**
- * A reconnect that keeps the wallet and chain the console last showed as ready is a re-sync
- * (Privy's wagmi sync calls reconnect() on every user or wallet-list change), so the page stays
- * mounted. A first restore or a changed wallet or chain still reports "reconnecting".
+ * A reconnect that keeps the wallet the console last showed is a re-sync (Privy's wagmi sync calls reconnect() on
+ * every user or wallet-list change), so the page stays mounted and the wallet's chain decides the state. A first
+ * restore, a changed wallet, or a changed chain outside a top-up still reports "reconnecting".
  */
 export const keepReadyThroughResync = (
   accessState: ConsoleAccessState,
@@ -89,13 +89,17 @@ export const keepReadyThroughResync = (
   lastReady: ReadyConnection | null,
   address: string | undefined,
   chainId: number | undefined,
+  isTopUpActive: boolean,
 ): ConsoleAccessState => {
   // Only the console account's own re-sync counts: while wagmi still holds a previous account,
   // pages for the new one must not mount.
-  if (accessState !== "reconnecting" || accountState !== "active" || lastReady === null) return accessState;
-  return lastReady.address.toLowerCase() === address?.toLowerCase() && lastReady.chainId === chainId
-    ? "ready"
-    : accessState;
+  if (accessState !== "reconnecting" || accountState !== "active" || lastReady === null || chainId === undefined) {
+    return accessState;
+  }
+  if (lastReady.address.toLowerCase() !== address?.toLowerCase()) return accessState;
+  // A top-up moves the wallet to its source network and back on purpose, so that chain change is a re-sync too.
+  if (lastReady.chainId !== chainId && !isTopUpActive) return accessState;
+  return getConsoleAccessState({ accountState: "active", isConnected: true, hasAddress: true, chainId });
 };
 
 /** The wallet and chain to compare the next reconnect against; any state but a reconnect resets it. */
@@ -106,6 +110,8 @@ export const rememberReadyConnection = (
   previous: ReadyConnection | null,
 ): ReadyConnection | null => {
   if (accessState === "reconnecting") return previous;
-  if (accessState !== "ready" || address === undefined || chainId === undefined) return null;
+  // A top-up's source network counts, so the return to Filecoin is a re-sync as well.
+  const isShown = accessState === "ready" || accessState === "squid-source";
+  if (!isShown || address === undefined || chainId === undefined) return null;
   return { address, chainId };
 };

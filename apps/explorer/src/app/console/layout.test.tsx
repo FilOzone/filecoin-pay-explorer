@@ -271,9 +271,10 @@ describe("same-wallet re-sync", () => {
   const WALLET = "0x00000000000000000000000000000000000000aa";
   const OTHER = "0x00000000000000000000000000000000000000cc";
   const lastReady = { address: WALLET, chainId: 314 };
+  const BASE = 8453;
 
   it("stays ready when a reconnect keeps the last ready wallet and chain", () => {
-    expect(keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, 314)).toBe("ready");
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, 314, false)).toBe("ready");
   });
 
   it.each([
@@ -282,27 +283,48 @@ describe("same-wallet re-sync", () => {
     ["the account changed", lastReady, OTHER, 314],
     ["the chain is not known yet", lastReady, WALLET, undefined],
   ])("still shows reconnecting when %s", (_case, previous, address, chainId) => {
-    expect(keepReadyThroughResync("reconnecting", "active", previous, address, chainId)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "active", previous, address, chainId, false)).toBe("reconnecting");
   });
 
   // The console account changed, but Privy has not moved wagmi off the previous account yet.
   it("still shows reconnecting while wagmi holds an account other than the console account", () => {
-    expect(keepReadyThroughResync("reconnecting", "connecting", lastReady, WALLET, 314)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "connecting", lastReady, WALLET, 314, false)).toBe("reconnecting");
+  });
+
+  // Paying from the console account's own extension switches the whole site to the source network and back.
+  it("keeps the console through a top-up's trip to its source network and back", () => {
+    const onSource = keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, BASE, true);
+    expect(onSource).toBe("squid-source");
+    expect(getConsoleDisplayAccessState(onSource, true)).toBe("ready");
+
+    const remembered = rememberReadyConnection(onSource, WALLET, BASE, lastReady);
+    expect(keepReadyThroughResync("reconnecting", "active", remembered, WALLET, 314, true)).toBe("ready");
+  });
+
+  it("still shows reconnecting when a different account appears during a top-up", () => {
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, OTHER, BASE, true)).toBe("reconnecting");
   });
 
   it("passes every other state through", () => {
-    expect(keepReadyThroughResync("not-connected", "active", lastReady, WALLET, 314)).toBe("not-connected");
+    expect(keepReadyThroughResync("not-connected", "active", lastReady, WALLET, 314, false)).toBe("not-connected");
   });
 
   it("remembers the wallet and chain a ready console showed", () => {
     expect(rememberReadyConnection("ready", WALLET, 314, null)).toEqual({ address: WALLET, chainId: 314 });
   });
 
+  it("remembers a top-up's source network, so the return to Filecoin is a re-sync", () => {
+    expect(rememberReadyConnection("squid-source", WALLET, BASE, lastReady)).toEqual({
+      address: WALLET,
+      chainId: BASE,
+    });
+  });
+
   it("keeps the remembered wallet through a reconnect", () => {
     expect(rememberReadyConnection("reconnecting", WALLET, 314, lastReady)).toBe(lastReady);
   });
 
-  it.each(["not-connected", "unsupported-chain", "squid-source"] as const)(
+  it.each(["not-connected", "unsupported-chain", "account-unavailable"] as const)(
     "forgets the remembered wallet on %s, so the next restore shows reconnecting",
     (state) => {
       expect(rememberReadyConnection(state, WALLET, 314, lastReady)).toBeNull();
