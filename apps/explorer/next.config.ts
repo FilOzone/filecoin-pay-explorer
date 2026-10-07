@@ -45,6 +45,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.0.*"],
+  // VERCEL_ENV is build-time only; the console needs it in the browser to refuse the development Privy app in
+  // production (see resolvePrivyApp).
+  env: { NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? "" },
   headers: async () => [{ source: "/(.*)", headers: securityHeaders }],
   images: {
     qualities: [75, 100],
