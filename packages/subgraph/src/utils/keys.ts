@@ -5,6 +5,14 @@ export function getRailEntityId(railId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(railId));
 }
 
+export function getDataSetEntityId(dataSetId: BigInt): Bytes {
+  return Bytes.fromByteArray(Bytes.fromBigInt(dataSetId));
+}
+
+export function getPieceEntityId(dataSetId: BigInt, pieceId: BigInt): Bytes {
+  return getDataSetEntityId(dataSetId).concat(Bytes.fromByteArray(Bytes.fromBigInt(pieceId)));
+}
+
 export function getUserTokenEntityId(account: Bytes, token: Bytes): Bytes {
   return account.concat(token);
 }
