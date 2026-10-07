@@ -50,6 +50,10 @@ export const exitWalletSession = async ({
     await disconnectConnection();
   } catch {}
   if (authenticated) await logout();
-  else disconnect?.();
+  else {
+    try {
+      disconnect?.();
+    } catch {}
+  }
   clearAccount();
 };
