@@ -65,7 +65,7 @@ const CustomConnectButton = () => {
           <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>New to crypto</span>
         </div>
         <p className='mb-4 text-sm text-muted-foreground'>
-          We’ll create a wallet for you, and you can pay by card right away.
+          We’ll create a Filecoin Pay wallet if you don’t have one yet.
         </p>
         <Button
           className='w-full'
@@ -73,7 +73,7 @@ const CustomConnectButton = () => {
           onClick={() => login({ loginMethods: ["email", "google"] })}
           type='button'
         >
-          Continue with email or Google
+          Continue with a Filecoin Pay wallet
         </Button>
       </div>
 

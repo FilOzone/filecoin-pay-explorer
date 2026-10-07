@@ -94,7 +94,7 @@ describe("CustomConnectButton", () => {
     mocks.walletsReady = true;
     const renderer = await render();
 
-    await act(async () => findButton(renderer, "Continue with email or Google")?.props.onClick());
+    await act(async () => findButton(renderer, "Continue with a Filecoin Pay wallet")?.props.onClick());
     await act(async () => findButton(renderer, "Connect existing wallet")?.props.onClick());
 
     // A wallet enters through the connect action only, so there is one way in per kind of account.
