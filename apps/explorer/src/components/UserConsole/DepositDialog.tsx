@@ -29,7 +29,8 @@ import {
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
+import { getChainConstants } from "@/utils/constants";
 import { getPermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
@@ -72,13 +73,15 @@ type DepositDialogProps = {
    * so a later change to this prop must not swap the target of a part-filled form.
    */
   depositToken?: UserToken | null;
+  /** The Filecoin network the deposit goes to. */
+  network: Network;
   /** Tokens already held by the account, resolved by the caller. */
   tokens: UserToken[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: DepositDialogProps) => {
+export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChange }: DepositDialogProps) => {
   const { address: userAddress } = useAccount();
 
   const [amount, setAmount] = useState("");
@@ -94,7 +97,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
    */
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { synapse, constants } = useSynapse();
+  const constants = getChainConstants(network);
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
@@ -166,9 +169,9 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   } = useReadContracts({
     contracts: customTokenAddress
       ? [
-          { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
+          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "name" },
         ]
       : [],
     query: {
@@ -226,6 +229,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
+    chainId: constants.chain.id,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: {
@@ -307,11 +311,6 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
 
     if (parsedDepositAmount === null || balance === undefined || hasInsufficientBalance) {
       console.log("Invalid amount");
-      return;
-    }
-
-    if (!synapse) {
-      console.log("Synapse not initialized");
       return;
     }
 

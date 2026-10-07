@@ -26,7 +26,8 @@ import TokenIcon from "@/components/shared/TokenIcon";
 import { FIL_TRANSACTION_FEE_RESERVE } from "@/components/UserConsole/FundsSection/data/filecoin-gas-balance";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
+import { getChainConstants } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
 import {
   CUSTOM_OPTION,
@@ -45,6 +46,8 @@ export interface AddServicePrefill {
 }
 
 interface AddServiceDialogProps {
+  /** The Filecoin network the approval and deposit go to. */
+  network: Network;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: AddServicePrefill | null;
@@ -103,14 +106,14 @@ const GasNotice = ({ action, children }: { action: ReactNode; children: ReactNod
   </div>
 );
 
-const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange, prefill }) => {
-  const serviceSelection = useServiceSelection();
-  const tokenSelection = useTokenSelection(open);
+const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOpenChange, prefill }) => {
+  const serviceSelection = useServiceSelection(network);
+  const tokenSelection = useTokenSelection(network, open);
   const [isCheckingGas, setIsCheckingGas] = useState(false);
   const isGasCheckInFlight = useRef(false);
-  const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(() => onOpenChange(false));
+  const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(network, () => onOpenChange(false));
   const isBusy = isCheckingGas || isSubmitting || isExecuting;
-  const gasBalance = useFilecoinGasBalance(open);
+  const gasBalance = useFilecoinGasBalance(network, open);
   const funding = useFundingLaunch();
   const formOwner = useRef(gasBalance.owner);
   const wasSquidOpen = useRef(funding.isSquidOpen);
@@ -123,7 +126,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
   const [lockupAllowance, setLockupAllowance] = useState("");
   const [rateAllowance, setRateAllowance] = useState("");
 
-  const { constants } = useSynapse();
+  const constants = getChainConstants(network);
   const explorerUrl = constants.chain.blockExplorers?.default.url;
   const filFaucet = constants.faucets?.find((faucet) => faucet.asset === "FIL");
   const requiredFil = formatUnits(FIL_TRANSACTION_FEE_RESERVE, 18);

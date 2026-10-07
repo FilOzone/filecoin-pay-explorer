@@ -80,18 +80,6 @@ vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
   useFundingLaunch: () => ({ isSquidOpen: mocks.isSquidOpen, openSquid: mocks.openSquid }),
 }));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    constants: {
-      chain: { blockExplorers: { default: { url: "https://example.com" } }, slug: mocks.network },
-      faucets:
-        mocks.network === "calibration"
-          ? [{ asset: "FIL", name: "Get FIL", url: "https://faucet.example.com/filecoin" }]
-          : undefined,
-      label: mocks.network === "calibration" ? "Calibration" : "Mainnet",
-    },
-  }),
-}));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
   useServiceSelection: () => ({
@@ -128,7 +116,7 @@ vi.mock("./hooks", () => ({
     switchToFilecoin: mocks.switchToFilecoin,
     targetChainId: mocks.targetChainId,
   }),
-  useAddServiceSubmit: (onSubmitOnChain: () => void) => {
+  useAddServiceSubmit: (_network: string, onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
     return { submit: mocks.submit, isSubmitting: mocks.isSubmitting, isExecuting: mocks.isExecuting };
   },
@@ -140,7 +128,7 @@ function renderDialog(
 ) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<AddServiceDialog open onOpenChange={onOpenChange} prefill={prefill} />);
+    renderer = create(<AddServiceDialog network={mocks.network} open onOpenChange={onOpenChange} prefill={prefill} />);
   });
   return { renderer, onOpenChange };
 }
@@ -235,7 +223,9 @@ describe("AddServiceDialog", () => {
 
     expect(primaryButton(renderer).props.disabled).toBe(true);
     expect(
-      renderer.root.findAllByType("a").some((link) => link.props.href === "https://faucet.example.com/filecoin"),
+      renderer.root
+        .findAllByType("a")
+        .some((link) => link.props.href === "https://faucet.calibnet.chainsafe-fil.io/funds.html"),
     ).toBe(true);
     expect(mocks.openSquid).not.toHaveBeenCalled();
   });
@@ -258,7 +248,7 @@ describe("AddServiceDialog", () => {
     mocks.refreshFilBalance.mockClear();
 
     mocks.isSquidOpen = false;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
   });
@@ -279,7 +269,7 @@ describe("AddServiceDialog", () => {
     expect(primaryButton(renderer).props.disabled).toBe(true);
 
     mocks.filBalanceStatus = "funded";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(primaryButton(renderer).props.disabled).toBe(false);
   });
@@ -313,11 +303,11 @@ describe("AddServiceDialog", () => {
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
 
     mocks.isSquidOpen = true;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
     expect(mocks.isDialogOpen).toBe(false);
 
     mocks.isSquidOpen = false;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
     expect(mocks.isDialogOpen).toBe(true);
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("7");
   });
@@ -327,7 +317,7 @@ describe("AddServiceDialog", () => {
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
 
     mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("");
   });
