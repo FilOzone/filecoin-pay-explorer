@@ -4,9 +4,8 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { WalletIcon } from "@phosphor-icons/react";
-import { useWallets } from "@privy-io/react-auth";
 import { useEffect, useState } from "react";
-import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
+import { useConsoleAccountExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { ExitLink } from "./ExitLink";
 
@@ -26,11 +25,7 @@ const ConnectingWallet = () => {
 
 function SlowConnection() {
   const { account } = useConsoleAccount();
-  const { wallets } = useWallets();
-  const accountWallet = account
-    ? wallets.find((wallet) => wallet.address.toLowerCase() === account.address.toLowerCase())
-    : undefined;
-  const walletExit = useWalletExit(accountWallet);
+  const walletExit = useConsoleAccountExit();
 
   return (
     <EmptyStateCard
