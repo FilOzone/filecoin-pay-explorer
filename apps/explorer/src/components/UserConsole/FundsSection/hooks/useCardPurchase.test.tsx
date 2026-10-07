@@ -10,7 +10,6 @@ const privy = vi.hoisted(() => ({
   authenticated: true,
   // The wallet the Privy login belongs to.
   loginOwner: "0x1111111111111111111111111111111111111111",
-  logout: vi.fn<() => Promise<void>>(),
   fund: vi.fn(),
   generateSiweMessage: vi.fn<(params: { address: string; chainId: string }) => Promise<string>>(),
   loginWithSiwe: vi.fn<(params: { message: string; signature: string }) => Promise<void>>(),
@@ -40,7 +39,6 @@ vi.mock("@privy-io/react-auth", () => ({
   useLoginWithSiwe: () => ({ generateSiweMessage: privy.generateSiweMessage, loginWithSiwe: privy.loginWithSiwe }),
   usePrivy: () => ({
     authenticated: privy.authenticated,
-    logout: privy.logout,
     user: privy.authenticated ? { linkedAccounts: [{ type: "wallet", address: privy.loginOwner }] } : null,
   }),
   useWallets: () => ({
@@ -76,7 +74,6 @@ beforeEach(() => {
   onPurchased.mockReset();
   privy.authenticated = true;
   privy.loginOwner = ADDRESS;
-  privy.logout.mockReset().mockResolvedValue(undefined);
   privy.fund.mockReset();
   privy.generateSiweMessage.mockReset().mockResolvedValue("siwe message");
   privy.loginWithSiwe.mockReset().mockResolvedValue(undefined);
@@ -185,10 +182,8 @@ describe("useCardPurchase", () => {
     expect(onPurchased).toHaveBeenCalledWith(2n);
   });
 
-  it("does not buy on a login that belongs to another wallet, and ends it before verifying", async () => {
+  it("does not buy on, or verify behind, a login that belongs to another wallet", async () => {
     privy.loginOwner = OTHER;
-    chain.readContract.mockResolvedValueOnce(10n).mockResolvedValueOnce(12n);
-    privy.fund.mockResolvedValue({ status: "submitted" });
     await act(async () => {
       create(<Harness />);
     });
@@ -196,12 +191,13 @@ describe("useCardPurchase", () => {
     expect(latest.label).toBe("Verify wallet to buy USDC with card");
     await act(async () => latest.buyWithCard());
 
-    expect(privy.logout).toHaveBeenCalledOnce();
-    expect(privy.logout.mock.invocationCallOrder[0]).toBeLessThan(
-      privy.generateSiweMessage.mock.invocationCallOrder[0],
-    );
-    expect(privy.generateSiweMessage).toHaveBeenCalledWith({ address: ADDRESS, chainId: "eip155:314" });
-    expect(privy.fund.mock.calls[0][0].destination.address).toBe(ADDRESS);
+    // Privy rejects a login over the active one; the console account provider ends that login instead.
+    expect(privy.generateSiweMessage).not.toHaveBeenCalled();
+    expect(privy.fund).not.toHaveBeenCalled();
+    expect(latest.isBusy).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith("Card purchase unavailable", {
+      description: "Finishing the previous sign-out. Try again in a moment.",
+    });
   });
 
   it("shows the sign-in step while the wallet signs, not the purchase", async () => {

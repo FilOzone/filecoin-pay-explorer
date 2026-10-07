@@ -133,7 +133,7 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated, logout, user } = usePrivy();
+  const { authenticated, user } = usePrivy();
   const { wallets } = useWallets();
   // A Privy login only counts for its own wallets, never for an account the extension switched to.
   const isLoggedInAsRecipient = isLinkedWallet(user, address);
@@ -261,8 +261,6 @@ export function useCardPurchase({
   const verifyThenPurchase = async (wallet: ConnectedWallet, intent: LoginContext) => {
     setStatus("verifying");
     try {
-      // A login that belongs to another wallet must end first; Privy also refuses to log in over one.
-      if (authenticated) await logout();
       const chainId = Number(wallet.chainId.replace("eip155:", ""));
       const message = await generateSiweMessage({ address: intent.recipient, chainId: `eip155:${chainId}` });
       // Naming the recipient makes the wallet sign as it or refuse, never as whichever account it has selected.
@@ -311,6 +309,13 @@ export function useCardPurchase({
     if (status === "opening" || status === "verifying" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (isLoggedInAsRecipient) return purchase();
+    // Privy refuses to log in over another login, and the console account provider is already ending it.
+    if (authenticated) {
+      toast.error("Card purchase unavailable", {
+        description: "Finishing the previous sign-out. Try again in a moment.",
+      });
+      return;
+    }
     const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === address.toLowerCase());
     if (!recipientWallet) {
       toast.error("Card purchase unavailable", { description: "Reconnect your wallet and try again." });
