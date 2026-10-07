@@ -8,6 +8,7 @@ import {
   PaginationPrevious,
 } from "@filecoin-pay/ui/components/pagination";
 import { useCallback, useMemo, useState } from "react";
+import type { Address } from "viem";
 import { getChain } from "@/constants/chains";
 import { ACCOUNT_SERVICE_RAILS_PAGE_SIZE, useAccountServiceRails } from "@/hooks/useAccountServices";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
@@ -37,8 +38,15 @@ type RailsPaginationProps = {
   onPageChange: (page: number) => void;
 } & ({ kind: "counted"; totalPages: number } | { kind: "stepped"; hasMore: boolean });
 
-/** How many numbered links to offer before falling back to stepping. */
+/** How many numbered links to show around the current page. */
 const MAX_PAGE_LINKS = 5;
+
+/** Up to `MAX_PAGE_LINKS` page numbers centred on `page`, shifted to stay within the first and last page. */
+function pageWindow(page: number, totalPages: number): number[] {
+  const count = Math.min(MAX_PAGE_LINKS, totalPages);
+  const first = Math.min(Math.max(1, page - Math.floor(MAX_PAGE_LINKS / 2)), totalPages - count + 1);
+  return Array.from({ length: count }, (_, index) => first + index);
+}
 
 const stepClass = (isDisabled: boolean) => (isDisabled ? "pointer-events-none opacity-50" : "cursor-pointer");
 
@@ -57,19 +65,17 @@ function RailsPagination(props: RailsPaginationProps) {
         </PaginationItem>
 
         {props.kind === "counted"
-          ? Array.from({ length: Math.min(MAX_PAGE_LINKS, props.totalPages) }, (_, index) => index + 1).map(
-              (pageNumber) => (
-                <PaginationItem key={pageNumber}>
-                  <PaginationLink
-                    onClick={() => onPageChange(pageNumber)}
-                    isActive={page === pageNumber}
-                    className='cursor-pointer'
-                  >
-                    {pageNumber}
-                  </PaginationLink>
-                </PaginationItem>
-              ),
-            )
+          ? pageWindow(page, props.totalPages).map((pageNumber) => (
+              <PaginationItem key={pageNumber}>
+                <PaginationLink
+                  onClick={() => onPageChange(pageNumber)}
+                  isActive={page === pageNumber}
+                  className='cursor-pointer'
+                >
+                  {pageNumber}
+                </PaginationLink>
+              </PaginationItem>
+            ))
           : null}
 
         <PaginationItem>
@@ -83,6 +89,9 @@ function RailsPagination(props: RailsPaginationProps) {
 /** Stable identity so the table memo survives a render with no data yet. */
 const NO_RAILS: Rail[] = [];
 
+/** The rail being settled and the epoch read when its dialog opened; null while no dialog is open. */
+type SettleSelection = { rail: Rail; currentEpoch: bigint | undefined } | null;
+
 interface RailsSectionProps {
   /** The connected payer. Every rail listed here has this account as its payer. */
   accountId: string;
@@ -90,7 +99,7 @@ interface RailsSectionProps {
   operatorAddress: string;
   /** `AccountOperator.totalRails` for this pair — not the account-wide count. */
   totalRails: bigint;
-  userAddress: string;
+  userAddress: Address;
 }
 
 export const RailsSection: React.FC<RailsSectionProps> = ({
@@ -102,11 +111,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
 }) => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [settleDialogOpen, setSettleDialogOpen] = useState(false);
-  const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
-  const [currentEpoch, setCurrentEpoch] = useState<bigint>();
+  const [settleSelection, setSettleSelection] = useState<SettleSelection>(null);
 
-  const chain = useMemo(() => getChain(network), [network]);
+  const chain = getChain(network);
 
   const { filter, summary } = useMemo(() => parseServiceRailsSearch(searchQuery), [searchQuery]);
   const isFiltering = Boolean(summary);
@@ -117,7 +124,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
   const rails = data?.rails ?? NO_RAILS;
 
   const { settleRail, isSettling, settlements } = useRailSettlements({
-    account: userAddress as `0x${string}`,
+    account: userAddress,
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
@@ -125,10 +132,8 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
-  const handleSettle = useCallback((rail: Rail, epoch: bigint | undefined) => {
-    setSelectedRail(rail);
-    setCurrentEpoch(epoch);
-    setSettleDialogOpen(true);
+  const handleSettle = useCallback((rail: Rail, currentEpoch: bigint | undefined) => {
+    setSettleSelection({ rail, currentEpoch });
   }, []);
 
   const handleSearch = (query: string) => {
@@ -200,14 +205,16 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
         {renderResults()}
       </RailsSectionLayout>
 
-      {selectedRail && (
+      {settleSelection && (
         <SettleRailDialog
-          rail={selectedRail}
+          rail={settleSelection.rail}
           userAddress={userAddress}
-          currentEpoch={currentEpoch}
-          open={settleDialogOpen}
-          onOpenChange={setSettleDialogOpen}
-          isSettling={isSettling(selectedRail.railId.toString())}
+          currentEpoch={settleSelection.currentEpoch}
+          open
+          onOpenChange={(open) => {
+            if (!open) setSettleSelection(null);
+          }}
+          isSettling={isSettling(settleSelection.rail.railId.toString())}
           settleRail={settleRail}
         />
       )}
