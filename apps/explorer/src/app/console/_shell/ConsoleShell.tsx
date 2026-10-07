@@ -113,7 +113,7 @@ export const ConsoleShell = ({
               {focused ? (
                 <div key={account?.address}>{children}</div>
               ) : (
-                <ConsoleContent key={account?.address} accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
+                <ConsoleContent key={account?.address} sidebar={<ConsoleSidebar />}>
                   {children}
                 </ConsoleContent>
               )}
