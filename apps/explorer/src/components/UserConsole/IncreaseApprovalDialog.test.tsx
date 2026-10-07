@@ -41,7 +41,7 @@ vi.mock("@filecoin-pay/ui/components/dialog", () => ({
 vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("wagmi", () => ({ useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }) }));
+vi.mock("wagmi", () => ({ useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }) }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
 }));
