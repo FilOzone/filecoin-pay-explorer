@@ -107,7 +107,7 @@ test("an account switch closes a form opened for the previous account", async ({
 async function connectAndOpenCardPurchase(page: Page): Promise<string> {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const account = await consoleAccount(page);
   await walletMenu(page).click();
