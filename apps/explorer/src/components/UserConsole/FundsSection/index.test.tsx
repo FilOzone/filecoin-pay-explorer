@@ -3,9 +3,10 @@ import type { ReactNode } from "react";
 import { act, create } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { calibration, mainnet } from "@/constants/chains";
+import type { Network } from "@/types";
 import { FundsSection } from ".";
 
-const USDFC = "0x3333333333333333333333333333333333333333";
 const OTHER_TOKEN = "0x4444444444444444444444444444444444444444";
 
 const tokenState = vi.hoisted(() => ({ userTokens: [] as UserToken[] }));
@@ -13,9 +14,6 @@ const tokenState = vi.hoisted(() => ({ userTokens: [] as UserToken[] }));
 vi.mock("@/hooks/useAccountDetails", () => ({
   CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () => ({ data: { userTokens: tokenState.userTokens }, isError: false, isLoading: false }),
-}));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { contracts: { usdfc: USDFC } } }),
 }));
 vi.mock("@/components/UserConsole/WithdrawDialog", () => ({ WithdrawDialog: () => null }));
 // Stubbed out: these tests are about guided funding, not the chart.
@@ -52,12 +50,12 @@ function LaunchState() {
   return <div data-funding-open={launch.isAddFundsOpen} data-token-id={launch.depositToken?.id ?? ""} />;
 }
 
-async function openFundingFrom(buttonLabel: string) {
+async function openFundingFrom(buttonLabel: string, network: Network = "mainnet") {
   let renderer!: ReturnType<typeof create>;
   await act(async () => {
     renderer = create(
       <FundingLaunchProvider>
-        <FundsSection account={account} network='mainnet' />
+        <FundsSection account={account} network={network} />
         <LaunchState />
       </FundingLaunchProvider>,
     );
@@ -85,5 +83,21 @@ describe("FundsSection funding launch", () => {
 
     const renderer = await openFundingFrom("Add funds to populated account");
     expect(renderer.root.findByProps({ "data-funding-open": true }).props["data-token-id"]).toBe("account-other-token");
+  });
+
+  // The network comes from the page, which shows mainnet during a Squid top-up while the wallet sits on the source
+  // chain, so the default token must not follow the wallet.
+  it.each([
+    ["mainnet", "account-mainnet-usdfc"],
+    ["calibration", "account-calibration-usdfc"],
+  ] as const)("opens on the %s USDFC the section displays", async (network, expected) => {
+    tokenState.userTokens = [
+      { id: "account-other-token", token: { id: OTHER_TOKEN } },
+      { id: "account-calibration-usdfc", token: { id: calibration.contracts.usdfc.address } },
+      { id: "account-mainnet-usdfc", token: { id: mainnet.contracts.usdfc.address } },
+    ] as unknown as UserToken[];
+
+    const renderer = await openFundingFrom("Add funds to populated account", network);
+    expect(renderer.root.findByProps({ "data-funding-open": true }).props["data-token-id"]).toBe(expected);
   });
 });

@@ -47,7 +47,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     return (
       <>
         <ApprovalsEmptyState onApprove={handleOpenApprove} />
-        <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+        <AddServiceDialog network={network} open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       </>
     );
   }
@@ -69,10 +69,11 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
       </div>
 
       {/* Dialogs */}
-      <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+      <AddServiceDialog network={network} open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       {selectedApproval && (
         <IncreaseApprovalDialog
           approval={selectedApproval}
+          network={network}
           open={increaseDialogOpen}
           onOpenChange={setIncreaseDialogOpen}
         />

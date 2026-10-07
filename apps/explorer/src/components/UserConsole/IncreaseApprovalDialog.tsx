@@ -15,17 +15,24 @@ import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
 import { computeIncreasedApproval } from "@/utils/approvalIncrease";
+import { getChainConstants } from "@/utils/constants";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
 
 interface IncreaseApprovalDialogProps {
   approval: OperatorApproval;
+  network: Network;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ approval, open, onOpenChange }) => {
+export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({
+  approval,
+  network,
+  open,
+  onOpenChange,
+}) => {
   const [lockupIncrease, setLockupIncrease] = useState("");
   const [rateIncrease, setRateIncrease] = useState("");
   const [maxLockupPeriodIncrease, setMaxLockupPeriodIncrease] = useState("");
@@ -33,7 +40,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { address: userAddress } = useConnection();
 
-  const { synapse, constants } = useSynapse();
+  const constants = getChainConstants(network);
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
@@ -78,11 +85,6 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
 
   const handleIncrease = async () => {
     if (!newTotals || !hasIncrease) return;
-
-    if (!synapse) {
-      console.log("Synapse not initialized");
-      return;
-    }
 
     setIsSubmitting(true);
 

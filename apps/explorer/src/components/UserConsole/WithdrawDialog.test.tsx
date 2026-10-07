@@ -51,15 +51,6 @@ vi.mock("wagmi", () => ({
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
 }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    synapse: {},
-    constants: {
-      chain: { id: 314, blockExplorers: { default: { url: "https://example.com" } } },
-      contracts: { payments: { address: "0x2222222222222222222222222222222222222222", abi: [] } },
-    },
-  }),
-}));
 
 const userToken = {
   id: "user-token",
@@ -69,7 +60,7 @@ const userToken = {
 function renderDialog(onOpenChange = vi.fn()) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<WithdrawDialog onOpenChange={onOpenChange} open userToken={userToken} />);
+    renderer = create(<WithdrawDialog network='mainnet' onOpenChange={onOpenChange} open userToken={userToken} />);
   });
   const withdraw = () =>
     renderer.root.findAllByType("button").find((button) => button.children.join("") === "Withdraw");

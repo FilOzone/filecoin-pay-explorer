@@ -14,7 +14,8 @@ import {
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
+import { getChainConstants } from "@/utils/constants";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
@@ -43,10 +44,10 @@ export interface ServiceSelection {
 }
 
 // Everything in this dialog — service list, token list, payments contract,
-// permit domain — derives from the same useSynapse chain so a wallet/app
+// permit domain — derives from the same displayed network so a wallet/app
 // network divergence can't mix networks within one submission.
-export function useServiceSelection(): ServiceSelection {
-  const { constants } = useSynapse();
+export function useServiceSelection(network: Network): ServiceSelection {
+  const constants = getChainConstants(network);
   const [serviceChoice, setServiceChoice] = useState("");
   const [customServiceInput, setCustomServiceInput] = useState("");
   const { services, isLoading: isLoadingServices } = useApprovableServices({
@@ -128,8 +129,9 @@ export interface TokenSelection {
   reset: () => void;
 }
 
-export function useTokenSelection(open: boolean): TokenSelection {
-  const { constants } = useSynapse();
+export function useTokenSelection(network: Network, open: boolean): TokenSelection {
+  const constants = getChainConstants(network);
+  const chainId = constants.chain.id;
   const { address: userAddress } = useAccount();
 
   const knownTokens: PaymentTokenDetails[] = paymentTokensByChainId[constants.chain.id] ?? [];
@@ -149,11 +151,11 @@ export function useTokenSelection(open: boolean): TokenSelection {
   } = useReadContracts({
     contracts: customTokenAddress
       ? [
-          { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
-          { address: customTokenAddress, abi: permitNoncesAbi, functionName: "nonces", args: [zeroAddress] },
-          { address: customTokenAddress, abi: permitDomainSeparatorAbi, functionName: "DOMAIN_SEPARATOR" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "name" },
+          { address: customTokenAddress, abi: permitNoncesAbi, chainId, functionName: "nonces", args: [zeroAddress] },
+          { address: customTokenAddress, abi: permitDomainSeparatorAbi, chainId, functionName: "DOMAIN_SEPARATOR" },
         ]
       : [],
     query: { enabled: !!customTokenAddress && open },
@@ -201,6 +203,7 @@ export function useTokenSelection(open: boolean): TokenSelection {
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
     address: (token?.address as Hex | undefined) ?? undefined,
     abi: erc20Abi,
+    chainId,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: { enabled: !!token && !!userAddress && open },
@@ -226,8 +229,8 @@ export function useTokenSelection(open: boolean): TokenSelection {
   };
 }
 
-export function useFilecoinGasBalance(open: boolean) {
-  const { constants } = useSynapse();
+export function useFilecoinGasBalance(network: Network, open: boolean) {
+  const constants = getChainConstants(network);
   const { address: owner, chainId } = useConnection();
   const { isPending: isSwitchingNetwork, switchChain } = useSwitchChain();
   const query = useBalance({
@@ -268,8 +271,8 @@ export interface SubmitArgs {
   rateInWei: bigint;
 }
 
-export function useAddServiceSubmit(onSubmitOnChain: () => void) {
-  const { constants } = useSynapse();
+export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => void) {
+  const constants = getChainConstants(network);
   const { address: userAddress } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
