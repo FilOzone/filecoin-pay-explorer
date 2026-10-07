@@ -32,6 +32,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
 
   // Form state
   const [amount, setAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { synapse, constants } = useSynapse();
   const { data: walletClient } = useWalletClient();
@@ -122,6 +123,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await execute({
         functionName: "withdrawTo",
@@ -132,18 +134,25 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
           token: token.symbol,
           to: userAddress,
         },
-        onSubmitOnChain: () => handleClose(),
+        onSubmitOnChain: () => onOpenChange(false),
       });
     } catch (err) {
       console.error("Withdraw failed:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleClose = () => {
-    if (!isExecuting) {
-      onOpenChange(false);
-      // State will be reset by useEffect when open becomes false
-    }
+  /**
+   * Every close request comes through here so a pending wallet signature cannot
+   * be dismissed. `isSubmitting` ends when the transaction is submitted, not
+   * when its receipt confirms: the dialog closes then and may be reopened while
+   * the receipt is tracked. That close deliberately calls `onOpenChange`
+   * directly; see `onSubmitOnChain` above.
+   */
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isSubmitting) return;
+    onOpenChange(nextOpen);
   };
 
   const handleMaxClick = () => {
@@ -160,8 +169,17 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
   const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[500px]'>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+      <DialogContent
+        className='sm:max-w-125'
+        showCloseButton={!isSubmitting}
+        onEscapeKeyDown={(event) => {
+          if (isSubmitting) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isSubmitting) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Withdraw {currentToken?.symbol || "Tokens"}</DialogTitle>
           <DialogDescription>Withdraw {currentToken?.symbol || "Tokens"} from your account.</DialogDescription>
@@ -266,7 +284,12 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
         </div>
 
         <DialogFooter>
-          <Button variant='ghost' onClick={handleClose} disabled={isExecuting} className='py-2'>
+          <Button
+            variant='ghost'
+            onClick={() => handleDialogOpenChange(false)}
+            disabled={isSubmitting}
+            className='py-2'
+          >
             Cancel
           </Button>
           <Button variant='primary' onClick={handleWithdraw} disabled={!canExecute} className='py-2'>
