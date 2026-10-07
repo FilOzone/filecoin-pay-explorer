@@ -20,12 +20,14 @@ import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
-import useSynapse from "@/hooks/useSynapse";
+import { getChainConstants } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
+import { getNetworkFromChainId } from "@/utils/network";
 
 const Balance = () => {
-  const { constants } = useSynapse();
-  const { address } = useConnection();
+  const { address, chainId } = useConnection();
+  // The header shows balances only while the wallet is on a Filecoin chain, so its chain is the displayed network.
+  const constants = getChainConstants(getNetworkFromChainId(chainId));
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
@@ -39,11 +41,13 @@ const Balance = () => {
   const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
+    chainId: constants.chain.id,
     query: { enabled: !!address },
   });
   const { data: usdfcBalance, isLoading: isLoadingUSDFCBalance } = useReadContract({
     address: constants.contracts.usdfc,
     abi: erc20Abi,
+    chainId: constants.chain.id,
     functionName: "balanceOf",
     args: [address as Address],
     query: { enabled: !!address },

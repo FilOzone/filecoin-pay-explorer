@@ -1,7 +1,7 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { calibration, mainnet } from "@/constants/chains";
+import { calibration, getChain, mainnet } from "@/constants/chains";
 import type { supportedChains } from "@/services/wagmi/config";
-import type { ChainConstants } from "@/types";
+import type { ChainConstants, Network } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
 export const EPOCH_DURATION = TIME_CONSTANTS.EPOCH_DURATION;
@@ -47,3 +47,5 @@ export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainC
     },
   },
 } as const;
+
+export const getChainConstants = (network: Network): ChainConstants => appConstants[getChain(network).id];

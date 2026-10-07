@@ -72,6 +72,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       <DepositDialog
         depositToken={launch.depositToken}
         key={network}
+        network={network}
         onOpenChange={handleDepositOpenChange}
         open={!chainChanged && (isDepositOpen || (isCalibration && launch.isAddFundsOpen))}
         tokens={data?.userTokens ?? []}
