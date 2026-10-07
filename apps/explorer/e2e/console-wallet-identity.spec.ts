@@ -203,3 +203,18 @@ test("after the site's access is revoked, Disconnect leaves the console", async 
 
   await expect(page.getByRole("button", { name: "Connect a wallet without an account" })).toBeVisible();
 });
+
+test("on an unsupported network, the exit leaves the console", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await page.getByRole("button", { name: "Connect a wallet without an account" }).click();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+
+  // Gnosis: neither a console network nor a Squid source chain.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("fake-privy:switch-chain", { detail: 100 })));
+  await expect(page.getByRole("heading", { name: "Unsupported Network" })).toBeVisible();
+  await page.getByRole("button", { name: "Log out" }).click();
+
+  await expect(page.getByRole("button", { name: "Connect a wallet without an account" })).toBeVisible();
+});
