@@ -215,8 +215,6 @@ describe("useCardPurchase", () => {
 
     expect(latest.isBusy).toBe(true);
     expect(latest.statusMessage).toBe("Confirm the sign-in message in your wallet…");
-    // The signature is the wallet's own popup, not a Privy dialog.
-    expect(latest.isOpening).toBe(false);
     expect(privy.fund).not.toHaveBeenCalled();
     await act(async () => sign("0xsignature"));
   });
@@ -231,7 +229,6 @@ describe("useCardPurchase", () => {
     await act(async () => latest.buyWithCard());
 
     expect(latest.isBusy).toBe(false);
-    expect(latest.isOpening).toBe(false);
     expect(latest.statusMessage).toBeNull();
     expect(toast.error).not.toHaveBeenCalled();
     expect(privy.loginWithSiwe).not.toHaveBeenCalled();
@@ -250,34 +247,6 @@ describe("useCardPurchase", () => {
     expect(latest.isBusy).toBe(false);
     expect(toast.error).toHaveBeenCalledWith("Unable to verify wallet", { description: "Invalid signature" });
     expect(privy.fund).not.toHaveBeenCalled();
-  });
-
-  it("ends the opening state while a submitted purchase still waits for funds", async () => {
-    let resolveBalance!: (balance: bigint) => void;
-    chain.readContract.mockResolvedValueOnce(10n).mockImplementationOnce(
-      () =>
-        new Promise<bigint>((resolve) => {
-          resolveBalance = resolve;
-        }),
-    );
-    privy.fund.mockResolvedValue({ status: "submitted" });
-    await act(async () => {
-      create(<Harness />);
-    });
-
-    let purchase!: Promise<void>;
-    await act(async () => {
-      purchase = latest.buyWithCard() as Promise<void>;
-    });
-    expect(latest.isOpening).toBe(false);
-    expect(latest.isBusy).toBe(true);
-    expect(latest.statusMessage).toBe("Waiting for Base USDC to arrive…");
-
-    await act(async () => {
-      resolveBalance(25n);
-      await purchase;
-    });
-    expect(onPurchased).toHaveBeenCalledWith(15n);
   });
 
   it("does not open the purchase when the wallet changes during verification", async () => {
@@ -404,14 +373,12 @@ describe("useCardPurchase", () => {
     });
     expect(privy.fund).toHaveBeenCalledOnce();
     expect(stored.size).toBe(0);
-    expect(latest.isOpening).toBe(true);
 
     await act(async () => {
       rejectFunding(new Error("User exited flow"));
       await purchase;
     });
     expect(latest.label).toBe("Buy USDC with card");
-    expect(latest.isOpening).toBe(false);
     expect(stored.size).toBe(0);
 
     await act(async () => renderer.unmount());
@@ -470,7 +437,6 @@ describe("useCardPurchase", () => {
     privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));
     await act(async () => latest.buyWithCard());
     expect(toast.error).toHaveBeenCalledWith("Card purchase failed", { description: "Provider unavailable" });
-    expect(latest.isOpening).toBe(false);
 
     vi.mocked(toast.error).mockClear();
     privy.fund.mockRejectedValueOnce(undefined);

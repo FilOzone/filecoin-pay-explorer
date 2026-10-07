@@ -336,7 +336,6 @@ export function useCardPurchase({
     buyWithCard,
     canStartOver: status === "delayed",
     isBusy: status === "opening" || status === "verifying" || status === "waiting",
-    isOpening: status === "opening",
     label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],

@@ -100,7 +100,8 @@ const Balance = () => {
   };
 
   return (
-    <DropdownMenu>
+    // Non-modal: a closing modal menu's aria-hidden would be saved by the Add funds dialog and restored on close.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
           <div className='flex min-w-0 items-center gap-3'>
