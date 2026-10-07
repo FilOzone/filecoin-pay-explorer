@@ -35,3 +35,9 @@ export const formatHexForSearch = (value: string): string | null => {
   // Treat "0x" as no filter
   return formatted === "0x" ? null : formatted;
 };
+
+/**
+ * Subgraph ids are lowercase hex, while wallets hand out checksummed addresses. Every account read keys and queries
+ * on this form, so both spellings of one account share a cache entry and invalidation reaches it by the same id.
+ */
+export const toAccountId = (address: string): string => address.toLowerCase();
