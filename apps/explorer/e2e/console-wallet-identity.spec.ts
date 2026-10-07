@@ -227,6 +227,33 @@ test("an email account opens the card purchase without another sign-in", async (
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
 });
 
+// Privy reports "submitted" after the provider's window closes even when nothing was paid, so the check that
+// follows must leave Add funds dismissible and the purchase easy to discard.
+test("closing an unpaid card purchase leaves Add funds dismissible and recoverable", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake card purchase window");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
+  await page.getByRole("dialog", { name: "buy usdc" }).getByRole("button", { name: "Done" }).click();
+
+  const addFunds = page.getByRole("dialog", { name: "Add funds" });
+  await expect(addFunds.getByRole("status")).toContainText("Looking for purchased USDC on Base");
+  await addFunds.getByRole("button", { name: "Close" }).click();
+  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeHidden();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await expect(addFunds.getByRole("button", { name: "Check for purchased USDC" })).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await addFunds.getByRole("button", { name: "Start over" }).click();
+  await expect(addFunds.getByRole("button", { name: "Buy USDC with card", exact: true })).toBeEnabled();
+});
+
 test("after the site's access is revoked, Disconnect leaves the console", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);

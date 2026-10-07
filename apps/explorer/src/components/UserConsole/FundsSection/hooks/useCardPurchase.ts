@@ -118,6 +118,13 @@ function isFundingExit(error: unknown) {
   );
 }
 
+// Privy rejects once it stops confirming a payment (after ten minutes, or when its status checks keep failing), but
+// the payment can still settle, so it is tracked like a submission.
+// ponytail: matches Privy 3.43's wording; recheck after a Privy upgrade.
+function isUnconfirmedPurchase(error: unknown) {
+  return error instanceof Error && /^(could not confirm|unable to check) payment status\b/i.test(error.message);
+}
+
 function getOnrampEnvironment() {
   return /^(1|true|yes|on)$/i.test(process.env.NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX?.trim() ?? "")
     ? "sandbox"
@@ -127,10 +134,13 @@ function getOnrampEnvironment() {
 export function useCardPurchase({
   address,
   contextKey,
+  isPickerOpen,
   onPurchased,
 }: {
   address: string;
   contextKey: string;
+  /** Closing the picker pauses the balance check, so a late arrival never opens Squid over other work. */
+  isPickerOpen: boolean;
   onPurchased: (amount: bigint) => void;
 }) {
   const { authenticated, user } = usePrivy();
@@ -147,6 +157,8 @@ export function useCardPurchase({
   const isMounted = useRef(true);
   const latestContext = useRef(contextKey);
   latestContext.current = contextKey;
+  // Each balance check runs under its own number; a newer number ends the older check.
+  const checkRun = useRef(0);
 
   useEffect(() => {
     isMounted.current = true;
@@ -154,6 +166,12 @@ export function useCardPurchase({
       isMounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (isPickerOpen) return;
+    checkRun.current += 1;
+    setStatus((current) => (current === "waiting" ? "delayed" : current));
+  }, [isPickerOpen]);
 
   useEffect(() => {
     const restored = loadPendingCardPurchase(address);
@@ -166,17 +184,21 @@ export function useCardPurchase({
     isMounted.current &&
     latestContext.current === startedContext &&
     getAccount(config).address?.toLowerCase() === recipient.toLowerCase();
-  const checkPendingPurchase = async (submitted = false) => {
+  const checkPendingPurchase = async () => {
     const pending = pendingPurchase.current;
     if (!pending) return;
     if (!publicClient) return reportBaseClientUnavailable();
-    const current = () => isCurrent(pending);
+    checkRun.current += 1;
+    const run = checkRun.current;
+    const current = () => isCurrent(pending) && checkRun.current === run;
     setStatus("waiting");
     const landed = await waitForPurchasedUsdc({
       before: pending.before,
       isCurrent: current,
       read: () => readUsdcBalance(publicClient, pending.recipient),
     });
+    // Closing the picker or Start over ended this check and already set the status.
+    if (checkRun.current !== run) return;
     if (landed.status === "changed") {
       if (isMounted.current) {
         setStatus("delayed");
@@ -186,9 +208,6 @@ export function useCardPurchase({
     }
     if (landed.status === "delayed") {
       setStatus("delayed");
-      toast.info(submitted ? "Card purchase submitted" : "Card purchase not yet visible", {
-        description: "Base USDC has not arrived yet. Keep this account connected and check again after it appears.",
-      });
       return;
     }
 
@@ -220,6 +239,9 @@ export function useCardPurchase({
           source: {},
           destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
           environment: getOnrampEnvironment(),
+        }).catch((error: unknown) => {
+          if (isUnconfirmedPurchase(error)) return { status: "submitted" as const };
+          throw error;
         });
         purchaseStatus = result.status;
         pendingPurchase.current = next;
@@ -240,7 +262,7 @@ export function useCardPurchase({
         reportWalletChanged();
         return;
       }
-      await checkPendingPurchase(purchaseStatus === "submitted");
+      await checkPendingPurchase();
     } catch (error) {
       if (purchaseStatus) {
         if (isMounted.current) setStatus("delayed");
@@ -295,6 +317,7 @@ export function useCardPurchase({
   const startOver = () => {
     const pending = pendingPurchase.current;
     pendingPurchase.current = null;
+    checkRun.current += 1;
     if (pending) {
       try {
         clearPendingCardPurchase(pending.recipient);
@@ -325,18 +348,23 @@ export function useCardPurchase({
   };
 
   const purchaseLabel = isLoggedInAsRecipient ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
+  // Privy reports "submitted" both for a payment still settling and for a provider window closed without paying.
   const statusMessages = {
-    delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
+    delayed:
+      "No purchased USDC on Base yet. If you paid, check again in a few minutes. If you closed the purchase without paying, choose Start over.",
     idle: null,
     opening: "Opening card purchase…",
     verifying: "Confirm the sign-in message in your wallet…",
-    waiting: "Waiting for Base USDC to arrive…",
+    waiting: "Looking for purchased USDC on Base… If you closed the purchase without paying, choose Start over.",
   };
+  const isPending = status === "delayed" || status === "waiting";
   return {
     buyWithCard,
-    canStartOver: status === "delayed",
-    isBusy: status === "opening" || status === "verifying" || status === "waiting",
-    label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
+    canStartOver: isPending,
+    // Only Privy's own windows hold the picker; the balance check does not.
+    isBusy: status === "opening" || status === "verifying",
+    isChecking: status === "waiting",
+    label: isPending ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],
   };

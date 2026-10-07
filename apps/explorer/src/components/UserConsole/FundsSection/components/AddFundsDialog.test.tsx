@@ -56,4 +56,31 @@ describe("AddFundsDialog", () => {
     act(() => dialog.onOpenChange?.(false));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("closes during a card balance check, which holds only the card", () => {
+    const onOpenChange = vi.fn();
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(
+        <AddFundsDialog
+          isCardChecking
+          onCardStartOver={vi.fn()}
+          onOpenChange={onOpenChange}
+          onSelect={vi.fn()}
+          open
+          squidAvailable
+        />,
+      );
+    });
+
+    const isDisabled = (label: string) => renderer.root.findByProps({ "aria-label": label }).props.disabled;
+    expect(isDisabled("Buy USDC with card")).toBe(true);
+    expect(isDisabled("Deposit token")).toBe(false);
+    expect(isDisabled("Swap to USDFC")).toBe(false);
+    const startOver = renderer.root.find((node) => node.type === "button" && node.children.includes("Start over"));
+    expect(startOver.props.disabled).toBe(false);
+
+    act(() => dialog.onOpenChange?.(false));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
