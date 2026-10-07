@@ -138,10 +138,12 @@ function KeepConsoleWallet() {
     });
   }, [replacement, selectAccount]);
 
-  const walletOnlyLogin = user?.linkedAccounts.every((linked) => linked.type === "wallet") ?? false;
+  // A login whose wallets don't include the console account ends, since card funding can't use it and Privy won't
+  // start another login over it. An email login still creating its embedded wallet has no wallet yet, so it stays.
+  const loginHasWallet = user?.linkedAccounts.some((linked) => linked.type === "wallet") ?? false;
   useEffect(() => {
-    if (authenticated && walletOnlyLogin && account && !isLinkedWallet(user, account.address)) void logout();
-  }, [authenticated, walletOnlyLogin, user, account, logout]);
+    if (authenticated && loginHasWallet && account && !isLinkedWallet(user, account.address)) void logout();
+  }, [authenticated, loginHasWallet, user, account, logout]);
 
   return null;
 }

@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   authenticated: false,
   clearAccount: vi.fn(),
   connectWallet: vi.fn(),
+  connectWalletOnSuccess: undefined as
+    | ((params: { wallet: { address: string; walletClientType: string } }) => void)
+    | undefined,
   logout: vi.fn<() => Promise<void>>(),
+  selectAccount: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -28,7 +32,14 @@ vi.mock("@filecoin-foundation/ui-filecoin/EmptyStateCard", () => ({
   ),
 }));
 vi.mock("@privy-io/react-auth", () => ({
-  useConnectWallet: () => ({ connectWallet: mocks.connectWallet }),
+  useConnectWallet: ({
+    onSuccess,
+  }: {
+    onSuccess: (params: { wallet: { address: string; walletClientType: string } }) => void;
+  }) => {
+    mocks.connectWalletOnSuccess = onSuccess;
+    return { connectWallet: mocks.connectWallet };
+  },
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
@@ -37,6 +48,7 @@ vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({
     account: ACCOUNT,
     clearAccount: mocks.clearAccount,
+    selectAccount: mocks.selectAccount,
   }),
 }));
 
@@ -65,10 +77,19 @@ describe("AccountUnavailable", () => {
     const renderer = await render();
 
     expect(renderer.root.findByType("h2").children).toEqual(["Reconnect your wallet"]);
-    await clickButton(renderer, "Reconnect wallet");
+    await clickButton(renderer, "Connect a wallet");
     expect(mocks.connectWallet).toHaveBeenCalledOnce();
 
     await clickButton(renderer, "Disconnect");
     expect(mocks.clearAccount).toHaveBeenCalledOnce();
+  });
+
+  it("makes a different wallet picked here the console account", async () => {
+    await render();
+
+    const wallet = { address: "0x2222222222222222222222222222222222222222", walletClientType: "brave_wallet" };
+    await act(async () => mocks.connectWalletOnSuccess?.({ wallet }));
+
+    expect(mocks.selectAccount).toHaveBeenCalledWith(wallet);
   });
 });

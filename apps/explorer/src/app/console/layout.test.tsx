@@ -232,7 +232,7 @@ describe("same-wallet re-sync", () => {
   const BASE = 8453;
 
   it("stays ready when a reconnect keeps the last ready wallet and chain", () => {
-    expect(keepReadyThroughResync("reconnecting", lastReady, WALLET, 314, false)).toBe("ready");
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, 314, false)).toBe("ready");
   });
 
   it.each([
@@ -241,25 +241,30 @@ describe("same-wallet re-sync", () => {
     ["the account changed", lastReady, OTHER, 314],
     ["the chain is not known yet", lastReady, WALLET, undefined],
   ])("still shows reconnecting when %s", (_case, previous, address, chainId) => {
-    expect(keepReadyThroughResync("reconnecting", previous, address, chainId, false)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "active", previous, address, chainId, false)).toBe("reconnecting");
+  });
+
+  // The console account changed, but Privy has not moved wagmi off the previous account yet.
+  it("still shows reconnecting while wagmi holds an account other than the console account", () => {
+    expect(keepReadyThroughResync("reconnecting", "connecting", lastReady, WALLET, 314, false)).toBe("reconnecting");
   });
 
   // Paying from the console account's own extension switches the whole site to the source network and back.
   it("keeps the console through a top-up's trip to its source network and back", () => {
-    const onSource = keepReadyThroughResync("reconnecting", lastReady, WALLET, BASE, true);
+    const onSource = keepReadyThroughResync("reconnecting", "active", lastReady, WALLET, BASE, true);
     expect(onSource).toBe("squid-source");
     expect(getConsoleDisplayAccessState(onSource, true)).toBe("ready");
 
     const remembered = rememberReadyConnection(onSource, WALLET, BASE, lastReady);
-    expect(keepReadyThroughResync("reconnecting", remembered, WALLET, 314, true)).toBe("ready");
+    expect(keepReadyThroughResync("reconnecting", "active", remembered, WALLET, 314, true)).toBe("ready");
   });
 
   it("still shows reconnecting when a different account appears during a top-up", () => {
-    expect(keepReadyThroughResync("reconnecting", lastReady, OTHER, BASE, true)).toBe("reconnecting");
+    expect(keepReadyThroughResync("reconnecting", "active", lastReady, OTHER, BASE, true)).toBe("reconnecting");
   });
 
   it("passes every other state through", () => {
-    expect(keepReadyThroughResync("not-connected", lastReady, WALLET, 314, false)).toBe("not-connected");
+    expect(keepReadyThroughResync("not-connected", "active", lastReady, WALLET, 314, false)).toBe("not-connected");
   });
 
   it("remembers the wallet and chain a ready console showed", () => {

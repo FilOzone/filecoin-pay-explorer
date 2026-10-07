@@ -130,6 +130,7 @@ type LoginComplete = (event: { user: User; isNewUser: boolean; loginAccount: { t
 type ConnectSuccess = (event: { wallet: Wallet }) => void;
 
 type FakePrivy = {
+  ready: boolean;
   user: User | null;
   wallets: Wallet[];
   openLogin: () => void;
@@ -238,6 +239,10 @@ const overlay = (dialog: ReactNode) =>
   );
 
 export function PrivyProvider({ children }: { children: ReactNode }) {
+  // Privy is not ready during server rendering or before hydration. Reporting
+  // ready earlier renders clickable login buttons that do nothing until React takes over.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   const [user, setUser] = useState<User | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -297,6 +302,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
   };
 
   const value: FakePrivy = {
+    ready,
     user,
     wallets,
     onLogin,
@@ -325,12 +331,13 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
 }
 
 export function usePrivy() {
-  const { user, openLogin, logout } = useFakePrivy();
-  return { ready: true, authenticated: user !== null, user, error: null, login: openLogin, logout };
+  const { ready, user, openLogin, logout } = useFakePrivy();
+  return { ready, authenticated: user !== null, user, error: null, login: openLogin, logout };
 }
 
 export function useWallets() {
-  return { ready: true, wallets: useFakePrivy().wallets };
+  const { ready, wallets } = useFakePrivy();
+  return { ready, wallets };
 }
 
 export function useLogin(callbacks: { onComplete?: LoginComplete } = {}) {

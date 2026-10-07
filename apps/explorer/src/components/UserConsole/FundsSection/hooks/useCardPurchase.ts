@@ -133,7 +133,7 @@ export function useCardPurchase({
   contextKey: string;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { user } = usePrivy();
+  const { authenticated, user } = usePrivy();
   // A Privy login only counts for its own wallets, never for an account the extension switched to.
   const isLoggedInAsRecipient = isLinkedWallet(user, address);
   const { fund } = useFiatOnramp();
@@ -296,6 +296,13 @@ export function useCardPurchase({
     if (status === "opening" || status === "waiting") return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (isLoggedInAsRecipient) return purchase();
+    // Privy ignores login() while another login is active, and the console account provider is already ending it.
+    if (authenticated) {
+      toast.error("Card purchase unavailable", {
+        description: "Finishing the previous sign-out. Try again in a moment.",
+      });
+      return;
+    }
     continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
     setStatus("opening");
     // This only runs when a wallet is already connected, so offer only wallet methods.

@@ -82,12 +82,17 @@ export type ReadyConnection = { address: string; chainId: number };
  */
 export const keepReadyThroughResync = (
   accessState: ConsoleAccessState,
+  accountState: ConsoleAccountState,
   lastReady: ReadyConnection | null,
   address: string | undefined,
   chainId: number | undefined,
   isTopUpActive: boolean,
 ): ConsoleAccessState => {
-  if (accessState !== "reconnecting" || lastReady === null || chainId === undefined) return accessState;
+  // Only the console account's own re-sync counts: while wagmi still holds a previous account,
+  // pages for the new one must not mount.
+  if (accessState !== "reconnecting" || accountState !== "active" || lastReady === null || chainId === undefined) {
+    return accessState;
+  }
   if (lastReady.address.toLowerCase() !== address?.toLowerCase()) return accessState;
   // A top-up moves the wallet to its source network and back on purpose, so that chain change is a re-sync too.
   if (lastReady.chainId !== chainId && !isTopUpActive) return accessState;
