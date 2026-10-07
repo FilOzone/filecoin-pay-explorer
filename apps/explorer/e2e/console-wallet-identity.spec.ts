@@ -56,25 +56,41 @@ async function switchExtensionAccount(page: Page): Promise<void> {
 const walletMenu = (page: Page) => page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])');
 const consoleAccount = async (page: Page) => (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
 
-test("closing Add funds opened from the wallet menu leaves the console reachable", async ({ page }) => {
-  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+async function openAddFundsFromWalletMenu(page: Page): Promise<void> {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
-  const sessionKeys = page.getByRole("link", { name: "Session Keys" });
-  await expect(sessionKeys).toBeVisible({ timeout: 30_000 });
-
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   await walletMenu(page).click();
   await page.getByRole("menuitem", { name: "Add funds" }).click();
-  const addFunds = page.getByRole("dialog", { name: "Add funds" });
-  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeVisible();
-  // A person closes the dialog after the menu has finished closing; an immediate click races the menu's exit.
+  await expect(page.getByRole("heading", { name: "Add funds" })).toBeVisible();
+  // Let the menu finish closing, as a person would.
   await expect(page.locator('[data-slot="dropdown-menu-content"]')).toHaveCount(0);
+}
+
+// Role queries skip aria-hidden content, so these fail if closing leaves the console hidden.
+test("closing Add funds opened from the wallet menu leaves the console reachable", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+
+  const addFunds = page.getByRole("dialog", { name: "Add funds" });
   await addFunds.getByRole("button", { name: "Close" }).click();
   await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeHidden();
 
-  // Role queries skip aria-hidden content, so this fails if the console is left hidden from assistive tech.
-  await expect(sessionKeys).toBeVisible();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+});
+
+test("closing Deposit tokens after choosing it in Add funds leaves the console reachable", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+
+  await page.getByRole("button", { name: "Deposit token" }).click();
+  const deposit = page.getByRole("dialog", { name: "Deposit tokens" });
+  await expect(deposit.getByRole("heading", { name: "Deposit tokens" })).toBeVisible();
+  await deposit.getByRole("button", { name: "Close" }).click();
+  await expect(deposit.getByRole("heading", { name: "Deposit tokens" })).toBeHidden();
+
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
 test("an extension account switch while idle moves the console to the new account", async ({ page }) => {

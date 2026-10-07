@@ -100,9 +100,7 @@ const Balance = () => {
   };
 
   return (
-    // Non-modal: a modal menu marks the page aria-hidden until its exit finishes. Add funds opens a Headless UI
-    // dialog meanwhile, which saves that aria-hidden as the page's own state and restores it on close, hiding the
-    // console from assistive tech for good.
+    // Non-modal: a closing modal menu's aria-hidden would be saved by the Add funds dialog and restored on close.
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
