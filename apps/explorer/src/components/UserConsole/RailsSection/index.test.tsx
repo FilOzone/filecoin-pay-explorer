@@ -33,7 +33,7 @@ vi.mock("@/hooks/useAccountServices", () => ({
 vi.mock("@/hooks/useRailSettlements", () => ({
   useRailSettlements: (options: { account?: string; chainId?: number; chainName?: string }) => {
     observed.settlements = options;
-    return { isSettling: () => false, settleRail: vi.fn(), settlements: new Set() };
+    return { isSettling: () => false, settleRail: vi.fn() };
   },
 }));
 vi.mock("../SettleRailDialog", () => ({
