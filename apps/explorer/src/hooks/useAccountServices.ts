@@ -85,13 +85,14 @@ export const useAccountServices = (address: string, options?: AccountServicesOpt
  */
 export const useAccountService = (address: string, operatorAddress: string, options?: AccountServicesOptions) => {
   const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
 
   return useGraphQLQuery<AccountOperatorResponse, AccountService | null>({
-    queryKey: ["account", accountId, "services", operatorAddress],
+    queryKey: ["account", accountId, "services", operatorId],
     query: GET_ACCOUNT_OPERATOR,
-    variables: { id: getAccountOperatorId(accountId, operatorAddress) },
+    variables: { id: getAccountOperatorId(accountId, operatorId) },
     select: (data) => data.accountOperator,
-    enabled: !!accountId && !!operatorAddress,
+    enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
   });
 };
@@ -116,11 +117,12 @@ export const useAccountServiceRails = (
   options?: AccountServicesOptions,
 ) => {
   const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
   // The payer and operator are always pinned; the filter only narrows further,
   // so it can never widen the query beyond this payer's own rails.
   const where: Record<string, string> = {
     payer: accountId,
-    operator: operatorAddress.toLowerCase(),
+    operator: operatorId,
   };
   if (filter.railId) {
     where.railId = filter.railId;
@@ -130,7 +132,7 @@ export const useAccountServiceRails = (
   }
 
   return useGraphQLQuery<AccountOperatorRailsResponse, ServiceRailsPage>({
-    queryKey: ["account", accountId, "services", operatorAddress, "rails", page, where],
+    queryKey: ["account", accountId, "services", operatorId, "rails", page, where],
     query: GET_ACCOUNT_OPERATOR_RAILS,
     variables: {
       where,
@@ -141,7 +143,7 @@ export const useAccountServiceRails = (
       rails: data.rails.slice(0, ACCOUNT_SERVICE_RAILS_PAGE_SIZE),
       hasMore: data.rails.length > ACCOUNT_SERVICE_RAILS_PAGE_SIZE,
     }),
-    enabled: !!accountId && !!operatorAddress,
+    enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
   });
 };
