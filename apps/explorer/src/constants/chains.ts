@@ -2,7 +2,7 @@ import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@f
 import type { Address } from "viem";
 import { arbitrum, avalanche, base, bsc, mainnet as ethereum, optimism, polygon } from "viem/chains";
 
-import type { Network } from "@/types";
+import type { FaucetProvider, Network } from "@/types";
 
 type SynapseChain = typeof synapseMainnet;
 
@@ -23,6 +23,8 @@ export interface Chain extends SynapseChain {
     /** Mainnet only. The direct Squid deposit's FIL top-up swaps USDFC to WFIL through this pool. */
     sushi?: { router: Address; wfil: Address; wfilUsdfcPoolFee: number };
   };
+  /** Testnet faucets; mainnet has none. */
+  faucets?: FaucetProvider[];
 }
 
 export const mainnet = {
@@ -96,6 +98,18 @@ export const calibration: Chain = {
     ...synapseCalibration.contracts,
     payments: synapseCalibration.contracts.filecoinPay,
   },
+  faucets: [
+    {
+      name: "Get FIL",
+      url: "https://faucet.calibnet.chainsafe-fil.io/funds.html",
+      asset: "FIL",
+    },
+    {
+      name: "Get USDFC",
+      url: "https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc",
+      asset: "USDFC",
+    },
+  ],
 };
 
 export const SQUID_SOURCE_CHAINS = [

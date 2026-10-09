@@ -4,9 +4,10 @@ import { WalletIcon } from "@phosphor-icons/react";
 import { ArrowDownCircle } from "lucide-react";
 import { useState } from "react";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import type { Network } from "@/types";
 import AddServiceDialog from "../AddServiceDialog";
 
-const AccountNotFound = () => {
+const AccountNotFound = ({ network }: { network: Network }) => {
   const { openAddFunds } = useFundingLaunch();
   const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false);
 
@@ -29,7 +30,7 @@ const AccountNotFound = () => {
         </Button>
       </div>
 
-      <AddServiceDialog open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen} />
+      <AddServiceDialog network={network} open={addServiceDialogOpen} onOpenChange={setAddServiceDialogOpen} />
     </EmptyStateCard>
   );
 };

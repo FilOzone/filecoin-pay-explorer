@@ -14,37 +14,37 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi";
+import { useAccount, useReadContract, useWalletClient } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
-import type { AccountInfo } from "@/types";
+import type { AccountInfo, Network } from "@/types";
 import { WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
 
 interface WithdrawDialogProps {
+  network: Network;
   userToken: UserToken;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open, onOpenChange }) => {
+export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userToken, open, onOpenChange }) => {
   const { address: userAddress } = useAccount();
 
   // Form state
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { synapse, constants } = useSynapse();
+  const chain = getChain(network);
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
   // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
   // Reset state when dialog closes
   useEffect(() => {
@@ -59,10 +59,11 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
     isLoading: isLoadingAccountInfo,
     isRefetching: isRefetchingAccountInfo,
   } = useReadContract({
-    address: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
+    address: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
     functionName: "getAccountInfoIfSettled",
-    args: [userToken.token.id, userAddress],
+    args: userAddress ? [userToken.token.id, userAddress] : undefined,
     query: {
       enabled: !!userToken?.token?.id && !!userAddress && open,
       refetchInterval: 10 * 1_000,
@@ -108,13 +109,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
       return;
     }
 
-    if (!synapse) {
-      console.log("Synapse not initialized");
-      return;
-    }
-
-    if (!walletClient || !publicClient) {
-      console.log("Wallet client or public client not available");
+    if (!walletClient) {
+      console.log("Wallet client not available");
       return;
     }
 

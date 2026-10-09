@@ -85,7 +85,7 @@ const AccountSections = ({ account, error, isLoading, network, alertsBanner }: A
   if (!account) {
     return (
       <>
-        {error ? <ErrorState error={error} /> : <AccountNotFound />}
+        {error ? <ErrorState error={error} /> : <AccountNotFound network={network} />}
         {alertsBanner}
       </>
     );
@@ -165,6 +165,7 @@ const UserConsole = () => {
         <AddServiceDialog
           // A chain switch remounts the dialog so token and operator follow the wallet's network.
           key={walletNetwork}
+          network={walletNetwork}
           open
           onOpenChange={(open) => {
             if (!open) setDialogDismissed(true);

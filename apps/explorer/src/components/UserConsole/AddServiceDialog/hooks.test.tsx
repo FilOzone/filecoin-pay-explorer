@@ -1,13 +1,14 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { calibration } from "@/constants/chains";
 import { getPermitDomainSeparator } from "@/utils/permit";
 import { CUSTOM_OPTION, useAddServiceSubmit, useFilecoinGasBalance, useTokenSelection } from "./hooks";
 
 const TOKEN = "0x1111111111111111111111111111111111111111" as const;
 const OWNER = "0x2222222222222222222222222222222222222222" as const;
-const PAYMENTS = "0x3333333333333333333333333333333333333333" as const;
+const PAYMENTS = calibration.contracts.payments.address;
 const OPERATOR = "0x4444444444444444444444444444444444444444" as const;
-const CHAIN_ID = 314159;
+const CHAIN_ID = calibration.id;
 
 const mocks = vi.hoisted(() => ({
   balance: { data: undefined as { value: bigint } | undefined, isError: false, isFetching: false, refetch: vi.fn() },
@@ -25,7 +26,7 @@ vi.mock("wagmi", () => ({
   useBalance: () => mocks.balance,
   useConnection: () => mocks.connection,
   useSwitchChain: () => ({ isPending: false, switchChain: mocks.switchChain }),
-  usePublicClient: () => ({ readContract: vi.fn() }),
+  usePublicClient: ({ chainId }: { chainId?: number } = {}) => ({ readContract: vi.fn(), chainId }),
   useReadContract: () => ({ data: 1000n, isLoading: false }),
   useReadContracts: () => ({ data: mocks.readContracts, isLoading: false, isError: false }),
   useWalletClient: () => ({ data: { signTypedData: vi.fn() } }),
@@ -33,14 +34,6 @@ vi.mock("wagmi", () => ({
 vi.mock("@/hooks/useApprovableServices", () => ({ useApprovableServices: () => ({ services: [], isLoading: false }) }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
-}));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    constants: {
-      chain: { id: CHAIN_ID, slug: "calibration", blockExplorers: { default: { url: "https://example.com" } } },
-      contracts: { payments: { address: PAYMENTS, abi: [] } },
-    },
-  }),
 }));
 vi.mock("@/utils/permit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/utils/permit")>()),
@@ -66,7 +59,7 @@ describe("useFilecoinGasBalance", () => {
   function renderGasBalance() {
     let result!: ReturnType<typeof useFilecoinGasBalance>;
     function Harness() {
-      result = useFilecoinGasBalance(true);
+      result = useFilecoinGasBalance("calibration", true);
       return null;
     }
     act(() => {
@@ -122,7 +115,7 @@ describe("useTokenSelection", () => {
     ];
     let selection!: ReturnType<typeof useTokenSelection>;
     function Harness() {
-      selection = useTokenSelection(true);
+      selection = useTokenSelection("calibration", true);
       return null;
     }
     let renderer!: ReturnType<typeof create>;
@@ -146,7 +139,7 @@ describe("useAddServiceSubmit", () => {
   function renderSubmitHook(onSubmitOnChain = vi.fn()) {
     let result!: ReturnType<typeof useAddServiceSubmit>;
     function Harness() {
-      result = useAddServiceSubmit(onSubmitOnChain);
+      result = useAddServiceSubmit("calibration", onSubmitOnChain);
       return null;
     }
     act(() => {
@@ -198,7 +191,8 @@ describe("useAddServiceSubmit", () => {
         chainId: CHAIN_ID,
       }),
       expect.anything(),
-      expect.anything(),
+      // The nonce and domain are read on the approval's chain, not the wallet's default.
+      expect.objectContaining({ chainId: CHAIN_ID }),
     );
     expect(mocks.execute).toHaveBeenCalledWith({
       functionName: "depositWithPermitAndApproveOperator",

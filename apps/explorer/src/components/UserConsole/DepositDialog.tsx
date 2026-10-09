@@ -27,9 +27,10 @@ import {
   ONE_YEAR_EPOCHS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
+import { getChain } from "@/constants/chains";
 import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
 import { getPermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
@@ -72,13 +73,15 @@ type DepositDialogProps = {
    * so a later change to this prop must not swap the target of a part-filled form.
    */
   depositToken?: UserToken | null;
+  /** The Filecoin network the deposit goes to. */
+  network: Network;
   /** Tokens already held by the account, resolved by the caller. */
   tokens: UserToken[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: DepositDialogProps) => {
+export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChange }: DepositDialogProps) => {
   const { address: userAddress } = useAccount();
 
   const [amount, setAmount] = useState("");
@@ -94,16 +97,18 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
    */
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { synapse, constants } = useSynapse();
+  const chain = getChain(network);
+  const chainId = chain.id;
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  // Permit nonce and domain reads must come from the deposit's chain, not whichever chain the wallet is on.
+  const publicClient = usePublicClient({ chainId });
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
 
   /** The form is locked from the first click through to the receipt. */
@@ -166,9 +171,9 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   } = useReadContracts({
     contracts: customTokenAddress
       ? [
-          { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "name" },
         ]
       : [],
     query: {
@@ -226,6 +231,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
   } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
+    chainId,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: {
@@ -233,10 +239,10 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     },
   });
 
-  const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const isUsdfcDeposit = currentToken?.address.toLowerCase() === chain.contracts.usdfc.address.toLowerCase();
   const { data: accountSummary, isFetching: isAccountSummaryLoading } = useAccountSummary({
     address: userAddress,
-    chainId: constants.chain.id,
+    chainId,
     enabled: open && isUsdfcDeposit,
   });
 
@@ -310,11 +316,6 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
       return;
     }
 
-    if (!synapse) {
-      console.log("Synapse not initialized");
-      return;
-    }
-
     if (!walletClient || !publicClient) {
       console.log("Wallet client or public client not available");
       return;
@@ -343,10 +344,10 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
           // token rejects. `getPermitSignature` re-reads it from chain instead.
           tokenName: currentToken.name,
           ownerAddress: userAddress,
-          spenderAddress: constants.contracts.payments.address,
+          spenderAddress: chain.contracts.payments.address,
           amount: parsedDepositAmount,
           deadline,
-          chainId: constants.chain.id,
+          chainId,
         },
         walletClient,
         publicClient,
@@ -393,21 +394,16 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
-      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
+      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, chain.genesisTimestamp)
       : null;
   const usdfcDepositAmount = isUsdfcDeposit ? parseTopUpAmount(amount) : null;
   const runwayProjected =
     accountSummary && runwayCurrent && usdfcDepositAmount !== null
-      ? calculateProjectedFundingRunway(
-          accountSummary,
-          usdfcDepositAmount,
-          ONE_YEAR_EPOCHS,
-          constants.chain.genesisTimestamp,
-        )
+      ? calculateProjectedFundingRunway(accountSummary, usdfcDepositAmount, ONE_YEAR_EPOCHS, chain.genesisTimestamp)
       : null;
   const defaultSuggestion =
     isUsdfcDeposit && accountSummary && balance !== undefined
-      ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp, balance)
+      ? defaultTopUpSuggestion(accountSummary, chain.genesisTimestamp, balance)
       : "";
 
   useEffect(() => {
@@ -439,7 +435,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
             customAddress={customAddress}
             onCustomAddressChange={handleCustomAddressChange}
             customTokenStatus={customTokenStatus}
-            chainName={constants.chain.name}
+            chainName={chain.name}
             disabled={isBusy}
           />
 
@@ -506,7 +502,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
                 accountSummary={accountSummary}
                 amount={amount}
                 disabled={isBusy}
-                genesisTimestamp={constants.chain.genesisTimestamp}
+                genesisTimestamp={chain.genesisTimestamp}
                 maxAmount={balance}
                 onSelect={setAmount}
               />

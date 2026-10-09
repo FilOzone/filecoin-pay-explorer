@@ -28,7 +28,7 @@ describe("AccountNotFound", () => {
     act(() => {
       renderer = create(
         <FundingLaunchProvider>
-          <AccountNotFound />
+          <AccountNotFound network='mainnet' />
           <LaunchState />
         </FundingLaunchProvider>,
       );

@@ -46,9 +46,6 @@ vi.mock("wagmi", () => ({
   useReadContract: () => ({ data: 0n, isLoading: false }),
   useWalletClient: () => ({ data: undefined }),
 }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { contracts: { usdfc: "0x2222222222222222222222222222222222222222" } } }),
-}));
 vi.mock("@/assests/FilecoinLogo", () => ({ default: () => null }));
 vi.mock("@/assests/USDFCLogo", () => ({ default: () => null }));
 
