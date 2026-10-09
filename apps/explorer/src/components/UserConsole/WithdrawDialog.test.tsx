@@ -44,7 +44,6 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
 }));
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
-  usePublicClient: () => ({}),
   useReadContract: () => ({ data: mocks.accountInfo, isLoading: false, isRefetching: false }),
   useWalletClient: () => ({ data: {} }),
 }));
