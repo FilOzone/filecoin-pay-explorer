@@ -8,7 +8,9 @@ const observed = vi.hoisted(() => ({
   chainId: 0,
   settlements: undefined as { account?: string; chainId?: number; chainName?: string } | undefined,
   onSettle: undefined as ((rail: Rail, currentEpoch: bigint | undefined) => void) | undefined,
-  dialog: undefined as { rail: Rail; currentEpoch?: bigint; onOpenChange: (open: boolean) => void } | undefined,
+  dialog: undefined as
+    | { rail: Rail; currentEpoch?: bigint; open: boolean; onOpenChange: (open: boolean) => void }
+    | undefined,
 }));
 
 vi.mock("@/hooks/useAccountServices", () => ({
@@ -37,7 +39,7 @@ vi.mock("@/hooks/useRailSettlements", () => ({
 vi.mock("../SettleRailDialog", () => ({
   SettleRailDialog: (props: NonNullable<typeof observed.dialog>) => {
     observed.dialog = props;
-    return <div role='dialog' aria-label={`Settle rail ${props.rail.railId}`} />;
+    return props.open ? <div role='dialog' aria-label={`Settle rail ${props.rail.railId}`} /> : null;
   },
 }));
 vi.mock("./components", () => ({
@@ -127,7 +129,7 @@ describe("RailsSection pagination", () => {
 describe("RailsSection settle dialog", () => {
   const rail = { railId: 7n } as unknown as Rail;
 
-  it("opens for the chosen rail with the epoch read at that moment, and unmounts once closed", () => {
+  it("opens for the chosen rail with the epoch read at that moment, and closes without unmounting", () => {
     renderDom(section());
     expect(screen.queryByRole("dialog")).toBeNull();
 
@@ -137,5 +139,12 @@ describe("RailsSection settle dialog", () => {
 
     act(() => observed.dialog?.onOpenChange(false));
     expect(screen.queryByRole("dialog")).toBeNull();
+    // Still mounted with the same rail, so the dialog can play its leave transition.
+    expect(observed.dialog).toMatchObject({ rail, open: false });
+
+    const next = { railId: 8n } as unknown as Rail;
+    act(() => observed.onSettle?.(next, 456n));
+    expect(screen.getByRole("dialog", { name: "Settle rail 8" })).toBeTruthy();
+    expect(observed.dialog).toMatchObject({ rail: next, currentEpoch: 456n });
   });
 });

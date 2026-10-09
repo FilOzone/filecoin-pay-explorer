@@ -89,8 +89,11 @@ function RailsPagination(props: RailsPaginationProps) {
 /** Stable identity so the table memo survives a render with no data yet. */
 const NO_RAILS: Rail[] = [];
 
-/** The rail being settled and the epoch read when its dialog opened; null while no dialog is open. */
-type SettleSelection = { rail: Rail; currentEpoch: bigint | undefined } | null;
+/**
+ * The rail being settled and the epoch read when its dialog opened; null until a rail is first chosen. Closing keeps
+ * the rail so the dialog stays mounted for its leave transition.
+ */
+type SettleSelection = { rail: Rail; currentEpoch: bigint | undefined; open: boolean } | null;
 
 interface RailsSectionProps {
   /** The connected payer. Every rail listed here has this account as its payer. */
@@ -133,7 +136,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
   });
 
   const handleSettle = useCallback((rail: Rail, currentEpoch: bigint | undefined) => {
-    setSettleSelection({ rail, currentEpoch });
+    setSettleSelection({ rail, currentEpoch, open: true });
   }, []);
 
   const handleSearch = (query: string) => {
@@ -210,8 +213,8 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
           rail={settleSelection.rail}
           userAddress={userAddress}
           currentEpoch={settleSelection.currentEpoch}
-          open
-          onOpenChange={() => setSettleSelection(null)}
+          open={settleSelection.open}
+          onOpenChange={(open) => setSettleSelection({ ...settleSelection, open })}
           isSettling={isSettling(settleSelection.rail.railId.toString())}
           settleRail={settleRail}
         />
