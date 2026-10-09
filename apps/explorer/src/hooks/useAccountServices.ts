@@ -46,7 +46,7 @@ export const ACCOUNT_SERVICE_RAILS_PAGE_SIZE = 10;
 
 /** Mirrors the subgraph's `getAccountOperatorEntityId`: payer bytes then operator bytes. */
 export function getAccountOperatorId(accountId: string, operatorAddress: string): string {
-  return `${accountId.toLowerCase()}${operatorAddress.toLowerCase().replace(/^0x/, "")}`;
+  return `${toAccountId(accountId)}${operatorAddress.toLowerCase().replace(/^0x/, "")}`;
 }
 
 /**
