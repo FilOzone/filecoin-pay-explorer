@@ -126,12 +126,11 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
   });
   const rails = data?.rails ?? NO_RAILS;
 
-  const { settleRail, isSettling, settlements } = useRailSettlements({
+  const { settleRail, isSettling } = useRailSettlements({
     account: userAddress,
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
-    chainName: chain.name,
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
@@ -148,9 +147,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     () =>
       rails.map((rail) => ({
         ...rail,
-        isSettling: settlements.has(rail.railId.toString()),
+        isSettling: isSettling(rail.railId.toString()),
       })),
-    [rails, settlements],
+    [rails, isSettling],
   );
 
   const totalPages = Math.max(1, Math.ceil(Number(totalRails) / ACCOUNT_SERVICE_RAILS_PAGE_SIZE));
