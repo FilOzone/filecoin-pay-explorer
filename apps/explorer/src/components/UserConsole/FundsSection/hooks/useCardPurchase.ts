@@ -199,15 +199,10 @@ export function useCardPurchase({
     });
     // Closing the picker or Start over ended this check and already set the status.
     if (checkRun.current !== run) return;
-    if (landed.status === "changed") {
-      if (isMounted.current) {
-        setStatus("delayed");
-        reportWalletChanged();
-      }
-      return;
-    }
-    if (landed.status === "delayed") {
+    if (landed.status !== "funded") {
+      if (!isMounted.current) return;
       setStatus("delayed");
+      if (landed.status === "changed") reportWalletChanged();
       return;
     }
 
@@ -221,7 +216,7 @@ export function useCardPurchase({
   const purchase = async (requested?: LoginContext) => {
     if (!publicClient) return reportBaseClientUnavailable();
     const intent = requested ?? { contextKey, recipient: getAddress(address) };
-    let purchaseStatus: "confirmed" | "submitted" | undefined;
+    let submitted = false;
 
     setStatus("opening");
     try {
@@ -235,15 +230,14 @@ export function useCardPurchase({
         const before = await readUsdcBalance(publicClient, intent.recipient);
         if (!isCurrent(intent)) return null;
         const next = { before, ...intent };
-        const result = await fund({
+        await fund({
           source: {},
           destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
           environment: getOnrampEnvironment(),
         }).catch((error: unknown) => {
-          if (isUnconfirmedPurchase(error)) return { status: "submitted" as const };
-          throw error;
+          if (!isUnconfirmedPurchase(error)) throw error;
         });
-        purchaseStatus = result.status;
+        submitted = true;
         pendingPurchase.current = next;
         savePendingCardPurchase(next);
         return next;
@@ -253,7 +247,7 @@ export function useCardPurchase({
         return;
       }
       pendingPurchase.current = pending;
-      if (!purchaseStatus) {
+      if (!submitted) {
         setStatus("delayed");
         return;
       }
@@ -264,7 +258,7 @@ export function useCardPurchase({
       }
       await checkPendingPurchase();
     } catch (error) {
-      if (purchaseStatus) {
+      if (submitted) {
         if (isMounted.current) setStatus("delayed");
         return;
       }
@@ -328,8 +322,11 @@ export function useCardPurchase({
     setStatus("idle");
   };
 
+  // Only Privy's own windows hold the picker; the balance check does not.
+  const isBusy = status === "opening" || status === "verifying";
+  const isChecking = status === "waiting";
   const buyWithCard = () => {
-    if (status === "opening" || status === "verifying" || status === "waiting") return;
+    if (isBusy || isChecking) return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
     if (isLoggedInAsRecipient) return purchase();
     // Privy refuses to log in over another login, and the console account provider is already ending it.
@@ -361,9 +358,8 @@ export function useCardPurchase({
   return {
     buyWithCard,
     canStartOver: isPending,
-    // Only Privy's own windows hold the picker; the balance check does not.
-    isBusy: status === "opening" || status === "verifying",
-    isChecking: status === "waiting",
+    isBusy,
+    isChecking,
     label: isPending ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],
