@@ -98,14 +98,16 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const constants = getChainConstants(network);
+  const chainId = constants.chain.id;
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  // Permit nonce and domain reads must come from the deposit's chain, not whichever chain the wallet is on.
+  const publicClient = usePublicClient({ chainId });
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
     contractAddress: constants.contracts.payments.address,
     abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
+    chainId,
     explorerUrl: constants.chain.blockExplorers?.default.url,
   });
 
@@ -169,9 +171,9 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   } = useReadContracts({
     contracts: customTokenAddress
       ? [
-          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "symbol" },
-          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "decimals" },
-          { address: customTokenAddress, abi: erc20Abi, chainId: constants.chain.id, functionName: "name" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "name" },
         ]
       : [],
     query: {
@@ -229,7 +231,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   } = useReadContract({
     address: activeTokenAddress || undefined,
     abi: erc20Abi,
-    chainId: constants.chain.id,
+    chainId,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: {
@@ -240,7 +242,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
   const { data: accountSummary, isFetching: isAccountSummaryLoading } = useAccountSummary({
     address: userAddress,
-    chainId: constants.chain.id,
+    chainId,
     enabled: open && isUsdfcDeposit,
   });
 
@@ -345,7 +347,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
           spenderAddress: constants.contracts.payments.address,
           amount: parsedDepositAmount,
           deadline,
-          chainId: constants.chain.id,
+          chainId,
         },
         walletClient,
         publicClient,
