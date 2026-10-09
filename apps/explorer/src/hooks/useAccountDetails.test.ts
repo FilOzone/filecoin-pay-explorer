@@ -165,6 +165,15 @@ describe("account query ids", () => {
     expect(lowercase.queryKey.slice(0, 2)).toEqual(["account", LOWERCASE]);
     expect(readWith(read, CHECKSUMMED)).toEqual(lowercase);
   });
+
+  it.each(
+    Object.entries({
+      useAccountService: (operator: string) => useAccountService(LOWERCASE, operator),
+      useAccountServiceRails: (operator: string) => useAccountServiceRails(LOWERCASE, operator),
+    }),
+  )("%s shares one cache entry between checksummed and lowercase operators", (_, read) => {
+    expect(readWith(read, CHECKSUMMED)).toEqual(readWith(read, LOWERCASE));
+  });
 });
 
 describe("useInfiniteAccountApprovals", () => {
