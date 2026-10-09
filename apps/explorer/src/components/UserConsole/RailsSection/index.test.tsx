@@ -6,7 +6,7 @@ import { RailsSection } from ".";
 
 const observed = vi.hoisted(() => ({
   chainId: 0,
-  settlements: undefined as { account?: string; chainId?: number; chainName?: string } | undefined,
+  settlements: undefined as { account?: string; chainId?: number } | undefined,
   onSettle: undefined as ((rail: Rail, currentEpoch: bigint | undefined) => void) | undefined,
   dialog: undefined as
     | { rail: Rail; currentEpoch?: bigint; open: boolean; onOpenChange: (open: boolean) => void }
@@ -31,7 +31,7 @@ vi.mock("@/hooks/useAccountServices", () => ({
   }),
 }));
 vi.mock("@/hooks/useRailSettlements", () => ({
-  useRailSettlements: (options: { account?: string; chainId?: number; chainName?: string }) => {
+  useRailSettlements: (options: { account?: string; chainId?: number }) => {
     observed.settlements = options;
     return { isSettling: () => false, settleRail: vi.fn() };
   },
@@ -95,7 +95,6 @@ describe("RailsSection display network", () => {
     expect(observed.settlements).toMatchObject({
       account: "0x1111111111111111111111111111111111111111",
       chainId: 314,
-      chainName: "Filecoin - Mainnet",
     });
   });
 });

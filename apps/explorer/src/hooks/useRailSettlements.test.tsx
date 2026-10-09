@@ -19,7 +19,7 @@ vi.mock("sonner", () => ({ toast: mocks.toast }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
 vi.mock("@/utils/query-invalidation", () => ({ invalidateAccountQueries: mocks.invalidateAccountQueries }));
 vi.mock("wagmi", () => ({
-  useConfig: () => ({}),
+  useConfig: () => ({ chains: [{ id: 314, name: "Filecoin - Mainnet" }] }),
   useWriteContract: () => ({ writeContractAsync: mocks.writeContractAsync, isPending: false }),
   usePublicClient: () => ({
     waitForTransactionReceipt: ({ hash }: { hash: string }) =>
@@ -34,7 +34,6 @@ const mount = () =>
       account: ACCOUNT,
       abi: [],
       chainId: 314,
-      chainName: "Filecoin - Mainnet",
       contractAddress: CONTRACT,
     }),
   );
