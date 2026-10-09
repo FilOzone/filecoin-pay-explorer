@@ -6,12 +6,12 @@ import { Infinity as InfinityIcon } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { CopyableText } from "@/components/shared";
 import AllowanceDisplay from "@/components/shared/AllowanceDisplay";
-import { formatToken } from "@/utils/formatter";
+import { formatToken, isUnlimitedValue } from "@/utils/formatter";
 
-// Create column helper
-const columnHelper = createColumnHelper<OperatorApproval & { onIncrease: (approval: OperatorApproval) => void }>();
+const columnHelper = createColumnHelper<OperatorApproval>();
 
-export const columns = [
+/** Increase is the table's action, not approval data, so the column closes over it instead of each row carrying it. */
+export const createColumns = (onIncrease: (approval: OperatorApproval) => void) => [
   columnHelper.display({
     id: "operator",
     header: "Service",
@@ -90,7 +90,7 @@ export const columns = [
           </Badge>
           <div className='text-xs text-muted-foreground'>
             Max:{" "}
-            {approval.maxLockupPeriod === BigInt(2) ** BigInt(64) - BigInt(1) ? (
+            {isUnlimitedValue(approval.maxLockupPeriod) ? (
               <span className='inline-flex items-center gap-1'>
                 <InfinityIcon className='h-3 w-3' /> epochs
               </span>
@@ -108,7 +108,7 @@ export const columns = [
     cell: (info) => {
       const approval = info.row.original;
       return approval.isApproved ? (
-        <Button variant='primary' onClick={() => approval.onIncrease(approval)} className='my-3 py-3'>
+        <Button variant='primary' onClick={() => onIncrease(approval)} className='my-3 py-3'>
           Increase
         </Button>
       ) : null;

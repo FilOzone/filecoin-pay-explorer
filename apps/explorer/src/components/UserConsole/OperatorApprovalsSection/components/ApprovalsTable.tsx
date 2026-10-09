@@ -1,14 +1,17 @@
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import type { OperatorApproval } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import { useMemo } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
-import { columns } from "../data/columnDefinitions";
+import { createColumns } from "../data/columnDefinitions";
 
 export type ApprovalsTableProps = {
-  data: Array<OperatorApproval & { onIncrease: (approval: OperatorApproval) => void }>;
+  data: OperatorApproval[];
+  onIncrease: (approval: OperatorApproval) => void;
 };
 
-function ApprovalsTable({ data }: ApprovalsTableProps) {
+function ApprovalsTable({ data, onIncrease }: ApprovalsTableProps) {
+  const columns = useMemo(() => createColumns(onIncrease), [onIncrease]);
   const table = useReactTable({
     data,
     columns,

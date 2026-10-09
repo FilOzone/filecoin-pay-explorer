@@ -33,12 +33,6 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     setApproveDialogOpen(true);
   }, []);
 
-  // Prepare table data with onIncrease handler
-  const tableData = useMemo(
-    () => approvals.map((approval) => ({ ...approval, onIncrease: handleIncrease })),
-    [approvals, handleIncrease],
-  );
-
   let content: React.ReactNode;
   if (isLoading) {
     content = <ApprovalsLoadingState onApprove={handleOpenApprove} />;
@@ -59,7 +53,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
           </Button>
         </div>
 
-        <ApprovalsTable data={tableData} />
+        <ApprovalsTable data={approvals} onIncrease={handleIncrease} />
 
         {hasNextPage ? (
           <div className='flex justify-center'>
