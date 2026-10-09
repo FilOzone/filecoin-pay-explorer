@@ -211,9 +211,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
           userAddress={userAddress}
           currentEpoch={settleSelection.currentEpoch}
           open
-          onOpenChange={(open) => {
-            if (!open) setSettleSelection(null);
-          }}
+          onOpenChange={() => setSettleSelection(null)}
           isSettling={isSettling(settleSelection.rail.railId.toString())}
           settleRail={settleRail}
         />

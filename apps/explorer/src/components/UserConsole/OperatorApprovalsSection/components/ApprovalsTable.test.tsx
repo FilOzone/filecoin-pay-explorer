@@ -36,7 +36,7 @@ const LIMITED = approval("0x2222222222222222222222222222222222222222", 86_400n);
 afterEach(cleanup);
 
 describe("ApprovalsTable", () => {
-  const rowOf = (operator: string) => screen.getByText(operator).closest("tr") as HTMLElement;
+  const rowOf = (operator: string) => screen.getByRole("row", { name: new RegExp(operator) });
 
   it("shows an unlimited maximum lockup period as infinite and a limited one in epochs", () => {
     render(<ApprovalsTable data={[UNLIMITED, LIMITED]} onIncrease={vi.fn()} />);
