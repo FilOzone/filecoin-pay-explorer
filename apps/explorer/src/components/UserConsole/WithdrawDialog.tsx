@@ -15,9 +15,10 @@ import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useWalletClient } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { AccountInfo, Network } from "@/types";
-import { getChainConstants, WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
+import { WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
 import { formatAddress } from "@/utils/formatter";
 
 interface WithdrawDialogProps {
@@ -34,16 +35,16 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const constants = getChainConstants(network);
+  const chain = getChain(network);
   const { data: walletClient } = useWalletClient();
 
   // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
   // Reset state when dialog closes
   useEffect(() => {
@@ -58,11 +59,11 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
     isLoading: isLoadingAccountInfo,
     isRefetching: isRefetchingAccountInfo,
   } = useReadContract({
-    address: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
+    address: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
     functionName: "getAccountInfoIfSettled",
-    args: [userToken.token.id, userAddress],
+    args: userAddress ? [userToken.token.id, userAddress] : undefined,
     query: {
       enabled: !!userToken?.token?.id && !!userAddress && open,
       refetchInterval: 10 * 1_000,

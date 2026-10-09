@@ -14,10 +14,10 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useConnection } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { Network } from "@/types";
 import { computeIncreasedApproval } from "@/utils/approvalIncrease";
-import { getChainConstants } from "@/utils/constants";
 import { formatAddress, formatToken, isUnlimitedValue } from "@/utils/formatter";
 
 interface IncreaseApprovalDialogProps {
@@ -40,14 +40,14 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { address: userAddress } = useConnection();
 
-  const constants = getChainConstants(network);
+  const chain = getChain(network);
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
 
   // Check if current allowances are already unlimited
