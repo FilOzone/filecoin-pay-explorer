@@ -134,7 +134,7 @@ export function useTokenSelection(network: Network, open: boolean): TokenSelecti
   const chainId = constants.chain.id;
   const { address: userAddress } = useAccount();
 
-  const knownTokens: PaymentTokenDetails[] = paymentTokensByChainId[constants.chain.id] ?? [];
+  const knownTokens: PaymentTokenDetails[] = paymentTokensByChainId[chainId] ?? [];
   const [tokenChoice, setTokenChoice] = useState("");
   const [customTokenInput, setCustomTokenInput] = useState("");
 
@@ -275,7 +275,8 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
   const constants = getChainConstants(network);
   const { address: userAddress } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  // Permit nonce and domain reads must come from the approval's chain, not whichever chain the wallet is on.
+  const publicClient = usePublicClient({ chainId: constants.chain.id });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { execute, isExecuting } = useContractTransaction({

@@ -14,7 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi";
+import { useAccount, useReadContract, useWalletClient } from "wagmi";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { AccountInfo, Network } from "@/types";
 import { getChainConstants, WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
@@ -36,7 +36,6 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
 
   const constants = getChainConstants(network);
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
 
   // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
@@ -109,8 +108,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
       return;
     }
 
-    if (!walletClient || !publicClient) {
-      console.log("Wallet client or public client not available");
+    if (!walletClient) {
+      console.log("Wallet client not available");
       return;
     }
 

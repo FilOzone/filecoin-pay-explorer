@@ -26,7 +26,7 @@ vi.mock("wagmi", () => ({
   useBalance: () => mocks.balance,
   useConnection: () => mocks.connection,
   useSwitchChain: () => ({ isPending: false, switchChain: mocks.switchChain }),
-  usePublicClient: () => ({ readContract: vi.fn() }),
+  usePublicClient: ({ chainId }: { chainId?: number } = {}) => ({ readContract: vi.fn(), chainId }),
   useReadContract: () => ({ data: 1000n, isLoading: false }),
   useReadContracts: () => ({ data: mocks.readContracts, isLoading: false, isError: false }),
   useWalletClient: () => ({ data: { signTypedData: vi.fn() } }),
@@ -191,7 +191,8 @@ describe("useAddServiceSubmit", () => {
         chainId: CHAIN_ID,
       }),
       expect.anything(),
-      expect.anything(),
+      // The nonce and domain are read on the approval's chain, not the wallet's default.
+      expect.objectContaining({ chainId: CHAIN_ID }),
     );
     expect(mocks.execute).toHaveBeenCalledWith({
       functionName: "depositWithPermitAndApproveOperator",
