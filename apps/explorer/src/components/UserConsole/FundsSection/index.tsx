@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SpendChart } from "@/components/UserConsole/SpendChart";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
+import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import type { Network } from "@/types";
-import { EPOCH_DURATION, getChainConstants } from "@/utils/constants";
+import { EPOCH_DURATION } from "@/utils/constants";
 import {
   FundsEmptyState,
   FundsErrorState,
@@ -38,7 +39,7 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const usdfcAddress = getChainConstants(network).contracts.usdfc;
+  const usdfcAddress = getChain(network).contracts.usdfc.address;
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {

@@ -1,7 +1,4 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { calibration, getChain, mainnet } from "@/constants/chains";
-import type { supportedChains } from "@/services/wagmi/config";
-import type { ChainConstants, Network } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
 export const EPOCH_DURATION = TIME_CONSTANTS.EPOCH_DURATION;
@@ -16,36 +13,3 @@ export const explorerUrls = {
   mainnet: "https://filfox.info/en",
   calibration: "https://calibration.filfox.info/en",
 };
-
-export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainConstants> = {
-  [calibration.id]: {
-    chain: calibration,
-    label: "Calibration",
-    contracts: {
-      usdfc: calibration.contracts.usdfc.address,
-      payments: calibration.contracts.payments,
-    },
-    faucets: [
-      {
-        name: "Get FIL",
-        url: "https://faucet.calibnet.chainsafe-fil.io/funds.html",
-        asset: "FIL",
-      },
-      {
-        name: "Get USDFC",
-        url: "https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc",
-        asset: "USDFC",
-      },
-    ],
-  },
-  [mainnet.id]: {
-    chain: mainnet,
-    label: "Mainnet",
-    contracts: {
-      usdfc: mainnet.contracts.usdfc.address,
-      payments: mainnet.contracts.payments,
-    },
-  },
-} as const;
-
-export const getChainConstants = (network: Network): ChainConstants => appConstants[getChain(network).id];
