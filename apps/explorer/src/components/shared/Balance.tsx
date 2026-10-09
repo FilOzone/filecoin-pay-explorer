@@ -20,14 +20,14 @@ import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
-import { getChainConstants } from "@/utils/constants";
+import { getChain } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 import { getNetworkFromChainId } from "@/utils/network";
 
 const Balance = () => {
   const { address, chainId } = useConnection();
   // The header shows balances only while the wallet is on a Filecoin chain, so its chain is the displayed network.
-  const constants = getChainConstants(getNetworkFromChainId(chainId));
+  const chain = getChain(getNetworkFromChainId(chainId));
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
@@ -41,13 +41,13 @@ const Balance = () => {
   const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
-    chainId: constants.chain.id,
+    chainId: chain.id,
     query: { enabled: !!address },
   });
   const { data: usdfcBalance, isLoading: isLoadingUSDFCBalance } = useReadContract({
-    address: constants.contracts.usdfc,
+    address: chain.contracts.usdfc.address,
     abi: erc20Abi,
-    chainId: constants.chain.id,
+    chainId: chain.id,
     functionName: "balanceOf",
     args: [address as Address],
     query: { enabled: !!address },
@@ -72,7 +72,7 @@ const Balance = () => {
       await walletClient.watchAsset({
         type: "ERC20",
         options: {
-          address: constants.contracts.usdfc,
+          address: chain.contracts.usdfc.address,
           symbol: "USDFC",
           decimals: 18,
         },
@@ -166,7 +166,7 @@ const Balance = () => {
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
-        {constants.faucets?.map((faucet) => (
+        {chain.faucets?.map((faucet) => (
           <DropdownMenuItem asChild key={faucet.name} className='py-2'>
             <a href={faucet.url} target='_blank' rel='noopener noreferrer' className='w-full cursor-pointer'>
               <span className='text-base text-zinc-950'>{faucet.name}</span>

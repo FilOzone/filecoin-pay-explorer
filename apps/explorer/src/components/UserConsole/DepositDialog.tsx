@@ -27,10 +27,10 @@ import {
   ONE_YEAR_EPOCHS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
+import { getChain } from "@/constants/chains";
 import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { Network } from "@/types";
-import { getChainConstants } from "@/utils/constants";
 import { getPermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
@@ -97,18 +97,18 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
    */
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const constants = getChainConstants(network);
-  const chainId = constants.chain.id;
+  const chain = getChain(network);
+  const chainId = chain.id;
   const { data: walletClient } = useWalletClient();
   // Permit nonce and domain reads must come from the deposit's chain, not whichever chain the wallet is on.
   const publicClient = usePublicClient({ chainId });
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
     chainId,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
 
   /** The form is locked from the first click through to the receipt. */
@@ -239,7 +239,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
     },
   });
 
-  const isUsdfcDeposit = currentToken?.address.toLowerCase() === constants.contracts.usdfc.toLowerCase();
+  const isUsdfcDeposit = currentToken?.address.toLowerCase() === chain.contracts.usdfc.address.toLowerCase();
   const { data: accountSummary, isFetching: isAccountSummaryLoading } = useAccountSummary({
     address: userAddress,
     chainId,
@@ -344,7 +344,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
           // token rejects. `getPermitSignature` re-reads it from chain instead.
           tokenName: currentToken.name,
           ownerAddress: userAddress,
-          spenderAddress: constants.contracts.payments.address,
+          spenderAddress: chain.contracts.payments.address,
           amount: parsedDepositAmount,
           deadline,
           chainId,
@@ -394,21 +394,16 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
-      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, constants.chain.genesisTimestamp)
+      ? calculateFundingRunway(accountSummary, ONE_YEAR_EPOCHS, chain.genesisTimestamp)
       : null;
   const usdfcDepositAmount = isUsdfcDeposit ? parseTopUpAmount(amount) : null;
   const runwayProjected =
     accountSummary && runwayCurrent && usdfcDepositAmount !== null
-      ? calculateProjectedFundingRunway(
-          accountSummary,
-          usdfcDepositAmount,
-          ONE_YEAR_EPOCHS,
-          constants.chain.genesisTimestamp,
-        )
+      ? calculateProjectedFundingRunway(accountSummary, usdfcDepositAmount, ONE_YEAR_EPOCHS, chain.genesisTimestamp)
       : null;
   const defaultSuggestion =
     isUsdfcDeposit && accountSummary && balance !== undefined
-      ? defaultTopUpSuggestion(accountSummary, constants.chain.genesisTimestamp, balance)
+      ? defaultTopUpSuggestion(accountSummary, chain.genesisTimestamp, balance)
       : "";
 
   useEffect(() => {
@@ -440,7 +435,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
             customAddress={customAddress}
             onCustomAddressChange={handleCustomAddressChange}
             customTokenStatus={customTokenStatus}
-            chainName={constants.chain.name}
+            chainName={chain.name}
             disabled={isBusy}
           />
 
@@ -507,7 +502,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
                 accountSummary={accountSummary}
                 amount={amount}
                 disabled={isBusy}
-                genesisTimestamp={constants.chain.genesisTimestamp}
+                genesisTimestamp={chain.genesisTimestamp}
                 maxAmount={balance}
                 onSelect={setAmount}
               />
