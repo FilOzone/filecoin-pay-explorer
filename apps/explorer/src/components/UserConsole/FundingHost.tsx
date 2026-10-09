@@ -5,6 +5,7 @@ import { useConnection } from "wagmi";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
+import { toAccountId } from "@/utils/hexUtils";
 import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
@@ -35,7 +36,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   // closed during that render so nothing reopens on the new network.
   const previousChainId = useRef(chainId);
   const chainChanged = previousChainId.current !== chainId;
-  const { data } = useAccountTokens(address.toLowerCase(), 1, {
+  const { data } = useAccountTokens(address, 1, {
     enabled: isFilecoinChain,
     networkOverride: network,
     pageSize: CONSOLE_TOKEN_PAGE_SIZE,
@@ -106,7 +107,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       ) : null}
       {depositDialog}
       <DirectSquidDepositDialog
-        accountId={address.toLowerCase()}
+        accountId={toAccountId(address)}
         initialSource={cardSource}
         onOpenChange={(open) => {
           if (open) launch.openSquid();

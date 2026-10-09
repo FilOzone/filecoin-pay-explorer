@@ -1,6 +1,7 @@
 import type { AccountOperator, Operator, Rail } from "@filecoin-pay/types";
 import { GET_ACCOUNT_OPERATOR, GET_ACCOUNT_OPERATOR_RAILS, GET_ACCOUNT_OPERATORS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
+import { toAccountId } from "@/utils/hexUtils";
 import { useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
 
 /**
@@ -45,7 +46,7 @@ export const ACCOUNT_SERVICE_RAILS_PAGE_SIZE = 10;
 
 /** Mirrors the subgraph's `getAccountOperatorEntityId`: payer bytes then operator bytes. */
 export function getAccountOperatorId(accountId: string, operatorAddress: string): string {
-  return `${accountId.toLowerCase()}${operatorAddress.toLowerCase().replace(/^0x/, "")}`;
+  return `${toAccountId(accountId)}${operatorAddress.toLowerCase().replace(/^0x/, "")}`;
 }
 
 /**
@@ -53,8 +54,10 @@ export function getAccountOperatorId(accountId: string, operatorAddress: string)
  * address, so every id for this payer sorts after the payer address itself.
  * That makes the account id the opening cursor.
  */
-export const useAccountServices = (accountId: string, options?: AccountServicesOptions) =>
-  useGraphQLInfiniteQuery<AccountOperatorsResponse, AccountServicesPage, string>({
+export const useAccountServices = (address: string, options?: AccountServicesOptions) => {
+  const accountId = toAccountId(address);
+
+  return useGraphQLInfiniteQuery<AccountOperatorsResponse, AccountServicesPage, string>({
     queryKey: ["account", accountId, "services"],
     query: GET_ACCOUNT_OPERATORS,
     // One more than a page: asking for exactly a page cannot tell a full page
@@ -73,21 +76,26 @@ export const useAccountServices = (accountId: string, options?: AccountServicesO
     initialPageParam: accountId,
     networkOverride: options?.networkOverride,
   });
+};
 
 /**
  * One payer/operator relationship. Resolves to `null` when the connected payer
  * has no relationship with the operator, which the service route renders as not
  * found rather than as an empty rail list.
  */
-export const useAccountService = (accountId: string, operatorAddress: string, options?: AccountServicesOptions) =>
-  useGraphQLQuery<AccountOperatorResponse, AccountService | null>({
-    queryKey: ["account", accountId, "services", operatorAddress],
+export const useAccountService = (address: string, operatorAddress: string, options?: AccountServicesOptions) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+
+  return useGraphQLQuery<AccountOperatorResponse, AccountService | null>({
+    queryKey: ["account", accountId, "services", operatorId],
     query: GET_ACCOUNT_OPERATOR,
-    variables: { id: getAccountOperatorId(accountId, operatorAddress) },
+    variables: { id: getAccountOperatorId(accountId, operatorId) },
     select: (data) => data.accountOperator,
-    enabled: !!accountId && !!operatorAddress,
+    enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
   });
+};
 
 /** Narrows a pair's rails. Both are exact matches, never partial. */
 export type ServiceRailsFilter = {
@@ -102,17 +110,19 @@ export type ServiceRailsPage = {
 };
 
 export const useAccountServiceRails = (
-  accountId: string,
+  address: string,
   operatorAddress: string,
   page: number = 1,
   filter: ServiceRailsFilter = {},
   options?: AccountServicesOptions,
 ) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
   // The payer and operator are always pinned; the filter only narrows further,
   // so it can never widen the query beyond this payer's own rails.
   const where: Record<string, string> = {
-    payer: accountId.toLowerCase(),
-    operator: operatorAddress.toLowerCase(),
+    payer: accountId,
+    operator: operatorId,
   };
   if (filter.railId) {
     where.railId = filter.railId;
@@ -122,7 +132,7 @@ export const useAccountServiceRails = (
   }
 
   return useGraphQLQuery<AccountOperatorRailsResponse, ServiceRailsPage>({
-    queryKey: ["account", accountId, "services", operatorAddress, "rails", page, where],
+    queryKey: ["account", accountId, "services", operatorId, "rails", page, where],
     query: GET_ACCOUNT_OPERATOR_RAILS,
     variables: {
       where,
@@ -133,7 +143,7 @@ export const useAccountServiceRails = (
       rails: data.rails.slice(0, ACCOUNT_SERVICE_RAILS_PAGE_SIZE),
       hasMore: data.rails.length > ACCOUNT_SERVICE_RAILS_PAGE_SIZE,
     }),
-    enabled: !!accountId && !!operatorAddress,
+    enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
   });
 };
