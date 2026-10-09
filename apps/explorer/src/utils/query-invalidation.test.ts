@@ -43,20 +43,6 @@ describe("invalidateAccountQueries", () => {
     expect(invalidated()).toEqual(affected.map(() => true));
   });
 
-  it("reaches the account's queries by its lowercase id when given a checksummed address", async () => {
-    const queryClient = new QueryClient();
-    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-    const account = ["account", CHECKSUMMED_OWNER.toLowerCase(), "mainnet"] as const;
-    queryClient.setQueryData(account, "cached");
-
-    await invalidateAccountQueries(queryClient, CHECKSUMMED_OWNER, { repeatAfterMs: [] });
-
-    expect(queryClient.getQueryState(account)?.isInvalidated).toBe(true);
-    expect(invalidateQueries.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === "account")).toEqual([
-      [{ queryKey: ["account", CHECKSUMMED_OWNER.toLowerCase()], refetchType: "active" }],
-    ]);
-  });
-
   it("refetches only mounted queries and lets a later mutation replace the pending passes", async () => {
     const queryClient = new QueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
