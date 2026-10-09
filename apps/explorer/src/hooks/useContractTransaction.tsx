@@ -9,13 +9,11 @@ import type { TransactionMetadata } from "@/types";
 import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { getToastContent } from "@/utils/toast";
 
-interface UseContractTransactionOptions {
+export interface UseContractTransactionOptions {
   account?: Address;
   contractAddress: Address;
   abi: Abi;
   chainId?: number;
-  /** Named in the rejection toast when the wallet is on another network; without it that toast stays generic. */
-  chainName?: string;
   explorerUrl?: string;
 }
 
@@ -41,7 +39,7 @@ interface ExecuteTransactionParams {
  * callbacks (its loading toast never resolved).
  */
 export const useContractTransaction = (options: UseContractTransactionOptions) => {
-  const { account, contractAddress, abi, chainId, chainName, explorerUrl } = options;
+  const { account, contractAddress, abi, chainId, explorerUrl } = options;
 
   const [inFlightCount, setInFlightCount] = useState(0);
   const config = useConfig();
@@ -148,7 +146,9 @@ export const useContractTransaction = (options: UseContractTransactionOptions) =
 
       // A write pinned to `chainId` fails while the wallet sits on another network, for example Base after a
       // Squid deposit; retrying cannot help until the wallet switches.
-      const isOnOtherChain = chainName !== undefined && chainId !== undefined && getAccount(config).chainId !== chainId;
+      // Checked again here rather than trusting the guard above: the wallet can also switch while the prompt is open.
+      const isOnOtherChain = chainId !== undefined && getAccount(config).chainId !== chainId;
+      const chainName = config.chains.find((chain) => chain.id === chainId)?.name ?? "the expected network";
       toast.error("Transaction Rejected", {
         description: isOnOtherChain
           ? `Your wallet is on another network. Switch it to ${chainName} and try again.`

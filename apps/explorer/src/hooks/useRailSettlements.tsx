@@ -1,17 +1,6 @@
 import { useCallback, useState } from "react";
-import type { Abi, Address } from "viem";
 import { formatToken } from "@/utils/formatter";
-import { useContractTransaction } from "./useContractTransaction";
-
-interface UseRailSettlementsOptions {
-  account?: Address;
-  contractAddress: Address;
-  abi: Abi;
-  chainId: number;
-  /** Named in the error toast when the wallet is on another network. */
-  chainName?: string;
-  explorerUrl?: string;
-}
+import { type UseContractTransactionOptions, useContractTransaction } from "./useContractTransaction";
 
 export interface SettleRailParams {
   railId: bigint;
@@ -26,7 +15,7 @@ export interface SettleRailParams {
  * submission to its own receipt, and adds which rails are settling: from the
  * wallet prompt until that rail's receipt confirms or fails.
  */
-export const useRailSettlements = (options: UseRailSettlementsOptions) => {
+export const useRailSettlements = (options: UseContractTransactionOptions & { chainId: number }) => {
   const [settlingRails, setSettlingRails] = useState<ReadonlySet<string>>(new Set());
   const { execute } = useContractTransaction(options);
 
@@ -40,23 +29,19 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
       });
 
     setSettlingRails((current) => new Set(current).add(id));
-    try {
-      return await execute({
-        functionName: "settleRail",
-        args: [railId, untilEpoch],
-        metadata: {
-          type: "settleRail",
-          railId: id,
-          amount: formatToken(settlementAmount, tokenDecimals),
-          token: tokenSymbol,
-        },
-        onConfirmed: settled,
-        onReverted: settled,
-      });
-    } catch (error) {
-      settled();
-      throw error;
-    }
+    return execute({
+      functionName: "settleRail",
+      args: [railId, untilEpoch],
+      metadata: {
+        type: "settleRail",
+        railId: id,
+        amount: formatToken(settlementAmount, tokenDecimals),
+        token: tokenSymbol,
+      },
+      onError: settled,
+      onConfirmed: settled,
+      onReverted: settled,
+    });
   };
 
   const isSettling = useCallback((railId: string) => settlingRails.has(railId), [settlingRails]);
