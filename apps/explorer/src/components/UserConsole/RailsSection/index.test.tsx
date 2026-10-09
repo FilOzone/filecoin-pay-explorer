@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import type { Rail } from "@filecoin-pay/types";
 import { act, cleanup, fireEvent, render as renderDom, screen } from "@testing-library/react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RailsSection } from ".";
 
@@ -75,7 +74,6 @@ const section = (totalRails = 1n) => (
     userAddress='0x1111111111111111111111111111111111111111'
   />
 );
-const render = () => renderToStaticMarkup(section());
 
 afterEach(cleanup);
 
@@ -86,12 +84,12 @@ describe("RailsSection display network", () => {
   });
 
   it("uses the explicit display chain for rail epochs", () => {
-    render();
+    renderDom(section());
     expect(observed.chainId).toBe(314);
   });
 
   it("pins settlements to the connected account and the display chain", () => {
-    render();
+    renderDom(section());
     expect(observed.settlements).toMatchObject({
       account: "0x1111111111111111111111111111111111111111",
       chainId: 314,
