@@ -23,6 +23,8 @@ const state = vi.hoisted(() => ({
   refetchBalances: vi.fn(),
   requestRoute: vi.fn(),
   walletChainId: 8453,
+  // The console wallet's chain; undefined models a payer whose switches also move the console.
+  consoleChainId: undefined as number | undefined,
 }));
 const wallet = vi.hoisted(() => ({
   address: "0x1111111111111111111111111111111111111111" as const,
@@ -133,7 +135,9 @@ vi.mock("wagmi", () => ({
   useAccount: () => ({ address: state.liveRecipient }),
   usePublicClient: ({ chainId }: { chainId: number }) => ({ chain: { id: chainId } }),
 }));
-vi.mock("wagmi/actions", () => ({ getAccount: () => ({ address: state.liveRecipient }) }));
+vi.mock("wagmi/actions", () => ({
+  getAccount: () => ({ address: state.liveRecipient, chainId: state.consoleChainId }),
+}));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({ setTopUpActive: topUp.setActive }),
@@ -309,6 +313,7 @@ describe("DirectSquidDepositDialog safety integration", () => {
     }));
     state.requestRoute.mockReset().mockResolvedValue(query.quote);
     state.walletChainId = 8453;
+    state.consoleChainId = undefined;
     query.allowance = 100_000_000n;
     query.balanceIsError = false;
     query.budgetIsError = false;
@@ -1191,6 +1196,26 @@ describe("DirectSquidDepositDialog safety integration", () => {
     expect(renderer.root.findByProps({ role: "alert" }).children.join("")).toBe("Switch refused");
     // The review survives here because the mocked account never leaves Filecoin; the footer is usable again.
     expect(button(renderer, "Back")?.props.disabled).toBe(false);
+  });
+
+  it("closes after a deposit without switching back a payer in another wallet", async () => {
+    state.consoleChainId = 314;
+    state.execute.mockResolvedValueOnce({
+      depositedAmount: 92n,
+      destinationTransactionHash: ROUTE_HASH,
+      transactionHash: ROUTE_HASH,
+    });
+    // The paying wallet would refuse a switch back, but it is not the console's wallet.
+    wallet.switchChain.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("Switch refused"));
+    const onOpenChange = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<DirectSquidDepositDialog accountId='account' onOpenChange={onOpenChange} open />);
+    });
+    await reachExecution(renderer);
+    await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    expect(wallet.switchChain.mock.calls).toEqual([[8453]]);
   });
 
   it("keeps top-up mode active until a successful route returns to Filecoin", async () => {

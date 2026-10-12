@@ -617,7 +617,9 @@ export function DirectSquidDepositDialog({
   };
 
   const restoreFilecoin = async () => {
-    if (!hasSwitchedToSource.current) return true;
+    // Networks are per extension: a payer in another wallet can stay on the source network, since only the
+    // console's own wallet must be back on Filecoin.
+    if (!hasSwitchedToSource.current || getAccount(config).chainId === mainnet.id) return true;
     if (!payingWallet) {
       setError("Reconnect the paying wallet to return to Filecoin mainnet.");
       return false;
