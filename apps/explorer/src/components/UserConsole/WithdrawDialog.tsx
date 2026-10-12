@@ -130,7 +130,10 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
 
   const hasAvailableFunds = !!accountInfo && (parsedAmount === null || parsedAmount <= (accountInfo as AccountInfo)[2]);
   const canWithdraw = hasAvailableFunds && parsedAmount !== null && parsedAmount > 0n;
-  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
+  // useWalletClient resolves asynchronously after a connect or chain switch; until then a click could not sign.
+  const isWalletReady = !!walletClient && !!userAddress;
+  const submitLabel = isWalletReady ? "Withdraw" : "Connecting wallet…";
+  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo && isWalletReady;
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -216,6 +219,9 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
                 Max includes a small buffer to prevent transaction failures from ongoing payment streams.
               </p>
             )}
+            {amount.trim() && (parsedAmount === null || parsedAmount <= 0n) ? (
+              <p className='text-xs text-red-500'>Enter a plain number greater than 0, like 1.5.</p>
+            ) : null}
             <p className='text-xs text-red-500'>
               {hasAvailableFunds ? "" : "Insufficient Available funds in contract account"}
             </p>
@@ -238,7 +244,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
                 Processing...
               </span>
             ) : (
-              "Withdraw"
+              submitLabel
             )}
           </Button>
         </DialogFooter>
