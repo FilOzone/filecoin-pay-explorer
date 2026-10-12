@@ -7,6 +7,7 @@ import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from 
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
 const DEFAULT_CHAIN_ID = 314;
+const ETHEREUM_CHAIN_ID = 1;
 
 type Listener = (...args: unknown[]) => void;
 
@@ -43,9 +44,11 @@ function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
 
 // `connectedAccounts` lists what the site may sign with, the wallet's selected account first. An extension passes
 // `prompt` to show its popup before each signature; the embedded wallet signs directly.
+// `hasFilecoin: false` models a wallet without the Filecoin network: it starts elsewhere and refuses to switch to it.
 function createProvider(
   connectedAccounts: () => PrivateKeyAccount[],
   prompt: (sign: () => Promise<Hex>) => Promise<Hex> = (sign) => sign(),
+  { hasFilecoin = true }: { hasFilecoin?: boolean } = {},
 ) {
   // A wallet signs only as an account connected to the site.
   const connectedAccount = (address: string | undefined) => {
@@ -56,12 +59,15 @@ function createProvider(
       throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
     return account;
   };
-  let chainId = DEFAULT_CHAIN_ID;
+  let chainId = hasFilecoin ? DEFAULT_CHAIN_ID : ETHEREUM_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
   const emit = (event: string, ...args: unknown[]) => {
     for (const listener of listeners.get(event) ?? []) listener(...args);
   };
   const switchChain = (id: number) => {
+    if (!hasFilecoin && id === DEFAULT_CHAIN_ID) {
+      throw Object.assign(new Error(`Unrecognized chain ID ${numberToHex(id)}.`), { code: 4902 });
+    }
     chainId = id;
     emit("chainChanged", numberToHex(id));
   };
@@ -159,6 +165,25 @@ function createExtension(disconnect: () => void) {
     ];
   };
   return { connectOtherAccount, current, revoke, switchAccount };
+}
+
+// A second extension, like Rabby, with one account and no Filecoin network. Its address is readable from
+// Playwright as `window.__fakePrivyRabbyAccount` once "fake-privy:connect-rabby" connects it.
+function createRabby(): Wallet {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const wallet = createProvider(() => [account], requestSignature, { hasFilecoin: false });
+  (window as typeof window & { __fakePrivyRabbyAccount?: Hex }).__fakePrivyRabbyAccount = account.address;
+  return {
+    address: account.address,
+    walletClientType: "rabby",
+    connectorType: "injected",
+    get chainId() {
+      return wallet.chainId();
+    },
+    meta: { id: "io.rabby", name: "Rabby", icon: undefined },
+    getEthereumProvider: async () => wallet.provider,
+    switchChain: wallet.switchChain,
+  };
 }
 
 type Wallet = {
@@ -388,6 +413,15 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     window.addEventListener("fake-privy:connect-other-account", onConnectOther);
     return () => window.removeEventListener("fake-privy:connect-other-account", onConnectOther);
   }, [extension]);
+  useEffect(() => {
+    // Created outside the updater, which StrictMode runs twice.
+    const onConnectRabby = () => {
+      const rabby = createRabby();
+      setWallets((current) => [...current, rabby]);
+    };
+    window.addEventListener("fake-privy:connect-rabby", onConnectRabby);
+    return () => window.removeEventListener("fake-privy:connect-rabby", onConnectRabby);
+  }, []);
   useEffect(() => {
     // Connects the extension from outside the app's own buttons, as Privy's wallet list or a pay-with flow would.
     const onConnectExtension = () => {
