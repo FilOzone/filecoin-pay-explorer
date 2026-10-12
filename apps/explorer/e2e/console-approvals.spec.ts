@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -21,8 +22,8 @@ const approval = (index: number) => {
   };
 };
 
-// Regression: the dashboard showed only the first ten approvals, so the rest could not be seen or increased.
-test("Load more reaches approvals beyond the first page", async ({ page }) => {
+/** Serves the approvals list; while `failBeyondFirstPage` holds, any later page fails. */
+async function openApprovals(page: Page, email: string, failBeyondFirstPage = () => false) {
   const approvals = Array.from({ length: APPROVAL_COUNT }, (_, index) => approval(index));
   await page.route(
     // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
@@ -32,6 +33,7 @@ test("Load more reaches approvals beyond the first page", async ({ page }) => {
       const query: string = body.query ?? "";
       if (query.includes("GetAccountApprovals")) {
         const { skip, first } = body.variables;
+        if (skip > 0 && failBeyondFirstPage()) return route.fulfill({ status: 500 });
         return route.fulfill({ json: { data: { operatorApprovals: approvals.slice(skip, skip + first) } } });
       }
       if (query.includes("GetAccountDetails")) {
@@ -49,11 +51,32 @@ test("Load more reaches approvals beyond the first page", async ({ page }) => {
   );
 
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "approvals-paging@fake-privy.test" });
+  await loginWithTestAccount(page, { email });
   const increaseButtons = page.getByRole("button", { name: "Increase", exact: true });
   await expect(increaseButtons).toHaveCount(10, { timeout: 30_000 });
+  return increaseButtons;
+}
+
+// Regression: the dashboard showed only the first ten approvals, so the rest could not be seen or increased.
+test("Load more reaches approvals beyond the first page", async ({ page }) => {
+  const increaseButtons = await openApprovals(page, "approvals-paging@fake-privy.test");
 
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(increaseButtons).toHaveCount(APPROVAL_COUNT);
   await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
+});
+
+// Regression: a failed Load more replaced the loaded approvals with the error state.
+test("a failed Load more keeps the loaded approvals and can be retried", async ({ page }) => {
+  let failing = true;
+  const increaseButtons = await openApprovals(page, "approvals-paging-error@fake-privy.test", () => failing);
+
+  await page.getByRole("button", { name: "Load more" }).click();
+  // The query client retries before it reports the failure.
+  await expect(page.getByText("Couldn't load more approvals. Try again.")).toBeVisible({ timeout: 15_000 });
+  await expect(increaseButtons).toHaveCount(10);
+
+  failing = false;
+  await page.getByRole("button", { name: "Load more" }).click();
+  await expect(increaseButtons).toHaveCount(APPROVAL_COUNT);
 });

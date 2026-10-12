@@ -27,10 +27,8 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     setIncreaseDialogOpen(false);
   }
 
-  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteAccountApprovals(
-    account.id,
-    { networkOverride: network },
-  );
+  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
+    useInfiniteAccountApprovals(account.id, { networkOverride: network });
   const approvals = useMemo(() => data?.pages.flatMap((page) => page.operatorApprovals) ?? [], [data]);
 
   const handleIncrease = useCallback((approval: OperatorApproval) => {
@@ -51,7 +49,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
   let content: React.ReactNode;
   if (isLoading) {
     content = <ApprovalsLoadingState onApprove={handleOpenApprove} />;
-  } else if (isError) {
+  } else if (isError && !data) {
     content = <ApprovalsErrorState onApprove={handleOpenApprove} />;
   } else if (approvals.length === 0) {
     content = <ApprovalsEmptyState onApprove={handleOpenApprove} />;
@@ -71,7 +69,12 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
         <ApprovalsTable data={tableData} />
 
         {hasNextPage ? (
-          <div className='flex justify-center'>
+          <div className='flex flex-col items-center gap-2'>
+            {isFetchNextPageError ? (
+              <p role='alert' className='text-sm text-destructive'>
+                Couldn't load more approvals. Try again.
+              </p>
+            ) : null}
             <Button variant='tertiary' size='compact' onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
               {isFetchingNextPage ? "Loading..." : "Load more"}
             </Button>

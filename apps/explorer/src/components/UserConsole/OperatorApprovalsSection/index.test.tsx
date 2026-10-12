@@ -9,6 +9,7 @@ const query = vi.hoisted(() => ({
   isError: false,
   hasNextPage: false,
   isFetchingNextPage: false,
+  isFetchNextPageError: false,
   fetchNextPage: vi.fn(),
 }));
 
@@ -113,6 +114,7 @@ describe("OperatorApprovalsSection paging", () => {
   beforeEach(() => {
     query.isLoading = false;
     query.isError = false;
+    query.isFetchNextPageError = false;
     query.fetchNextPage.mockReset();
   });
 
@@ -126,6 +128,20 @@ describe("OperatorApprovalsSection paging", () => {
       "Increase 2",
       "Increase 3",
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(query.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression: a failed Load more replaced the loaded approvals with the error state.
+  it("keeps loaded approvals and offers a retry when the next page fails", () => {
+    query.data = { pages: [{ operatorApprovals: [{ id: "1" }] }] };
+    query.hasNextPage = true;
+    query.isError = true;
+    query.isFetchNextPageError = true;
+    render(<OperatorApprovalsSection account={account} network='mainnet' />);
+
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Increase 1"]);
+    expect(screen.getByRole("alert").textContent).toBe("Couldn't load more approvals. Try again.");
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(query.fetchNextPage).toHaveBeenCalledTimes(1);
   });
