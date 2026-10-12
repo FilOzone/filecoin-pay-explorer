@@ -41,11 +41,21 @@ function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
   });
 }
 
-// An extension passes `prompt` to show its popup before each signature; the embedded wallet signs directly.
+// `connectedAccounts` lists what the site may sign with, the wallet's selected account first. An extension passes
+// `prompt` to show its popup before each signature; the embedded wallet signs directly.
 function createProvider(
-  currentAccount: () => PrivateKeyAccount,
+  connectedAccounts: () => PrivateKeyAccount[],
   prompt: (sign: () => Promise<Hex>) => Promise<Hex> = (sign) => sign(),
 ) {
+  // A wallet signs only as an account connected to the site.
+  const connectedAccount = (address: string | undefined) => {
+    const [selected] = connectedAccounts();
+    if (!address) return selected;
+    const account = connectedAccounts().find((candidate) => candidate.address.toLowerCase() === address.toLowerCase());
+    if (!account)
+      throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
+    return account;
+  };
   let chainId = DEFAULT_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
   const emit = (event: string, ...args: unknown[]) => {
@@ -59,25 +69,24 @@ function createProvider(
     switch (method) {
       case "eth_accounts":
       case "eth_requestAccounts":
-        return [currentAccount().address];
+        return connectedAccounts().map((account) => account.address);
       case "eth_chainId":
         return numberToHex(chainId);
       case "wallet_switchEthereumChain":
         return switchChain(Number((params[0] as { chainId: Hex }).chainId));
       case "personal_sign": {
         const [message, address] = params as [Hex, string | undefined];
-        const account = currentAccount();
-        // A wallet signs only as an account connected to the site, and this fake connects one at a time.
-        if (address && address.toLowerCase() !== account.address.toLowerCase()) {
-          throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
-        }
+        const account = connectedAccount(address);
         return prompt(() => account.signMessage({ message: { raw: message } }));
       }
       case "eth_signTypedData_v4":
-        return currentAccount().signTypedData(JSON.parse(params[1] as string));
+        return connectedAccount(params[0] as string).signTypedData(JSON.parse(params[1] as string));
       // Goes through the fake Privy transaction dialog; nothing is signed or broadcast.
-      case "eth_sendTransaction":
-        return requestSend(params[0] as Record<string, unknown>);
+      case "eth_sendTransaction": {
+        const tx = params[0] as Record<string, unknown>;
+        connectedAccount(typeof tx.from === "string" ? tx.from : undefined);
+        return requestSend(tx);
+      }
       default:
         throw Object.assign(new Error(`fake Privy wallet does not support ${method}`), { code: 4200 });
     }
@@ -97,7 +106,7 @@ function createProvider(
 
 function createEmbeddedWallet(): Wallet {
   const account = privateKeyToAccount(generatePrivateKey());
-  const wallet = createProvider(() => account);
+  const wallet = createProvider(() => [account]);
   return {
     address: account.address,
     walletClientType: "privy",
@@ -111,12 +120,18 @@ function createEmbeddedWallet(): Wallet {
   };
 }
 
-// An extension like MetaMask: the site sees one selected account, which a test switches with the
-// "fake-privy:switch-account" window event.
+// An extension like MetaMask: the site sees the selected account, which a test switches with the
+// "fake-privy:switch-account" window event. "fake-privy:connect-other-account" connects the other account too,
+// as MetaMask's account picker does; Privy still reports only the selected one. Both addresses are then readable
+// from Playwright as `window.__fakePrivyExtensionAccounts`, selected first.
 function createExtension(disconnect: () => void) {
   const accounts = [privateKeyToAccount(generatePrivateKey()), privateKeyToAccount(generatePrivateKey())];
   let selected = 0;
-  const wallet = createProvider(() => accounts[selected], requestSignature);
+  let isOtherConnected = false;
+  const wallet = createProvider(
+    () => (isOtherConnected ? [accounts[selected], accounts[1 - selected]] : [accounts[selected]]),
+    requestSignature,
+  );
   const current = (): Wallet => ({
     address: accounts[selected].address,
     walletClientType: "metamask",
@@ -136,7 +151,14 @@ function createExtension(disconnect: () => void) {
   };
   // Like revoking the site's access in MetaMask: the provider reports no accounts.
   const revoke = () => wallet.emit("accountsChanged", []);
-  return { current, revoke, switchAccount };
+  const connectOtherAccount = () => {
+    isOtherConnected = true;
+    (window as typeof window & { __fakePrivyExtensionAccounts?: Hex[] }).__fakePrivyExtensionAccounts = [
+      accounts[selected].address,
+      accounts[1 - selected].address,
+    ];
+  };
+  return { connectOtherAccount, current, revoke, switchAccount };
 }
 
 type Wallet = {
@@ -360,6 +382,11 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("fake-privy:revoke-extension", onRevoke);
     return () => window.removeEventListener("fake-privy:revoke-extension", onRevoke);
+  }, [extension]);
+  useEffect(() => {
+    const onConnectOther = () => extension.connectOtherAccount();
+    window.addEventListener("fake-privy:connect-other-account", onConnectOther);
+    return () => window.removeEventListener("fake-privy:connect-other-account", onConnectOther);
   }, [extension]);
   useEffect(() => {
     // Connects the extension from outside the app's own buttons, as Privy's wallet list or a pay-with flow would.
