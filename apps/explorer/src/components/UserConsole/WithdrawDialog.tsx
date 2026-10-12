@@ -65,12 +65,11 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
     functionName: "getAccountInfoIfSettled",
     args: userAddress ? [userToken.token.id, userAddress] : undefined,
     query: {
-      enabled: !!userToken?.token?.id && !!userAddress && open,
+      enabled: !!userToken.token.id && !!userAddress && open,
       refetchInterval: 10 * 1_000,
     },
   });
 
-  // Determine current token to display
   const currentToken = {
     symbol: userToken.token.symbol,
     decimals: Number(userToken.token.decimals),
@@ -137,8 +136,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className='sm:max-w-125' showCloseButton={!isSubmitting}>
         <DialogHeader>
-          <DialogTitle>Withdraw {currentToken.symbol || "Tokens"}</DialogTitle>
-          <DialogDescription>Withdraw {currentToken.symbol || "Tokens"} from your account.</DialogDescription>
+          <DialogTitle>Withdraw {currentToken.symbol}</DialogTitle>
+          <DialogDescription>Withdraw {currentToken.symbol} from your account.</DialogDescription>
         </DialogHeader>
 
         <div className='grid gap-4 py-4'>
@@ -167,27 +166,25 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
           <div className='grid gap-2'>
             <div className='flex items-center justify-between'>
               <Label htmlFor='amount'>Amount</Label>
-              {
-                <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                  <Wallet className='h-3 w-3' />
-                  <span>
-                    Balance:{" "}
-                    {isLoadingAccountInfo || !accountInfo || isRefetchingAccountInfo ? (
-                      <Loader2 className='h-3 w-3 animate-spin inline' />
-                    ) : (
-                      <span className='font-medium text-foreground'>
-                        {Number(formatUnits((accountInfo as AccountInfo)[2], currentToken.decimals)).toLocaleString(
-                          undefined,
-                          {
-                            maximumFractionDigits: 6,
-                          },
-                        )}{" "}
-                        {currentToken.symbol}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              }
+              <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                <Wallet className='h-3 w-3' />
+                <span>
+                  Balance:{" "}
+                  {isLoadingAccountInfo || !accountInfo || isRefetchingAccountInfo ? (
+                    <Loader2 className='h-3 w-3 animate-spin inline' />
+                  ) : (
+                    <span className='font-medium text-foreground'>
+                      {Number(formatUnits((accountInfo as AccountInfo)[2], currentToken.decimals)).toLocaleString(
+                        undefined,
+                        {
+                          maximumFractionDigits: 6,
+                        },
+                      )}{" "}
+                      {currentToken.symbol}
+                    </span>
+                  )}
+                </span>
+              </div>
             </div>
             <div className='relative'>
               <Input
