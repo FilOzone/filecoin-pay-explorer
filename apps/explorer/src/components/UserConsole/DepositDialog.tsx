@@ -401,7 +401,11 @@ export const DepositDialog = ({
     }
   };
 
-  const canDeposit = parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy;
+  // useWalletClient resolves asynchronously after a connect or chain switch; until then a click could not sign.
+  const isWalletReady = !!walletClient && !!publicClient && !!userAddress;
+  const submitLabel = isWalletReady ? "Deposit" : "Connecting wallet…";
+  const canDeposit =
+    parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy && isWalletReady;
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
@@ -502,6 +506,9 @@ export const DepositDialog = ({
               <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
+              {amount !== "" && parsedDepositAmount === null ? (
+                <p className='text-xs text-destructive'>Enter a plain number greater than 0, like 1.5.</p>
+              ) : null}
               {hasInsufficientBalance ? <p className='text-xs text-destructive'>Insufficient wallet balance.</p> : null}
               {isBalanceError ? <p className='text-xs text-destructive'>Wallet balance unavailable.</p> : null}
             </div>
@@ -537,7 +544,7 @@ export const DepositDialog = ({
                 Processing...
               </span>
             ) : (
-              "Deposit"
+              submitLabel
             )}
           </Button>
         </DialogFooter>
