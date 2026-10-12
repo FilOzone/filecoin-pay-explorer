@@ -1,12 +1,11 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 // CI points the subgraph at placeholder.invalid, which the page's connect-src CSP refuses before any route can answer.
 test.use({ bypassCSP: true });
 
-// Regression: a value like 1.5 in the lockup period field threw after the dialog had entered its busy state, leaving
-// it on "Processing..." until it was closed and reopened.
-test("Increase stays unavailable for an unparsable lockup period instead of getting stuck", async ({ page }) => {
+async function openIncreaseDialog(page: Page, email: string) {
   const approval = {
     id: "approval-1",
     isApproved: true,
@@ -42,10 +41,15 @@ test("Increase stays unavailable for an unparsable lockup period instead of gett
   );
 
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "increase-approval@fake-privy.test" });
+  await loginWithTestAccount(page, { email });
   await page.getByRole("button", { name: "Increase", exact: true }).click({ timeout: 30_000 });
+  return page.getByRole("dialog", { name: "Increase Approval" });
+}
 
-  const dialog = page.getByRole("dialog", { name: "Increase Approval" });
+// Regression: a value like 1.5 in the lockup period field threw after the dialog had entered its busy state, leaving
+// it on "Processing..." until it was closed and reopened.
+test("Increase stays unavailable for an unparsable lockup period instead of getting stuck", async ({ page }) => {
+  const dialog = await openIncreaseDialog(page, "increase-approval@fake-privy.test");
   await dialog.getByLabel("Lockup Increase").fill("1");
   const submit = dialog.getByRole("button", { name: "Increase", exact: true });
   await expect(submit).toBeEnabled();
@@ -53,4 +57,24 @@ test("Increase stays unavailable for an unparsable lockup period instead of gett
   await dialog.getByLabel("Maximum Lockup Period Increase").fill("1.5");
   await expect(submit).toBeDisabled();
   await expect(submit).not.toContainText("Processing");
+});
+
+test("Increase Approval stays open while the wallet request is pending", async ({ page }) => {
+  const dialog = await openIncreaseDialog(page, "increase-approval-busy@fake-privy.test");
+  await dialog.getByLabel("Lockup Increase").fill("1");
+  await dialog.getByRole("button", { name: "Increase", exact: true }).click();
+
+  // Approving and then closing the wallet dialog leaves the request unsettled, as real Privy does.
+  const wallet = page.getByRole("dialog", { name: "approve transaction" });
+  await wallet.getByRole("button", { name: "Approve" }).click();
+  await expect(wallet.getByText("Loading...")).toBeVisible();
+  await wallet.getByRole("button", { name: "close modal" }).click();
+  await expect(dialog).toContainText("Processing...");
+
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
+  await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  // A dismissed panel stays visible through its leave transition, so check it never started closing.
+  await expect(dialog.locator("[data-slot='dialog-content']")).not.toHaveAttribute("data-closed");
 });

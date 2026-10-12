@@ -38,4 +38,17 @@ describe("computeIncreasedApproval", () => {
   ])("rejects %s", (_name, input) => {
     expect(compute(input)).toBeNull();
   });
+
+  it.each([
+    ["lockup", { totals: { lockup: maxUint256 }, input: { lockup: "0.000000000000000001" } }],
+    ["rate", { totals: { rate: maxUint256 }, input: { rate: "0.000000000000000001" } }],
+    ["period", { totals: { maxLockupPeriod: maxUint256 }, input: { maxLockupPeriod: "1" } }],
+  ])("rejects a %s total above uint256", (_name, { totals, input }) => {
+    expect(computeIncreasedApproval({ ...empty, ...input }, { ...current, ...totals }, 18)).toBeNull();
+  });
+
+  it("accepts a total of exactly uint256", () => {
+    const totals = { ...current, maxLockupPeriod: maxUint256 - 1n };
+    expect(computeIncreasedApproval({ ...empty, maxLockupPeriod: "1" }, totals, 18)?.maxLockupPeriod).toBe(maxUint256);
+  });
 });

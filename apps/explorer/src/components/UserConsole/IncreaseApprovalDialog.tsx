@@ -229,7 +229,8 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
 
         {!newTotals && (
           <p role='alert' className='text-sm text-destructive'>
-            Enter plain decimal amounts and a whole number of epochs for the lockup period.
+            Enter plain decimal amounts and a whole number of epochs for the lockup period, within the contract's
+            limits.
           </p>
         )}
 
