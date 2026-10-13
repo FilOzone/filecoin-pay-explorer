@@ -2,16 +2,17 @@
 import { useEffect, useMemo } from "react";
 import { useConnection } from "wagmi";
 import SessionKeysSection from "@/components/UserConsole/SessionKeysSection";
+import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { dropSearchParams, useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type AuthorizeParamError, LINK_PARAMS, parseAuthorizeLink, parseRevokeLink } from "@/utils/authorizeParam";
-import { getNetworkFromChainId } from "@/utils/network";
 
 function linkError<T extends object>(link: T | { error: AuthorizeParamError } | null): AuthorizeParamError | null {
   return link !== null && "error" in link ? link.error : null;
 }
 
 const SessionKeysPage = () => {
-  const { address, chainId } = useConnection();
+  const { address } = useConnection();
+  const { network } = useConsoleNetwork();
   // `revoke` stays in the URL until acted on: a network switch can remount this page.
   const params = useConsumedSearchParams(["authorize", "scopes", "network"], ["revoke"]);
   const link = useMemo(() => (params ? parseAuthorizeLink(params) : null), [params]);
@@ -25,7 +26,7 @@ const SessionKeysPage = () => {
 
   return (
     <SessionKeysSection
-      network={getNetworkFromChainId(chainId)}
+      network={network}
       account={address}
       prefillAddress={request?.address}
       prefillScopes={request?.scopes}
