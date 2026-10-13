@@ -26,7 +26,8 @@ type PendingSignature = {
   resolve: (signature: Hex) => void;
   reject: (error: unknown) => void;
 };
-type PendingFund = { address: string; reject: (error: unknown) => void };
+type FundResult = { status: "submitted" };
+type PendingFund = { address: string; resolve: (result: FundResult) => void; reject: (error: unknown) => void };
 
 // The provider lives outside React, so a send reaches the dialog in PrivyProvider through a window event.
 function requestSend(tx: Record<string, unknown>): Promise<Hex> {
@@ -210,7 +211,7 @@ type FakePrivy = {
   connectWallet: () => void;
   onConnect: Set<ConnectSuccess>;
   loginWithWallet: (address: string, walletClientType: string) => void;
-  fund: (address: string) => Promise<never>;
+  fund: (address: string) => Promise<FundResult>;
 };
 
 const FakePrivyContext = createContext<FakePrivy | null>(null);
@@ -332,6 +333,7 @@ function SignatureModal({ pending, onClose }: { pending: PendingSignature; onClo
 }
 
 // Privy's card purchase: it shows where the USDC goes, and closing it rejects with "User exited flow" as Privy does.
+// Done resolves "submitted", as Privy does once the provider's window closes, whether or not anything was paid.
 function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => void }) {
   return (
     <div role='dialog' aria-label='buy usdc' id='privy-dialog'>
@@ -347,6 +349,15 @@ function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => 
       </button>
       <h3>Buy USDC</h3>
       <p>Destination: {pending.address}</p>
+      <button
+        type='button'
+        onClick={() => {
+          pending.resolve({ status: "submitted" });
+          onClose();
+        }}
+      >
+        Done
+      </button>
     </div>
   );
 }
@@ -465,7 +476,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       const walletAccount = { type: "wallet", address, walletClientType };
       setUser({ id: `did:privy:fake-${address}`, wallet: walletAccount, linkedAccounts: [walletAccount] });
     },
-    fund: (address) => new Promise((_resolve, reject) => setPendingFund({ address, reject })),
+    fund: (address) => new Promise((resolve, reject) => setPendingFund({ address, resolve, reject })),
     // Connects without a modal, as if the user picked the extension in Privy's wallet list.
     connectWallet: () => {
       const wallet = extension.current();

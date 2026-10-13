@@ -44,6 +44,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     address,
     // The recipient check covers the account; a network switch after buying is not a wallet change.
     contextKey: address,
+    isPickerOpen: launch.isAddFundsOpen,
     onPurchased: (amount) => {
       setCardSource({ amount, chainId: CARD_CHAIN_ID, decimals: CARD_USDC_DECIMALS, token: CARD_USDC });
       launch.openSquid();
@@ -81,7 +82,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const chooseMethod = (method: AddFundsMethod) => {
     if (method === "card") {
       // The picker stays open: it shows the purchase status and Start over, and it
-      // refuses to close while the purchase is busy.
+      // refuses to close while Privy's window is open.
       void card.buyWithCard();
       return;
     }
@@ -97,6 +98,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
           cardLabel={card.label}
           cardStatus={card.statusMessage}
           isBusy={card.isBusy}
+          isCardChecking={card.isChecking}
           onCardStartOver={card.canStartOver ? card.startOver : undefined}
           onOpenChange={(open) => (open ? launch.openAddFunds(launch.depositToken) : launch.closeAddFunds())}
           onSelect={chooseMethod}
