@@ -9,11 +9,7 @@ export type ApprovalIncreaseInput = {
 
 export type ApprovalTotals = { lockup: bigint; rate: bigint; maxLockupPeriod: bigint };
 
-/**
- * New allowance totals for an increase, or null when an input is unparsable or a total exceeds the contract's uint256.
- * <input type=number> accepts values such as `1e5` that viem's `parseUnits` and
- * `BigInt` reject, and the lockup period is a whole number of epochs.
- */
+// New allowance totals for an increase, or null if an input is unparsable or a total exceeds unint256.
 export function computeIncreasedApproval(
   input: ApprovalIncreaseInput,
   current: ApprovalTotals,
@@ -34,6 +30,7 @@ export function computeIncreasedApproval(
   return Object.values(totals).some((total) => total > maxUint256) ? null : totals;
 }
 
+// <input type=number> allow `1e5`, which viem's parseUnits/BigInt reject.
 function parseAmount(value: string, decimals: number): bigint | null {
   const trimmed = value.trim();
   if (trimmed === "") return 0n;
@@ -45,6 +42,7 @@ function parseAmount(value: string, decimals: number): bigint | null {
   }
 }
 
+// Epochs must be a whole number.
 function parseEpochs(value: string): bigint | null {
   const trimmed = value.trim();
   if (trimmed === "") return 0n;

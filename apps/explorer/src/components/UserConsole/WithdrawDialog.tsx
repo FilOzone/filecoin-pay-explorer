@@ -14,7 +14,7 @@ import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi";
+import { useConnection, usePublicClient, useReadContract, useWalletClient } from "wagmi";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
 import type { AccountInfo } from "@/types";
@@ -28,7 +28,7 @@ interface WithdrawDialogProps {
 }
 
 export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open, onOpenChange }) => {
-  const { address: userAddress } = useAccount();
+  const { address: userAddress } = useConnection();
 
   // Form state
   const [amount, setAmount] = useState("");
@@ -143,14 +143,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ userToken, open,
     }
   };
 
-  /**
-   * Every close request comes through here so a pending wallet signature cannot
-   * be dismissed. `isSubmitting` ends when the transaction is submitted, not
-   * when its receipt confirms: the dialog closes then and may be reopened while
-   * the receipt is tracked. That close deliberately calls `onOpenChange`
-   * directly; see `onSubmitOnChain` above.
-   */
   const handleDialogOpenChange = (nextOpen: boolean) => {
+    // Don't let the user dismiss the dialog while a wallet signature is pending.
     if (!nextOpen && isSubmitting) return;
     onOpenChange(nextOpen);
   };
