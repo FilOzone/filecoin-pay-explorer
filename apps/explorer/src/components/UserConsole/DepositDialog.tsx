@@ -306,23 +306,15 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   const hasInsufficientBalance = parsedDepositAmount !== null && balance !== undefined && parsedDepositAmount > balance;
 
   const handleDeposit = async () => {
-    if (!currentToken) {
-      console.log("No token selected");
-      return;
-    }
-
-    if (parsedDepositAmount === null || balance === undefined || hasInsufficientBalance) {
-      console.log("Invalid amount");
-      return;
-    }
-
-    if (!walletClient || !publicClient) {
-      console.log("Wallet client or public client not available");
-      return;
-    }
-
-    if (!userAddress) {
-      console.log("User address not available");
+    if (
+      !currentToken ||
+      parsedDepositAmount === null ||
+      balance === undefined ||
+      hasInsufficientBalance ||
+      !walletClient ||
+      !publicClient ||
+      !userAddress
+    ) {
       return;
     }
 
@@ -330,8 +322,6 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
 
     try {
       const deadline = BigInt(Math.floor(Date.now() / 1000) + PERMIT_DEADLINE_SECONDS);
-
-      console.log("[Deposit] Getting permit signature...");
 
       const permitSignature = await getPermitSignature(
         {
@@ -352,8 +342,6 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
         walletClient,
         publicClient,
       );
-
-      console.log("[Deposit] Permit signature obtained, submitting transaction...");
 
       // Privy resolves the signature while its sign dialog is still animating
       // closed. Sending the transaction inside that window swaps the dialog's
@@ -390,7 +378,11 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
     }
   };
 
-  const canDeposit = parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy;
+  // useWalletClient resolves asynchronously after a connect or chain switch; until then a click could not sign.
+  const isWalletReady = !!walletClient && !!publicClient && !!userAddress;
+  const submitLabel = isWalletReady ? "Deposit" : "Connecting wallet…";
+  const canDeposit =
+    parsedDepositAmount !== null && balance !== undefined && !hasInsufficientBalance && !isBusy && isWalletReady;
 
   const runwayCurrent =
     isUsdfcDeposit && accountSummary
@@ -491,6 +483,9 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
               <p className='break-words text-xs text-muted-foreground'>
                 Enter the amount of {currentToken.symbol} you want to deposit
               </p>
+              {amount !== "" && parsedDepositAmount === null ? (
+                <p className='text-xs text-destructive'>Enter a plain number greater than 0, like 1.5.</p>
+              ) : null}
               {hasInsufficientBalance ? <p className='text-xs text-destructive'>Insufficient wallet balance.</p> : null}
               {isBalanceError ? <p className='text-xs text-destructive'>Wallet balance unavailable.</p> : null}
             </div>
@@ -526,7 +521,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
                 Processing...
               </span>
             ) : (
-              "Deposit"
+              submitLabel
             )}
           </Button>
         </DialogFooter>

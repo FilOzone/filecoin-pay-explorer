@@ -90,7 +90,7 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
             <BetaWarning />
             <ConsoleAccessGate accessState={displayAccessState}>
               {/* Keyed by account, so nothing started for one account survives a switch to another. */}
-              <ConsoleContent key={account?.address} accessState={displayAccessState} sidebar={<ConsoleSidebar />}>
+              <ConsoleContent key={account?.address} sidebar={<ConsoleSidebar />}>
                 {children}
               </ConsoleContent>
             </ConsoleAccessGate>

@@ -179,20 +179,7 @@ export const useRailSettlements = (options: UseRailSettlementsOptions) => {
 
         setSettlements((prev) => {
           const existing = prev.get(railIdStr);
-          if (existing) {
-            return new Map(prev).set(railIdStr, {
-              ...existing,
-              txHash,
-            });
-          }
-          console.warn(
-            `[Settlement Warning] Settlement state not found for rail ${railIdStr} when updating with txHash. This shouldn't happen.`,
-            {
-              railId: railIdStr,
-              txHash,
-            },
-          );
-          return prev;
+          return existing ? new Map(prev).set(railIdStr, { ...existing, txHash }) : prev;
         });
 
         setPendingTxHashes((prev) => new Set(prev).add(txHash));

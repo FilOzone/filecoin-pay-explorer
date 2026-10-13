@@ -1,11 +1,14 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WithdrawDialog } from "./WithdrawDialog";
 
 const mocks = vi.hoisted(() => ({
   accountInfo: [0n, 0n, 10n * 10n ** 18n, 0n] as [bigint, bigint, bigint, bigint] | undefined,
   execute: vi.fn(),
   isExecuting: false,
+  walletClient: {} as object | undefined,
   dialogOnOpenChange: undefined as ((open: boolean) => void) | undefined,
   contentProps: undefined as Record<string, unknown> | undefined,
 }));
@@ -45,7 +48,7 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
   useReadContract: () => ({ data: mocks.accountInfo, isLoading: false, isRefetching: false }),
-  useWalletClient: () => ({ data: {} }),
+  useWalletClient: () => ({ data: mocks.walletClient }),
 }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
@@ -73,7 +76,9 @@ describe("WithdrawDialog", () => {
     mocks.accountInfo = [0n, 0n, 10n * 10n ** 18n, 0n];
     mocks.execute.mockReset();
     mocks.isExecuting = false;
+    mocks.walletClient = {};
   });
+  afterEach(cleanup);
 
   it("renders with an empty amount and enables withdrawal only for a valid amount within funds", () => {
     const { type, withdraw, text } = renderDialog();
@@ -141,5 +146,22 @@ describe("WithdrawDialog", () => {
     type("1");
     await act(async () => withdraw()?.props.onClick());
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it.each(["1e5", "0", "-1"])("tells the user to correct the amount %s", (value) => {
+    render(<WithdrawDialog network='mainnet' onOpenChange={vi.fn()} open userToken={userToken} />);
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value } });
+
+    expect(screen.getByText("Enter a plain number greater than 0, like 1.5.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Withdraw" })).toHaveProperty("disabled", true);
+  });
+
+  it("waits for the wallet client instead of accepting a click it cannot sign", () => {
+    mocks.walletClient = undefined;
+    render(<WithdrawDialog network='mainnet' onOpenChange={vi.fn()} open userToken={userToken} />);
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1" } });
+
+    expect(screen.getByRole("button", { name: "Connecting wallet…" })).toHaveProperty("disabled", true);
+    expect(screen.queryByText("Enter a plain number greater than 0, like 1.5.")).toBeNull();
   });
 });
