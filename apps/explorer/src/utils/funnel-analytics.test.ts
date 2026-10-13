@@ -4,12 +4,14 @@ import { calibration, mainnet } from "@/constants/chains";
 
 const DIRECT = { ft_type: "direct", entry_page: "console", entry_type: "console-direct" };
 const SITE = {
-  ft_type: "campaign",
+  ft_type: "organic",
   entry_page: "ipfs-pinning",
   entry_type: "from-site",
+  ft_source: "google",
   foc_ref: "ipfs-pinning-start-building",
+  product: "ipfs-pinning",
 };
-const SITE_QUERY = "foc_ft=campaign&foc_entry=ipfs-pinning&foc_ref=ipfs-pinning-start-building";
+const SITE_QUERY = "foc_ft=organic:google&foc_entry=ipfs-pinning&foc_ref=ipfs-pinning-start-building";
 const MAINNET_USDFC = mainnet.contracts.usdfc.address;
 
 let plausible: ReturnType<typeof vi.fn>;
@@ -53,8 +55,26 @@ describe("readFunnelLabels", () => {
 
   it("accepts only known ft_type values", async () => {
     const { readFunnelLabels } = await load();
-    assert.equal(readFunnelLabels(new URLSearchParams("foc_ft=organic")).ft_type, "organic");
-    assert.equal(readFunnelLabels(new URLSearchParams("foc_ft=paid-search")).ft_type, "direct");
+    assert.equal(readFunnelLabels(new URLSearchParams("foc_ft=campaign")).ft_type, "campaign");
+    assert.deepEqual(readFunnelLabels(new URLSearchParams("foc_ft=paid-search:google")), DIRECT);
+  });
+
+  it("reads a referral domain as ft_source", async () => {
+    const { readFunnelLabels } = await load();
+    assert.deepEqual(readFunnelLabels(new URLSearchParams("foc_ft=referral:news.ycombinator.com")), {
+      ...DIRECT,
+      ft_type: "referral",
+      ft_source: "news.ycombinator.com",
+    });
+  });
+
+  it("takes product from the CTA, then the landing page, then the CLI", async () => {
+    const { readFunnelLabels } = await load();
+    const product = (query: string) => readFunnelLabels(new URLSearchParams(query)).product;
+    assert.equal(product("foc_ref=agent-skills-fund-console&foc_entry=pricing"), "agent-skills");
+    assert.equal(product("foc_ref=docs-open-console&foc_entry=data-storage"), "data-storage");
+    assert.equal(product("utm_source=filecoin-pin&utm_campaign=fund"), "filecoin-pin");
+    assert.equal(product("foc_ref=docs-open-console&utm_source=other"), undefined);
   });
 
   it("drops lowercase addresses, hashes, and UUIDs", async () => {
@@ -65,7 +85,11 @@ describe("readFunnelLabels", () => {
       "123e4567-e89b-12d3-a456-426614174000",
       "agent-skills-0xab5801a7",
     ]) {
-      assert.deepEqual(readFunnelLabels(new URLSearchParams({ foc_ref: id, foc_entry: id })), DIRECT, id);
+      assert.deepEqual(
+        readFunnelLabels(new URLSearchParams({ foc_ref: id, foc_entry: id, foc_ft: `referral:${id}` })),
+        { ...DIRECT, ft_type: "referral" },
+        id,
+      );
     }
   });
 
@@ -94,34 +118,44 @@ describe("captureFunnelLabels", () => {
 
   it("reads labels once per page load", async () => {
     stubWindow(`?${SITE_QUERY}`);
-    const { captureFunnelLabels, trackFunnelOnce } = await load();
+    const { captureFunnelLabels, trackConsoleView } = await load();
     captureFunnelLabels();
-    window.location.search = "?foc_ft=organic";
+    window.location.search = "?foc_ft=campaign";
     captureFunnelLabels();
-    trackFunnelOnce("console_view");
+    trackConsoleView();
     assert.deepEqual(plausible.mock.calls, [["console_view", { props: SITE }]]);
   });
 });
 
-describe("trackFunnelOnce", () => {
-  it("sends each event once per page load", async () => {
+describe("trackConsoleView", () => {
+  it("sends console_view once per page load", async () => {
     stubWindow(`?${SITE_QUERY}`);
-    const { captureFunnelLabels, trackFunnelOnce } = await load();
+    const { captureFunnelLabels, trackConsoleView } = await load();
     captureFunnelLabels();
-    trackFunnelOnce("console_view");
-    trackFunnelOnce("console_view");
-    trackFunnelOnce("console_wallet_connected");
-    assert.deepEqual(plausible.mock.calls, [
-      ["console_view", { props: SITE }],
-      ["console_wallet_connected", { props: SITE }],
-    ]);
+    trackConsoleView();
+    trackConsoleView();
+    assert.deepEqual(plausible.mock.calls, [["console_view", { props: SITE }]]);
   });
 
   it("falls back to console-direct labels before capture", async () => {
     stubWindow(`?${SITE_QUERY}`);
-    const { trackFunnelOnce } = await load();
-    trackFunnelOnce("console_view");
+    const { trackConsoleView } = await load();
+    trackConsoleView();
     assert.deepEqual(plausible.mock.calls, [["console_view", { props: DIRECT }]]);
+  });
+});
+
+describe("trackWalletConnected", () => {
+  it("sends every connect with the wallet type and whether the account is new", async () => {
+    stubWindow(`?${SITE_QUERY}`);
+    const { captureFunnelLabels, trackWalletConnected } = await load();
+    captureFunnelLabels();
+    trackWalletConnected("embedded", true);
+    trackWalletConnected("external");
+    assert.deepEqual(plausible.mock.calls, [
+      ["console_wallet_connected", { props: { ...SITE, wallet_type: "embedded", account: "new" } }],
+      ["console_wallet_connected", { props: { ...SITE, wallet_type: "external", account: "returning" } }],
+    ]);
   });
 });
 

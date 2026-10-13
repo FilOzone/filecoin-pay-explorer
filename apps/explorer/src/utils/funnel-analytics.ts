@@ -22,28 +22,47 @@ declare global {
 // foc_jid is never read; it is dropped so a visitor ID can't linger in the URL.
 const FUNNEL_PARAMS = ["foc_ft", "foc_entry", "foc_ref", "foc_jid"] as const;
 const FT_TYPES = new Set(["direct", "organic", "referral", "campaign"]);
-// Untrusted URL input: a slug with no long hex run, so addresses, hashes, and UUIDs can't pass as labels.
-const SLUG = /^[a-z0-9-]{1,64}$/;
+const PRODUCTS = ["agent-skills", "ipfs-pinning", "data-storage", "backups-archives", "pricing", "dev-quickstart"];
+// Untrusted URL input: a slug (dots allowed for source domains) with no long hex run,
+// so addresses, hashes, and UUIDs can't pass as labels.
+const LABEL = /^[a-z0-9.-]{1,64}$/;
 const HEX_RUN = /[0-9a-f]{8,}/;
 
-const readLabel = (params: URLSearchParams, name: string) => {
-  const value = params.get(name);
-  return value && SLUG.test(value) && !HEX_RUN.test(value) ? value : null;
-};
+const asLabel = (value: string | null | undefined) =>
+  value && LABEL.test(value) && !HEX_RUN.test(value) ? value : null;
 
 const entryType = (ref: string | null) => {
   if (!ref) return "console-direct";
   return ref.startsWith("docs-") ? "from-docs" : "from-site";
 };
 
+// The CTA's product (foc_ref is `<product>-<cta>`), else the landing page's, else the CLI's.
+const productOf = (ref: string | null, entry: string | null, params: URLSearchParams) => {
+  const fromRef = PRODUCTS.find((product) => ref?.startsWith(`${product}-`));
+  if (fromRef) return fromRef;
+  if (entry && PRODUCTS.includes(entry)) return entry;
+  return params.get("utm_source") === "filecoin-pin" ? "filecoin-pin" : null;
+};
+
+/**
+ * Wire format, set by the website's link decorator:
+ * `foc_ft=<ft_type>[:<ft_source>]` (e.g. `organic:google`, `referral:news.ycombinator.com`),
+ * `foc_entry=<landing page slug>`, `foc_ref=<product>-<cta>`.
+ */
 export function readFunnelLabels(params: URLSearchParams): FunnelProps {
-  const ref = readLabel(params, "foc_ref");
-  const ftType = params.get("foc_ft");
+  const ref = asLabel(params.get("foc_ref"));
+  const entry = asLabel(params.get("foc_entry"));
+  const [ftType, ftSource] = (params.get("foc_ft") ?? "").split(":", 2);
+  const known = FT_TYPES.has(ftType);
+  const source = known ? asLabel(ftSource) : null;
+  const product = productOf(ref, entry, params);
   return {
-    ft_type: ftType && FT_TYPES.has(ftType) ? ftType : "direct",
-    entry_page: readLabel(params, "foc_entry") ?? "console",
+    ft_type: known ? ftType : "direct",
+    entry_page: entry ?? "console",
     entry_type: entryType(ref),
+    ...(source ? { ft_source: source } : {}),
     ...(ref ? { foc_ref: ref } : {}),
+    ...(product ? { product } : {}),
   };
 }
 
@@ -58,18 +77,25 @@ export function captureFunnelLabels() {
   dropSearchParams(FUNNEL_PARAMS);
 }
 
-function trackFunnelEvent(event: string, revenue?: string) {
+function trackFunnelEvent(event: string, revenue?: string, extra?: FunnelProps) {
   window.plausible?.(event, {
-    props: labels ?? readFunnelLabels(new URLSearchParams()),
+    props: { ...(labels ?? readFunnelLabels(new URLSearchParams())), ...extra },
     ...(revenue && { revenue: { currency: "USD", amount: revenue } }),
   });
 }
 
-/** console_wallet_connected counts connected sessions, auto-reconnects included, not first-time signups. */
-export function trackFunnelOnce(event: "console_view" | "console_wallet_connected") {
-  if (fired.has(event)) return;
-  fired.add(event);
-  trackFunnelEvent(event);
+export function trackConsoleView() {
+  if (fired.has("console_view")) return;
+  fired.add("console_view");
+  trackFunnelEvent("console_view");
+}
+
+/** A login or connect the user just did, never a silent reconnect. `new` marks a first-time account. */
+export function trackWalletConnected(walletType: "embedded" | "external", isNewUser = false) {
+  trackFunnelEvent("console_wallet_connected", undefined, {
+    wallet_type: walletType,
+    account: isNewUser ? "new" : "returning",
+  });
 }
 
 /** Mainnet USDFC only: the funnel's "added money". */

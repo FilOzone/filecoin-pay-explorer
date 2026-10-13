@@ -4,6 +4,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
+import { trackWalletConnected } from "@/utils/funnel-analytics";
 import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
@@ -15,13 +16,19 @@ const CustomConnectButton = () => {
   const { selectAccount } = useConsoleAccount();
   // An email or Google login needs no callback: the console account follows the Privy session.
   const { login } = useLogin({
+    onComplete: ({ isNewUser, wasAlreadyAuthenticated }) => {
+      if (!wasAlreadyAuthenticated) trackWalletConnected("embedded", isNewUser);
+    },
     onError: (code) => {
       if (isUserCancelledFlow(code)) return;
       toast.error("Unable to log in", { description: code });
     },
   });
   const { connectWallet } = useConnectWallet({
-    onSuccess: ({ wallet }) => selectAccount(wallet),
+    onSuccess: ({ wallet }) => {
+      selectAccount(wallet);
+      trackWalletConnected("external");
+    },
     onError: (code) => {
       if (isUserCancelledFlow(code)) return;
       toast.error("Unable to connect wallet", { description: code });
