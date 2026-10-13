@@ -6,6 +6,7 @@
 
 import { type Address, formatUnits } from "viem";
 import { mainnet } from "@/constants/chains";
+import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
 
 type FunnelProps = Record<string, string>;
 
@@ -18,11 +19,16 @@ declare global {
   }
 }
 
-// Untrusted URL input: a slug or nothing, so an ID can't ride in on a label.
-const LABEL = /^[a-z0-9-]{1,64}$/;
+// foc_jid is never read; it is dropped so a visitor ID can't linger in the URL.
+const FUNNEL_PARAMS = ["foc_ft", "foc_entry", "foc_ref", "foc_jid"] as const;
+const FT_TYPES = new Set(["direct", "organic", "referral", "campaign"]);
+// Untrusted URL input: a slug with no long hex run, so addresses, hashes, and UUIDs can't pass as labels.
+const SLUG = /^[a-z0-9-]{1,64}$/;
+const HEX_RUN = /[0-9a-f]{8,}/;
+
 const readLabel = (params: URLSearchParams, name: string) => {
   const value = params.get(name);
-  return value && LABEL.test(value) ? value : null;
+  return value && SLUG.test(value) && !HEX_RUN.test(value) ? value : null;
 };
 
 const entryType = (ref: string | null) => {
@@ -32,8 +38,9 @@ const entryType = (ref: string | null) => {
 
 export function readFunnelLabels(params: URLSearchParams): FunnelProps {
   const ref = readLabel(params, "foc_ref");
+  const ftType = params.get("foc_ft");
   return {
-    ft_type: readLabel(params, "foc_ft") ?? "direct",
+    ft_type: ftType && FT_TYPES.has(ftType) ? ftType : "direct",
     entry_page: readLabel(params, "foc_entry") ?? "console",
     entry_type: entryType(ref),
     ...(ref ? { foc_ref: ref } : {}),
@@ -47,21 +54,18 @@ const fired = new Set<string>();
 /** Reads the foc_* labels once per page load, then drops them from the address bar. */
 export function captureFunnelLabels() {
   if (labels) return;
-  const url = new URL(window.location.href);
-  labels = readFunnelLabels(url.searchParams);
-  const focKeys = [...url.searchParams.keys()].filter((key) => key.startsWith("foc_"));
-  if (focKeys.length === 0) return;
-  for (const key of focKeys) url.searchParams.delete(key);
-  window.history.replaceState(null, "", url);
+  labels = readFunnelLabels(new URLSearchParams(window.location.search));
+  dropSearchParams(FUNNEL_PARAMS);
 }
 
 function trackFunnelEvent(event: string, revenue?: string) {
   window.plausible?.(event, {
     props: labels ?? readFunnelLabels(new URLSearchParams()),
-    ...(revenue === undefined ? {} : { revenue: { currency: "USD", amount: revenue } }),
+    ...(revenue && { revenue: { currency: "USD", amount: revenue } }),
   });
 }
 
+/** console_wallet_connected counts connected sessions, auto-reconnects included, not first-time signups. */
 export function trackFunnelOnce(event: "console_view" | "console_wallet_connected") {
   if (fired.has(event)) return;
   fired.add(event);
