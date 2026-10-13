@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
-import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
+import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { toAccountId } from "@/utils/hexUtils";
-import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
 import { DepositDialog } from "./DepositDialog";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import {
@@ -25,12 +24,11 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   const launch = useFundingLaunch();
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
+  const { network, isFilecoinChain: isWalletOnFilecoin, isSquidSourceChain } = useConsoleNetwork();
   // An undefined chain id only occurs while wagmi reconnects; treat it as the default network.
-  const isFilecoinChain = chainId === undefined || isSupportedChainId(chainId);
-  const network = getNetworkFromChainId(chainId);
+  const isFilecoinChain = chainId === undefined || isWalletOnFilecoin;
   const isMainnet = isFilecoinChain && network === "mainnet";
   const isCalibration = isFilecoinChain && network === "calibration";
-  const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
   // The effect below closes Filecoin-network dialogs after a chain change, but that runs one
   // render late. Comparing against the last committed chain id keeps the dialogs
   // closed during that render so nothing reopens on the new network.

@@ -21,13 +21,14 @@ import { useWalletExit } from "@/components/shared/CustomConnectButton/useWallet
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { getChain } from "@/constants/chains";
+import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { formatAddress } from "@/utils/formatter";
-import { getNetworkFromChainId } from "@/utils/network";
 
 const Balance = () => {
-  const { address, chainId } = useConnection();
+  const { address } = useConnection();
+  const { network } = useConsoleNetwork();
   // The header shows balances only while the wallet is on a Filecoin chain, so its chain is the displayed network.
-  const chain = getChain(getNetworkFromChainId(chainId));
+  const chain = getChain(network);
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());

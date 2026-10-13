@@ -1,6 +1,7 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
 import Balance from "./Balance";
 
 vi.mock("@filecoin-pay/ui/components/button", () => ({
@@ -60,10 +61,12 @@ function render() {
   let renderer!: ReturnType<typeof create>;
   act(() => {
     renderer = create(
-      <FundingLaunchProvider>
-        <Balance />
-        <LaunchState />
-      </FundingLaunchProvider>,
+      <TopUpActivityProvider>
+        <FundingLaunchProvider>
+          <Balance />
+          <LaunchState />
+        </FundingLaunchProvider>
+      </TopUpActivityProvider>,
     );
   });
   return renderer;

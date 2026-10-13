@@ -8,13 +8,14 @@ import { AlertsBanner, FundsSection, OperatorApprovalsSection, ServicesSection }
 import AddServiceDialog, { type AddServicePrefill } from "@/components/UserConsole/AddServiceDialog";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
-import { getChain, SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { getChain } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
+import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import type { Network } from "@/types";
 import { type DepositLink, parseDepositLink, resolveOperator } from "@/utils/depositParam";
-import { getNetworkFromChainId, isNotificationsEligibleNetwork, isSupportedChainId } from "@/utils/network";
+import { isNotificationsEligibleNetwork } from "@/utils/network";
 
 /**
  * Turns the link's values into dialog fields; the link names the network the
@@ -109,22 +110,17 @@ const AccountSections = ({ account, error, isLoading, network, alertsBanner }: A
 const UserConsole = () => {
   const { address, chainId } = useConnection();
   const { isTopUpActive } = useTopUpActivity();
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const isFilecoinChain = isSupportedChainId(chainId);
-  const isSquidSourceChain = !isFilecoinChain && SQUID_SOURCE_CHAINS.some((chain) => chain.id === chainId);
-  const displayMainnetDuringTopUp = isTopUpActive && isSquidSourceChain;
-  const displayNetwork = displayMainnetDuringTopUp ? "mainnet" : walletNetwork;
-  const canLoadFilecoinConsole = chainId === undefined || isFilecoinChain || displayMainnetDuringTopUp;
+  const { network, isFilecoinChain, isSquidSourceChain } = useConsoleNetwork();
+  const canLoadFilecoinConsole = chainId === undefined || isFilecoinChain || (isTopUpActive && isSquidSourceChain);
 
   const { data: notificationStatus, isError: isNotificationStatusError } = useNotificationStatus(
     canLoadFilecoinConsole ? address : undefined,
   );
   const isSubscribed = notificationStatus?.subscribed === true;
-  const showAlertsBanner =
-    isNotificationsEligibleNetwork(displayNetwork) && !isSubscribed && !isNotificationStatusError;
+  const showAlertsBanner = isNotificationsEligibleNetwork(network) && !isSubscribed && !isNotificationStatusError;
 
   const accountQuery = useAccountDetails(canLoadFilecoinConsole ? (address ?? "") : "", {
-    networkOverride: displayNetwork,
+    networkOverride: network,
   });
 
   const accountSections = () =>
@@ -133,7 +129,7 @@ const UserConsole = () => {
         account={accountQuery.data}
         error={accountQuery.error}
         isLoading={accountQuery.isLoading}
-        network={displayNetwork}
+        network={network}
         alertsBanner={showAlertsBanner ? <AlertsBanner /> : null}
       />
     ) : null;
@@ -146,8 +142,8 @@ const UserConsole = () => {
   const asksToFund = fundingLink !== null && (fundingLink.has("deposit") || fundingLink.has("operator"));
   const hasUnreadableFundingLink = asksToFund && depositLink === null;
   // A link for another network prefills nothing: approving it here would fund the wrong chain's operator.
-  const isFundingLinkForOtherNetwork = depositLink !== null && isFilecoinChain && depositLink.network !== walletNetwork;
-  const isFundingLinkForWallet = depositLink !== null && isFilecoinChain && depositLink.network === walletNetwork;
+  const isFundingLinkForOtherNetwork = depositLink !== null && isFilecoinChain && depositLink.network !== network;
+  const isFundingLinkForWallet = depositLink !== null && isFilecoinChain && depositLink.network === network;
   const shouldOpenFundingDialog = isFundingLinkForWallet && !dialogDismissed;
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const depositPrefill = useMemo(
@@ -159,13 +155,13 @@ const UserConsole = () => {
     <div className='flex flex-col gap-15'>
       {hasUnreadableFundingLink && <UnreadableFundingLinkNotice />}
       {isFundingLinkForOtherNetwork && (
-        <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} walletNetwork={walletNetwork} />
+        <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} walletNetwork={network} />
       )}
       {depositPrefill && (
         <AddServiceDialog
           // A chain switch remounts the dialog so token and operator follow the wallet's network.
-          key={walletNetwork}
-          network={walletNetwork}
+          key={network}
+          network={network}
           open
           onOpenChange={(open) => {
             if (!open) setDialogDismissed(true);
