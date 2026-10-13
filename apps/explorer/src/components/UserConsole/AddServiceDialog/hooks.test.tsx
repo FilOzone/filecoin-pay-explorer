@@ -205,6 +205,7 @@ describe("useAddServiceSubmit", () => {
       args: [TOKEN, OWNER, 25n, 123n, 27, "0xaaaa", "0xbbbb", OPERATOR, 6n, 5n, 86_400n],
       metadata: { type: "depositAndApprove", amount: "25", token: "TKN", operator: OPERATOR },
       onSubmitOnChain: hook.onSubmitOnChain,
+      onConfirmed: expect.any(Function),
     });
     expect(hook.result.isSubmitting).toBe(false);
   });
