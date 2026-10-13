@@ -43,7 +43,7 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("wagmi", () => ({
-  useAccount: () => ({ address: "0x1111111111111111111111111111111111111111" }),
+  useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
   usePublicClient: () => ({}),
   useReadContract: () => ({ data: mocks.accountInfo, isLoading: false, isRefetching: false }),
   useWalletClient: () => ({ data: {} }),
