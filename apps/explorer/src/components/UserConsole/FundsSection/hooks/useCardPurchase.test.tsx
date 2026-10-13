@@ -60,8 +60,8 @@ vi.mock("sonner", () => ({ toast }));
 
 let latest!: ReturnType<typeof useCardPurchase>;
 const onPurchased = vi.fn();
-function Harness() {
-  latest = useCardPurchase({ address: ADDRESS, contextKey: harness.contextKey, onPurchased });
+function Harness({ isPickerOpen = true }: { isPickerOpen?: boolean }) {
+  latest = useCardPurchase({ address: ADDRESS, contextKey: harness.contextKey, isPickerOpen, onPurchased });
   return null;
 }
 
@@ -424,6 +424,92 @@ describe("useCardPurchase", () => {
     expect(privy.fund).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the picker usable while checking, and closing it pauses the check", async () => {
+    vi.useFakeTimers();
+    chain.readContract.mockResolvedValue(10n);
+    // Privy reports this even when the provider window closed without a payment.
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    let renderer!: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    let purchase!: Promise<void>;
+    await act(async () => {
+      purchase = latest.buyWithCard() as Promise<void>;
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(latest.isBusy).toBe(false);
+    expect(latest.isChecking).toBe(true);
+    expect(latest.canStartOver).toBe(true);
+
+    // Reopening right away offers the check again rather than waiting out the paused one.
+    await act(async () => renderer.update(<Harness isPickerOpen={false} />));
+    await act(async () => renderer.update(<Harness />));
+    expect(latest.isChecking).toBe(false);
+    expect(latest.label).toBe("Check for purchased USDC");
+
+    chain.readContract.mockResolvedValue(25n);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+    expect(onPurchased).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(stored.size).toBe(1);
+
+    await act(async () => latest.buyWithCard());
+    expect(privy.fund).toHaveBeenCalledOnce();
+    expect(onPurchased).toHaveBeenCalledWith(15n);
+  });
+
+  it("ends a running check when the user starts over", async () => {
+    vi.useFakeTimers();
+    chain.readContract.mockResolvedValue(10n);
+    privy.fund.mockResolvedValue({ status: "submitted" });
+    await act(async () => {
+      create(<Harness />);
+    });
+
+    let purchase!: Promise<void>;
+    await act(async () => {
+      purchase = latest.buyWithCard() as Promise<void>;
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    act(() => latest.startOver());
+    chain.readContract.mockResolvedValue(25n);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+      await purchase;
+    });
+
+    expect(onPurchased).not.toHaveBeenCalled();
+    expect(latest.label).toBe("Buy USDC with card");
+    expect(stored.size).toBe(0);
+  });
+
+  it.each(["Could not confirm payment status yet.", "Unable to check payment status. Please try again."])(
+    "tracks a payment Privy stopped confirming (%s)",
+    async (message) => {
+      vi.useFakeTimers();
+      chain.readContract.mockResolvedValue(10n);
+      privy.fund.mockRejectedValue(new Error(message));
+      await act(async () => {
+        create(<Harness />);
+      });
+
+      await act(async () => {
+        const purchase = latest.buyWithCard();
+        await vi.runAllTimersAsync();
+        await purchase;
+      });
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(latest.label).toBe("Check for purchased USDC");
+      expect(stored.size).toBe(1);
+    },
+  );
+
   it("keeps cancellation recoverable and reports provider failures", async () => {
     chain.readContract.mockResolvedValue(10n);
     await act(async () => {
@@ -432,7 +518,12 @@ describe("useCardPurchase", () => {
 
     privy.fund.mockRejectedValueOnce(new Error("User exited flow"));
     await act(async () => latest.buyWithCard());
+    // What Privy rejects with once the provider reports the purchase cancelled.
+    privy.fund.mockRejectedValueOnce(new Error("Transaction cancelled"));
+    await act(async () => latest.buyWithCard());
     expect(toast.error).not.toHaveBeenCalled();
+    expect(latest.label).toBe("Buy USDC with card");
+    expect(stored.size).toBe(0);
 
     privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));
     await act(async () => latest.buyWithCard());

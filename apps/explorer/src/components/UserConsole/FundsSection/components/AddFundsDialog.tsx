@@ -15,7 +15,10 @@ export type AddFundsMethod = "card" | "deposit" | "squid";
 type AddFundsDialogProps = {
   cardLabel?: string;
   cardStatus?: string | null;
+  /** Privy's sign-in or purchase window is open over the picker. */
   isBusy?: boolean;
+  /** A balance check for a card purchase is running; only the card waits for it. */
+  isCardChecking?: boolean;
   /** Present while a card purchase is still being tracked; discards it after a confirmation. */
   onCardStartOver?: () => void;
   onOpenChange: (open: boolean) => void;
@@ -95,6 +98,7 @@ export function AddFundsDialog({
   cardLabel = "Buy USDC with card",
   cardStatus,
   isBusy = false,
+  isCardChecking = false,
   onCardStartOver,
   onOpenChange,
   onSelect,
@@ -102,8 +106,8 @@ export function AddFundsDialog({
   squidAvailable,
   squidDisabledReason,
 }: AddFundsDialogProps) {
-  // While the purchase is busy, Escape, an outside click or the close button must not dismiss the
-  // picker, which carries the purchase status and Start over.
+  // While Privy's window is open, Escape, an outside click or the close button must not dismiss the
+  // picker, which shows how the purchase ended and offers Start over.
   const handleOpenChange = (next: boolean) => {
     if (!next && isBusy) return;
     onOpenChange(next);
@@ -138,7 +142,7 @@ export function AddFundsDialog({
               ) : null
             }
             description='Buy USDC on Base, then swap and deposit it into Filecoin Pay.'
-            disabled={isBusy}
+            disabled={isBusy || isCardChecking}
             icon={CreditCard}
             label={cardLabel}
             onSelect={() => onSelect("card")}

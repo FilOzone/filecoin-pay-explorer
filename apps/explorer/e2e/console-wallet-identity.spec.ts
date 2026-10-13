@@ -54,6 +54,10 @@ async function switchExtensionAccount(page: Page): Promise<void> {
 }
 
 const walletMenu = (page: Page) => page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])');
+const openAddFunds = async (page: Page) => {
+  await walletMenu(page).click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+};
 const consoleAccount = async (page: Page) => (await walletMenu(page).locator(".font-mono").textContent()) ?? "";
 
 async function openAddFundsFromWalletMenu(page: Page): Promise<void> {
@@ -61,8 +65,7 @@ async function openAddFundsFromWalletMenu(page: Page): Promise<void> {
   await page.goto("/console");
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
-  await walletMenu(page).click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await openAddFunds(page);
   await expect(page.getByRole("heading", { name: "Add funds" })).toBeVisible();
   // Let the menu finish closing, as a person would.
   await expect(page.locator('[data-slot="dropdown-menu-content"]')).toHaveCount(0);
@@ -147,8 +150,7 @@ async function connectAndOpenCardPurchase(page: Page): Promise<string> {
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const account = await consoleAccount(page);
-  await walletMenu(page).click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await openAddFunds(page);
   await page.getByRole("button", { name: "Verify wallet to buy USDC with card" }).click();
   return account;
 }
@@ -198,8 +200,7 @@ test("after a switch, the extension's new account verifies for itself before buy
   await expect.poll(() => consoleAccount(page)).not.toBe(first);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
   const newAccount = await consoleAccount(page);
-  await walletMenu(page).click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await openAddFunds(page);
 
   // The previous account's login does not carry over to the new one.
   await page.getByRole("button", { name: "Verify wallet to buy USDC with card" }).click();
@@ -215,8 +216,7 @@ test("an email account opens the card purchase without another sign-in", async (
   await loginWithTestAccount(page);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const account = await consoleAccount(page);
-  await walletMenu(page).click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await openAddFunds(page);
 
   await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
 
@@ -225,6 +225,31 @@ test("an email account opens the card purchase without another sign-in", async (
   const [start, end] = account.split("...");
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
+});
+
+// Privy reports "submitted" after the provider's window closes even when nothing was paid, so the check that
+// follows must leave Add funds dismissible and the purchase easy to discard.
+test("closing an unpaid card purchase leaves Add funds dismissible and recoverable", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake card purchase window");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await openAddFunds(page);
+  await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
+  await page.getByRole("dialog", { name: "buy usdc" }).getByRole("button", { name: "Done" }).click();
+
+  const addFunds = page.getByRole("dialog", { name: "Add funds" });
+  await expect(addFunds.getByRole("status")).toContainText("Looking for purchased USDC on Base");
+  await addFunds.getByRole("button", { name: "Close" }).click();
+  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeHidden();
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+
+  await openAddFunds(page);
+  await expect(addFunds.getByRole("button", { name: "Check for purchased USDC" })).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await addFunds.getByRole("button", { name: "Start over" }).click();
+  await expect(addFunds.getByRole("button", { name: "Buy USDC with card", exact: true })).toBeEnabled();
 });
 
 test("after the site's access is revoked, Disconnect leaves the console", async ({ page }) => {
