@@ -93,6 +93,12 @@ Render loading, empty, and error states explicitly. Follow the matching list or 
 - Keep token amounts, epochs, rates, allowances, and transaction values exact. Use `bigint` and the established viem and formatting helpers; do not pass exact values through JavaScript `number` when precision can be lost.
 - Reuse `useContractTransaction` and existing domain flows before creating another write lifecycle.
 
+In the console, the wallet `chainId` and the console `network` are different values. During a Squid top-up the wallet sits on the source chain while the console keeps showing mainnet.
+
+- `network` selects contracts (`getChain(network)`), subgraph queries, and what the console displays. Read it with `useConsoleNetwork()` in console routes and top-level hosts such as `FundingHost`, `ConsoleSidebar`, and `Balance`, then pass it as a prop. Components and dialogs below take `network` as a prop and do not read it themselves.
+- Use the wallet `chainId` only for connector readiness, access gates, chain-mismatch and chain-switch UI, Squid source-chain detection, SIWE, and resetting dialogs on a chain change. Never use it to pick contracts or queries.
+- Do not call `getNetworkFromChainId` outside `useConsoleNetwork`; its mainnet fallback hides non-Filecoin chains. Do not read console contract configuration from `useSynapse()` or the explorer URL context (`useNetwork()`).
+
 Contract dialogs and transaction hooks own behavior such as wallet signature progress, duplicate-submission guards, receipt tracking, pending and success toasts, query invalidation, and close restrictions while work is pending. UI refactors must preserve handlers, disabled states, callback timing, and mount lifetime.
 
 Do not unmount a transaction controller immediately after submission when it still owns receipt tracking or recovery state. Snapshot user selections when a dialog opens if changing the live selection could alter the transaction being prepared.
