@@ -15,6 +15,7 @@ import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnection, useReadContract, useWalletClient } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { AccountInfo, Network } from "@/types";
 import { WITHDRAW_MAX_BUFFER_EPOCHS } from "@/utils/constants";
