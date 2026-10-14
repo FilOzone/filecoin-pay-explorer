@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
-import { useAccountApprovals } from "@/hooks/useAccountDetails";
+import { useInfiniteAccountApprovals } from "@/hooks/useAccountDetails";
 import type { Network } from "@/types";
 import { ApprovalsEmptyState, ApprovalsErrorState, ApprovalsLoadingState, ApprovalsTable } from "./components";
 
@@ -27,7 +27,9 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     setIncreaseDialogOpen(false);
   }
 
-  const { data, isLoading, isError } = useAccountApprovals(account.id, 1, { networkOverride: network });
+  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
+    useInfiniteAccountApprovals(account.id, { networkOverride: network });
+  const approvals = useMemo(() => data?.pages.flatMap((page) => page.operatorApprovals) ?? [], [data]);
 
   const handleIncrease = useCallback((approval: OperatorApproval) => {
     setSelectedApproval(approval);
@@ -40,16 +42,16 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
 
   // Prepare table data with onIncrease handler
   const tableData = useMemo(
-    () => data?.operatorApprovals.map((approval) => ({ ...approval, onIncrease: handleIncrease })) || [],
-    [data, handleIncrease],
+    () => approvals.map((approval) => ({ ...approval, onIncrease: handleIncrease })),
+    [approvals, handleIncrease],
   );
 
   let content: React.ReactNode;
   if (isLoading) {
     content = <ApprovalsLoadingState onApprove={handleOpenApprove} />;
-  } else if (isError) {
+  } else if (isError && !data) {
     content = <ApprovalsErrorState onApprove={handleOpenApprove} />;
-  } else if (!data || data.operatorApprovals.length === 0) {
+  } else if (approvals.length === 0) {
     content = <ApprovalsEmptyState onApprove={handleOpenApprove} />;
   } else {
     content = (
@@ -65,6 +67,19 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
         </div>
 
         <ApprovalsTable data={tableData} />
+
+        {hasNextPage ? (
+          <div className='flex flex-col items-center gap-2'>
+            {isFetchNextPageError ? (
+              <p role='alert' className='text-sm text-destructive'>
+                Couldn't load more approvals. Try again.
+              </p>
+            ) : null}
+            <Button variant='tertiary' size='compact' onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }
