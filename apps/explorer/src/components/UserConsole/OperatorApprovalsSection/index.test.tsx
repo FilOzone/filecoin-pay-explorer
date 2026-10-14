@@ -39,11 +39,17 @@ vi.mock("./components", () => ({
   ApprovalsLoadingState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsErrorState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsEmptyState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
-  ApprovalsTable: ({ data }: { data: { id: string; onIncrease: (approval: { id: string }) => void }[] }) => (
+  ApprovalsTable: ({
+    data,
+    onIncrease,
+  }: {
+    data: { id: string }[];
+    onIncrease: (approval: { id: string }) => void;
+  }) => (
     <ul>
       {data.map((approval) => (
         <li key={approval.id}>
-          <button type='button' onClick={() => approval.onIncrease(approval)}>
+          <button type='button' onClick={() => onIncrease(approval)}>
             Increase {approval.id}
           </button>
         </li>
