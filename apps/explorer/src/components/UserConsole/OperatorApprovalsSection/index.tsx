@@ -18,6 +18,15 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
   const [increaseDialogOpen, setIncreaseDialogOpen] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<OperatorApproval | null>(null);
 
+  // An approval belongs to one account on one network; submitting it after a switch would target the wrong contract.
+  const scope = `${account.id}:${network}`;
+  const [selectionScope, setSelectionScope] = useState(scope);
+  if (selectionScope !== scope) {
+    setSelectionScope(scope);
+    setSelectedApproval(null);
+    setIncreaseDialogOpen(false);
+  }
+
   const { data, isLoading, isError } = useAccountApprovals(account.id, 1, { networkOverride: network });
 
   const handleIncrease = useCallback((approval: OperatorApproval) => {

@@ -20,7 +20,11 @@ vi.mock("@/hooks/useAccountDetails", () => ({ useAccountApprovals: () => query }
 vi.mock("@/components/UserConsole/AddServiceDialog", () => ({
   default: ({ open }: { open: boolean }) => <div data-testid='add-service-dialog' data-open={String(open)} />,
 }));
-vi.mock("@/components/UserConsole/IncreaseApprovalDialog", () => ({ IncreaseApprovalDialog: () => null }));
+vi.mock("@/components/UserConsole/IncreaseApprovalDialog", () => ({
+  IncreaseApprovalDialog: ({ approval, open }: { approval: { id: string }; open: boolean }) => (
+    <div data-testid='increase-dialog' data-approval={approval.id} data-open={String(open)} />
+  ),
+}));
 const AddServiceButton = ({ onApprove }: { onApprove: () => void }) => (
   <button type='button' onClick={onApprove}>
     Add Service
@@ -31,10 +35,16 @@ vi.mock("./components", () => ({
   ApprovalsLoadingState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsErrorState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
   ApprovalsEmptyState: ({ onApprove }: { onApprove: () => void }) => <AddServiceButton onApprove={onApprove} />,
-  ApprovalsTable: () => null,
+  ApprovalsTable: ({ data }: { data: { id: string; onIncrease: (approval: { id: string }) => void }[] }) =>
+    data.map((approval) => (
+      <button key={approval.id} type='button' onClick={() => approval.onIncrease(approval)}>
+        Increase {approval.id}
+      </button>
+    )),
 }));
 
 const account = { id: "0x1111111111111111111111111111111111111111" } as never;
+const otherAccount = { id: "0x2222222222222222222222222222222222222222" } as never;
 
 const dialogOpen = () => screen.getByTestId("add-service-dialog").dataset.open;
 
@@ -59,5 +69,32 @@ describe("OperatorApprovalsSection Add Service", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add Service" }));
     expect(dialogOpen()).toBe("true");
+  });
+});
+
+describe("OperatorApprovalsSection Increase", () => {
+  beforeEach(() => {
+    query.data = { operatorApprovals: [{ id: "mainnet-approval" }] };
+    query.isLoading = false;
+    query.isError = false;
+  });
+
+  it.each([
+    ["network", { account, network: "calibration" as const }],
+    ["account", { account: otherAccount, network: "mainnet" as const }],
+  ])("drops the open form when the %s changes", (_name, next) => {
+    const { rerender } = render(<OperatorApprovalsSection account={account} network='mainnet' />);
+    fireEvent.click(screen.getByRole("button", { name: "Increase mainnet-approval" }));
+    expect(screen.getByTestId("increase-dialog").dataset).toMatchObject({ approval: "mainnet-approval", open: "true" });
+
+    // Cached empty approvals render straight away, without a loading state in between.
+    query.data = { operatorApprovals: [] };
+    rerender(<OperatorApprovalsSection account={next.account} network={next.network} />);
+    expect(screen.queryByTestId("increase-dialog")).toBeNull();
+
+    // Switching back must not bring the old form back.
+    query.data = { operatorApprovals: [{ id: "mainnet-approval" }] };
+    rerender(<OperatorApprovalsSection account={account} network='mainnet' />);
+    expect(screen.queryByTestId("increase-dialog")).toBeNull();
   });
 });
