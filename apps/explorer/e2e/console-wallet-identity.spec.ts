@@ -1,4 +1,6 @@
 import type { Page } from "@playwright/test";
+import type { Hex } from "viem";
+import { installFakeSquid } from "./fake-squid";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount, logoutFromConsole } from "./privy";
@@ -93,6 +95,88 @@ test("closing Deposit tokens after choosing it in Add funds leaves the console r
   await deposit.getByRole("button", { name: "Close" }).click();
   await expect(deposit.getByRole("heading", { name: "Deposit tokens" })).toBeHidden();
 
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+});
+
+test("a Squid deposit paid from another account of the extension credits the console account", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+  const consoleBefore = await consoleAccount(page);
+  // MetaMask's account picker connects a second account; only that one holds USDC on Base.
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
+  const [consoleAddress, payer] = await page.evaluate(
+    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
+  );
+  const routeRequests = await installFakeSquid(page, payer);
+
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  // The console account holds nothing to pay with, so the funded account is the default payer.
+  await expect(squid.getByRole("combobox", { name: "Paying wallet" })).toContainText(
+    `${payer.slice(0, 6)}...${payer.slice(-4)}`,
+  );
+  await squid.getByLabel(/^Amount/).fill("10");
+  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  await squid.getByRole("checkbox").click();
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  // The approval, then the route.
+  for (let i = 0; i < 2; i += 1) {
+    const approve = page.getByRole("dialog", { name: "approve transaction" });
+    await approve.getByRole("button", { name: "Approve" }).click();
+    await approve.getByRole("button", { name: "All Done" }).click();
+  }
+  await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
+
+  const sent = await page.evaluate(
+    () => (window as unknown as { __fakePrivyTransactions: { from: string }[] }).__fakePrivyTransactions,
+  );
+  expect(sent.map((tx) => tx.from.toLowerCase())).toEqual([payer.toLowerCase(), payer.toLowerCase()]);
+  // Every quote and the executed route pay from the payer into the console account.
+  const routeParties = new Set(
+    routeRequests.map((route) => `${route.fromAddress} -> ${route.toAddress}`.toLowerCase()),
+  );
+  expect([...routeParties]).toEqual([`${payer} -> ${consoleAddress}`.toLowerCase()]);
+  expect(await consoleAccount(page)).toBe(consoleBefore);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+});
+
+test("a Squid deposit paid from an extension without Filecoin closes the dialog", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+  const consoleBefore = await consoleAccount(page);
+  // Rabby holds the USDC on Base but has no Filecoin network, so it cannot be switched back.
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-rabby")));
+  const payer = await page.evaluate(
+    () => (window as unknown as { __fakePrivyRabbyAccount: Hex }).__fakePrivyRabbyAccount,
+  );
+  await installFakeSquid(page, payer);
+
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  await expect(squid.getByRole("combobox", { name: "Paying wallet" })).toContainText(
+    `${payer.slice(0, 6)}...${payer.slice(-4)} · Rabby`,
+  );
+  await squid.getByLabel(/^Amount/).fill("10");
+  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  await squid.getByRole("checkbox").click();
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  for (let i = 0; i < 2; i += 1) {
+    const approve = page.getByRole("dialog", { name: "approve transaction" });
+    await approve.getByRole("button", { name: "Approve" }).click();
+    await approve.getByRole("button", { name: "All Done" }).click();
+  }
+  await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
+
+  // The console's wallet never left Filecoin, so the dialog closes with Rabby still on Base.
+  // Under either title: the review, or the form that shows a failed switch back. The dialog closes only after
+  // the account's queries refetch.
+  await expect(page.getByRole("heading", { name: /^(Review Squid deposit|Pay with another token)$/ })).toBeHidden({
+    timeout: 30_000,
+  });
+  expect(await consoleAccount(page)).toBe(consoleBefore);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
