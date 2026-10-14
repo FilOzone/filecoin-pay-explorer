@@ -96,6 +96,32 @@ describe("IncreaseApprovalDialog", () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
+  it("keeps Increase disabled without an alert while the form is empty", async () => {
+    const { increase } = renderDialog();
+    expect(increase().hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => fireEvent.click(increase()));
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("shows an alert for unparsable input", () => {
+    const { type } = renderDialog();
+    type("Maximum Lockup Period Increase", "1.5");
+    expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
+  it("submits an increase to the lockup period alone", async () => {
+    const { increase, type } = renderDialog();
+    type("Maximum Lockup Period Increase", "5");
+    await act(async () => fireEvent.click(increase()));
+
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: [approvalFixture.token.id, approvalFixture.operator.address, true, 10n, 100n, 55n],
+      }),
+    );
+  });
+
   it("submits the summed allowances", async () => {
     const { increase, type } = renderDialog();
     type("Lockup Increase", "1");

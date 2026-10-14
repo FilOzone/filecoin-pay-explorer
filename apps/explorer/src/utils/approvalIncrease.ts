@@ -8,26 +8,38 @@ export type ApprovalIncreaseInput = {
 };
 
 export type ApprovalTotals = { lockup: bigint; rate: bigint; maxLockupPeriod: bigint };
+export type ApprovalIncrease =
+  | { status: "invalid" }
+  | { status: "unchanged" }
+  | { status: "ready"; totals: ApprovalTotals };
 
-// New allowance totals for an increase, or null if an input is unparsable or a total exceeds unint256.
 export function computeIncreasedApproval(
   input: ApprovalIncreaseInput,
   current: ApprovalTotals,
   decimals: number,
-): ApprovalTotals | null {
-  if (input.isUnlimited) return { lockup: maxUint256, rate: maxUint256, maxLockupPeriod: maxUint256 };
+): ApprovalIncrease {
+  const totals = input.isUnlimited
+    ? { lockup: maxUint256, rate: maxUint256, maxLockupPeriod: maxUint256 }
+    : addIncreases(input, current, decimals);
+  if (!totals || Object.values(totals).some((total) => total > maxUint256)) return { status: "invalid" };
 
+  const unchanged =
+    totals.lockup === current.lockup &&
+    totals.rate === current.rate &&
+    totals.maxLockupPeriod === current.maxLockupPeriod;
+  return unchanged ? { status: "unchanged" } : { status: "ready", totals };
+}
+
+function addIncreases(input: ApprovalIncreaseInput, current: ApprovalTotals, decimals: number): ApprovalTotals | null {
   const lockup = parseAmount(input.lockup, decimals);
   const rate = parseAmount(input.rate, decimals);
   const period = parseEpochs(input.maxLockupPeriod);
   if (lockup === null || rate === null || period === null) return null;
-
-  const totals = {
+  return {
     lockup: current.lockup + lockup,
     rate: current.rate + rate,
     maxLockupPeriod: current.maxLockupPeriod + period,
   };
-  return Object.values(totals).some((total) => total > maxUint256) ? null : totals;
 }
 
 // <input type=number> allow `1e5`, which viem's parseUnits/BigInt reject.

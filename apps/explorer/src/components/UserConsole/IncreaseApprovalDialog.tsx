@@ -58,7 +58,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   }, [open]);
 
   const decimals = Number(approval.token.decimals);
-  const newTotals = computeIncreasedApproval(
+  const newApproval = computeIncreasedApproval(
     { lockup: lockupIncrease, rate: rateIncrease, maxLockupPeriod: maxLockupPeriodIncrease, isUnlimited },
     {
       lockup: BigInt(approval.lockupAllowance),
@@ -67,7 +67,6 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
     },
     decimals,
   );
-  const hasIncrease = isUnlimited || !!lockupIncrease || !!rateIncrease;
   const isBusy = isSubmitting || isExecuting;
 
   // Prevent dialog from closing while waiting for wallet signature
@@ -77,7 +76,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
   };
 
   const handleIncrease = async () => {
-    if (!newTotals || !hasIncrease) return;
+    if (newApproval.status !== "ready") return;
 
     if (!synapse) {
       console.log("Synapse not initialized");
@@ -93,9 +92,9 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
           approval.token.id,
           approval.operator.address,
           true,
-          newTotals.rate,
-          newTotals.lockup,
-          newTotals.maxLockupPeriod,
+          newApproval.totals.rate,
+          newApproval.totals.lockup,
+          newApproval.totals.maxLockupPeriod,
         ],
         metadata: {
           type: "increaseApproval",
@@ -111,7 +110,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
     }
   };
 
-  const canSubmit = !isBusy && !!newTotals && hasIncrease;
+  const canSubmit = !isBusy && newApproval.status === "ready";
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -227,7 +226,7 @@ export const IncreaseApprovalDialog: React.FC<IncreaseApprovalDialogProps> = ({ 
           </div>
         </div>
 
-        {!newTotals && (
+        {newApproval.status === "invalid" && (
           <p role='alert' className='text-sm text-destructive'>
             Enter plain decimal amounts and a whole number of epochs for the lockup period, within the contract's
             limits.
