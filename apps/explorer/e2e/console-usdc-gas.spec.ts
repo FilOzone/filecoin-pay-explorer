@@ -186,7 +186,9 @@ test("a reverted operation says gas was charged in USDC and keeps the delegation
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
 
   await expect(
-    page.getByText(/reverted on Base, so no USDC went to Squid\. Network fees were still charged/),
+    page.getByText(
+      /reverted on Base, so no USDC went to Squid and it is still in this account\. Network fees of 0\.0215 USDC were still charged/,
+    ),
   ).toBeVisible({
     timeout: 30_000,
   });
@@ -197,6 +199,39 @@ test("a reverted operation says gas was charged in USDC and keeps the delegation
   await expect(squid.getByRole("button", { name: "Review" })).toBeEnabled();
 });
 
+test("a bundler estimate above the reviewed USDC maximum asks for a review that then reserves enough", async ({
+  page,
+}) => {
+  const { fake, squid } = await reviewDeposit(page);
+  await squid.getByRole("button", { name: "Review" }).click();
+  // Far more L1 data than the review reserved for.
+  fake.preVerificationGas = 50_000_000n;
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(
+    page.getByText("Network fees rose above the reviewed USDC maximum. Review the deposit again."),
+  ).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toEqual([]);
+
+  // The next review reserves what execution needed, so the same spike now fits.
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toHaveLength(1);
+});
+
+test("a USDC-gas plan that cannot be made says why and can be retried", async ({ page }) => {
+  // Circle's surcharge above the 10% its docs state.
+  const { fake, squid } = await reviewDeposit(page, { feeSpreadBips: 1_001n });
+
+  await expect(squid.getByText(/Circle's USDC gas surcharge is above 10%/)).toBeVisible();
+  await expect(squid.getByRole("button", { name: "Review" })).toBeDisabled();
+
+  fake.feeSpreadBips = 1_000n;
+  await squid.getByRole("button", { name: "Retry" }).click();
+  await expect(squid.getByRole("button", { name: "Review" })).toBeEnabled();
+});
+
 test("an operation not yet included blocks another spend until Check again finds it", async ({ page }) => {
   // The clock jumps past the inclusion wait rather than tracking its exact length.
   await page.clock.install();
@@ -204,6 +239,8 @@ test("an operation not yet included blocks another spend until Check again finds
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
   await expect.poll(() => fake.operations.length).toBe(1);
+  // Sent, not signing: the operation is waiting for Base to include it.
+  await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
   await page.clock.fastForward("03:00");
 
   await expect(squid.getByText(/has not been included on Base yet/)).toBeVisible();

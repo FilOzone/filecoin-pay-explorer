@@ -6,12 +6,14 @@ import {
   type Chain,
   encodePacked,
   erc20Abi,
+  formatUnits,
   type Hash,
   type Hex,
   http,
   maxUint256,
   type PublicClient,
   parseAbi,
+  parseEventLogs,
   rpcSchema,
   type SignedAuthorization,
   type Transport,
@@ -52,7 +54,26 @@ import {
   type SquidDepositResult,
   type SquidDepositStage,
 } from "./squid-deposit-execution";
-import type { ExecutableSquidDepositQuote, SquidClient, SquidDepositRouteRequest } from "./squid-deposit-route";
+import {
+  applyNetworkFeeReviewHeadroom,
+  type ExecutableSquidDepositQuote,
+  type SquidClient,
+  type SquidDepositRouteRequest,
+} from "./squid-deposit-route";
+
+/**
+ * The reviewed plan no longer holds and nothing was signed into an operation: the deposit must be reviewed again.
+ * `gasMaximumFloor` is what execution needed, so the next review reserves at least that much.
+ */
+export class PaymasterReviewError extends Error {
+  readonly gasMaximumFloor?: bigint;
+
+  constructor(message: string, gasMaximumFloor?: bigint) {
+    super(message);
+    this.name = "PaymasterReviewError";
+    this.gasMaximumFloor = gasMaximumFloor;
+  }
+}
 
 // Waiting for inclusion before the deposit is reported unresolved; Base includes a bundle in seconds.
 const OPERATION_RECEIPT_TIMEOUT_MS = 120_000;
@@ -72,7 +93,7 @@ type PimlicoGasPriceSchema = {
 };
 
 // The parts of an operation receipt the deposit checks.
-type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "sender" | "success" | "userOpHash"> & {
+type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "logs" | "sender" | "success" | "userOpHash"> & {
   receipt: { transactionHash: Hash };
 };
 
@@ -177,10 +198,34 @@ const hashUserOperation = (userOperation: UserOperation<"0.8">) =>
     userOperation,
   });
 
-// A bundler answers a failed validation with an ERC-4337 AA code; nothing was included and no gas was charged.
-const hasAACode = (error: unknown) => error instanceof Error && /\bAA[1-5]\d\b/.test(error.message);
-const isValidationRejection = (error: unknown) =>
-  error instanceof BaseError ? Boolean(error.walk(hasAACode)) : hasAACode(error);
+const VALIDATION_REASON = /\bAA[1-5]\d\b[^\n]*/;
+
+// A bundler answers a failed validation with an ERC-4337 AA code: nothing was included and no gas was charged.
+// Returns that line of the error, without the request viem prints around it.
+function getValidationRejection(error: unknown): string | undefined {
+  const cause =
+    error instanceof BaseError
+      ? error.walk((inner) => inner instanceof Error && VALIDATION_REASON.test(inner.message))
+      : error;
+  return cause instanceof Error ? cause.message.match(VALIDATION_REASON)?.[0].trim() : undefined;
+}
+
+const circlePaymasterEventsAbi = parseAbi([
+  "event UserOperationSponsored(address indexed token, address indexed sender, bytes32 userOpHash, uint256 nativeTokenPrice, uint256 actualTokenNeeded, uint256 feeTokenAmount)",
+]);
+
+// The USDC Circle's paymaster kept for this operation, from the event it emits after refunding the rest.
+function getChargedUsdc(receipt: PaymasterOperationReceipt): bigint | undefined {
+  return parseEventLogs({
+    abi: circlePaymasterEventsAbi,
+    eventName: "UserOperationSponsored",
+    logs: receipt.logs,
+  }).find(
+    (log) =>
+      log.address.toLowerCase() === CIRCLE_PAYMASTER_ADDRESS.toLowerCase() &&
+      log.args.userOpHash === receipt.userOpHash,
+  )?.args.actualTokenNeeded;
+}
 
 /**
  * Waits for the operation's own receipt. A successful bundle does not prove the operation inside it
@@ -198,8 +243,8 @@ export async function awaitPaymasterOperation(
   } catch (error) {
     throw new SquidDepositError(
       error instanceof WaitForUserOperationReceiptTimeoutError
-        ? "The USDC-gas deposit has not been included on Base yet, so whether gas was charged is not known. Check again before starting another deposit."
-        : "The bundler could not be reached to confirm this deposit. Check again before starting another deposit.",
+        ? "The deposit has not been included on Base yet, so whether network fees were charged is not known. Your USDC stays in this account unless it is included. Check again before starting another deposit."
+        : "The bundler could not be reached to confirm this deposit, so whether network fees were charged is not known. Check again before starting another deposit.",
       "timeout",
     );
   }
@@ -207,8 +252,10 @@ export async function awaitPaymasterOperation(
     throw new SquidDepositError("The bundler reported a different operation than the one signed.", "timeout");
   }
   if (!receipt.success) {
+    const charged = getChargedUsdc(receipt);
+    const fees = charged === undefined ? "Network fees were" : `Network fees of ${formatUnits(charged, 6)} USDC were`;
     throw new SquidDepositError(
-      "The deposit reverted on Base, so no USDC went to Squid. Network fees were still charged in USDC, and this account keeps its USDC-gas setup for the next try.",
+      `The deposit reverted on Base, so no USDC went to Squid and it is still in this account. ${fees} still charged, and this account keeps its USDC-gas setup for the next try.`,
       "reverted",
       receipt.receipt.transactionHash,
     );
@@ -315,13 +362,13 @@ export async function executePaymasterSquidDeposit({
     throw new Error("An earlier USDC allowance to Circle's paymaster exceeds the reviewed gas maximum.");
   }
   if (nativeFee > plan.maxTransactionValue) {
-    throw new Error("The bridge fee rose above the reviewed maximum. Review again.");
+    throw new PaymasterReviewError("The bridge fee rose above the reviewed maximum.");
   }
   if (maxSwapInput > plan.maxSwapInput) {
-    throw new Error("Buying the bridge fee now costs more USDC than reviewed. Review again.");
+    throw new PaymasterReviewError("Buying the bridge fee now costs more USDC than reviewed.");
   }
   if (balance < request.sourceAmount + maxSwapInput + plan.gasMaximum) {
-    throw new Error("The USDC balance no longer covers the deposit and its fees. Review again.");
+    throw new PaymasterReviewError("The USDC balance no longer covers the deposit and its fees.");
   }
   const calls = buildPaymasterDepositCalls({
     maxSwapInput,
@@ -367,7 +414,10 @@ export async function executePaymasterSquidDeposit({
     fees,
   );
   if (gasMaximum > plan.gasMaximum) {
-    throw new Error("Network fees rose above the reviewed USDC maximum. Review again.");
+    throw new PaymasterReviewError(
+      "Network fees rose above the reviewed USDC maximum.",
+      applyNetworkFeeReviewHeadroom(gasMaximum),
+    );
   }
   await assertSigner();
   const userOperation = { ...prepared, signature: await operations.sign(prepared) };
@@ -377,20 +427,22 @@ export async function executePaymasterSquidDeposit({
   try {
     sentHash = await operations.send(userOperation);
   } catch (error) {
-    if (isValidationRejection(error)) {
+    const rejection = getValidationRejection(error);
+    if (rejection) {
       throw new SquidDepositError(
-        `The bundler refused the deposit, so nothing was charged. ${error instanceof Error ? error.message : ""}`.trim(),
+        `The bundler refused the deposit, so nothing was charged and your USDC is still in this account (${rejection}).`,
         "failed",
       );
     }
     throw new SquidDepositError(
-      "The deposit may have been sent, but the bundler's answer was lost. Check again before starting another deposit.",
+      "The deposit may have been sent, but the bundler's answer was lost, so whether network fees were charged is not known. Check again before starting another deposit.",
       "timeout",
     );
   }
   if (sentHash !== userOperationHash) {
     throw new SquidDepositError("The bundler reported a different operation than the one signed.", "timeout");
   }
+  onStage?.("swap-broadcast");
   const transactionHash = await awaitPaymasterOperation(operations, userOperationHash, payer);
   onBroadcast?.({ fundsBefore, quote, transactionHash });
 

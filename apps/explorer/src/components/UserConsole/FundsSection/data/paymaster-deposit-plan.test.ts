@@ -105,6 +105,15 @@ describe("planPaymasterDeposit", () => {
     await expect(planPaymasterDeposit(input(10_000_000n))).resolves.toMatchObject({ gasMaximum: 28_216n });
   });
 
+  it("reserves at least what an earlier execution needed", async () => {
+    const { input } = setUp();
+
+    await expect(planPaymasterDeposit({ ...input(10_000_000n), gasMaximumFloor: 300_000n })).resolves.toMatchObject({
+      gasMaximum: 300_000n,
+      quote: quoteFor(8_563_750n),
+    });
+  });
+
   it("reports the reserve when the budget cannot cover it", async () => {
     const { input } = setUp();
 
@@ -132,13 +141,18 @@ describe("getUsdcGasStatus", () => {
   } as const;
 
   it.each([
-    ["a plan still loading", undefined, false, "planning"],
-    ["a failed plan read", undefined, true, "failed"],
-    ["a quote that kept moving", { kind: "not-converged" }, false, "failed"],
-    ["another delegate", { kind: "conflicting-delegation" }, false, "conflict"],
-    ["a budget the reserves use up", { kind: "insufficient-usdc", reserved: 1n }, false, "insufficient"],
-    ["a sized deposit", sized, false, "ready"],
-  ] as const)("reports %s as %s", (_label, plan, failed, status) => {
-    expect(getUsdcGasStatus(plan, failed)).toBe(status);
+    ["a plan still loading", undefined, false, { status: "planning" }],
+    ["a failed plan read", undefined, true, { status: "failed" }],
+    ["a quote that kept moving", { kind: "not-converged" }, false, { status: "failed" }],
+    ["another delegate", { kind: "conflicting-delegation" }, false, { status: "conflict" }],
+    [
+      "a budget the reserves use up",
+      { kind: "insufficient-usdc", reserved: 1n },
+      false,
+      { status: "insufficient", reserved: 1n },
+    ],
+    ["a sized deposit", sized, false, { status: "ready" }],
+  ] as const)("reports %s", (_label, plan, failed, status) => {
+    expect(getUsdcGasStatus(plan, failed)).toEqual(status);
   });
 });

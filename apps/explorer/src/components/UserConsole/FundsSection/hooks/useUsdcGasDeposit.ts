@@ -1,6 +1,6 @@
 import { type ConnectedWallet, useSign7702Authorization } from "@privy-io/react-auth";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import type { Hash } from "viem";
 import {
   awaitPaymasterOperation,
@@ -15,6 +15,7 @@ import { getUsdcGasStatus, planPaymasterDeposit } from "../data/paymaster-deposi
 import { isPaymasterEligible } from "../data/paymaster-eligibility";
 import type { SquidClient, SquidDepositQuote, SquidDepositRouteRequest } from "../data/squid-deposit-route";
 import type { PendingSquidDeposit } from "../data/squid-deposit-tracker";
+import { walletErrorMessage } from "../data/squid-execution";
 
 const USDC_GAS_ENABLED = process.env.NEXT_PUBLIC_USDC_GAS_ENABLED === "true";
 // "Check again" asks the bundler once more rather than waiting out a full inclusion window.
@@ -62,6 +63,11 @@ export function useUsdcGasDeposit({
   withFilGasTopUp: boolean;
 }) {
   const { signAuthorization } = useSign7702Authorization();
+  const queryClient = useQueryClient();
+  const inputs = JSON.stringify([request, budget?.toString(), withFilGasTopUp]);
+  // What an execution needed above its review; it only applies to the inputs it was measured for.
+  const [floor, setFloor] = useState<{ inputs: string; amount: bigint }>();
+  const gasMaximumFloor = floor?.inputs === inputs ? floor.amount : undefined;
   const bundler = useMemo(() => (sourceClient ? createPaymasterBundler(sourceClient) : undefined), [sourceClient]);
   const isEligible =
     !!wallet &&
@@ -86,17 +92,29 @@ export function useUsdcGasDeposit({
         budget,
         client: sourceClient,
         firstQuote: quote,
+        gasMaximumFloor,
         maxFeePerGas,
         request,
         squid,
         withFilGasTopUp,
       });
     },
-    queryKey: ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp],
+    queryKey: ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp, gasMaximumFloor?.toString()],
     retry: false,
   });
   const plan = isEligible ? planQuery.data : undefined;
   const status = isEligible ? getUsdcGasStatus(plan, planQuery.isError) : undefined;
+  const error = (() => {
+    if (status?.status !== "failed") return null;
+    if (plan?.kind === "not-converged") return "Squid's quote kept changing while USDC was set aside for fees.";
+    return `Network fees in USDC could not be estimated. ${walletErrorMessage(planQuery.error, "")}`.trim();
+  })();
+
+  // The reviewed plan no longer holds: drop it so Review waits for a fresh one that reserves at least `gasFloor`.
+  const reviewAgain = (gasFloor: bigint | undefined) => {
+    if (gasFloor !== undefined) setFloor({ inputs, amount: gasFloor });
+    void queryClient.resetQueries({ queryKey: ["direct-squid-usdc-gas-plan"] });
+  };
 
   const execute = async ({
     onBroadcast,
@@ -150,5 +168,13 @@ export function useUsdcGasDeposit({
     return transactionHash;
   };
 
-  return { execute, plan: plan?.kind === "sized" ? plan : undefined, status, waitForOperation };
+  return {
+    error,
+    execute,
+    plan: plan?.kind === "sized" ? plan : undefined,
+    retry: () => void planQuery.refetch(),
+    reviewAgain,
+    status,
+    waitForOperation,
+  };
 }

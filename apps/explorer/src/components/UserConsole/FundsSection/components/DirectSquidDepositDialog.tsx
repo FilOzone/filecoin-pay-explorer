@@ -33,7 +33,9 @@ import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
+import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
 import type { PaymasterDepositPlan } from "../data/paymaster-deposit-plan";
+
 import {
   getSourceTokenBalance,
   getSourceTokenBalancesQueryKey,
@@ -693,6 +695,13 @@ export function DirectSquidDepositDialog({
         reportedFailure = reviewFailure;
       }
     }
+    // Nothing was sent: the form comes back to review a fresh plan, reserving what execution needed.
+    if (reportedFailure instanceof PaymasterReviewError) {
+      setReviewed(null);
+      usdcGas.reviewAgain(reportedFailure.gasMaximumFloor);
+      setError(`${reportedFailure.message} Review the deposit again.`);
+      return;
+    }
     if (reportedFailure instanceof SquidDepositError) {
       setError(reportedFailure.message);
       // Keep the marker, and with it the explorer and Squid links, while the route can still be
@@ -982,6 +991,7 @@ export function DirectSquidDepositDialog({
     quoteLoading: quoteQuery.isFetching,
     quoteReady: !!quote,
     requiredNative,
+    sourceDecimals: sourceToken?.decimals,
     sourceSymbol: sourceToken?.symbol,
     usdcGas: usdcGas.status,
   });
@@ -1305,6 +1315,14 @@ export function DirectSquidDepositDialog({
                     Network fees could not be estimated. {walletErrorMessage(budgetQuery.error, "")}
                   </span>
                   <Button onClick={() => void budgetQuery.refetch()} size='compact' type='button' variant='tertiary'>
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {usdcGas.error ? (
+                <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+                  <span className='break-words'>{usdcGas.error}</span>
+                  <Button onClick={usdcGas.retry} size='compact' type='button' variant='tertiary'>
                     Retry
                   </Button>
                 </div>

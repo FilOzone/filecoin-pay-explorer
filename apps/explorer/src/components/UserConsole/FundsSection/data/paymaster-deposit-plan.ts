@@ -43,13 +43,16 @@ export type PaymasterDepositPlanResult =
   | { kind: "conflicting-delegation" };
 
 /** Where the form's USDC-gas plan stands; the review blocker reads it in place of the native balance. */
-export type UsdcGasStatus = "planning" | "failed" | "insufficient" | "conflict" | "ready";
+export type UsdcGasStatus =
+  | { status: "planning" | "failed" | "conflict" | "ready" }
+  | { status: "insufficient"; reserved: bigint };
 
 export function getUsdcGasStatus(plan: PaymasterDepositPlanResult | undefined, failed: boolean): UsdcGasStatus {
-  if (failed || plan?.kind === "not-converged") return "failed";
-  if (!plan) return "planning";
-  if (plan.kind === "conflicting-delegation") return "conflict";
-  return plan.kind === "insufficient-usdc" ? "insufficient" : "ready";
+  if (failed || plan?.kind === "not-converged") return { status: "failed" };
+  if (!plan) return { status: "planning" };
+  if (plan.kind === "conflicting-delegation") return { status: "conflict" };
+  if (plan.kind === "insufficient-usdc") return { status: "insufficient", reserved: plan.reserved };
+  return { status: "ready" };
 }
 
 export interface PlanPaymasterDepositInput {
@@ -62,6 +65,8 @@ export interface PlanPaymasterDepositInput {
   maxFeePerGas: bigint;
   /** A quote already fetched for the whole budget, used for the first sizing round instead of quoting it again. */
   firstQuote?: SquidDepositQuote;
+  /** What an earlier execution needed, which a fixed-limit reserve may fall short of when Base's L1 fee spikes. */
+  gasMaximumFloor?: bigint;
 }
 
 function getRouteCallGas(quote: SquidDepositQuote): bigint {
@@ -89,6 +94,7 @@ export async function planPaymasterDeposit({
   budget,
   client,
   firstQuote,
+  gasMaximumFloor = 0n,
   maxFeePerGas,
   request,
   squid,
@@ -105,7 +111,10 @@ export async function planPaymasterDeposit({
       return { route, nativeFee: captureReviewedSquidDepositCaps(route, request.sourceToken).maxTransactionValue };
     },
     quoteSwapInput: (nativeFee) => quoteSwapInputCap(client, request.sourceToken, nativeFee),
-    estimateGasMaximum: async (route) => getReviewGasMaximum(route, fees, maxFeePerGas),
+    estimateGasMaximum: async (route) => {
+      const reserve = getReviewGasMaximum(route, fees, maxFeePerGas);
+      return reserve > gasMaximumFloor ? reserve : gasMaximumFloor;
+    },
   });
   if (sizing.kind !== "sized") return sizing;
   return {

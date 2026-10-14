@@ -2,13 +2,16 @@ import type { Page, Route } from "@playwright/test";
 import {
   concat,
   decodeFunctionData,
+  encodeAbiParameters,
   encodeFunctionResult,
   erc20Abi,
   type Hex,
   multicall3Abi,
   numberToHex,
+  pad,
   parseAbi,
   recoverAddress,
+  toEventSelector,
   toFunctionSelector,
 } from "viem";
 import {
@@ -40,6 +43,8 @@ const ADDITIONAL_GAS_CHARGE = 35_000n;
 /** USDC base units for 1 ETH, for both the paymaster's oracle and the pool. */
 export const FAKE_ETH_PRICE = 2_500_000_000n;
 const GAS_PRICE = 1_000_000n;
+/** The USDC the paymaster keeps for each included operation, as its UserOperationSponsored event reports. */
+export const FAKE_CHARGED_USDC = 21_500n;
 
 const hashOf = (userOperation: UserOperation<"0.8">) =>
   getUserOperationHash({
@@ -86,6 +91,8 @@ export interface FakeUsdcGas {
   /** Applies to every operation sent from now on. */
   outcome: FakeOperationOutcome;
   feeSpreadBips: bigint;
+  /** What the bundler estimates for pre-verification gas; raise it to push an operation past its reviewed cap. */
+  preVerificationGas: bigint;
   /** The payer's USDC allowance to the paymaster; an included operation resets it to 0. */
   paymasterAllowance: bigint;
   /** Operations the bundler accepted, in order. */
@@ -111,6 +118,7 @@ export async function installFakeUsdcGas(
     outcome: "included",
     feeSpreadBips: 0n,
     paymasterAllowance: 0n,
+    preVerificationGas: 60_000n,
     ...initial,
     operations: [],
     read: (target, data) => readBase(target, data),
@@ -255,6 +263,26 @@ export async function installFakeUsdcGas(
     return isPayer(signer) ? undefined : "AA24 signature error";
   };
 
+  // Circle's paymaster reports what it kept after refunding the rest of the prefund.
+  const sponsoredLog = (op: SubmittedOperation) => ({
+    address: PAYMASTER,
+    topics: [
+      toEventSelector("UserOperationSponsored(address,address,bytes32,uint256,uint256,uint256)"),
+      pad(BASE_USDC),
+      pad(op.userOperation.sender),
+    ],
+    data: encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
+      [op.hash, FAKE_ETH_PRICE, FAKE_CHARGED_USDC, 0n],
+    ),
+    blockNumber: "0x1",
+    blockHash: op.bundleHash,
+    transactionHash: op.bundleHash,
+    transactionIndex: "0x0",
+    logIndex: "0x0",
+    removed: false,
+  });
+
   const receiptOf = (op: SubmittedOperation) => ({
     userOpHash: op.hash,
     entryPoint: ENTRY_POINT,
@@ -265,7 +293,7 @@ export async function installFakeUsdcGas(
     actualGasUsed: numberToHex(400_000n),
     success: op.outcome === "included",
     reason: op.outcome === "reverted" ? "0x" : undefined,
-    logs: [],
+    logs: [sponsoredLog(op)],
     receipt: bundleReceipt(op),
   });
 
@@ -283,7 +311,7 @@ export async function installFakeUsdcGas(
         if (error) return { error: { code: -32500, message: error } };
         return {
           result: {
-            preVerificationGas: numberToHex(60_000n),
+            preVerificationGas: numberToHex(fake.preVerificationGas),
             verificationGasLimit: numberToHex(rpc.eip7702Auth ? 150_000n : 100_000n),
             callGasLimit: numberToHex(600_000n),
             paymasterVerificationGasLimit: numberToHex(200_000n),
