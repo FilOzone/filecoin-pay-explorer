@@ -57,7 +57,8 @@ export async function installFakeSquid(
   const { mainnet } = await import("@filoz/synapse-sdk");
   const payments = mainnet.contracts.filecoinPay.address.toLowerCase();
   const usdfc = mainnet.contracts.usdfc.address;
-  const routeRequests: (SquidRouteRequest & { quoteOnly: boolean })[] = [];
+  const routeRequests: SquidRouteRequest[] = [];
+  let executableRoutes = 0;
   const isPayer = (address: string) => address.toLowerCase() === payer.toLowerCase();
 
   const sent = () =>
@@ -238,9 +239,7 @@ export async function installFakeSquid(
       if (!url.pathname.endsWith("/route")) return route.fallback();
       const params = route.request().postDataJSON() as SquidRouteRequest & { quoteOnly: boolean };
       routeRequests.push(params);
-      const { minimumShortfall = 0n, expiresInSeconds } = params.quoteOnly
-        ? {}
-        : executableRoute(routeRequests.filter((request) => !request.quoteOnly).length);
+      const { minimumShortfall = 0n, expiresInSeconds } = params.quoteOnly ? {} : executableRoute(++executableRoutes);
       // 1 USDC buys 1 USDFC, 6 decimals to 18.
       const toAmount = (BigInt(params.fromAmount) * 10n ** 12n).toString();
       return route.fulfill({

@@ -749,7 +749,8 @@ export function DirectSquidDepositDialog({
   const reReview = async (change: SquidDepositBudgetError | SquidQuoteChangedError, current: ReviewedDeposit) => {
     if (!sourceFeeClient) throw change;
     const { context } = current;
-    const quote = change instanceof SquidQuoteChangedError ? change.quote : current.quote;
+    const isGasBreach = change instanceof SquidDepositBudgetError;
+    const quote = isGasBreach ? current.quote : change.quote;
     const balances = (await balancesQuery.refetch()).data;
     if (!balances) throw new Error("Source balances are unavailable. Review the payment again.");
     const budget = await estimateDepositNetworkFeeMaximum({
@@ -764,8 +765,7 @@ export function DirectSquidDepositDialog({
     });
     const isNativeSource = isNativeToken(context.sourceToken);
     // Execution priced the remaining transactions itself; the new maximum must at least cover that.
-    const floor =
-      change instanceof SquidDepositBudgetError ? applyNetworkFeeReviewHeadroom(change.breach.requiredFee) : 0n;
+    const floor = isGasBreach ? applyNetworkFeeReviewHeadroom(change.breach.requiredFee) : 0n;
     const maxNativeFee = budget.maximum > floor ? budget.maximum : floor;
     const requiredNative = getDepositRequiredNativeBalance(
       quote,
@@ -783,17 +783,10 @@ export function DirectSquidDepositDialog({
       transactions: budget.transactions,
     });
     const transactions = listTransactionLabels(budget.transactions.map(({ kind }) => kind));
-    setNotice(
-      change instanceof SquidDepositBudgetError
-        ? {
-            title: "Review the updated gas maximum",
-            description: `${change.message} Check the updated maximum and confirm to send the ${transactions}.`,
-          }
-        : {
-            title: "Review the updated quote",
-            description: `Squid's quote changed since your review. ${change.message} Check the updated quote and confirm to send the ${transactions}.`,
-          },
-    );
+    setNotice({
+      title: isGasBreach ? "Review the updated gas maximum" : "Review the updated quote",
+      description: `${change.message} Check the updated ${isGasBreach ? "maximum" : "quote"} and confirm to send the ${transactions}.`,
+    });
     if (balances.native < requiredNative) {
       setError("The paying wallet does not have enough native token for the updated maximum. Add funds, then confirm.");
     }

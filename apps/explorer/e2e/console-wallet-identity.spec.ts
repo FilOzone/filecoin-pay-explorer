@@ -144,15 +144,14 @@ test("a Squid deposit paid from another account of the extension credits the con
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
-test("a Squid route that drops below the reviewed minimum returns to review, then deposits", async ({ page }) => {
-  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+// Reviews a 10 USDC Squid deposit paid from a second extension account; returns the review card.
+async function reviewSquidDeposit(page: Page, squidOptions: Parameters<typeof installFakeSquid>[2]) {
   await openAddFundsFromWalletMenu(page);
   await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
   const [, payer] = await page.evaluate(
     () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
   );
-  await installFakeSquid(page, payer, { executableRoute: () => ({ minimumShortfall: 10n ** 17n }) });
-
+  await installFakeSquid(page, payer, squidOptions);
   await page.getByRole("button", { name: "Swap to USDFC" }).click();
   const squid = page.getByRole("dialog", { name: "Pay with another token" });
   await squid.getByLabel(/^Amount/).fill("10");
@@ -160,16 +159,25 @@ test("a Squid route that drops below the reviewed minimum returns to review, the
   await squid.getByRole("button", { name: "Review" }).click();
   const review = page.getByRole("region", { name: "Reviewed Squid deposit" });
   await expect(review).toContainText("Receive at least: 10 USDFC");
+  return review;
+}
+
+async function approveFakeTransaction(page: Page) {
+  const approve = page.getByRole("dialog", { name: "approve transaction" });
+  await approve.getByRole("button", { name: "Approve" }).click();
+  await approve.getByRole("button", { name: "All Done" }).click();
+}
+
+test("a Squid route that drops below the reviewed minimum returns to review, then deposits", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  const review = await reviewSquidDeposit(page, { executableRoute: () => ({ minimumShortfall: 10n ** 17n }) });
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
 
   await expect(review).toContainText("Review the updated quote");
   await expect(review).toContainText("Receive at least: 9.9 USDFC");
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
-  for (let i = 0; i < 2; i += 1) {
-    const approve = page.getByRole("dialog", { name: "approve transaction" });
-    await approve.getByRole("button", { name: "Approve" }).click();
-    await approve.getByRole("button", { name: "All Done" }).click();
-  }
+  await approveFakeTransaction(page);
+  await approveFakeTransaction(page);
   await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
 });
 
@@ -177,34 +185,18 @@ test("a Squid route that drops below the reviewed minimum after the approval ret
   page,
 }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
-  await openAddFundsFromWalletMenu(page);
-  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
-  const [, payer] = await page.evaluate(
-    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
-  );
   // The first route expires before the approval lands, so the route is fetched again, now below the review.
-  await installFakeSquid(page, payer, {
+  const review = await reviewSquidDeposit(page, {
     executableRoute: (n) => (n === 1 ? { expiresInSeconds: 10 } : { minimumShortfall: 10n ** 17n }),
   });
-
-  await page.getByRole("button", { name: "Swap to USDFC" }).click();
-  const squid = page.getByRole("dialog", { name: "Pay with another token" });
-  await squid.getByLabel(/^Amount/).fill("10");
-  await squid.getByRole("checkbox").click();
-  await squid.getByRole("button", { name: "Review" }).click();
-  const review = page.getByRole("region", { name: "Reviewed Squid deposit" });
-  await expect(review).toContainText("Receive at least: 10 USDFC");
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
-  const approve = page.getByRole("dialog", { name: "approve transaction" });
-  await approve.getByRole("button", { name: "Approve" }).click();
-  await approve.getByRole("button", { name: "All Done" }).click();
+  await approveFakeTransaction(page);
 
   await expect(review).toContainText("Review the updated quote");
   await expect(review).toContainText("Receive at least: 9.9 USDFC");
   await expect(review).toContainText("Your wallet will confirm the Squid transaction.");
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
-  await approve.getByRole("button", { name: "Approve" }).click();
-  await approve.getByRole("button", { name: "All Done" }).click();
+  await approveFakeTransaction(page);
   await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
 
   const sent = await page.evaluate(

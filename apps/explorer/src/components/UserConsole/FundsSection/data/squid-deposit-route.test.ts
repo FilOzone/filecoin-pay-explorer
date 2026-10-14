@@ -684,15 +684,9 @@ describe("parseSquidDepositRoute", () => {
       { ...executable, gasCosts: [{ ...executable.gasCosts[0], amount: executable.gasCosts[0].amount * 10n }] },
     ];
     for (const route of drifted) {
-      let offered: unknown;
-      try {
-        assertExecutableQuoteWithinReview(route, reviewed);
-      } catch (failure) {
-        offered = failure;
-      }
-      if (!(offered instanceof SquidQuoteChangedError)) throw new Error("expected a re-review");
+      expect(() => assertExecutableQuoteWithinReview(route, reviewed)).toThrow(SquidQuoteChangedError);
       expect(() =>
-        assertExecutableQuoteWithinReview(offered.quote, captureReviewedSquidDepositCaps(offered.quote, USDC)),
+        assertExecutableQuoteWithinReview(route, captureReviewedSquidDepositCaps(route, USDC)),
       ).not.toThrow();
     }
   });
