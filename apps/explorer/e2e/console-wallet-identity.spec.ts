@@ -144,6 +144,35 @@ test("a Squid deposit paid from another account of the extension credits the con
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
+test("a Squid route that drops below the reviewed minimum returns to review, then deposits", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
+  const [, payer] = await page.evaluate(
+    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
+  );
+  await installFakeSquid(page, payer, { executableShortfall: 10n ** 17n });
+
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  await squid.getByLabel(/^Amount/).fill("10");
+  await squid.getByRole("checkbox").click();
+  await squid.getByRole("button", { name: "Review" }).click();
+  const review = page.getByRole("region", { name: "Reviewed Squid deposit" });
+  await expect(review).toContainText("Receive at least: 10 USDFC");
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(review).toContainText("Review the updated quote");
+  await expect(review).toContainText("Receive at least: 9.9 USDFC");
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  for (let i = 0; i < 2; i += 1) {
+    const approve = page.getByRole("dialog", { name: "approve transaction" });
+    await approve.getByRole("button", { name: "Approve" }).click();
+    await approve.getByRole("button", { name: "All Done" }).click();
+  }
+  await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
+});
+
 test("a Squid deposit paid from an extension without Filecoin closes the dialog", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await openAddFundsFromWalletMenu(page);

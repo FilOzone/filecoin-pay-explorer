@@ -43,9 +43,14 @@ const paymentsAbi = parseAbi([
 /**
  * Squid on Base for one funded payer: the token catalog, quotes and routes that echo the request, a status that
  * reports success, and the Filecoin deposit receipt that credits the route's recipient. Other RPC calls fall
- * through to fake-chain.ts. Returns the route requests Squid received, in order.
+ * through to fake-chain.ts. `executableShortfall` lowers the minimum received of executable routes below the
+ * quotes'. Returns the route requests Squid received, in order.
  */
-export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRouteRequest[]> {
+export async function installFakeSquid(
+  page: Page,
+  payer: Hex,
+  { executableShortfall = 0n }: { executableShortfall?: bigint } = {},
+): Promise<SquidRouteRequest[]> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet } = await import("@filoz/synapse-sdk");
   const payments = mainnet.contracts.filecoinPay.address.toLowerCase();
@@ -240,7 +245,7 @@ export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRou
             params,
             estimate: {
               toAmount,
-              toAmountMin: toAmount,
+              toAmountMin: (BigInt(toAmount) - (params.quoteOnly ? 0n : executableShortfall)).toString(),
               actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
               feeCosts: [],
               // Squid prices the route's source gas; the review budgets the route from it.

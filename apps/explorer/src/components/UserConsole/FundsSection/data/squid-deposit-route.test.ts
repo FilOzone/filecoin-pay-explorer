@@ -651,12 +651,14 @@ describe("parseSquidDepositRoute", () => {
         reviewed,
       ),
     ).not.toThrow();
-    expect(() =>
-      assertExecutableQuoteWithinReview(
-        { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
-        reviewed,
-      ),
-    ).toThrow("minimum USDFC");
+    const lowerMinimum = { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n };
+    expect(() => assertExecutableQuoteWithinReview(lowerMinimum, reviewed)).toThrow(
+      expect.objectContaining({
+        name: "SquidQuoteChangedError",
+        message: expect.stringContaining("minimum USDFC"),
+        quote: lowerMinimum,
+      }),
+    );
     expect(() =>
       assertExecutableQuoteWithinReview(
         { ...executable, fees: [{ ...executable.fees[0], amount: feeCap + 1n }] },

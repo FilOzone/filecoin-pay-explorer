@@ -321,23 +321,36 @@ export function captureReviewedSquidDepositCaps(
   };
 }
 
+/** The route Squid would execute is worse than the reviewed quote; `quote` is that route, for the payer to review. */
+export class SquidQuoteChangedError extends Error {
+  readonly quote: ExecutableSquidDepositQuote;
+
+  constructor(message: string, quote: ExecutableSquidDepositQuote) {
+    super(message);
+    this.name = "SquidQuoteChangedError";
+    this.quote = quote;
+  }
+}
+
 export function assertExecutableQuoteWithinReview(
   quote: ExecutableSquidDepositQuote,
   reviewed: ReviewedSquidDepositCaps,
 ): void {
   if (quote.sourceAmount !== reviewed.sourceAmount) throw new Error("The source spend changed after review");
   if (quote.minimumDestinationAmount < reviewed.minimumDestinationAmount) {
-    throw new Error("The minimum USDFC received fell below the reviewed amount");
+    throw new SquidQuoteChangedError("The minimum USDFC received fell below the reviewed amount.", quote);
   }
   if (quote.transaction.value > reviewed.maxTransactionValue) {
-    throw new Error("The native route payment exceeded the reviewed maximum");
+    throw new SquidQuoteChangedError("The native route payment exceeded the reviewed maximum.", quote);
   }
   for (const [label, actual, maximum] of [
     ["route fee", getCostCaps(quote.fees), reviewed.fees],
     ["network gas", getCostCaps(quote.gasCosts), reviewed.gasCosts],
   ] as const) {
     for (const [key, amount] of Object.entries(actual)) {
-      if (amount > (maximum[key] ?? 0n)) throw new Error(`The ${label} exceeded the reviewed maximum`);
+      if (amount > (maximum[key] ?? 0n)) {
+        throw new SquidQuoteChangedError(`The ${label} exceeded the reviewed maximum.`, quote);
+      }
     }
   }
 }
