@@ -8,6 +8,7 @@ import {
   isHash,
   type PublicClient,
   parseEventLogs,
+  type ReplacementReturnType,
   type TransactionReceipt,
   type WalletClient,
 } from "viem";
@@ -383,8 +384,11 @@ export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef 
   fundsBefore: bigint;
   minimumDestinationAmount: bigint;
   destinationClient: SquidDepositDestinationClient;
+  sourceClient: Pick<PublicClient, "waitForTransactionReceipt">;
   squid: SquidClient;
   onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
+  /** Fires when the wallet re-sent the route under a new hash (a speed-up), so a resume follows that one. */
+  onReplaced?: (transactionHash: Hash) => void;
 }
 
 const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
@@ -447,8 +451,9 @@ export async function fetchSquidDepositStatus(
 }
 
 /**
- * Follows a broadcast route to its exact Filecoin transaction, then verifies
- * the expected Filecoin Pay deposit event from that receipt.
+ * Confirms a broadcast route on the source network, follows it to its exact
+ * Filecoin transaction, then verifies the expected Filecoin Pay deposit event
+ * from that receipt.
  */
 export async function awaitSquidDepositSettlement({
   destinationClient,
@@ -456,19 +461,51 @@ export async function awaitSquidDepositSettlement({
   maxStatusAttempts = 90,
   maxStatusFailures = 6,
   maxVerifyAttempts = 12,
+  onReplaced,
   onStage,
   pollIntervalMs = 10_000,
   quoteId,
   sleep = defaultSleep,
   sourceChainId,
+  sourceClient,
   squid,
   statusRequestTimeoutMs = STATUS_REQUEST_TIMEOUT_MS,
   target,
-  transactionHash,
+  transactionHash: broadcastHash,
 }: AwaitSquidDepositInput): Promise<SquidDepositResult> {
   // Squid delivers to the recipient, which is the Pay account's address and not
   // always the paying wallet, so failure messages name where the USDFC went.
   const recipientLabel = formatAddress(target.recipient);
+  onStage?.("swap-broadcast", broadcastHash);
+  // Squid answers 404 for a hash that never landed, so the source network decides whether there is a route to follow.
+  let replacement: ReplacementReturnType | undefined;
+  let sourceReceipt: TransactionReceipt;
+  try {
+    sourceReceipt = await sourceClient.waitForTransactionReceipt({
+      hash: broadcastHash,
+      onReplaced: (replaced) => {
+        replacement = replaced;
+      },
+    });
+  } catch {
+    throw new SquidDepositError(
+      "The source network has no confirmed record of this swap. If your wallet still shows it pending, check again later; if it was dropped, replaced or never sent, dismiss it and try again.",
+      "timeout",
+      broadcastHash,
+    );
+  }
+  if (replacement && replacement.reason !== "repriced") {
+    throw new SquidDepositError(
+      "Your wallet cancelled or replaced the swap transaction, so nothing was sent to Squid.",
+      "failed",
+      broadcastHash,
+    );
+  }
+  const transactionHash = replacement?.transaction.hash ?? broadcastHash;
+  if (transactionHash !== broadcastHash) onReplaced?.(transactionHash);
+  if (sourceReceipt.status !== "success") {
+    throw new SquidDepositError("The Squid transaction reverted on the source network", "reverted", transactionHash);
+  }
   let destinationTransactionHash = transactionHash;
   if (sourceChainId !== FILECOIN_CHAIN_ID) {
     onStage?.("bridging", transactionHash);
@@ -730,21 +767,19 @@ export async function executeSquidDeposit({
     account: walletClient.account,
     chain: undefined,
   });
-  onStage?.("swap-broadcast", transactionHash);
   onBroadcast?.({ transactionHash, fundsBefore, quote: routeQuote });
-  const receipt = await sourceClient.waitForTransactionReceipt({ hash: transactionHash });
-  if (receipt.status !== "success") {
-    throw new SquidDepositError("The Squid transaction reverted on the source network", "reverted", transactionHash);
-  }
 
   return awaitSquidDepositSettlement({
     ...polling,
     destinationClient,
     fundsBefore,
     minimumDestinationAmount: routeQuote.minimumDestinationAmount,
+    onReplaced: (replacementHash) =>
+      onBroadcast?.({ transactionHash: replacementHash, fundsBefore, quote: routeQuote }),
     onStage,
     quoteId: routeQuote.quoteId,
     sourceChainId: request.sourceChainId,
+    sourceClient,
     squid,
     target: request,
     transactionHash,

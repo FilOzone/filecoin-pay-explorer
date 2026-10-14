@@ -695,7 +695,7 @@ export function DirectSquidDepositDialog({
   };
 
   const resume = async () => {
-    if (!pending || !recipient || !destinationClient || isSubmitting.current) return;
+    if (!pending || !recipient || !destinationClient || !sourceClient || isSubmitting.current) return;
     isSubmitting.current = true;
     const pendingHash = pending.transactionHash;
     if (!pendingHash) {
@@ -718,9 +718,13 @@ export function DirectSquidDepositDialog({
           destinationClient: destinationClient as SquidDepositDestinationClient,
           fundsBefore: pending.fundsBefore,
           minimumDestinationAmount: pending.minimumDestinationAmount,
+          onReplaced: (hash) => {
+            setPending(savePendingSquidDeposit(window.localStorage, { ...pending, transactionHash: hash }));
+          },
           onStage: setStageWithHash,
           quoteId: pending.quoteId,
           sourceChainId: pending.sourceChainId,
+          sourceClient,
           squid,
           target: { ...DEPOSIT_TARGET, recipient: pending.recipient },
           transactionHash: pendingHash,

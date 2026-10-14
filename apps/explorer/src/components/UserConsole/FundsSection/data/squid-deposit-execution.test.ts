@@ -272,6 +272,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -282,7 +283,7 @@ describe("awaitSquidDepositSettlement", () => {
       destinationTransactionHash: DESTINATION_HASH,
       transactionHash: ROUTE_HASH,
     });
-    expect(stages).toEqual(["bridging", "verifying"]);
+    expect(stages).toEqual(["swap-broadcast", "bridging", "verifying"]);
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -295,6 +296,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 314,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -315,6 +317,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -331,6 +334,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("needs_gas")) },
       target,
       transactionHash: ROUTE_HASH,
@@ -349,6 +353,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -371,6 +376,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -396,6 +402,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       statusRequestTimeoutMs: 1,
       target,
@@ -418,6 +425,7 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 8453,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id", fetch },
         target,
         transactionHash: ROUTE_HASH,
@@ -436,6 +444,7 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 314,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id" },
         target,
         transactionHash: ROUTE_HASH,
@@ -452,11 +461,89 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 314,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id" },
         target,
         transactionHash: ROUTE_HASH,
       }),
     ).rejects.toMatchObject({ reason: "failed", transactionHash: ROUTE_HASH });
+  });
+
+  describe("on the source network", () => {
+    const REPLACEMENT_HASH = `0x${"e".repeat(64)}` as Hash;
+    const replacingSource = (reason: "cancelled" | "replaced" | "repriced") =>
+      ({
+        waitForTransactionReceipt: vi.fn(async ({ onReplaced }: { onReplaced?: (replacement: unknown) => void }) => {
+          onReplaced?.({ reason, transaction: { hash: REPLACEMENT_HASH } });
+          return { status: "success" };
+        }),
+      }) as unknown as SquidDepositSourceClient;
+    const settle = (input: Partial<Parameters<typeof awaitSquidDepositSettlement>[0]>) =>
+      awaitSquidDepositSettlement({
+        destinationClient: fakeDestination(),
+        fundsBefore: 100n,
+        minimumDestinationAmount: 1n,
+        quoteId: "quote-1",
+        sleep: noSleep,
+        sourceChainId: 8453,
+        sourceClient: fakeSource(),
+        squid: { integratorId: "id", fetch: vi.fn() },
+        target,
+        transactionHash: ROUTE_HASH,
+        ...input,
+      });
+
+    it("follows a sped-up route under its replacement hash", async () => {
+      const fetch = vi.fn(async () => statusResponse("success"));
+      const onReplaced = vi.fn();
+      const result = await settle({
+        onReplaced,
+        sourceClient: replacingSource("repriced"),
+        squid: { integratorId: "id", fetch },
+      });
+      expect(result).toEqual({
+        depositedAmount: 95n,
+        destinationTransactionHash: DESTINATION_HASH,
+        transactionHash: REPLACEMENT_HASH,
+      });
+      expect(onReplaced).toHaveBeenCalledWith(REPLACEMENT_HASH);
+      const [url] = fetch.mock.calls[0] as unknown as [string];
+      expect(url).toContain(`transactionId=${REPLACEMENT_HASH}`);
+    });
+
+    it.each(["cancelled", "replaced"] as const)(
+      "fails without asking Squid when the wallet %s the route",
+      async (reason) => {
+        const fetch = vi.fn();
+        const attempt = settle({ sourceClient: replacingSource(reason), squid: { integratorId: "id", fetch } });
+        await expect(attempt).rejects.toMatchObject({ reason: "failed", transactionHash: ROUTE_HASH });
+        await expect(attempt).rejects.toThrow("nothing was sent to Squid");
+        expect(fetch).not.toHaveBeenCalled();
+      },
+    );
+
+    it("stops instead of polling Squid when the route never lands", async () => {
+      const fetch = vi.fn(async () => statusResponse(null, 404));
+      const sourceClient = {
+        waitForTransactionReceipt: vi.fn(async () => {
+          throw new Error("Timed out while waiting for transaction");
+        }),
+      } as unknown as SquidDepositSourceClient;
+      const attempt = settle({ sourceClient, squid: { integratorId: "id", fetch } });
+      await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+      await expect(attempt).rejects.toThrow("The source network has no confirmed record of this swap.");
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("reports a reverted route without asking Squid", async () => {
+      const fetch = vi.fn();
+      const attempt = settle({
+        sourceClient: fakeSource({ receiptStatus: "reverted" }),
+        squid: { integratorId: "id", fetch },
+      });
+      await expect(attempt).rejects.toMatchObject({ reason: "reverted", transactionHash: ROUTE_HASH });
+      expect(fetch).not.toHaveBeenCalled();
+    });
   });
 });
 

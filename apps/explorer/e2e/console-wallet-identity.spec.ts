@@ -180,6 +180,67 @@ test("a Squid deposit paid from an extension without Filecoin closes the dialog"
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
+test("checking a Squid deposit whose route never landed stops and offers Dismiss", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  // The source receipt wait gives up after viem's three minutes; the clock skips them.
+  await page.clock.install();
+  await openAddFundsFromWalletMenu(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
+  const [consoleAddress, payer] = await page.evaluate(
+    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
+  );
+  await installFakeSquid(page, payer);
+  const droppedHash = `0x${"0d".repeat(32)}`;
+  // No Base RPC has a record of the hash, as with a route the wallet dropped; the app's transport asks each in turn.
+  const baseRpcHosts = ["base-rpc.publicnode.com", "base.drpc.org", "mainnet.base.org"];
+  await page.route(
+    (url) => baseRpcHosts.includes(url.hostname),
+    (route) => {
+      const body = route.request().postDataJSON() as { id: number; method: string; params: unknown[] } | null;
+      const isLookup =
+        (body?.method === "eth_getTransactionReceipt" || body?.method === "eth_getTransactionByHash") &&
+        body.params[0] === droppedHash;
+      if (!body || !isLookup) return route.fallback();
+      return route.fulfill({ json: { jsonrpc: "2.0", id: body.id, result: null } });
+    },
+  );
+  const statusRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/status")) statusRequests.push(request.url());
+  });
+  await page.evaluate(
+    ({ owner, recipient, transactionHash }) =>
+      localStorage.setItem(
+        `filecoin-pay:squid-deposit:v1:${owner.toLowerCase()}`,
+        JSON.stringify({
+          executionStage: "swap-broadcast",
+          fundsBefore: "0",
+          minimumDestinationAmount: "10000000000000000000",
+          owner,
+          quoteId: "fake-quote-dropped",
+          recipient,
+          sourceAmount: "10000000",
+          sourceChainId: 8453,
+          sourceToken: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          startedAt: Date.now(),
+          transactionHash,
+        }),
+      ),
+    { owner: payer, recipient: consoleAddress, transactionHash: droppedHash },
+  );
+
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  await expect(squid.getByText("A Squid deposit is still in progress.")).toBeVisible();
+  await squid.getByRole("button", { name: "Check again" }).click();
+  await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
+  await page.clock.fastForward("03:01");
+
+  await expect(squid.getByText(/The source network has no confirmed record of this swap\./)).toBeVisible();
+  await expect(squid.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+  expect(statusRequests).toEqual([]);
+});
+
 test("an extension account switch while idle moves the console to the new account", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
