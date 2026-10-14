@@ -1,5 +1,13 @@
 import type { Page, Route } from "@playwright/test";
-import { decodeFunctionData, encodeFunctionResult, erc20Abi, type Hex, multicall3Abi, toFunctionSelector } from "viem";
+import {
+  decodeFunctionData,
+  encodeFunctionResult,
+  erc20Abi,
+  type Hex,
+  multicall3Abi,
+  parseAbi,
+  toFunctionSelector,
+} from "viem";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
@@ -7,6 +15,10 @@ type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
 const BALANCE_OF = toFunctionSelector("balanceOf(address)");
+const accountsAbi = parseAbi([
+  "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
+]);
+const ACCOUNTS = toFunctionSelector(accountsAbi[0]);
 // The card purchase checks the recipient's USDC on Base before and after buying.
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
@@ -14,7 +26,7 @@ const BASE_RPC_HOST = "base-rpc.publicnode.com";
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
  * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
- * zero FIL, USDFC, and Base USDC for every wallet. Any other RPC call falls through to the route that blocks it
+ * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet. Any other RPC call falls through to the route that blocks it
  * (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
@@ -25,6 +37,7 @@ export async function installFakeChain(page: Page): Promise<void> {
     ...[mainnet, calibration].map((chain) => chain.contracts.usdfc.address.toLowerCase()),
     BASE_USDC,
   ];
+  const paymentsContracts = [mainnet, calibration].map((chain) => chain.contracts.filecoinPay.address.toLowerCase());
   const registryAt = (to: string) => registries.find((r) => r.address.toLowerCase() === to.toLowerCase());
   const abi = registries[0].abi;
 
@@ -61,6 +74,9 @@ export async function installFakeChain(page: Page): Promise<void> {
     }
     if (zeroBalanceTokens.includes(target.toLowerCase()) && data.startsWith(BALANCE_OF)) {
       return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: 0n });
+    }
+    if (paymentsContracts.includes(target.toLowerCase()) && data.startsWith(ACCOUNTS)) {
+      return encodeFunctionResult({ abi: accountsAbi, functionName: "accounts", result: [0n, 0n, 0n, 0n] });
     }
     return undefined;
   };
