@@ -96,6 +96,15 @@ describe("planPaymasterDeposit", () => {
     await expect(planPaymasterDeposit(input(10_000_000n))).resolves.toMatchObject({ gasMaximum: 28_216n });
   });
 
+  it("reserves at least what an earlier execution needed", async () => {
+    const { input } = setUp();
+
+    await expect(planPaymasterDeposit({ ...input(10_000_000n), gasMaximumFloor: 300_000n })).resolves.toMatchObject({
+      gasMaximum: 300_000n,
+      quote: quoteFor(8_563_750n),
+    });
+  });
+
   it("reports the reserve when the budget cannot cover it", async () => {
     const { input } = setUp();
 

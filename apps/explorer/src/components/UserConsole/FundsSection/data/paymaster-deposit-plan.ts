@@ -51,6 +51,8 @@ export interface PlanPaymasterDepositInput {
   client: Pick<PublicClient, "getCode" | "multicall" | "simulateContract">;
   /** The bundler's current fee per gas. */
   maxFeePerGas: bigint;
+  /** What an earlier execution needed, which a fixed-limit reserve may fall short of when Base's L1 fee spikes. */
+  gasMaximumFloor?: bigint;
 }
 
 function getRouteCallGas(quote: SquidDepositQuote): bigint {
@@ -77,6 +79,7 @@ function getReviewGasMaximum(quote: SquidDepositQuote, fees: PaymasterFees, maxF
 export async function planPaymasterDeposit({
   budget,
   client,
+  gasMaximumFloor = 0n,
   maxFeePerGas,
   request,
   squid,
@@ -93,7 +96,10 @@ export async function planPaymasterDeposit({
       };
     },
     quoteSwapInput: (nativeFee) => quoteSwapInputCap(client, request.sourceToken, nativeFee),
-    estimateGasMaximum: async ({ route }) => getReviewGasMaximum(route.quote, fees, maxFeePerGas),
+    estimateGasMaximum: async ({ route }) => {
+      const reserve = getReviewGasMaximum(route.quote, fees, maxFeePerGas);
+      return reserve > gasMaximumFloor ? reserve : gasMaximumFloor;
+    },
   });
   if (sizing.kind !== "sized") return sizing;
   return {

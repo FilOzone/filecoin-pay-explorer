@@ -1,4 +1,4 @@
-import type { Hash, Hex } from "viem";
+import { encodeAbiParameters, type Hash, type Hex, type Log, pad, toEventSelector } from "viem";
 import {
   getUserOperationHash,
   type UserOperation,
@@ -12,6 +12,7 @@ import {
   executePaymasterSquidDeposit,
   type PaymasterOperationRequest,
   type PaymasterOperations,
+  PaymasterReviewError,
 } from "./paymaster-deposit-execution";
 import type { PaymasterDepositPlan } from "./paymaster-deposit-plan";
 import { SIMPLE_7702_ACCOUNT_ADDRESS } from "./paymaster-eligibility";
@@ -127,6 +128,7 @@ function operations(overrides: Partial<PaymasterOperations> = {}) {
       return hashOf(userOperation);
     }),
     waitForReceipt: vi.fn(async (hash) => ({
+      logs: [],
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
       success: true,
@@ -240,7 +242,10 @@ describe("executePaymasterSquidDeposit", () => {
   it("fails before the operation is signed when the bundler's estimate exceeds the reviewed USDC maximum", async () => {
     const { input, ops } = run({ plan: { ...plan, gasMaximum: 5n } });
 
-    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow("rose above the reviewed USDC maximum");
+    // (1,045,000 + 35,000) gas at 2,000,000 wei and 2,750 USDC/ETH = 5,941 units; the next review reserves 1.5x.
+    await expect(executePaymasterSquidDeposit(input)).rejects.toEqual(
+      new PaymasterReviewError("Network fees rose above the reviewed USDC maximum.", 8_912n),
+    );
     expect(ops.sign).not.toHaveBeenCalled();
     expect(ops.send).not.toHaveBeenCalled();
   });
@@ -252,7 +257,11 @@ describe("executePaymasterSquidDeposit", () => {
     const failure = await executePaymasterSquidDeposit(input).catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(SquidDepositError);
-    expect(failure).toMatchObject({ reason: "failed", message: expect.stringContaining("nothing was charged") });
+    expect(failure).toMatchObject({
+      message:
+        "The bundler refused the deposit, so nothing was charged and your USDC is still in this account (AA33 reverted: paymaster validation failed).",
+      reason: "failed",
+    });
   });
 
   it("keeps a lost submission answer unresolved rather than proof of rejection", async () => {
@@ -280,22 +289,69 @@ describe("awaitPaymasterOperation", () => {
   it("returns the bundle hash of a successful operation", async () => {
     await expect(
       awaitPaymasterOperation(
-        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: true, userOpHash: hash }),
+        receiptOps({
+          logs: [],
+          receipt: { transactionHash: BUNDLE_HASH },
+          sender: PAYER,
+          success: true,
+          userOpHash: hash,
+        }),
         hash,
         PAYER,
       ),
     ).resolves.toBe(BUNDLE_HASH);
   });
 
+  it("names the USDC Circle's paymaster kept when its event is in the receipt", async () => {
+    const sponsored: Log<bigint, number, false> = {
+      address: CIRCLE_PAYMASTER_ADDRESS,
+      blockHash: BUNDLE_HASH,
+      blockNumber: 1n,
+      data: encodeAbiParameters(
+        [{ type: "bytes32" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
+        [hash, 2_500_000_000n, 21_500n, 0n],
+      ),
+      logIndex: 0,
+      removed: false,
+      topics: [
+        toEventSelector("UserOperationSponsored(address,address,bytes32,uint256,uint256,uint256)"),
+        pad(USDC),
+        pad(PAYER),
+      ],
+      transactionHash: BUNDLE_HASH,
+      transactionIndex: 0,
+    };
+
+    await expect(
+      awaitPaymasterOperation(
+        receiptOps({
+          logs: [sponsored],
+          receipt: { transactionHash: BUNDLE_HASH },
+          sender: PAYER,
+          success: false,
+          userOpHash: hash,
+        }),
+        hash,
+        PAYER,
+      ),
+    ).rejects.toThrow("Network fees of 0.0215 USDC were still charged");
+  });
+
   it("treats a failed operation inside a successful bundle as reverted, with gas charged", async () => {
     await expect(
       awaitPaymasterOperation(
-        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: false, userOpHash: hash }),
+        receiptOps({
+          logs: [],
+          receipt: { transactionHash: BUNDLE_HASH },
+          sender: PAYER,
+          success: false,
+          userOpHash: hash,
+        }),
         hash,
         PAYER,
       ),
     ).rejects.toMatchObject({
-      message: expect.stringContaining("Network fees were still charged in USDC"),
+      message: expect.stringContaining("it is still in this account. Network fees were still charged"),
       reason: "reverted",
       transactionHash: BUNDLE_HASH,
     });
@@ -305,6 +361,7 @@ describe("awaitPaymasterOperation", () => {
     await expect(
       awaitPaymasterOperation(
         receiptOps({
+          logs: [],
           receipt: { transactionHash: BUNDLE_HASH },
           sender: "0x2222222222222222222222222222222222222222",
           success: true,

@@ -38,6 +38,7 @@ import {
   createPaymasterBundler,
   createPaymasterOperations,
   executePaymasterSquidDeposit,
+  PaymasterReviewError,
   readUserOperationGasPrice,
   toPaymasterAccount,
 } from "../data/paymaster-deposit-execution";
@@ -220,6 +221,8 @@ export function DirectSquidDepositDialog({
   const [error, setError] = useState<string | null>(null);
   // Why the review card came back after a confirmation: a fresh gas maximum to accept.
   const [notice, setNotice] = useState<string | null>(null);
+  // The USDC gas an execution needed above its review; the next review reserves at least this much.
+  const [usdcGasFloor, setUsdcGasFloor] = useState<bigint | undefined>(undefined);
   const isSubmitting = useRef(false);
   const isMounted = useRef(true);
   const initializedSelectionScope = useRef("");
@@ -454,6 +457,10 @@ export function DirectSquidDepositDialog({
   // The reset runs while the dialog is closed, so a reopen never shows the previous opt-out.
   useEffect(() => {
     if (!open) setFilGasTopUpEnabled(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setUsdcGasFloor(undefined);
   }, [open]);
 
   useEffect(() => {
@@ -696,6 +703,13 @@ export function DirectSquidDepositDialog({
       } catch (reviewFailure) {
         reportedFailure = reviewFailure;
       }
+    }
+    // Nothing was sent: the form comes back to review a fresh plan, reserving what execution needed.
+    if (reportedFailure instanceof PaymasterReviewError) {
+      setReviewed(null);
+      if (reportedFailure.gasMaximumFloor !== undefined) setUsdcGasFloor(reportedFailure.gasMaximumFloor);
+      setError(`${reportedFailure.message} Review the deposit again.`);
+      return;
     }
     if (reportedFailure instanceof SquidDepositError) {
       setError(reportedFailure.message);
@@ -989,6 +1003,7 @@ export function DirectSquidDepositDialog({
       return planPaymasterDeposit({
         budget: parsedAmount,
         client: sourceClient,
+        gasMaximumFloor: usdcGasFloor,
         maxFeePerGas,
         request: { ...DEPOSIT_TARGET, owner, recipient, sourceChainId, sourceToken: getAddress(sourceToken.token) },
         squid,
@@ -1003,16 +1018,27 @@ export function DirectSquidDepositDialog({
       sourceToken?.token,
       parsedAmount?.toString(),
       isFilGasTopUpEnabled,
+      usdcGasFloor?.toString(),
     ],
     retry: false,
   });
   const usdcGasPlan = isUsdcGasEligible ? usdcGasQuery.data : undefined;
-  // A conflicting delegation leaves the deposit on the ETH path, whose balance check then applies.
   const usdcGasState = (() => {
-    if (!isUsdcGasEligible || usdcGasPlan?.kind === "conflicting-delegation") return undefined;
-    if (usdcGasQuery.isError || usdcGasPlan?.kind === "not-converged") return "failed";
-    if (!usdcGasPlan) return "planning";
-    return usdcGasPlan.kind === "insufficient-usdc" ? "insufficient" : "ready";
+    if (!isUsdcGasEligible || !sourceToken) return undefined;
+    if (usdcGasQuery.isError || usdcGasPlan?.kind === "not-converged") return { status: "failed" } as const;
+    if (!usdcGasPlan) return { status: "planning" } as const;
+    if (usdcGasPlan.kind === "conflicting-delegation") return { status: "conflict" } as const;
+    if (usdcGasPlan.kind === "insufficient-usdc") {
+      const reserved = `${formatUnits(usdcGasPlan.reserved, sourceToken.decimals)} ${sourceToken.symbol}`;
+      return { reserved, status: "insufficient" } as const;
+    }
+    return { status: "ready" } as const;
+  })();
+  // A failed plan disables Review, so the form says why and offers a retry, as it does for ETH fees.
+  const usdcGasError = (() => {
+    if (usdcGasState?.status !== "failed") return null;
+    if (usdcGasPlan?.kind === "not-converged") return "Squid's quote kept changing while USDC was set aside for fees.";
+    return `Network fees in USDC could not be estimated. ${walletErrorMessage(usdcGasQuery.error, "")}`.trim();
   })();
   const reviewBlocker = getSquidReviewBlocker({
     amount,
@@ -1369,6 +1395,14 @@ export function DirectSquidDepositDialog({
                     Network fees could not be estimated. {walletErrorMessage(budgetQuery.error, "")}
                   </span>
                   <Button onClick={() => void budgetQuery.refetch()} size='compact' type='button' variant='tertiary'>
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {usdcGasError ? (
+                <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+                  <span className='break-words'>{usdcGasError}</span>
+                  <Button onClick={() => void usdcGasQuery.refetch()} size='compact' type='button' variant='tertiary'>
                     Retry
                   </Button>
                 </div>

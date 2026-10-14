@@ -20,14 +20,25 @@ const ready = {
 
 describe("getSquidReviewBlocker", () => {
   it.each([
-    ["planning", { kind: "waiting", message: "Setting aside USDC for network fees…" }],
-    ["failed", { kind: "failed", message: "USDC network fees could not be estimated." }],
+    [{ status: "planning" }, { kind: "waiting", message: "Setting aside USDC for network fees…" }],
+    [{ status: "failed" }, { kind: "failed", message: "USDC network fees could not be estimated." }],
     [
-      "insufficient",
-      { kind: "funds", message: "0x1111...1111 doesn't have enough USDC for the deposit and its fees." },
+      { status: "insufficient", reserved: "0.76 USDC" },
+      {
+        kind: "funds",
+        message: "0x1111...1111 doesn't have enough USDC for the deposit and its fees, which need up to 0.76 USDC.",
+      },
     ],
-    ["ready", null],
-  ] as const)("lets a USDC-gas plan that is %s stand in for the ETH balance", (usdcGas, expected) => {
+    [
+      { status: "conflict" },
+      {
+        kind: "funds",
+        message:
+          "0x1111...1111 is set up with another smart account, so its network fees can't be paid in USDC. Add ETH to pay them.",
+      },
+    ],
+    [{ status: "ready" }, null],
+  ] as const)("lets a USDC-gas plan in state %o stand in for the ETH balance", (usdcGas, expected) => {
     expect(getSquidReviewBlocker({ ...ready, balances: { native: 0n, token: 100n }, usdcGas })).toEqual(expected);
   });
 

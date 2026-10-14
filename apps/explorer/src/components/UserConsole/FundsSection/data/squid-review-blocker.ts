@@ -39,8 +39,11 @@ export function getSquidReviewBlocker({
   quoteReady: boolean;
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
-  /** Set when network fees are paid in USDC; its plan then stands in for the native balance. */
-  usdcGas?: "planning" | "failed" | "insufficient" | "ready";
+  /**
+   * Set when the payer can only cover network fees in USDC; its plan then stands in for the native balance.
+   * `reserved` is the swap cap and gas maximum, formatted; `conflict` is a delegation the console never replaces.
+   */
+  usdcGas?: { status: "planning" | "failed" | "ready" | "conflict" } | { status: "insufficient"; reserved: string };
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
@@ -62,15 +65,24 @@ export function getSquidReviewBlocker({
       ? { kind: "waiting", message: "Estimating network fees…" }
       : { kind: "missing", message: "Network fees are not available yet." };
   }
-  if (usdcGas === "failed") return { kind: "failed", message: "USDC network fees could not be estimated." };
-  if (usdcGas === "planning") return { kind: "waiting", message: "Setting aside USDC for network fees…" };
-  if (usdcGas === "insufficient") {
-    return {
-      kind: "funds",
-      message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees.`,
-    };
+  switch (usdcGas?.status) {
+    case "failed":
+      return { kind: "failed", message: "USDC network fees could not be estimated." };
+    case "planning":
+      return { kind: "waiting", message: "Setting aside USDC for network fees…" };
+    case "insufficient":
+      return {
+        kind: "funds",
+        message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees, which need up to ${usdcGas.reserved}.`,
+      };
+    case "conflict":
+      return {
+        kind: "funds",
+        message: `${payerLabel} is set up with another smart account, so its network fees can't be paid in ${sourceSymbol}. Add ${nativeSymbol} to pay them.`,
+      };
+    case "ready":
+      return null;
   }
-  if (usdcGas === "ready") return null;
   if (balances.native < requiredNative) {
     const purpose = isNativeSource ? "the payment and network fees" : "network fees";
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${nativeSymbol} for ${purpose}.` };
