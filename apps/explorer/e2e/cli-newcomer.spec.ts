@@ -80,7 +80,8 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     await privyDialog(page).getByRole("button", { name: "Approve" }).click();
 
     await expect(privyDialog(page).getByText("Loading...")).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "New session key" })).toContainText("All Done");
+    // Real Privy marks the page behind its modal aria-hidden, so the console dialog is only reachable as hidden.
+    await expect(page.getByRole("dialog", { name: "New session key", includeHidden: true })).toContainText("All Done");
   });
 
   test("sees the key registered after clicking All Done", async ({ page, baseURL }) => {
@@ -98,7 +99,8 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     // The login is already sent; real Privy leaves the request unsettled when closed now.
     await privyDialog(page).getByRole("button", { name: "close modal" }).click();
 
-    await expect(page.getByRole("heading", { name: "Session key registered" })).toBeVisible({
+    // Real Privy reopens on "Transaction complete" above the console, hiding the page behind it from roles.
+    await expect(page.getByRole("heading", { name: "Session key registered", includeHidden: true })).toBeVisible({
       timeout: WALLET_TIMEOUT,
     });
   });
