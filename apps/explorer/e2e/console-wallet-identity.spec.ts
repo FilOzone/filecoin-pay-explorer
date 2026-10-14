@@ -236,7 +236,9 @@ test("checking a Squid deposit whose route never landed stops and offers Dismiss
   await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
   await page.clock.fastForward("03:01");
 
-  await expect(squid.getByText(/The source network has no confirmed record of this swap\./)).toBeVisible();
+  await expect(
+    squid.getByText(/Check your wallet's activity before you dismiss this and start another deposit\./),
+  ).toBeVisible();
   await expect(squid.getByRole("button", { name: "Dismiss" })).toBeEnabled();
   expect(statusRequests).toEqual([]);
 });

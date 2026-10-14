@@ -531,7 +531,9 @@ describe("awaitSquidDepositSettlement", () => {
       } as unknown as SquidDepositSourceClient;
       const attempt = settle({ sourceClient, squid: { integratorId: "id", fetch } });
       await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
-      await expect(attempt).rejects.toThrow("The source network has no confirmed record of this swap.");
+      await expect(attempt).rejects.toThrow(
+        "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
+      );
       expect(fetch).not.toHaveBeenCalled();
     });
 

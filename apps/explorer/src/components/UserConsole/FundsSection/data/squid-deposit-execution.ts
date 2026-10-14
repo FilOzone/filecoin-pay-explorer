@@ -488,8 +488,9 @@ export async function awaitSquidDepositSettlement({
       },
     });
   } catch {
+    // A speed-up whose original hash the RPC has forgotten cannot be traced, so a missing hash is not proof nothing ran.
     throw new SquidDepositError(
-      "The source network has no confirmed record of this swap. If your wallet still shows it pending, check again later; if it was dropped, replaced or never sent, dismiss it and try again.",
+      "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
       "timeout",
       broadcastHash,
     );
