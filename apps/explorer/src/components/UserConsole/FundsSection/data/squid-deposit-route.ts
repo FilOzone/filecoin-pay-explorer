@@ -341,7 +341,8 @@ export function assertExecutableQuoteWithinReview(
     throw new SquidQuoteChangedError("The minimum USDFC received fell below the reviewed amount.", quote);
   }
   if (quote.transaction.value > reviewed.maxTransactionValue) {
-    throw new SquidQuoteChangedError("The native route payment exceeded the reviewed maximum.", quote);
+    // Not re-reviewable: the cap comes from the native fees, so a value above them would fail every review.
+    throw new Error("The native route payment exceeded the reviewed maximum");
   }
   for (const [label, actual, maximum] of [
     ["route fee", getCostCaps(quote.fees), reviewed.fees],
