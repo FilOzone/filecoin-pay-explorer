@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { Hex } from "viem";
+import { base } from "viem/chains";
+import { SOURCE_RPC_URLS } from "../src/services/wagmi/transports";
 import { installFakeSquid } from "./fake-squid";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
@@ -182,7 +184,7 @@ test("a Squid deposit paid from an extension without Filecoin closes the dialog"
 
 test("checking a Squid deposit whose route never landed stops and offers Dismiss", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
-  // The source receipt wait gives up after viem's three minutes; the clock skips them.
+  // The clock jumps past the source receipt wait rather than tracking its exact length.
   await page.clock.install();
   await openAddFundsFromWalletMenu(page);
   await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
@@ -192,7 +194,7 @@ test("checking a Squid deposit whose route never landed stops and offers Dismiss
   await installFakeSquid(page, payer);
   const droppedHash = `0x${"0d".repeat(32)}`;
   // No Base RPC has a record of the hash, as with a route the wallet dropped; the app's transport asks each in turn.
-  const baseRpcHosts = ["base-rpc.publicnode.com", "base.drpc.org", "mainnet.base.org"];
+  const baseRpcHosts = [...SOURCE_RPC_URLS[base.id], ...base.rpcUrls.default.http].map((url) => new URL(url).hostname);
   await page.route(
     (url) => baseRpcHosts.includes(url.hostname),
     (route) => {
@@ -234,7 +236,7 @@ test("checking a Squid deposit whose route never landed stops and offers Dismiss
   await expect(squid.getByText("A Squid deposit is still in progress.")).toBeVisible();
   await squid.getByRole("button", { name: "Check again" }).click();
   await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
-  await page.clock.fastForward("03:01");
+  await page.clock.fastForward("10:00");
 
   await expect(
     squid.getByText(/Check your wallet's activity before you dismiss this and start another deposit\./),

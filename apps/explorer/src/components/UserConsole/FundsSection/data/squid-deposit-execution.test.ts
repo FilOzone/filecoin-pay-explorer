@@ -8,6 +8,7 @@ import {
   getAddress,
   type Hash,
   type Hex,
+  WaitForTransactionReceiptTimeoutError,
 } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -165,8 +166,9 @@ function fakeSource({
         return Promise.all(contracts.map((contract) => source.readContract(contract)));
       },
     ),
-    waitForTransactionReceipt: vi.fn(async () => ({
+    waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: Hash }) => ({
       status: receiptStatus,
+      transactionHash: hash,
       ...(receiptBlock === undefined ? {} : { blockNumber: receiptBlock }),
     })),
   };
@@ -474,8 +476,8 @@ describe("awaitSquidDepositSettlement", () => {
     const replacingSource = (reason: "cancelled" | "replaced" | "repriced") =>
       ({
         waitForTransactionReceipt: vi.fn(async ({ onReplaced }: { onReplaced?: (replacement: unknown) => void }) => {
-          onReplaced?.({ reason, transaction: { hash: REPLACEMENT_HASH } });
-          return { status: "success" };
+          onReplaced?.({ reason });
+          return { status: "success", transactionHash: REPLACEMENT_HASH };
         }),
       }) as unknown as SquidDepositSourceClient;
     const settle = (input: Partial<Parameters<typeof awaitSquidDepositSettlement>[0]>) =>
@@ -524,12 +526,13 @@ describe("awaitSquidDepositSettlement", () => {
 
     const lostRouteMessage =
       "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.";
-    const lostSource = () =>
+    const failingSource = (error: Error) =>
       ({
         waitForTransactionReceipt: vi.fn(async () => {
-          throw new Error("Timed out while waiting for transaction");
+          throw error;
         }),
       }) as unknown as SquidDepositSourceClient;
+    const lostSource = () => failingSource(new WaitForTransactionReceiptTimeoutError({ hash: ROUTE_HASH }));
 
     // The fake Pay account holds 100; the route's minimum is 92.
     it.each([
@@ -555,6 +558,19 @@ describe("awaitSquidDepositSettlement", () => {
         expect(fetch).not.toHaveBeenCalled();
       },
     );
+
+    it("does not call the route lost when the source network cannot be reached", async () => {
+      const fetch = vi.fn();
+      const attempt = settle({
+        sourceClient: failingSource(new Error("429 Too Many Requests")),
+        squid: { integratorId: "id", fetch },
+      });
+      await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+      await expect(attempt).rejects.toThrow(
+        "The source network could not be reached to confirm this swap. Check again in a moment.",
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    });
 
     it("reports a reverted route without asking Squid", async () => {
       const fetch = vi.fn();
