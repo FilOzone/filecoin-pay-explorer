@@ -29,7 +29,7 @@ function viaPage(page: Page, url: string) {
   });
 }
 
-async function setUp(page: Page, initial: Partial<Omit<FakeUsdcGas, "operations">> = {}) {
+async function setUp(page: Page, initial: Partial<Omit<FakeUsdcGas, "operations" | "read">> = {}) {
   const owner = privateKeyToAccount(generatePrivateKey());
   const fake = await installFakeUsdcGas(page, owner.address, initial);
   await page.goto("/console");

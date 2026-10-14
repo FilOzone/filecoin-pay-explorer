@@ -20,7 +20,7 @@ export interface PaymasterEligibilityInput {
   enabled: boolean;
   wallet: Pick<ConnectedWallet, "walletClientType">;
   sourceChainId: number;
-  sourceToken: Address;
+  sourceToken: string;
   /** The payer's ETH on the source network. */
   nativeBalance: bigint;
   /** ETH the existing path needs: reviewed gas plus the route's bridge fee. */

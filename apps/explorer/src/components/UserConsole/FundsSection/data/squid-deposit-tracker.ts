@@ -11,6 +11,8 @@ export const PENDING_SQUID_DEPOSIT_EVENT = "filecoin-pay:squid-deposit-changed";
 export interface PendingSquidDeposit extends Omit<SquidDepositRef, "transactionHash"> {
   executionStage: "swap-requested" | "swap-broadcast";
   transactionHash?: Hash;
+  /** A USDC-gas deposit's user operation, tracked until its bundle transaction is known. */
+  userOperationHash?: Hash;
   recipient: Address;
   owner: Address;
   sourceToken: Address;
@@ -68,6 +70,8 @@ export function loadPendingSquidDeposit(storage: StorageLike, owner: Address): P
         parsed.executionStage !== "swap-broadcast") ||
       (parsed.transactionHash !== undefined &&
         (typeof parsed.transactionHash !== "string" || !isHash(parsed.transactionHash))) ||
+      (parsed.userOperationHash !== undefined &&
+        (typeof parsed.userOperationHash !== "string" || !isHash(parsed.userOperationHash))) ||
       !isDigits(parsed.sourceAmount) ||
       !isDigits(parsed.minimumDestinationAmount) ||
       !isDigits(parsed.fundsBefore) ||
@@ -92,6 +96,7 @@ export function loadPendingSquidDeposit(storage: StorageLike, owner: Address): P
       quoteId: parsed.quoteId,
       executionStage,
       ...(parsed.transactionHash === undefined ? {} : { transactionHash: parsed.transactionHash as Hash }),
+      ...(parsed.userOperationHash === undefined ? {} : { userOperationHash: parsed.userOperationHash as Hash }),
       sourceAmount: BigInt(parsed.sourceAmount),
       minimumDestinationAmount: BigInt(parsed.minimumDestinationAmount),
       fundsBefore: BigInt(parsed.fundsBefore),

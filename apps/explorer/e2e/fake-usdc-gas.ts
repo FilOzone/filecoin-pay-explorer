@@ -49,7 +49,13 @@ const quoterAbi = parseAbi([
   "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
   "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
-const permitAbi = parseAbi(["function nonces(address owner) view returns (uint256)"]);
+const permitAbi = parseAbi([
+  "function name() view returns (string)",
+  "function version() view returns (string)",
+  "function nonces(address owner) view returns (uint256)",
+]);
+/** The payer's USDC, as fake-squid.ts funds it; the executor reads it in one batch with the permit state. */
+const PAYER_USDC = 100_000_000n;
 
 /**
  * What the bundler does with the next operation sent: include it (`included`), include it with the batch reverted
@@ -75,6 +81,11 @@ export interface FakeUsdcGas {
   paymasterAllowance: bigint;
   /** Operations the bundler accepted, in order. */
   operations: SubmittedOperation[];
+  /**
+   * Answers this fake's contract reads. The app batches concurrent reads into one multicall, so pass this to
+   * `installFakeSquid` and a batch mixing both fakes' reads is answered in one place.
+   */
+  read: (target: string, data: Hex) => Hex | undefined;
 }
 
 /**
@@ -86,7 +97,7 @@ export interface FakeUsdcGas {
 export async function installFakeUsdcGas(
   page: Page,
   payer: Hex,
-  initial: Partial<Omit<FakeUsdcGas, "operations">> = {},
+  initial: Partial<Omit<FakeUsdcGas, "operations" | "read">> = {},
 ): Promise<FakeUsdcGas> {
   const fake: FakeUsdcGas = {
     delegation: "none",
@@ -95,6 +106,7 @@ export async function installFakeUsdcGas(
     paymasterAllowance: 0n,
     ...initial,
     operations: [],
+    read: (target, data) => readBase(target, data),
   };
   // The bundler hands an operation back in the hex form it was sent in.
   const sentAsRpc = new Map<Hex, RpcUserOperation<"0.8">>();
@@ -130,6 +142,18 @@ export async function installFakeUsdcGas(
     }
     if (to === BASE_USDC && data.startsWith(toFunctionSelector("nonces(address)"))) {
       return encodeFunctionResult({ abi: permitAbi, functionName: "nonces", result: spentNonces() });
+    }
+    // Base USDC's EIP-712 domain, which the paymaster permit is signed over.
+    if (to === BASE_USDC && data.startsWith(toFunctionSelector("name()"))) {
+      return encodeFunctionResult({ abi: permitAbi, functionName: "name", result: "USD Coin" });
+    }
+    if (to === BASE_USDC && data.startsWith(toFunctionSelector("version()"))) {
+      return encodeFunctionResult({ abi: permitAbi, functionName: "version", result: "2" });
+    }
+    if (to === BASE_USDC && data.startsWith(toFunctionSelector("balanceOf(address)"))) {
+      const { args } = decodeFunctionData({ abi: erc20Abi, data });
+      if (!isPayer(args[0])) return undefined;
+      return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: PAYER_USDC });
     }
     if (to === BASE_USDC && data.startsWith(toFunctionSelector("allowance(address,address)"))) {
       const { args, functionName } = decodeFunctionData({ abi: erc20Abi, data });
@@ -213,12 +237,11 @@ export async function installFakeUsdcGas(
     if (authorization) {
       // The console must never replace a delegation it did not install.
       if (fake.delegation === "conflict") return "fake bundler: authorization would overwrite another delegation";
-      const signer = await recoverAuthorizationAddress({ authorization });
-      if (
-        !isPayer(signer) ||
-        authorization.address.toLowerCase() !== SIMPLE_7702_ACCOUNT ||
-        authorization.chainId !== BASE_CHAIN_ID
-      ) {
+      if (authorization.address.toLowerCase() !== SIMPLE_7702_ACCOUNT || authorization.chainId !== BASE_CHAIN_ID) {
+        return "AA24 invalid 7702 authorization";
+      }
+      // Estimation runs with a stub authorization, as viem sends one for an account not yet delegated.
+      if (signed && !isPayer(await recoverAuthorizationAddress({ authorization }))) {
         return "AA24 invalid 7702 authorization";
       }
     } else if (fake.delegation === "none") {

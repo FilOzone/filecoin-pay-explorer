@@ -129,6 +129,7 @@ vi.mock("@privy-io/react-auth", () => ({
     payers.connectWalletOnSuccess = onSuccess;
     return { connectWallet: payers.connectWallet };
   },
+  useSign7702Authorization: () => ({ signAuthorization: vi.fn() }),
   useWallets: () => ({ wallets: connectedWallets.current }),
 }));
 vi.mock("wagmi", () => ({

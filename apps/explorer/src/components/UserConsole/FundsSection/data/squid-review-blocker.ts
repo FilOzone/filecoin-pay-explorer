@@ -23,6 +23,7 @@ export function getSquidReviewBlocker({
   quoteReady,
   requiredNative,
   sourceSymbol,
+  usdcGas,
 }: {
   amount: string;
   balances: { native: bigint; token: bigint } | undefined;
@@ -38,6 +39,8 @@ export function getSquidReviewBlocker({
   quoteReady: boolean;
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
+  /** Set when network fees are paid in USDC; its plan then stands in for the native balance. */
+  usdcGas?: "planning" | "failed" | "insufficient" | "ready";
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
@@ -59,6 +62,15 @@ export function getSquidReviewBlocker({
       ? { kind: "waiting", message: "Estimating network fees…" }
       : { kind: "missing", message: "Network fees are not available yet." };
   }
+  if (usdcGas === "failed") return { kind: "failed", message: "USDC network fees could not be estimated." };
+  if (usdcGas === "planning") return { kind: "waiting", message: "Setting aside USDC for network fees…" };
+  if (usdcGas === "insufficient") {
+    return {
+      kind: "funds",
+      message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees.`,
+    };
+  }
+  if (usdcGas === "ready") return null;
   if (balances.native < requiredNative) {
     const purpose = isNativeSource ? "the payment and network fees" : "network fees";
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${nativeSymbol} for ${purpose}.` };

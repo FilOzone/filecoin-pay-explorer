@@ -1,0 +1,331 @@
+import type { Hash, Hex } from "viem";
+import {
+  getUserOperationHash,
+  type UserOperation,
+  WaitForUserOperationReceiptTimeoutError,
+} from "viem/account-abstraction";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CIRCLE_PAYMASTER_ADDRESS } from "./circle-paymaster";
+import {
+  awaitPaymasterOperation,
+  type ExecutePaymasterDepositInput,
+  executePaymasterSquidDeposit,
+  type PaymasterOperationRequest,
+  type PaymasterOperations,
+} from "./paymaster-deposit-execution";
+import type { PaymasterDepositPlan } from "./paymaster-deposit-plan";
+import { SIMPLE_7702_ACCOUNT_ADDRESS } from "./paymaster-eligibility";
+import { awaitSquidDepositSettlement, SquidDepositError } from "./squid-deposit-execution";
+import type { ExecutableSquidDepositQuote, SquidDepositRouteRequest } from "./squid-deposit-route";
+
+const PAYER = "0x1111111111111111111111111111111111111111" as const;
+const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const SQUID_ROUTER = "0xce16F69375520ab01377ce7B88f5BA8C48F8D666" as const;
+const BUNDLE_HASH = `0x${"bb".repeat(32)}` as Hash;
+const OUR_DELEGATION: Hex = "0xef0100e6cae83bde06e4c305530e199d7217f42808555b";
+const BRIDGE_FEE = 300_000_000_000_000n;
+
+const request: SquidDepositRouteRequest = {
+  owner: PAYER,
+  payments: "0x5555555555555555555555555555555555555555",
+  recipient: PAYER,
+  sourceAmount: 9_000_000n,
+  sourceChainId: 8453,
+  sourceToken: USDC,
+  usdfc: "0x4444444444444444444444444444444444444444",
+};
+const quote: ExecutableSquidDepositQuote = {
+  destinationAmount: 9_000_000_000_000_000_000n,
+  fees: [],
+  gasCosts: [],
+  minimumDestinationAmount: 8_900_000_000_000_000_000n,
+  quoteId: "quote-1",
+  sourceAmount: 9_000_000n,
+  sourceChainId: 8453,
+  transaction: { data: "0x12345678", gasLimit: 500_000n, target: SQUID_ROUTER, value: BRIDGE_FEE },
+};
+const plan: PaymasterDepositPlan = {
+  gasMaximum: 100_000n,
+  maxNativeFee: 450_000_000_000_000n,
+  maxSwapInput: 1_200_000n,
+  quote,
+};
+
+vi.mock("./squid-deposit-execution", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./squid-deposit-execution")>()),
+  awaitSquidDepositSettlement: vi.fn(),
+  readFilecoinPayFunds: vi.fn(async () => 0n),
+}));
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+type Chain = {
+  code?: Hex;
+  balance?: bigint;
+  paymasterAllowance?: bigint;
+  swapInput?: bigint;
+};
+
+function sourceClient({ balance = 10_000_000n, code, paymasterAllowance = 0n, swapInput = 750_000n }: Chain = {}) {
+  return {
+    getCode: vi.fn(async () => code),
+    getTransactionCount: vi.fn(async () => 3),
+    multicall: vi.fn(async () => [35_000, 0, 2_500_000_000n]),
+    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+      const results: Record<string, unknown> = {
+        allowance: paymasterAllowance,
+        balanceOf: balance,
+        name: "USD Coin",
+        nonces: 0n,
+        version: "2",
+      };
+      return results[functionName];
+    }),
+    simulateContract: vi.fn(async () => ({ result: [swapInput, 0n, 0, 0n] })),
+    waitForTransactionReceipt: vi.fn(),
+  } as unknown as ExecutePaymasterDepositInput["sourceClient"];
+}
+
+const hashOf = (userOperation: UserOperation<"0.8">) =>
+  getUserOperationHash({
+    chainId: 8453,
+    entryPointAddress: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
+    entryPointVersion: "0.8",
+    userOperation,
+  });
+
+function operations(overrides: Partial<PaymasterOperations> = {}) {
+  const events: string[] = [];
+  const ops: PaymasterOperations = {
+    getGasPrice: vi.fn(async () => ({ maxFeePerGas: 2_000_000n, maxPriorityFeePerGas: 1_000_000n })),
+    prepare: vi.fn(
+      async (operation: PaymasterOperationRequest): Promise<UserOperation<"0.8">> => ({
+        callData: "0x",
+        callGasLimit: 600_000n,
+        maxFeePerGas: operation.gasPrice.maxFeePerGas,
+        maxPriorityFeePerGas: operation.gasPrice.maxPriorityFeePerGas,
+        nonce: 0n,
+        paymaster: CIRCLE_PAYMASTER_ADDRESS,
+        paymasterData: operation.paymasterData,
+        paymasterPostOpGasLimit: operation.paymasterPostOpGasLimit,
+        paymasterVerificationGasLimit: operation.paymasterVerificationGasLimit,
+        preVerificationGas: 60_000n,
+        sender: PAYER,
+        signature: "0x",
+        verificationGasLimit: 150_000n,
+      }),
+    ),
+    sign: vi.fn(async () => {
+      events.push("sign");
+      return "0x5167" as Hex;
+    }),
+    signPermit: vi.fn(async () => "0x9e41" as Hex),
+    send: vi.fn(async (userOperation) => {
+      events.push("send");
+      return hashOf(userOperation);
+    }),
+    waitForReceipt: vi.fn(async (hash) => ({
+      receipt: { transactionHash: BUNDLE_HASH },
+      sender: PAYER,
+      success: true,
+      userOpHash: hash,
+    })),
+    ...overrides,
+  };
+  return { events, ops };
+}
+
+function run(overrides: Partial<ExecutePaymasterDepositInput> = {}, chain: Chain = {}) {
+  const { events, ops } = operations();
+  const settle = vi.mocked(awaitSquidDepositSettlement).mockResolvedValue({
+    depositedAmount: 9_000_000_000_000_000_000n,
+    destinationTransactionHash: BUNDLE_HASH,
+    transactionHash: BUNDLE_HASH,
+  });
+  const signAuthorization = vi.fn(async (authorization: { contractAddress: Hex; chainId: number; nonce: number }) => ({
+    address: authorization.contractAddress,
+    chainId: authorization.chainId,
+    nonce: authorization.nonce,
+    r: "0x01" as Hex,
+    s: "0x02" as Hex,
+    yParity: 0,
+  }));
+  const onSubmit = vi.fn(() => {
+    events.push("submit");
+  });
+  const input: ExecutePaymasterDepositInput = {
+    assertCurrentContext: () => undefined,
+    destinationClient: {} as ExecutePaymasterDepositInput["destinationClient"],
+    getCurrentOwner: async () => PAYER,
+    onSubmit,
+    operations: ops,
+    plan,
+    quote,
+    request,
+    signAuthorization,
+    sourceClient: sourceClient(chain),
+    squid: { integratorId: "test" },
+    ...overrides,
+  };
+  return { events, input, onSubmit, ops, settle, signAuthorization };
+}
+
+describe("executePaymasterSquidDeposit", () => {
+  it("authorizes the delegation once, signs the permit for the reviewed maximum, and follows the bundle to Squid", async () => {
+    const { events, input, onSubmit, ops, settle, signAuthorization } = run();
+
+    await expect(executePaymasterSquidDeposit(input)).resolves.toMatchObject({ transactionHash: BUNDLE_HASH });
+
+    expect(signAuthorization).toHaveBeenCalledWith({
+      chainId: 8453,
+      contractAddress: SIMPLE_7702_ACCOUNT_ADDRESS,
+      nonce: 3,
+    });
+    expect(ops.signPermit).toHaveBeenCalledWith(
+      { chainId: 8453, name: "USD Coin", verifyingContract: USDC, version: "2" },
+      { deadline: 2n ** 256n - 1n, nonce: 0n, owner: PAYER, spender: CIRCLE_PAYMASTER_ADDRESS, value: 100_000n },
+    );
+    expect(vi.mocked(ops.prepare).mock.calls[0]?.[0]).toMatchObject({
+      authorization: expect.objectContaining({ address: SIMPLE_7702_ACCOUNT_ADDRESS }),
+      paymasterPostOpGasLimit: 35_000n,
+      paymasterVerificationGasLimit: 200_000n,
+    });
+    // The marker is written before the operation leaves, so a reload can find it.
+    expect(events).toEqual(["sign", "submit", "send"]);
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ userOperationHash: expect.any(String) }));
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({ quoteId: "quote-1", transactionHash: BUNDLE_HASH }));
+  });
+
+  it("reuses an existing delegation without a new authorization", async () => {
+    const { input, ops, signAuthorization } = run({}, { code: OUR_DELEGATION });
+
+    await executePaymasterSquidDeposit(input);
+
+    expect(signAuthorization).not.toHaveBeenCalled();
+    expect(vi.mocked(ops.prepare).mock.calls[0]?.[0].authorization).toBeUndefined();
+  });
+
+  it.each([
+    [
+      "another delegate is installed",
+      { code: "0xef01001111111111111111111111111111111111111111" as Hex },
+      {},
+      "another smart account",
+    ],
+    [
+      "an earlier paymaster allowance exceeds the reviewed maximum",
+      { paymasterAllowance: 100_001n },
+      {},
+      "exceeds the reviewed gas maximum",
+    ],
+    [
+      "the route's bridge fee rose above its cap",
+      {},
+      { quote: { ...quote, transaction: { ...quote.transaction, value: 450_000_000_000_001n } } },
+      "bridge fee rose",
+    ],
+    ["buying the bridge fee costs more than reviewed", { swapInput: 1_190_000n }, {}, "costs more USDC than reviewed"],
+    ["the balance no longer covers the deposit and its fees", { balance: 9_857_499n }, {}, "no longer covers"],
+  ] as const)("fails before signing when %s", async (_label, chain, overrides, message) => {
+    const { input, ops, signAuthorization } = run(overrides, chain);
+
+    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow(message);
+    expect(signAuthorization).not.toHaveBeenCalled();
+    expect(ops.signPermit).not.toHaveBeenCalled();
+    expect(ops.send).not.toHaveBeenCalled();
+  });
+
+  it("fails before the operation is signed when the bundler's estimate exceeds the reviewed USDC maximum", async () => {
+    const { input, ops } = run({ plan: { ...plan, gasMaximum: 5n } });
+
+    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow("rose above the reviewed USDC maximum");
+    expect(ops.sign).not.toHaveBeenCalled();
+    expect(ops.send).not.toHaveBeenCalled();
+  });
+
+  it("reports a bundler validation rejection as nothing charged", async () => {
+    const { input, ops } = run();
+    vi.mocked(ops.send).mockRejectedValue(new Error("AA33 reverted: paymaster validation failed"));
+
+    const failure = await executePaymasterSquidDeposit(input).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(SquidDepositError);
+    expect(failure).toMatchObject({ reason: "failed", message: expect.stringContaining("nothing was charged") });
+  });
+
+  it("keeps a lost submission answer unresolved rather than proof of rejection", async () => {
+    const { input, ops } = run();
+    vi.mocked(ops.send).mockRejectedValue(new TypeError("fetch failed"));
+
+    await expect(executePaymasterSquidDeposit(input)).rejects.toMatchObject({ reason: "timeout" });
+  });
+
+  it("refuses a bundler that reports a different operation than the one signed", async () => {
+    const { input, ops, settle } = run();
+    vi.mocked(ops.send).mockResolvedValue(`0x${"ee".repeat(32)}`);
+
+    await expect(executePaymasterSquidDeposit(input)).rejects.toMatchObject({ reason: "timeout" });
+    expect(settle).not.toHaveBeenCalled();
+  });
+});
+
+describe("awaitPaymasterOperation", () => {
+  const hash = `0x${"aa".repeat(32)}` as Hash;
+  const receiptOps = (receipt: Awaited<ReturnType<PaymasterOperations["waitForReceipt"]>>) => ({
+    waitForReceipt: vi.fn(async () => receipt),
+  });
+
+  it("returns the bundle hash of a successful operation", async () => {
+    await expect(
+      awaitPaymasterOperation(
+        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: true, userOpHash: hash }),
+        hash,
+        PAYER,
+      ),
+    ).resolves.toBe(BUNDLE_HASH);
+  });
+
+  it("treats a failed operation inside a successful bundle as reverted, with gas charged", async () => {
+    await expect(
+      awaitPaymasterOperation(
+        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: false, userOpHash: hash }),
+        hash,
+        PAYER,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("Network fees were still charged in USDC"),
+      reason: "reverted",
+      transactionHash: BUNDLE_HASH,
+    });
+  });
+
+  it("does not accept another payer's receipt", async () => {
+    await expect(
+      awaitPaymasterOperation(
+        receiptOps({
+          receipt: { transactionHash: BUNDLE_HASH },
+          sender: "0x2222222222222222222222222222222222222222",
+          success: true,
+          userOpHash: hash,
+        }),
+        hash,
+        PAYER,
+      ),
+    ).rejects.toMatchObject({ reason: "timeout" });
+  });
+
+  it("reports an operation not yet included as unresolved", async () => {
+    const ops = {
+      waitForReceipt: vi.fn(async () => {
+        throw new WaitForUserOperationReceiptTimeoutError({ hash });
+      }),
+    };
+
+    await expect(awaitPaymasterOperation(ops, hash, PAYER, 10)).rejects.toMatchObject({
+      message: expect.stringContaining("has not been included on Base yet"),
+      reason: "timeout",
+    });
+  });
+});
