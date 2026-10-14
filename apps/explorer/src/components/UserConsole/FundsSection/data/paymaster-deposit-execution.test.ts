@@ -12,6 +12,7 @@ import {
   awaitPaymasterOperation,
   type ExecutePaymasterDepositInput,
   executePaymasterSquidDeposit,
+  getUsdcGasDepositFailure,
   type PaymasterOperationRequest,
   type PaymasterOperations,
   PaymasterReviewError,
@@ -359,5 +360,20 @@ describe("awaitPaymasterOperation", () => {
       message: expect.stringContaining("has not been included on Base yet"),
       reason: "timeout",
     });
+  });
+});
+
+describe("getUsdcGasDepositFailure", () => {
+  it.each([
+    ["a stale review", new PaymasterReviewError("Network fees rose."), "review"],
+    ["a bundler refusal", new SquidDepositError("refused", "failed"), "rejected"],
+    ["a reverted operation", new SquidDepositError("reverted", "reverted", BUNDLE_HASH), "reverted"],
+    ["a route failure after inclusion", new SquidDepositError("failed", "failed", BUNDLE_HASH), "bridge"],
+    ["a destination that needs gas", new SquidDepositError("needs gas", "needs-gas", BUNDLE_HASH), "bridge"],
+    ["a declined signature", Object.assign(new Error("User rejected the request."), { code: 4001 }), "wallet"],
+    ["anything else", new Error("boom"), "error"],
+    ["a deposit not yet included", new SquidDepositError("not included", "timeout"), null],
+  ] as const)("labels %s", (_label, failure, expected) => {
+    expect(getUsdcGasDepositFailure(failure)).toBe(expected);
   });
 });

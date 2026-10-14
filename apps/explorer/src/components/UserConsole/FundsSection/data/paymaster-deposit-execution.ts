@@ -32,6 +32,7 @@ import {
   WaitForUserOperationReceiptTimeoutError,
 } from "viem/account-abstraction";
 import { type PrivateKeyAccount, toAccount } from "viem/accounts";
+import type { UsdcGasDepositFailure } from "@/utils/funnel-analytics";
 import { PERMIT_TYPES } from "@/utils/permit";
 import {
   CIRCLE_PAYMASTER_ADDRESS,
@@ -65,6 +66,7 @@ import {
   type SquidDepositRouteRequest,
   SquidQuoteChangedError,
 } from "./squid-deposit-route";
+import { isUserRejectedRequest } from "./squid-execution";
 
 /**
  * The reviewed plan no longer holds and nothing was signed into an operation: the deposit must be reviewed again.
@@ -78,6 +80,20 @@ export class PaymasterReviewError extends Error {
     this.name = "PaymasterReviewError";
     this.gasMaximumFloor = gasMaximumFloor;
   }
+}
+
+/**
+ * The funnel's label for how a USDC-gas deposit ended, or null while it is unresolved and may still complete.
+ * A refusal at the bundler has no transaction; a route failure after inclusion always does.
+ */
+export function getUsdcGasDepositFailure(error: unknown): UsdcGasDepositFailure | null {
+  if (error instanceof PaymasterReviewError) return "review";
+  if (error instanceof SquidDepositError) {
+    if (error.reason === "timeout") return null;
+    if (error.reason === "reverted") return "reverted";
+    return error.reason === "failed" && error.transactionHash === undefined ? "rejected" : "bridge";
+  }
+  return isUserRejectedRequest(error) ? "wallet" : "error";
 }
 
 // Waiting for inclusion before the deposit is reported unresolved; Base includes a bundle in seconds.

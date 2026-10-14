@@ -193,3 +193,25 @@ describe("trackDepositConfirmed", () => {
     assert.equal(plausible.mock.calls.length, 0);
   });
 });
+
+describe("card and USDC-gas deposit events", () => {
+  it("counts card USDC that landed, whether or not a deposit follows", async () => {
+    stubWindow("");
+    const { trackCardUsdcLanded } = await load();
+    trackCardUsdcLanded("embedded");
+    assert.deepEqual(plausible.mock.calls, [["card_usdc_landed", { props: { ...DIRECT, wallet_type: "embedded" } }]]);
+  });
+
+  it("follows a USDC-gas deposit from submission to its outcome, with a reason label on failure", async () => {
+    stubWindow(SITE_QUERY);
+    const { trackUsdcGasDeposit } = await load();
+    trackUsdcGasDeposit("submitted");
+    trackUsdcGasDeposit("completed");
+    trackUsdcGasDeposit({ failed: "reverted" });
+    assert.deepEqual(plausible.mock.calls, [
+      ["usdc_gas_deposit_submitted", { props: SITE }],
+      ["usdc_gas_deposit_completed", { props: SITE }],
+      ["usdc_gas_deposit_failed", { props: { ...SITE, reason: "reverted" } }],
+    ]);
+  });
+});

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { act, create } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { trackCardUsdcLanded } from "@/utils/funnel-analytics";
 import { useCardPurchase, waitForPurchasedUsdc } from "./useCardPurchase";
 
 const ADDRESS = "0x1111111111111111111111111111111111111111" as const;
@@ -57,6 +58,7 @@ vi.mock("wagmi", () => ({ usePublicClient: () => chain, useSignMessage: () => ({
 vi.mock("wagmi/actions", () => ({ getAccount: () => account }));
 vi.mock("@/services/wagmi/config", () => ({ config: {} }));
 vi.mock("sonner", () => ({ toast }));
+vi.mock("@/utils/funnel-analytics", () => ({ trackCardUsdcLanded: vi.fn() }));
 
 let latest!: ReturnType<typeof useCardPurchase>;
 const onPurchased = vi.fn();
@@ -137,6 +139,7 @@ describe("useCardPurchase", () => {
       [{ queryKey: ["direct-squid-deposit-balances", 8453], refetchType: "active" }],
     ]);
     expect(onPurchased).toHaveBeenCalledWith(15n);
+    expect(vi.mocked(trackCardUsdcLanded).mock.calls).toEqual([["external"]]);
   });
 
   it("still opens card funding after the Strict Mode effect probe", async () => {

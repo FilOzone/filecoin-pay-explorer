@@ -28,12 +28,12 @@ import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivi
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
-import { trackDepositConfirmed } from "@/utils/funnel-analytics";
+import { trackDepositConfirmed, trackUsdcGasDeposit } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
-import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
+import { getUsdcGasDepositFailure, PaymasterReviewError } from "../data/paymaster-deposit-execution";
 import type { PaymasterDepositPlan } from "../data/paymaster-deposit-plan";
 import {
   getSourceTokenBalance,
@@ -159,6 +159,12 @@ function describeWalletConfirmations(reviewed: ReviewedDeposit | UsdcGasReviewed
   if (reviewed.approvalResetRequired) return "an allowance reset, an approval, then the Squid transaction.";
   if (reviewed.approvalRequired) return "an approval, then the Squid transaction.";
   return "the Squid transaction.";
+}
+
+// An unresolved deposit is not an outcome yet; "Check again" can still complete it.
+function trackUsdcGasFailure(failure: unknown) {
+  const reason = getUsdcGasDepositFailure(failure);
+  if (reason) trackUsdcGasDeposit({ failed: reason });
 }
 
 function describePending(pending: PendingSquidDeposit) {
@@ -756,9 +762,11 @@ export function DirectSquidDepositDialog({
           target: { ...DEPOSIT_TARGET, recipient: pending.recipient },
           transactionHash,
         });
+        if (pending.userOperationHash) trackUsdcGasDeposit("completed");
         await finish(pending.owner, pending.recipient, result.depositedAmount);
       });
     } catch (failure) {
+      if (pending.userOperationHash) trackUsdcGasFailure(failure);
       await fail(failure, pending.owner);
     } finally {
       isSubmitting.current = false;
@@ -886,6 +894,7 @@ export function DirectSquidDepositDialog({
             sourceSymbol: reviewed.sourceSymbol,
             walletClient,
           });
+          trackUsdcGasDeposit("completed");
           await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
           return;
         }
@@ -947,6 +956,7 @@ export function DirectSquidDepositDialog({
         await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
       });
     } catch (failure) {
+      if (reviewed?.usdcGas) trackUsdcGasFailure(failure);
       await fail(failure, reviewed?.context.owner ?? owner);
     } finally {
       isSubmitting.current = false;

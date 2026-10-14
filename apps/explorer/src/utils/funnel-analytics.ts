@@ -1,6 +1,7 @@
 /**
  * Plausible funnel events for the console: console_view → console_wallet_connected →
- * console_deposit_confirmed. Labels only: never a wallet address, visitor ID, or a hash of either.
+ * console_deposit_confirmed, and card_usdc_landed → usdc_gas_deposit_submitted → completed or failed for card
+ * buyers who pay Base gas in USDC. Labels only: never a wallet address, visitor ID, or a hash of either.
  * Plausible attaches the session's utm_* to these events itself.
  */
 
@@ -99,4 +100,17 @@ export function trackWalletConnected(walletType: "embedded" | "external", isNewU
 export function trackDepositConfirmed(chainId: number, token: Address, amount: bigint) {
   if (chainId !== mainnet.id || token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase()) return;
   trackFunnelEvent("console_deposit_confirmed", formatUnits(amount, 18));
+}
+
+/** Card-bought USDC reached the account on Base, whether or not a deposit follows: the card funnel's start. */
+export function trackCardUsdcLanded(walletType: "embedded" | "external") {
+  trackFunnelEvent("card_usdc_landed", undefined, { wallet_type: walletType });
+}
+
+export type UsdcGasDepositFailure = "rejected" | "reverted" | "bridge" | "review" | "wallet" | "error";
+
+/** A deposit paying Base gas in USDC, from the bundler accepting it to its end. */
+export function trackUsdcGasDeposit(outcome: "submitted" | "completed" | { failed: UsdcGasDepositFailure }) {
+  if (typeof outcome === "string") return trackFunnelEvent(`usdc_gas_deposit_${outcome}`);
+  trackFunnelEvent("usdc_gas_deposit_failed", undefined, { reason: outcome.failed });
 }

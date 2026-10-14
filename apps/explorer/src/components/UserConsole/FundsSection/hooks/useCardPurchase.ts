@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
 import { usePublicClient, useSignMessage } from "wagmi";
 import { getAccount } from "wagmi/actions";
-import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
+import { isLinkedWallet, isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
+import { trackCardUsdcLanded } from "@/utils/funnel-analytics";
 import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 
@@ -210,6 +211,8 @@ export function useCardPurchase({
     clearPendingCardPurchase(pending.recipient);
     void invalidateSourceBalanceQueries(queryClient, pending.recipient, CARD_CHAIN_ID);
     setStatus("idle");
+    const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === pending.recipient.toLowerCase());
+    trackCardUsdcLanded(recipientWallet && isPrivyEmbeddedWallet(recipientWallet) ? "embedded" : "external");
     onPurchased(landed.balance - pending.before);
   };
 

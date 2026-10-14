@@ -2,6 +2,7 @@ import { type ConnectedWallet, useSign7702Authorization } from "@privy-io/react-
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { Hash } from "viem";
+import { trackUsdcGasDeposit } from "@/utils/funnel-analytics";
 import {
   awaitPaymasterOperation,
   createPaymasterBundler,
@@ -146,8 +147,10 @@ export function useUsdcGasDeposit({
         onSave({ ...marker(fundsBefore, routeQuote), executionStage: "swap-broadcast", transactionHash });
         onBroadcast(transactionHash);
       },
-      onSubmit: ({ fundsBefore, quote: routeQuote, userOperationHash }) =>
-        onSave({ ...marker(fundsBefore, routeQuote), executionStage: "swap-requested", userOperationHash }),
+      onSubmit: ({ fundsBefore, quote: routeQuote, userOperationHash }) => {
+        onSave({ ...marker(fundsBefore, routeQuote), executionStage: "swap-requested", userOperationHash });
+        trackUsdcGasDeposit("submitted");
+      },
       operations: createPaymasterOperations(await toPaymasterAccount(sourceClient, owner), walletClient, bundler),
       signAuthorization: (authorization) => signAuthorization(authorization, { address: owner }),
       sourceClient,

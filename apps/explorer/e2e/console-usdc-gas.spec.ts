@@ -66,6 +66,13 @@ async function reviewDeposit(
     FakeUsdcGasOptions = {},
 ) {
   await stubAccountBackgroundRequests(page);
+  // Installed before the page's own Plausible snippet, which keeps an existing `window.plausible`.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __funnel: string[]; plausible: unknown };
+    w.__funnel = [];
+    w.plausible = (event: string, options?: { props?: { reason?: string } }) =>
+      w.__funnel.push(options?.props?.reason ? `${event}:${options.props.reason}` : event);
+  });
   await page.goto("/console");
   await loginWithTestAccount(page, { email: "usdc-gas@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -84,6 +91,12 @@ async function reviewDeposit(
   await squid.getByRole("checkbox").click();
   return { fake, payer, squid };
 }
+
+/** The deposit funnel's events, with a failure's reason after a colon. */
+const depositEvents = async (page: Page) =>
+  (await page.evaluate(() => (window as unknown as { __funnel: string[] }).__funnel)).filter(
+    (event) => event.startsWith("usdc_gas_") || event === "console_deposit_confirmed",
+  );
 
 const sentTransactions = (page: Page) =>
   page.evaluate(() => (window as unknown as { __fakePrivyTransactions?: unknown[] }).__fakePrivyTransactions ?? []);
@@ -131,6 +144,11 @@ test("a zero-ETH email account deposits card USDC with network fees paid in USDC
   expect(batch[4]).toEqual({ to: SQUID_ROUTER, value: BRIDGE_FEE });
   expect(batch[5]).toEqual({ to: USDC, approve: [PAYMASTER, 0n] });
   expect(fake.delegation).toBe("ours");
+  expect(await depositEvents(page)).toEqual([
+    "usdc_gas_deposit_submitted",
+    "usdc_gas_deposit_completed",
+    "console_deposit_confirmed",
+  ]);
 });
 
 test("a returning account reuses its delegation without a new authorization", async ({ page }) => {
@@ -178,6 +196,7 @@ test("a reverted operation says gas was charged in USDC and keeps the delegation
     timeout: 30_000,
   });
   expect(fake.delegation).toBe("ours");
+  expect(await depositEvents(page)).toEqual(["usdc_gas_deposit_submitted", "usdc_gas_deposit_failed:reverted"]);
   // Nothing is left to follow up: no pending deposit blocks the form.
   await expect(squid.getByRole("region", { name: "Pending Squid deposit" })).toBeHidden();
   // The form quotes and plans again; ending once it can review leaves no request in flight.
@@ -203,6 +222,12 @@ test("a bundler estimate above the reviewed USDC maximum asks for a review that 
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
+  expect(await depositEvents(page)).toEqual([
+    "usdc_gas_deposit_failed:review",
+    "usdc_gas_deposit_submitted",
+    "usdc_gas_deposit_completed",
+    "console_deposit_confirmed",
+  ]);
 });
 
 test("a route that drops below the reviewed minimum returns USDC gas to review, then deposits", async ({ page }) => {
@@ -251,8 +276,16 @@ test("an operation not yet included blocks another spend until Check again finds
   await expect(squid.getByText("waiting to be included on Base", { exact: false })).toBeVisible();
   await expect(squid.getByRole("button", { name: "Review" })).toBeHidden();
 
+  // Not included yet is not an outcome: nothing is counted as failed.
+  expect(await depositEvents(page)).toEqual(["usdc_gas_deposit_submitted"]);
+
   fake.operations[0].outcome = "included";
   await squid.getByRole("button", { name: "Check again" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
+  expect(await depositEvents(page)).toEqual([
+    "usdc_gas_deposit_submitted",
+    "usdc_gas_deposit_completed",
+    "console_deposit_confirmed",
+  ]);
 });
