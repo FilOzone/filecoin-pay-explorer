@@ -522,20 +522,39 @@ describe("awaitSquidDepositSettlement", () => {
       },
     );
 
-    it("stops instead of polling Squid when the route never lands", async () => {
-      const fetch = vi.fn(async () => statusResponse(null, 404));
-      const sourceClient = {
+    const lostRouteMessage =
+      "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.";
+    const lostSource = () =>
+      ({
         waitForTransactionReceipt: vi.fn(async () => {
           throw new Error("Timed out while waiting for transaction");
         }),
-      } as unknown as SquidDepositSourceClient;
-      const attempt = settle({ sourceClient, squid: { integratorId: "id", fetch } });
-      await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
-      await expect(attempt).rejects.toThrow(
-        "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
-      );
-      expect(fetch).not.toHaveBeenCalled();
-    });
+      }) as unknown as SquidDepositSourceClient;
+
+    // The fake Pay account holds 100; the route's minimum is 92.
+    it.each([
+      ["has not moved", 100n, lostRouteMessage],
+      ["grew by less than the route's minimum", 10n, lostRouteMessage],
+      [
+        "grew by at least the route's minimum",
+        0n,
+        "The source network has no record of this swap, but the Pay account's balance has grown by 0.0000000000000001 USDFC since it started, so your wallet likely re-sent it under a new hash. Check your wallet's activity before you dismiss this.",
+      ],
+    ])(
+      "stops instead of polling Squid when the route never lands and the balance %s",
+      async (_case, fundsBefore, message) => {
+        const fetch = vi.fn(async () => statusResponse(null, 404));
+        const attempt = settle({
+          fundsBefore,
+          minimumDestinationAmount: 92n,
+          sourceClient: lostSource(),
+          squid: { integratorId: "id", fetch },
+        });
+        await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+        await expect(attempt).rejects.toThrow(message);
+        expect(fetch).not.toHaveBeenCalled();
+      },
+    );
 
     it("reports a reverted route without asking Squid", async () => {
       const fetch = vi.fn();

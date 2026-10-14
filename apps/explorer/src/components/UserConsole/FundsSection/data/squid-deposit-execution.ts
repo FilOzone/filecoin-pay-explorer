@@ -3,6 +3,7 @@ import {
   type Address,
   encodeFunctionData,
   erc20Abi,
+  formatUnits,
   type Hash,
   type Hex,
   isHash,
@@ -457,6 +458,7 @@ export async function fetchSquidDepositStatus(
  */
 export async function awaitSquidDepositSettlement({
   destinationClient,
+  fundsBefore,
   minimumDestinationAmount,
   maxStatusAttempts = 90,
   maxStatusFailures = 6,
@@ -489,8 +491,13 @@ export async function awaitSquidDepositSettlement({
     });
   } catch {
     // A speed-up whose original hash the RPC has forgotten cannot be traced, so a missing hash is not proof nothing ran.
+    // Growth of at least the route's minimum hints that it did; settlements draw funds too, so no growth proves nothing.
+    const funds = await readFilecoinPayFunds(destinationClient, target).catch(() => fundsBefore);
+    const grown = funds - fundsBefore;
     throw new SquidDepositError(
-      "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
+      grown > 0n && grown >= minimumDestinationAmount
+        ? `The source network has no record of this swap, but the Pay account's balance has grown by ${formatUnits(grown, 18)} USDFC since it started, so your wallet likely re-sent it under a new hash. Check your wallet's activity before you dismiss this.`
+        : "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
       "timeout",
       broadcastHash,
     );
