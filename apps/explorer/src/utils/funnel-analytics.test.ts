@@ -101,55 +101,57 @@ describe("readFunnelLabels", () => {
   });
 });
 
-describe("captureFunnelLabels", () => {
-  it("drops foc_* params, including foc_jid, and keeps the rest", async () => {
-    stubWindow(`?${SITE_QUERY}&foc_jid=v123&utm_source=x&deposit=2`);
-    const { captureFunnelLabels } = await load();
-    captureFunnelLabels();
-    assert.deepEqual(replaceState.mock.calls, [[null, "", "/console?utm_source=x&deposit=2"]]);
-  });
-
-  it("leaves a URL with no foc_* params alone", async () => {
-    stubWindow("?utm_source=x");
-    const { captureFunnelLabels } = await load();
-    captureFunnelLabels();
+describe("funnel labels", () => {
+  it("leaves the URL untouched", async () => {
+    stubWindow(`?${SITE_QUERY}&utm_source=x&deposit=2`);
+    const { trackConsoleView } = await load();
+    trackConsoleView();
     assert.equal(replaceState.mock.calls.length, 0);
   });
 
-  it("reads labels once per page load", async () => {
+  it("keeps the first labels read this page load", async () => {
     stubWindow(`?${SITE_QUERY}`);
-    const { captureFunnelLabels, trackConsoleView } = await load();
-    captureFunnelLabels();
+    const { trackConsoleView, trackWalletConnected } = await load();
+    trackConsoleView();
     window.location.search = "?foc_ft=campaign";
-    captureFunnelLabels();
-    trackConsoleView();
-    assert.deepEqual(plausible.mock.calls, [["console_view", { props: SITE }]]);
-  });
-});
-
-describe("trackConsoleView", () => {
-  it("sends console_view once per page load", async () => {
-    stubWindow(`?${SITE_QUERY}`);
-    const { captureFunnelLabels, trackConsoleView } = await load();
-    captureFunnelLabels();
-    trackConsoleView();
-    trackConsoleView();
-    assert.deepEqual(plausible.mock.calls, [["console_view", { props: SITE }]]);
+    trackWalletConnected("external");
+    assert.deepEqual(plausible.mock.calls[1], [
+      "console_wallet_connected",
+      { props: { ...SITE, wallet_type: "external", account: "returning" } },
+    ]);
   });
 
-  it("falls back to console-direct labels before capture", async () => {
-    stubWindow(`?${SITE_QUERY}`);
+  it("reads the labels again after the Google login redirect reloads the page", async () => {
+    stubWindow(`?${SITE_QUERY}&privy_oauth_code=c&privy_oauth_state=s&privy_oauth_provider=google`);
+    const { trackWalletConnected } = await load();
+    trackWalletConnected("embedded", true);
+    assert.deepEqual(plausible.mock.calls, [
+      ["console_wallet_connected", { props: { ...SITE, wallet_type: "embedded", account: "new" } }],
+    ]);
+  });
+
+  it("reads a typed URL as console-direct", async () => {
+    stubWindow("");
     const { trackConsoleView } = await load();
     trackConsoleView();
     assert.deepEqual(plausible.mock.calls, [["console_view", { props: DIRECT }]]);
   });
 });
 
+describe("trackConsoleView", () => {
+  it("sends console_view once per page load", async () => {
+    stubWindow(`?${SITE_QUERY}`);
+    const { trackConsoleView } = await load();
+    trackConsoleView();
+    trackConsoleView();
+    assert.deepEqual(plausible.mock.calls, [["console_view", { props: SITE }]]);
+  });
+});
+
 describe("trackWalletConnected", () => {
   it("sends every connect with the wallet type and whether the account is new", async () => {
     stubWindow(`?${SITE_QUERY}`);
-    const { captureFunnelLabels, trackWalletConnected } = await load();
-    captureFunnelLabels();
+    const { trackWalletConnected } = await load();
     trackWalletConnected("embedded", true);
     trackWalletConnected("external");
     assert.deepEqual(plausible.mock.calls, [

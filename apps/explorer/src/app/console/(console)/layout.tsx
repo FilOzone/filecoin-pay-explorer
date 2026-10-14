@@ -12,7 +12,7 @@ import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAcc
 import ConsoleProviders from "@/components/UserConsole/providers/ConsoleProviders";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
-import { captureFunnelLabels, trackConsoleView } from "@/utils/funnel-analytics";
+import { trackConsoleView } from "@/utils/funnel-analytics";
 import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
@@ -71,7 +71,6 @@ const ConsoleShell = ({ children }: { children: ReactNode }) => {
     chainId,
   );
   useEffect(() => {
-    captureFunnelLabels();
     trackConsoleView();
   }, []);
   useEffect(() => {

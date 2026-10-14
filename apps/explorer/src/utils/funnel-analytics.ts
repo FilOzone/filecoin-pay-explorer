@@ -6,7 +6,6 @@
 
 import { type Address, formatUnits } from "viem";
 import { mainnet } from "@/constants/chains";
-import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
 
 type FunnelProps = Record<string, string>;
 
@@ -19,8 +18,6 @@ declare global {
   }
 }
 
-// foc_jid is never read; it is dropped so a visitor ID can't linger in the URL.
-const FUNNEL_PARAMS = ["foc_ft", "foc_entry", "foc_ref", "foc_jid"] as const;
 const FT_TYPES = new Set(["direct", "organic", "referral", "campaign"]);
 const PRODUCTS = ["agent-skills", "ipfs-pinning", "data-storage", "backups-archives", "pricing", "dev-quickstart"];
 // Untrusted URL input: a slug (dots allowed for source domains) with no long hex run,
@@ -66,20 +63,20 @@ export function readFunnelLabels(params: URLSearchParams): FunnelProps {
   };
 }
 
-// ponytail: page memory only, so a reload reads as console-direct; sessionStorage needs the privacy review.
+// foc_* stays in the URL like utm_*, so a reload or the Google login redirect reads it again.
+// ponytail: client navigation drops the query, so a reload on another console page reads as console-direct.
 let labels: FunnelProps | null = null;
 const fired = new Set<string>();
 
-/** Reads the foc_* labels once per page load, then drops them from the address bar. */
-export function captureFunnelLabels() {
-  if (labels) return;
-  labels = readFunnelLabels(new URLSearchParams(window.location.search));
-  dropSearchParams(FUNNEL_PARAMS);
-}
+/** The first labels read this page load win, so later URL changes can't re-attribute a visit. */
+const funnelLabels = () => {
+  labels ??= readFunnelLabels(new URLSearchParams(window.location.search));
+  return labels;
+};
 
 function trackFunnelEvent(event: string, revenue?: string, extra?: FunnelProps) {
   window.plausible?.(event, {
-    props: { ...(labels ?? readFunnelLabels(new URLSearchParams())), ...extra },
+    props: { ...funnelLabels(), ...extra },
     ...(revenue && { revenue: { currency: "USD", amount: revenue } }),
   });
 }
