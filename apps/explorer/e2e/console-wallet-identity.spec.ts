@@ -122,6 +122,9 @@ test("a Squid deposit paid from another account of the extension credits the con
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await expect(page.getByRole("status", { name: "Squid deposit progress" })).toContainText(
+    "Don't switch accounts in your wallet until the deposit finishes.",
+  );
 
   // The approval, then the route.
   for (let i = 0; i < 2; i += 1) {
