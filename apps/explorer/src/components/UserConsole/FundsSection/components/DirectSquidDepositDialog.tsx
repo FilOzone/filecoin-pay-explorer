@@ -28,6 +28,7 @@ import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivi
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
@@ -657,6 +658,7 @@ export function DirectSquidDepositDialog({
   const finish = async (owner: Address, depositRecipient: Address, depositedAmount: bigint) => {
     clearSaved(owner);
     toast.success(`Deposited ${formatUnits(depositedAmount, 18)} USDFC into Filecoin Pay`);
+    trackDepositConfirmed(mainnet.id, mainnet.contracts.usdfc.address, depositedAmount);
     await invalidateTopUpQueries(queryClient, accountId, depositRecipient);
     // The stage is left in place: the review was already dropped by the chain switch, and a reset
     // here would land in the same render as the parent's close, so the dialog would animate out
