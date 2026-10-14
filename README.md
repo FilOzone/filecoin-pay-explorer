@@ -132,6 +132,7 @@ Optional Explorer configuration:
 | `NEXT_PUBLIC_SQUID_INTEGRATOR_ID` | Overrides the default public Squid integrator ID |
 | `NEXT_PUBLIC_NOTIFICATIONS_API_URL` | Enables notification registration and settings against a matching notification API |
 | `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS` | Selects the Filecoin network where notification UI is available; defaults to `mainnet` |
+| `PIMLICO_API_KEY` | Server-only key for the `/api/bundler` proxy that sends USDC-gas deposits to Pimlico's Base bundler; without it the route answers 503 |
 
 Build the generated types, then start the Explorer:
 
