@@ -126,12 +126,14 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
-    // CI's placeholder subgraph lists no services, so the operator lands as a custom address.
+    // A subgraph that lists Warm Storage (real mode) selects it by name and links its contract; CI's
+    // placeholder subgraph lists no services, so the operator lands in the custom-address field instead.
     const { mainnet } = await import("@filoz/synapse-sdk");
-    await expect(dialog.getByRole("textbox", { name: /^Service contract address/ })).toHaveValue(
-      new RegExp(`^${mainnet.contracts.fwss.address}$`, "i"),
-      { timeout: 30_000 },
-    );
+    const fwss = mainnet.contracts.fwss.address;
+    const custom = dialog.getByRole("textbox", { name: /^Service contract address/ });
+    const curated = dialog.locator(`a[href$="/address/${fwss}" i]`);
+    await expect(custom.or(curated)).toBeVisible({ timeout: 30_000 });
+    if (await custom.isVisible()) await expect(custom).toHaveValue(new RegExp(`^${fwss}$`, "i"));
     await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveValue("");
   });
 });
