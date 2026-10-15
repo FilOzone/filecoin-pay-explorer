@@ -136,4 +136,22 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     if (await custom.isVisible()) await expect(custom).toHaveValue(new RegExp(`^${fwss}$`, "i"));
     await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveValue("");
   });
+
+  test("opens an approval-only funding link on an account that already approved Warm Storage and is told so", async ({
+    page,
+  }) => {
+    test.skip(REAL_MODE, "marks the approval in the fake chain");
+    const { mainnet } = await import("@filoz/synapse-sdk");
+    await page.addInitScript((fwss) => {
+      (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [fwss];
+    }, mainnet.contracts.fwss.address);
+    await page.goto(APPROVAL_LINK);
+
+    await loginWithTestAccount(page);
+
+    await expect(page.getByRole("status").filter({ hasText: "Warm Storage is already approved" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("dialog", { name: "Add a Service" })).toHaveCount(0);
+  });
 });
