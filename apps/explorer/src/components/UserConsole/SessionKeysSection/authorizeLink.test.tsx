@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** The `?authorize=` deep link `filecoin-pin login` prints. */
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Hex } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScopeId } from "@/utils/sessionKeys";
@@ -40,6 +40,17 @@ vi.mock("./CreateKeyFlow", () => ({
 const OWNER = "0x00000000000000000000000000000000000000aa" as Hex;
 const KEY = "0x00000000000000000000000000000000000000bb" as Hex;
 const SCOPES: ScopeId[] = ["createDataSet", "addPieces", "schedulePieceRemovals"];
+
+/** The link's key, already in this browser's list. */
+const listedKey = {
+  name: "laptop",
+  sessionKeyPublic: KEY,
+  scopes: ["createDataSet"],
+  createdAt: 1,
+  scopeExpiries: { createDataSet: 9_999_999_999n },
+  scopeActive: { createDataSet: true },
+  maxExpiry: 9_999_999_999n,
+};
 
 const hooks = vi.hoisted(() => ({ keys: [] as unknown[], statusReadsPending: false }));
 vi.mock("@/hooks/useSessionKeys", () => ({
@@ -94,28 +105,30 @@ describe("authorize deep link", () => {
   });
 
   it("waits for a listed key's status before opening", async () => {
-    hooks.keys = [
-      {
-        name: "laptop",
-        sessionKeyPublic: KEY,
-        scopes: ["createDataSet"],
-        createdAt: 1,
-        status: "unknown",
-        scopeExpiries: { createDataSet: 9_999_999_999n },
-        scopeActive: { createDataSet: true },
-        maxExpiry: 9_999_999_999n,
-      },
-    ];
+    hooks.keys = [{ ...listedKey, status: "unknown" }];
     hooks.statusReadsPending = true;
     const { rerender } = render(section());
 
     expect(lastCreate()?.open).toBe(false);
 
-    hooks.keys = [{ ...(hooks.keys[0] as object), status: "active" }];
+    hooks.keys = [{ ...listedKey, status: "active" }];
     hooks.statusReadsPending = false;
     await act(async () => rerender(section()));
 
     expect(lastCreate()).toMatchObject({ open: true, prefillAddress: KEY });
+  });
+
+  it("leaves a form the owner opened by hand while the key's status loaded", async () => {
+    hooks.keys = [{ ...listedKey, status: "unknown" }];
+    hooks.statusReadsPending = true;
+    const { rerender } = render(section());
+
+    fireEvent.click(screen.getByText("+ New session key"));
+    hooks.keys = [{ ...listedKey, status: "active" }];
+    hooks.statusReadsPending = false;
+    await act(async () => rerender(section()));
+
+    expect(lastCreate()).toMatchObject({ open: true, prefillAddress: null });
   });
 
   it("does not open while the wallet is on another network", async () => {

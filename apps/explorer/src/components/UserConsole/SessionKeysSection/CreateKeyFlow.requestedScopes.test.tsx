@@ -70,6 +70,16 @@ describe("CreateKeyFlow requested scopes", () => {
     expect(screen.queryByText(/Granting fewer scopes than requested/)).toBeNull();
   });
 
+  it("leaves a renewed key's destructive scope the link did not request unticked, without the warning", () => {
+    renderRequest(["addPieces"], {
+      existingKey: { name: "", scopes: ["addPieces", "terminateService"], expirySec: null },
+    });
+
+    const terminate = checkbox("Terminate service") as HTMLInputElement;
+    expect({ checked: terminate.checked, disabled: terminate.disabled }).toEqual({ checked: false, disabled: false });
+    expect(screen.queryByText(WARNING)).toBeNull();
+  });
+
   it("drops the warning and flags the shortfall once the owner unticks it", () => {
     renderRequest(["createDataSet", "schedulePieceRemovals"]);
 

@@ -159,8 +159,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const requestPresets = useMemo(() => {
     if (!prefillAddress) return null;
     const renewed = renewedScopes ? (renewedScopes.split(",") as ScopeId[]) : [];
-    const requested = [...new Set([...(prefillScopes ?? []), ...renewed])];
-    return requested.length ? presetScopeStates(requested) : null;
+    // Kept apart from the link's scopes: a renewal must not preselect a destructive scope the link did not ask for.
+    return prefillScopes?.length || renewed.length ? presetScopeStates(prefillScopes ?? [], renewed) : null;
   }, [prefillAddress, prefillScopes, renewedScopes]);
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
@@ -541,7 +541,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                           {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
                         </span>
                         <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                        {preset === "checked" && scope.destructive && checkedScopes[scope.id] && (
+                        {prefillScopes?.includes(scope.id) && scope.destructive && checkedScopes[scope.id] && (
                           <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
                             Requested by the link. Untick it unless this key should be able to do this.
                           </span>
