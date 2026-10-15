@@ -27,6 +27,7 @@ interface CreateProps {
   onOpenChange: (open: boolean) => void;
   prefillAddress: Hex | null;
   prefillScopes: ScopeId[] | null;
+  onConfirmed: (signer: Hex) => void;
 }
 /** The dialog is the unit under test's collaborator; record what it is asked to show. */
 const createRenders: CreateProps[] = [];
@@ -78,7 +79,10 @@ function section(network: "mainnet" | "calibration" = "calibration", account: He
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+});
 
 const lastCreate = () => createRenders.at(-1);
 
@@ -129,6 +133,21 @@ describe("authorize deep link", () => {
     await act(async () => rerender(section()));
 
     expect(lastCreate()).toMatchObject({ open: true, prefillAddress: null });
+  });
+
+  it("drops the link from the URL once its key's login confirms, so a reload does not reopen the form", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/console/session-keys?authorize=0xbb&scopes=createDataSet&network=calibration",
+    );
+    render(section());
+
+    await act(async () => lastCreate()?.onConfirmed("0x00000000000000000000000000000000000000cc" as Hex));
+    expect(window.location.search).not.toBe("");
+
+    await act(async () => lastCreate()?.onConfirmed(KEY));
+    expect(window.location.search).toBe("");
   });
 
   it("does not open while the wallet is on another network", async () => {

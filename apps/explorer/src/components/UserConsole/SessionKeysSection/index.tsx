@@ -559,7 +559,11 @@ const ConnectedSessionKeys = ({
         prefillName={linkPrefill ? prefillName : null}
         existingKey={linkPrefill ? existingKeyForPrefill : null}
         onCreated={addKey}
-        onConfirmed={markConfirmed}
+        onConfirmed={(signer) => {
+          markConfirmed(signer);
+          // Done: a reload must not reopen the form for a key that is now authorized.
+          if (cliPrefill && signer.toLowerCase() === cliPrefill.toLowerCase()) dropSearchParams(LINK_PARAMS);
+        }}
         onFailed={removeKey}
       />
       <RevokeDialog
