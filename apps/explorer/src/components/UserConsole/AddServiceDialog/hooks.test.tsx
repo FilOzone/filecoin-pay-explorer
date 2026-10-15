@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getPermitSignature: vi.fn(),
   readContracts: [] as Array<{ status: "success"; result: unknown }>,
   isExecuting: false,
+  trackDepositConfirmed: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -32,6 +33,7 @@ vi.mock("wagmi", () => ({
   useWalletClient: () => ({ data: { signTypedData: vi.fn() } }),
 }));
 vi.mock("@/hooks/useApprovableServices", () => ({ useApprovableServices: () => ({ services: [], isLoading: false }) }));
+vi.mock("@/utils/funnel-analytics", () => ({ trackDepositConfirmed: mocks.trackDepositConfirmed }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
 }));
@@ -199,7 +201,10 @@ describe("useAddServiceSubmit", () => {
       args: [TOKEN, OWNER, 25n, 123n, 27, "0xaaaa", "0xbbbb", OPERATOR, 6n, 5n, 86_400n],
       metadata: { type: "depositAndApprove", amount: "25", token: "TKN", operator: OPERATOR },
       onSubmitOnChain: hook.onSubmitOnChain,
+      onConfirmed: expect.any(Function),
     });
+    mocks.execute.mock.calls[0][0].onConfirmed();
+    expect(mocks.trackDepositConfirmed).toHaveBeenCalledWith(CHAIN_ID, TOKEN, 25n);
     expect(hook.result.isSubmitting).toBe(false);
   });
 

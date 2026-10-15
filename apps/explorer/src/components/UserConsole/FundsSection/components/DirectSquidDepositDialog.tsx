@@ -28,6 +28,7 @@ import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivi
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
@@ -72,6 +73,7 @@ import {
   type SquidDepositNetworkFeeBudget,
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
+  SquidQuoteChangedError,
 } from "../data/squid-deposit-route";
 import type { SquidDepositUiStage } from "../data/squid-deposit-stages";
 import {
@@ -193,8 +195,8 @@ export function DirectSquidDepositDialog({
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [pending, setPending] = useState<PendingSquidDeposit | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Why the review card came back after a confirmation: a fresh gas maximum to accept.
-  const [notice, setNotice] = useState<string | null>(null);
+  // Why the review card came back after a confirmation: a fresh gas maximum or quote to accept.
+  const [notice, setNotice] = useState<{ title: string; description: string } | null>(null);
   const isSubmitting = useRef(false);
   const isMounted = useRef(true);
   const initializedSelectionScope = useRef("");
@@ -657,6 +659,7 @@ export function DirectSquidDepositDialog({
   const finish = async (owner: Address, depositRecipient: Address, depositedAmount: bigint) => {
     clearSaved(owner);
     toast.success(`Deposited ${formatUnits(depositedAmount, 18)} USDFC into Filecoin Pay`);
+    trackDepositConfirmed(mainnet.id, mainnet.contracts.usdfc.address, depositedAmount);
     await invalidateTopUpQueries(queryClient, accountId, depositRecipient);
     // The stage is left in place: the review was already dropped by the chain switch, and a reset
     // here would land in the same render as the parent's close, so the dialog would animate out
@@ -669,7 +672,10 @@ export function DirectSquidDepositDialog({
   const fail = async (failure: unknown, owner?: Address) => {
     setStage(null);
     let reportedFailure = failure;
-    if (reportedFailure instanceof SquidDepositBudgetError && reviewed) {
+    if (
+      (reportedFailure instanceof SquidDepositBudgetError || reportedFailure instanceof SquidQuoteChangedError) &&
+      reviewed
+    ) {
       try {
         await reReview(reportedFailure, reviewed);
         return;
@@ -693,7 +699,7 @@ export function DirectSquidDepositDialog({
   };
 
   const resume = async () => {
-    if (!pending || !recipient || !destinationClient || isSubmitting.current) return;
+    if (!pending || !recipient || !destinationClient || !sourceClient || isSubmitting.current) return;
     isSubmitting.current = true;
     const pendingHash = pending.transactionHash;
     if (!pendingHash) {
@@ -716,9 +722,13 @@ export function DirectSquidDepositDialog({
           destinationClient: destinationClient as SquidDepositDestinationClient,
           fundsBefore: pending.fundsBefore,
           minimumDestinationAmount: pending.minimumDestinationAmount,
+          onReplaced: (hash) => {
+            setPending(savePendingSquidDeposit(window.localStorage, { ...pending, transactionHash: hash }));
+          },
           onStage: setStageWithHash,
           quoteId: pending.quoteId,
           sourceChainId: pending.sourceChainId,
+          sourceClient,
           squid,
           target: { ...DEPOSIT_TARGET, recipient: pending.recipient },
           transactionHash: pendingHash,
@@ -733,19 +743,21 @@ export function DirectSquidDepositDialog({
   };
 
   /**
-   * The cap would be breached before a send: nothing past the completed approvals was
-   * broadcast, so price the remaining transactions again and hand the card back for review.
+   * The gas cap would be breached, or Squid's route got worse, before the swap was sent: nothing past the
+   * completed approvals was broadcast, so price the remaining transactions again and hand the card back for review.
    */
-  const reReview = async (breach: SquidDepositBudgetError, current: ReviewedDeposit) => {
-    if (!sourceFeeClient) throw breach;
+  const reReview = async (change: SquidDepositBudgetError | SquidQuoteChangedError, current: ReviewedDeposit) => {
+    if (!sourceFeeClient) throw change;
     const { context } = current;
+    const isGasBreach = change instanceof SquidDepositBudgetError;
+    const quote = isGasBreach ? current.quote : change.quote;
     const balances = (await balancesQuery.refetch()).data;
     if (!balances) throw new Error("Source balances are unavailable. Review the payment again.");
     const budget = await estimateDepositNetworkFeeMaximum({
       allowance: balances.allowance,
       client: sourceFeeClient,
       owner: context.owner,
-      quote: current.quote,
+      quote,
       sourceAmount: context.sourceAmount,
       sourceChainId: context.sourceChainId,
       sourceToken: context.sourceToken,
@@ -753,10 +765,10 @@ export function DirectSquidDepositDialog({
     });
     const isNativeSource = isNativeToken(context.sourceToken);
     // Execution priced the remaining transactions itself; the new maximum must at least cover that.
-    const floor = applyNetworkFeeReviewHeadroom(breach.breach.requiredFee);
+    const floor = isGasBreach ? applyNetworkFeeReviewHeadroom(change.breach.requiredFee) : 0n;
     const maxNativeFee = budget.maximum > floor ? budget.maximum : floor;
     const requiredNative = getDepositRequiredNativeBalance(
-      current.quote,
+      quote,
       context.sourceChainId,
       context.sourceToken,
       maxNativeFee,
@@ -766,12 +778,15 @@ export function DirectSquidDepositDialog({
       approvalRequired: !isNativeSource && balances.allowance !== context.sourceAmount,
       approvalResetRequired: !isNativeSource && balances.allowance > 0n && balances.allowance !== context.sourceAmount,
       maxNativeFee,
+      quote,
       requiredNative,
       transactions: budget.transactions,
     });
-    setNotice(
-      `${breach.message} Check the updated maximum and confirm to send the ${listTransactionLabels(budget.transactions.map(({ kind }) => kind))}.`,
-    );
+    const transactions = listTransactionLabels(budget.transactions.map(({ kind }) => kind));
+    setNotice({
+      title: isGasBreach ? "Review the updated gas maximum" : "Review the updated quote",
+      description: `${change.message} Check the updated ${isGasBreach ? "maximum" : "quote"} and confirm to send the ${transactions}.`,
+    });
     if (balances.native < requiredNative) {
       setError("The paying wallet does not have enough native token for the updated maximum. Add funds, then confirm.");
     }
@@ -1029,7 +1044,7 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!stage && !pending && reviewed && reviewedSourceChain ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Reviewed Squid deposit'>
-              {notice ? <Alert title='Review the updated gas maximum' description={notice} /> : null}
+              {notice ? <Alert title={notice.title} description={notice.description} /> : null}
               <p>
                 <span className='text-muted-foreground'>Spend:</span> {reviewed.amount} {reviewed.sourceSymbol}
               </p>

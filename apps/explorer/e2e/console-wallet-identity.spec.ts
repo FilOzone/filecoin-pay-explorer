@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { Hex } from "viem";
+import { base } from "viem/chains";
+import { SOURCE_RPC_URLS } from "../src/services/wagmi/transports";
 import { installFakeSquid } from "./fake-squid";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
@@ -120,6 +122,9 @@ test("a Squid deposit paid from another account of the extension credits the con
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await expect(page.getByRole("status", { name: "Squid deposit progress" })).toContainText(
+    "Don't switch accounts in your wallet until the deposit finishes.",
+  );
 
   // The approval, then the route.
   for (let i = 0; i < 2; i += 1) {
@@ -140,6 +145,68 @@ test("a Squid deposit paid from another account of the extension credits the con
   expect([...routeParties]).toEqual([`${payer} -> ${consoleAddress}`.toLowerCase()]);
   expect(await consoleAccount(page)).toBe(consoleBefore);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+});
+
+// Reviews a 10 USDC Squid deposit paid from a second extension account; returns the review card.
+async function reviewSquidDeposit(page: Page, squidOptions: Parameters<typeof installFakeSquid>[2]) {
+  await openAddFundsFromWalletMenu(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
+  const [, payer] = await page.evaluate(
+    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
+  );
+  await installFakeSquid(page, payer, squidOptions);
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  await squid.getByLabel(/^Amount/).fill("10");
+  await squid.getByRole("checkbox").click();
+  await squid.getByRole("button", { name: "Review" }).click();
+  const review = page.getByRole("region", { name: "Reviewed Squid deposit" });
+  await expect(review).toContainText("Receive at least: 10 USDFC");
+  return review;
+}
+
+async function approveFakeTransaction(page: Page) {
+  const approve = page.getByRole("dialog", { name: "approve transaction" });
+  await approve.getByRole("button", { name: "Approve" }).click();
+  await approve.getByRole("button", { name: "All Done" }).click();
+}
+
+test("a Squid route that drops below the reviewed minimum returns to review, then deposits", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  const review = await reviewSquidDeposit(page, { executableRoute: () => ({ minimumShortfall: 10n ** 17n }) });
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(review).toContainText("Review the updated quote");
+  await expect(review).toContainText("Receive at least: 9.9 USDFC");
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await approveFakeTransaction(page);
+  await approveFakeTransaction(page);
+  await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
+});
+
+test("a Squid route that drops below the reviewed minimum after the approval returns to review without approving again", async ({
+  page,
+}) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  // The first route expires before the approval lands, so the route is fetched again, now below the review.
+  const review = await reviewSquidDeposit(page, {
+    executableRoute: (n) => (n === 1 ? { expiresInSeconds: 10 } : { minimumShortfall: 10n ** 17n }),
+  });
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await approveFakeTransaction(page);
+
+  await expect(review).toContainText("Review the updated quote");
+  await expect(review).toContainText("Receive at least: 9.9 USDFC");
+  await expect(review).toContainText("Your wallet will confirm the Squid transaction.");
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await approveFakeTransaction(page);
+  await expect(page.getByText("Deposited 10 USDFC into Filecoin Pay")).toBeVisible({ timeout: 30_000 });
+
+  const sent = await page.evaluate(
+    () => (window as unknown as { __fakePrivyTransactions: { data?: string }[] }).__fakePrivyTransactions,
+  );
+  // One approval, paid once, then the route.
+  expect(sent.map((tx) => tx.data?.slice(0, 10))).toEqual(["0x095ea7b3", "0x12345678"]);
 });
 
 test("a Squid deposit paid from an extension without Filecoin closes the dialog", async ({ page }) => {
@@ -178,6 +245,69 @@ test("a Squid deposit paid from an extension without Filecoin closes the dialog"
   });
   expect(await consoleAccount(page)).toBe(consoleBefore);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+});
+
+test("checking a Squid deposit whose route never landed stops and offers Dismiss", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  // The clock jumps past the source receipt wait rather than tracking its exact length.
+  await page.clock.install();
+  await openAddFundsFromWalletMenu(page);
+  await page.evaluate(() => window.dispatchEvent(new Event("fake-privy:connect-other-account")));
+  const [consoleAddress, payer] = await page.evaluate(
+    () => (window as unknown as { __fakePrivyExtensionAccounts: Hex[] }).__fakePrivyExtensionAccounts,
+  );
+  await installFakeSquid(page, payer);
+  const droppedHash = `0x${"0d".repeat(32)}`;
+  // No Base RPC has a record of the hash, as with a route the wallet dropped; the app's transport asks each in turn.
+  const baseRpcHosts = [...SOURCE_RPC_URLS[base.id], ...base.rpcUrls.default.http].map((url) => new URL(url).hostname);
+  await page.route(
+    (url) => baseRpcHosts.includes(url.hostname),
+    (route) => {
+      const body = route.request().postDataJSON() as { id: number; method: string; params: unknown[] } | null;
+      const isLookup =
+        (body?.method === "eth_getTransactionReceipt" || body?.method === "eth_getTransactionByHash") &&
+        body.params[0] === droppedHash;
+      if (!body || !isLookup) return route.fallback();
+      return route.fulfill({ json: { jsonrpc: "2.0", id: body.id, result: null } });
+    },
+  );
+  const statusRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/status")) statusRequests.push(request.url());
+  });
+  await page.evaluate(
+    ({ owner, recipient, transactionHash }) =>
+      localStorage.setItem(
+        `filecoin-pay:squid-deposit:v1:${owner.toLowerCase()}`,
+        JSON.stringify({
+          executionStage: "swap-broadcast",
+          fundsBefore: "0",
+          minimumDestinationAmount: "10000000000000000000",
+          owner,
+          quoteId: "fake-quote-dropped",
+          recipient,
+          sourceAmount: "10000000",
+          sourceChainId: 8453,
+          sourceToken: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          startedAt: Date.now(),
+          transactionHash,
+        }),
+      ),
+    { owner: payer, recipient: consoleAddress, transactionHash: droppedHash },
+  );
+
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  await expect(squid.getByText("A Squid deposit is still in progress.")).toBeVisible();
+  await squid.getByRole("button", { name: "Check again" }).click();
+  await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
+  await page.clock.fastForward("10:00");
+
+  await expect(
+    squid.getByText(/Check your wallet's activity before you dismiss this and start another deposit\./),
+  ).toBeVisible();
+  await expect(squid.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+  expect(statusRequests).toEqual([]);
 });
 
 test("an extension account switch while idle moves the console to the new account", async ({ page }) => {

@@ -31,6 +31,7 @@ import { getChain } from "@/constants/chains";
 import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { Network } from "@/types";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { getPermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
@@ -380,6 +381,7 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
         // The one close that must succeed while busy: the transaction is away and
         // the toast tracks it from here. Bypasses the guard above on purpose.
         onSubmitOnChain: () => onOpenChange(false),
+        onConfirmed: () => trackDepositConfirmed(chainId, currentToken.address as Hex, parsedDepositAmount),
       });
     } catch (err) {
       console.error("Deposit failed:", err);

@@ -16,6 +16,7 @@ import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { Network } from "@/types";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
@@ -356,6 +357,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
             operator: operatorAddress,
           },
           onSubmitOnChain,
+          onConfirmed: () => trackDepositConfirmed(chain.id, tokenAddress, parsedDeposit),
         });
       } else {
         await execute({
