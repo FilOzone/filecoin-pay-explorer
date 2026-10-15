@@ -104,6 +104,15 @@ describe("presetScopeStates", () => {
     });
   });
 
+  it("offers a renewed key's destructive scope the link did not request, unticked", () => {
+    assert.deepEqual(presetScopeStates(["addPieces"], ["createDataSet", "terminateService"]), {
+      createDataSet: "checked",
+      addPieces: "checked",
+      schedulePieceRemovals: "locked-off",
+      terminateService: "unchecked",
+    });
+  });
+
   it("locks off scopes the request did not name", () => {
     const states = presetScopeStates(["createDataSet"]);
     assert.equal(states.addPieces, "locked-off");

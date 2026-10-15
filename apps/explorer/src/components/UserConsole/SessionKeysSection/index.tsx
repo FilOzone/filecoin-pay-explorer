@@ -169,9 +169,12 @@ const ConnectedSessionKeys = ({
   useEffect(() => {
     if (!cliPrefill || prefillPending || authorizeLinkOpenedRef.current) return;
     authorizeLinkOpenedRef.current = true;
+    // A form the owner opened by hand while the key's status loaded is theirs:
+    // switching it to the link would replace what they entered.
+    if (createOpen) return;
     setCreateSource("link");
     setCreateOpen(true);
-  }, [cliPrefill, prefillPending]);
+  }, [cliPrefill, prefillPending, createOpen]);
 
   /** Resolves true when the chain was read, false when the read failed and was reported. */
   const handleSync = useCallback(async (): Promise<boolean> => {

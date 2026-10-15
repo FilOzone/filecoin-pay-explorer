@@ -32,7 +32,7 @@ afterEach(cleanup);
 
 const WARNING = "Requested by the link. Untick it unless this key should be able to do this.";
 
-function renderRequest(prefillScopes: ScopeId[]) {
+function renderRequest(prefillScopes: ScopeId[], extra: Partial<React.ComponentProps<typeof CreateKeyFlow>> = {}) {
   render(
     <CreateKeyFlow
       open
@@ -43,6 +43,7 @@ function renderRequest(prefillScopes: ScopeId[]) {
       prefillAddress={"0x00000000000000000000000000000000000000bb" as Hex}
       prefillScopes={prefillScopes}
       onCreated={() => undefined}
+      {...extra}
     />,
   );
 }
@@ -67,6 +68,16 @@ describe("CreateKeyFlow requested scopes", () => {
     ]);
     expect(screen.getAllByText(WARNING)).toHaveLength(1);
     expect(screen.queryByText(/Granting fewer scopes than requested/)).toBeNull();
+  });
+
+  it("leaves a renewed key's destructive scope the link did not request unticked, without the warning", () => {
+    renderRequest(["addPieces"], {
+      existingKey: { name: "", scopes: ["addPieces", "terminateService"], expirySec: null },
+    });
+
+    const terminate = checkbox("Terminate service") as HTMLInputElement;
+    expect({ checked: terminate.checked, disabled: terminate.disabled }).toEqual({ checked: false, disabled: false });
+    expect(screen.queryByText(WARNING)).toBeNull();
   });
 
   it("drops the warning and flags the shortfall once the owner unticks it", () => {
