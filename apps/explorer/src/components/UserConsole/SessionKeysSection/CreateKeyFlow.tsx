@@ -359,21 +359,29 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // Declared AFTER the fresh-attempt
   // reset effect: both fire on the open transition and run in declaration
   // order, so the reset must never clobber the request's prefill.
+  // Applied once per opening and address: a key that becomes known while the
+  // form is open (a chain sync, the login confirming) must not wipe what the
+  // owner entered.
+  const prefillAppliedFor = useRef<Hex | null>(null);
   useEffect(() => {
-    if (open && prefillAddress) {
-      setSignerMode("own");
-      setOwnAddress(prefillAddress);
-      if (existingKeyName != null) setName(existingKeyName);
-      else if (prefillName) setName(prefillName);
-      if (prefillDays != null) setDays(String(prefillDays));
-      if (requestPresets) {
-        setCheckedScopes(
-          Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
-            ScopeId,
-            boolean
-          >,
-        );
-      }
+    if (!open) {
+      prefillAppliedFor.current = null;
+      return;
+    }
+    if (!prefillAddress || prefillAppliedFor.current === prefillAddress) return;
+    prefillAppliedFor.current = prefillAddress;
+    setSignerMode("own");
+    setOwnAddress(prefillAddress);
+    if (existingKeyName != null) setName(existingKeyName);
+    else if (prefillName) setName(prefillName);
+    if (prefillDays != null) setDays(String(prefillDays));
+    if (requestPresets) {
+      setCheckedScopes(
+        Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
+          ScopeId,
+          boolean
+        >,
+      );
     }
   }, [open, prefillAddress, existingKeyName, prefillName, prefillDays, requestPresets]);
 
@@ -408,10 +416,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
 
-  // Success copy comes from `submitted`, not the checkboxes. Once the login
-  // confirms, the parent passes the updated key back as `existingKey`, the
-  // prefill effect runs again, and it resets the checkboxes to the request.
-  // Reading the checkboxes here could list scopes the owner had unticked.
+  // Success copy comes from `submitted`, not the checkboxes: it must name what
+  // was sent onchain, whatever the live form shows once the login confirms.
   const submittedScopeLabels = (submitted?.scopes ?? []).map((id) => SCOPE_BY_ID[id].label).join(", ");
   const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
 
@@ -449,7 +455,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     renew: {
       title: "Renew session key",
       description:
-        "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired.",
+        "This key has expired. Its previous scopes are checked again, except destructive ones the link did not request. Every scope you select gets the new expiry; unselected scopes stay expired.",
       submit: "Renew key",
     },
     add: {
@@ -548,6 +554,11 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                         {prefillScopes?.includes(scope.id) && scope.destructive && checkedScopes[scope.id] && (
                           <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
                             Requested by the link. Untick it unless this key should be able to do this.
+                          </span>
+                        )}
+                        {preset === "unchecked" && !checkedScopes[scope.id] && (
+                          <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
+                            This key held it before. Check to renew it too.
                           </span>
                         )}
                       </span>
