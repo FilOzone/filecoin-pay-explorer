@@ -83,10 +83,11 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
       {content}
 
       {/* Dialogs */}
-      <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+      <AddServiceDialog network={network} open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       {selectedApproval && (
         <IncreaseApprovalDialog
           approval={selectedApproval}
+          network={network}
           open={increaseDialogOpen}
           onOpenChange={setIncreaseDialogOpen}
         />

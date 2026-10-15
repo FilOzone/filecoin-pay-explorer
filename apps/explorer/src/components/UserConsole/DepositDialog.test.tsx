@@ -1,5 +1,6 @@
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import { mainnet } from "@/constants/chains";
 import { DepositDialog } from "./DepositDialog";
 
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
@@ -47,29 +48,18 @@ vi.mock("@/hooks/useAccountSummary", () => ({ default: () => ({ data: undefined,
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: vi.fn(), isExecuting: false }),
 }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    synapse: {},
-    constants: {
-      chain: { id: 314, genesisTimestamp: 0 },
-      contracts: {
-        payments: { address: "0x2222222222222222222222222222222222222222", abi: [] },
-        usdfc: "0x3333333333333333333333333333333333333333",
-      },
-    },
-  }),
-}));
-
 const usdfc = {
   id: "user-token",
-  token: { id: "0x3333333333333333333333333333333333333333", symbol: "USDFC", decimals: "18" },
+  token: { id: mainnet.contracts.usdfc.address, symbol: "USDFC", decimals: "18" },
 } as never;
 
 describe("DepositDialog", () => {
   it("rejects an amount above the connected wallet balance", () => {
     let renderer!: ReturnType<typeof create>;
     act(() => {
-      renderer = create(<DepositDialog depositToken={usdfc} onOpenChange={vi.fn()} open tokens={[usdfc]} />);
+      renderer = create(
+        <DepositDialog depositToken={usdfc} network='mainnet' onOpenChange={vi.fn()} open tokens={[usdfc]} />,
+      );
     });
 
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("1"));
@@ -84,7 +74,9 @@ describe("DepositDialog", () => {
     let renderer!: ReturnType<typeof create>;
     try {
       act(() => {
-        renderer = create(<DepositDialog depositToken={usdfc} onOpenChange={vi.fn()} open tokens={[usdfc]} />);
+        renderer = create(
+          <DepositDialog depositToken={usdfc} network='mainnet' onOpenChange={vi.fn()} open tokens={[usdfc]} />,
+        );
       });
       act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("1"));
 
