@@ -14,9 +14,9 @@ describe("invalidateAccountQueries", () => {
     const queryClient = new QueryClient();
     const affected = [
       ["account", OWNER, "mainnet"],
-      ["account", OWNER.toLowerCase(), "tokens", 1, 100, "mainnet"],
-      ["account", OWNER.toLowerCase(), "approvals", 1, "mainnet"],
-      ["account", OWNER.toLowerCase(), "rails", 1, "mainnet"],
+      ["account", OWNER, "tokens", 1, 100, "mainnet"],
+      ["account", OWNER, "approvals", "infinite", "mainnet"],
+      ["account", OWNER, "rails", 1, "mainnet"],
       ["payments", "account-summary", 314, OWNER],
       ["balance", { address: OWNER }],
       ["readContract", { functionName: "balanceOf" }],
@@ -46,19 +46,19 @@ describe("invalidateAccountQueries", () => {
   it("refetches only mounted queries and lets a later mutation replace the pending passes", async () => {
     const queryClient = new QueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
-    const checksummedAccount = ["account", CHECKSUMMED_OWNER, "mainnet"] as const;
-    queryClient.setQueryData(checksummedAccount, "cached");
+    const account = ["account", CHECKSUMMED_OWNER.toLowerCase(), "mainnet"] as const;
+    queryClient.setQueryData(account, "cached");
 
     await invalidateAccountQueries(queryClient, CHECKSUMMED_OWNER, { repeatAfterMs: [5_000] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["readContract"], refetchType: "active" });
     const immediatePasses = invalidateQueries.mock.calls.length;
 
     await invalidateAccountQueries(queryClient, CHECKSUMMED_OWNER.toLowerCase(), { repeatAfterMs: [5_000] });
-    queryClient.setQueryData(checksummedAccount, "refetched");
+    queryClient.setQueryData(account, "refetched");
     await vi.advanceTimersByTimeAsync(5_000);
     // Two immediate passes and one delayed pass: the first mutation's timer was replaced, not stacked.
     expect(invalidateQueries.mock.calls.length).toBe(immediatePasses * 3);
-    expect(queryClient.getQueryState(checksummedAccount)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(account)?.isInvalidated).toBe(true);
   });
 });
 

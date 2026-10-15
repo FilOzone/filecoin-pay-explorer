@@ -47,7 +47,7 @@ Keep privileged service calls and non-public configuration on the server. Valida
 Before editing, inspect the closest route, shared layout, component, hook, and co-located tests. Useful starting points are:
 
 - `src/components/shared/SiteLayout.tsx` and `Providers.tsx` — application shell, network context, TanStack Query, tooltips, progress, and toasts
-- `src/components/UserConsole/ConsoleProviders.tsx` — console-only wagmi, RainbowKit, Synapse, and top-up activity state
+- `src/components/UserConsole/providers/` — console-only providers: Privy, the console account and the wagmi connection that follows it, Synapse, and funding state
 - `src/services/grapql/queries.ts` — shared GraphQL documents; keep the existing `grapql` spelling unless a task explicitly includes renaming it
 - `src/hooks/useGraphQLQuery.ts` — network-aware query and infinite-query wrappers
 - `src/constants/chains.ts`, `src/services/wagmi/config.tsx`, and `src/utils/network.ts` — Filecoin and wallet-chain definitions and checks
@@ -177,14 +177,14 @@ Do not hardcode deployment endpoints, credentials, private keys, or new environm
 
 ## Testing
 
-Vitest runs in the Node environment and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
+Vitest runs in the Node environment by default and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
 
 ```text
 Component.tsx
 Component.test.tsx
 ```
 
-Follow existing `react-test-renderer` and module-mocking patterns for component tests unless intentionally changing the test environment.
+Write new component tests with `@testing-library/react`. Start the file with `// @vitest-environment jsdom` and register `afterEach(cleanup)`, as in `src/components/shared/Providers.test.tsx`. Do not add new `react-test-renderer` tests; existing ones are migrating under [#498](https://github.com/FilOzone/filecoin-pay-explorer/issues/498). Follow existing module-mocking patterns.
 
 - Add regression coverage for bug fixes and tests for new behavior.
 - Test observable outputs and state transitions, not component internals.
@@ -236,3 +236,13 @@ Run `pnpm type-check --filter @filecoin-pay/explorer` for TypeScript changes and
 5. Keep unrelated cleanup outside the change.
 
 Keep edits local to `apps/explorer` unless behavior truly crosses a workspace boundary. Avoid opportunistic rewrites of the large console dialogs or query catalog. If a task changes subgraph entities, generated types, shared UI, or notification-service behavior, state the expanded scope before editing those packages and follow their local instructions.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

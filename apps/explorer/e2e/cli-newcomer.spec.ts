@@ -108,8 +108,9 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
 
+    // The dialog root has no box of its own (everything inside is `fixed`), so assert on its heading.
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
-    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
     // The form renders after a chain read; a cold `next dev` in CI can take well past the default 5s.
     await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2", { timeout: 30_000 });
   });

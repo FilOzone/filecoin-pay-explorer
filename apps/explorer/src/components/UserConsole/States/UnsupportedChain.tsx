@@ -5,10 +5,14 @@ import { EmptyStateCard } from "@filecoin-foundation/ui-filecoin/EmptyStateCard"
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useSwitchChain } from "wagmi";
+import { useConsoleAccountExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { supportedChains } from "@/services/wagmi/config";
+import { ExitLink } from "./ExitLink";
 
 const UnsupportedChain = () => {
   const { switchChain } = useSwitchChain();
+  // A wallet that cannot add Filecoin never leaves this screen, so it needs a way out of the console.
+  const walletExit = useConsoleAccountExit();
 
   return (
     <EmptyStateCard
@@ -34,6 +38,7 @@ const UnsupportedChain = () => {
             Switch to {chain.label}
           </Button>
         ))}
+        <ExitLink action={walletExit.action} exit={walletExit.exit} />
       </div>
     </EmptyStateCard>
   );

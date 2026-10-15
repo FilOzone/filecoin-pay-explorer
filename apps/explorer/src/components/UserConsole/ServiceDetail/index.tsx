@@ -1,3 +1,4 @@
+import type { Address } from "viem";
 import { useAccountService } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
@@ -14,7 +15,7 @@ interface ServiceDetailProps {
   network: Network;
   operatorAddress: string;
   /** The connected wallet, which the console always treats as the payer. */
-  userAddress: string;
+  userAddress: Address;
 }
 
 /**

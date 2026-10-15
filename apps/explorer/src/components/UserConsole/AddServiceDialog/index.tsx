@@ -23,8 +23,8 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatUnits, type Hex, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
 import TokenIcon from "@/components/shared/TokenIcon";
-import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
 import { FIL_TRANSACTION_FEE_RESERVE } from "@/components/UserConsole/FundsSection/data/filecoin-gas-balance";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import type { ApprovableService } from "@/hooks/useApprovableServices";
 import useSynapse from "@/hooks/useSynapse";
 import { formatAddress } from "@/utils/formatter";
@@ -264,16 +264,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ open, onOpenChange,
 
   return (
     <Dialog open={open && !funding.isSquidOpen} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto'
-        showCloseButton={!isBusy}
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-      >
+      <DialogContent className='sm:max-w-[600px] max-h-[90vh] overflow-y-auto' showCloseButton={!isBusy}>
         <DialogHeader>
           <DialogTitle>Add a Service</DialogTitle>
           <DialogDescription>

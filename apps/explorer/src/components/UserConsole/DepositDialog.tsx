@@ -30,6 +30,7 @@ import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/gui
 import useAccountSummary from "@/hooks/useAccountSummary";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import useSynapse from "@/hooks/useSynapse";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { getPermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 
@@ -379,6 +380,7 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
         // The one close that must succeed while busy: the transaction is away and
         // the toast tracks it from here. Bypasses the guard above on purpose.
         onSubmitOnChain: () => onOpenChange(false),
+        onConfirmed: () => trackDepositConfirmed(constants.chain.id, currentToken.address as Hex, parsedDepositAmount),
       });
     } catch (err) {
       console.error("Deposit failed:", err);
@@ -420,16 +422,8 @@ export const DepositDialog = ({ depositToken, tokens, open, onOpenChange }: Depo
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className='flex max-h-[90vh] flex-col sm:max-w-[500px]'
-        // The guard in `handleDialogOpenChange` already refuses these closes, but
-        // stopping them at the source means no dismissal is even attempted while
-        // a signature is pending, and the missing X says so before it is tried.
+        // `handleDialogOpenChange` refuses closes while busy; the missing X says so before it is tried.
         showCloseButton={!isBusy}
-        onEscapeKeyDown={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBusy) event.preventDefault();
-        }}
       >
         <DialogHeader>
           <DialogTitle>Deposit tokens</DialogTitle>

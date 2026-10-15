@@ -1,42 +1,6 @@
-import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import type { Abi, Hex, TransactionReceipt } from "viem";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import type { TransactionMetadata } from "@/types";
+import { useCallback, useState } from "react";
 import { formatToken } from "@/utils/formatter";
-import { invalidateAccountQueries } from "@/utils/query-invalidation";
-import { getToastContent } from "@/utils/toast";
-
-/** wagmi raises ConnectorChainMismatchError and viem ChainMismatchError, possibly wrapped, when the wallet is on another chain. */
-function isChainMismatch(error: unknown): boolean {
-  let current = error;
-  for (let depth = 0; depth < 5 && current instanceof Error; depth += 1) {
-    if (current.name.endsWith("ChainMismatchError")) return true;
-    current = current.cause;
-  }
-  return false;
-}
-
-interface RailSettlementState {
-  railId: string;
-  txHash?: Hex;
-  toastId?: string | number;
-  metadata: TransactionMetadata;
-}
-
-interface UseRailSettlementsOptions {
-  account?: Hex;
-  contractAddress: Hex;
-  abi: Abi;
-  chainId: number;
-  /** Named in the error toast when the wallet is on another network. */
-  chainName?: string;
-  explorerUrl?: string;
-  onSettlementSuccess?: (railId: string, receipt: TransactionReceipt) => void;
-  onSettlementError?: (railId: string, error: Error) => void;
-}
+import { type UseContractTransactionOptions, useContractTransaction } from "./useContractTransaction";
 
 export interface SettleRailParams {
   railId: bigint;
@@ -46,208 +10,41 @@ export interface SettleRailParams {
   tokenDecimals: number;
 }
 
-export const useRailSettlements = (options: UseRailSettlementsOptions) => {
-  const { account, contractAddress, abi, chainId, chainName, explorerUrl, onSettlementSuccess, onSettlementError } =
-    options;
+/**
+ * Settles rails through the shared transaction lifecycle, which tracks each
+ * submission to its own receipt, and adds which rails are settling: from the
+ * wallet prompt until that rail's receipt confirms or fails.
+ */
+export const useRailSettlements = (options: UseContractTransactionOptions & { chainId: number }) => {
+  const [settlingRails, setSettlingRails] = useState<ReadonlySet<string>>(new Set());
+  const { execute } = useContractTransaction(options);
 
-  const [settlements, setSettlements] = useState<Map<string, RailSettlementState>>(new Map());
-  const [pendingTxHashes, setPendingTxHashes] = useState<Set<Hex>>(new Set());
-  const queryClient = useQueryClient();
-
-  const { writeContractAsync } = useWriteContract();
-
-  // Watches for a pending transaction receipt.
-  // Currently processes transactions sequentially: once a transaction
-  // completes, it is removed from `pendingTxHashes` in `handleTransactionComplete`,
-  // allowing the next pending transaction to be processed.
-  // NOTE: This is a temporary approach and may need a more robust solution
-  // for handling multiple concurrent pending transactions.
-  const currentPendingTx = Array.from(pendingTxHashes)[0];
-  const {
-    data: receipt,
-    isSuccess,
-    isError,
-    error,
-  } = useWaitForTransactionReceipt({
-    chainId,
-    hash: currentPendingTx,
-    query: {
-      enabled: !!currentPendingTx,
-    },
-  });
-
-  // Use ref for transient settlement values to avoid recreating callback
-  const settlementsRef = useRef(settlements);
-  settlementsRef.current = settlements;
-
-  // Handle transaction completion
-  const handleTransactionComplete = useCallback(
-    (txHash: Hex, success: boolean, receiptData?: TransactionReceipt, errorData?: Error) => {
-      const settlement = Array.from(settlementsRef.current.values()).find((s) => s.txHash === txHash);
-      if (!settlement) return;
-
-      if (success && receiptData) {
-        const content = getToastContent(settlement.metadata, "success");
-        const txHashShort = `${txHash.slice(0, 6)}...${txHash.slice(-4)}`;
-
-        toast.success(content.title, {
-          id: settlement.toastId,
-          description: undefined, // setting 'undefined' to remove the description
-          action: explorerUrl ? (
-            <ExternalTextLink className='flex items-center' href={`${explorerUrl}/tx/${txHash}`}>
-              View {txHashShort}
-            </ExternalTextLink>
-          ) : null,
-        });
-
-        // A settlement moves funds for payer and payee and rewrites the rail.
-        void invalidateAccountQueries(queryClient, receiptData.from);
-        onSettlementSuccess?.(settlement.railId, receiptData);
-      } else if (errorData) {
-        const content = getToastContent(settlement.metadata, "error");
-
-        console.error(`[Settlement Error] Rail ${settlement.railId}:`, {
-          error: errorData.message,
-          txHash,
-          fullError: errorData,
-        });
-
-        toast.error(content.title, {
-          id: settlement.toastId,
-          description: "Settlement failed. See console for details.",
-        });
-
-        onSettlementError?.(settlement.railId, errorData);
-      }
-
-      // Cleanup
-      setSettlements((prev) => {
-        const next = new Map(prev);
-        next.delete(settlement.railId);
+  const settleRail = async ({ railId, untilEpoch, settlementAmount, tokenSymbol, tokenDecimals }: SettleRailParams) => {
+    const id = railId.toString();
+    const settled = () =>
+      setSettlingRails((current) => {
+        const next = new Set(current);
+        next.delete(id);
         return next;
       });
-      setPendingTxHashes((prev) => {
-        const next = new Set(prev);
-        next.delete(txHash);
-        return next;
-      });
-    },
-    [explorerUrl, onSettlementSuccess, onSettlementError, queryClient],
-  );
 
-  // Effect to handle transaction status changes
-  useEffect(() => {
-    if (currentPendingTx && (isSuccess || isError)) {
-      handleTransactionComplete(currentPendingTx, isSuccess, receipt, error as Error);
-    }
-  }, [currentPendingTx, isSuccess, isError, receipt, error, handleTransactionComplete]);
-
-  const settleRail = useCallback(
-    async (params: SettleRailParams) => {
-      const { railId, untilEpoch, settlementAmount, tokenSymbol, tokenDecimals } = params;
-      const railIdStr = railId.toString();
-
-      const metadata: TransactionMetadata = {
+    setSettlingRails((current) => new Set(current).add(id));
+    return execute({
+      functionName: "settleRail",
+      args: [railId, untilEpoch],
+      metadata: {
         type: "settleRail",
-        railId: railIdStr,
+        railId: id,
         amount: formatToken(settlementAmount, tokenDecimals),
         token: tokenSymbol,
-      };
-
-      try {
-        const content = getToastContent(metadata, "pending");
-        const toastId = toast.loading(content.title, {
-          description: content.description,
-        });
-
-        setSettlements((prev) =>
-          new Map(prev).set(railIdStr, {
-            railId: railIdStr,
-            metadata,
-            toastId,
-          }),
-        );
-
-        const txHash = await writeContractAsync({
-          account,
-          address: contractAddress,
-          abi,
-          chainId,
-          functionName: "settleRail",
-          args: [railId, untilEpoch],
-        });
-
-        setSettlements((prev) => {
-          const existing = prev.get(railIdStr);
-          if (existing) {
-            return new Map(prev).set(railIdStr, {
-              ...existing,
-              txHash,
-            });
-          }
-          console.warn(
-            `[Settlement Warning] Settlement state not found for rail ${railIdStr} when updating with txHash. This shouldn't happen.`,
-            {
-              railId: railIdStr,
-              txHash,
-            },
-          );
-          return prev;
-        });
-
-        setPendingTxHashes((prev) => new Set(prev).add(txHash));
-
-        return txHash;
-      } catch (err) {
-        console.error("[Settlement Rejected]:", {
-          error: err instanceof Error ? err.message : "Transaction failed",
-          railId: railIdStr,
-          fullError: err,
-        });
-
-        // Get the settlement to access toastId
-        const settlement = settlementsRef.current.get(railIdStr);
-
-        // Dismiss the loading toast and show error
-        toast.dismiss(settlement?.toastId);
-        toast.error("Settlement Rejected", {
-          // A write pinned to the displayed chain fails while the wallet sits on another network,
-          // for example Base after a Squid deposit; retrying cannot help until the wallet switches.
-          description: isChainMismatch(err)
-            ? `Your wallet is on another network. Switch it to ${chainName ?? "the displayed Filecoin network"} and try again.`
-            : "Transaction was rejected. Please try again.",
-          duration: 4000,
-        });
-
-        // Clean up settlement state
-        setSettlements((prev) => {
-          const next = new Map(prev);
-          next.delete(railIdStr);
-          return next;
-        });
-
-        throw err;
-      }
-    },
-    [account, contractAddress, abi, chainId, chainName, writeContractAsync],
-  );
-
-  const isSettling = useCallback(
-    (railId: string) => {
-      return settlements.has(railId);
-    },
-    [settlements],
-  );
-
-  const getSettlementCount = useCallback(() => {
-    return settlements.size;
-  }, [settlements]);
-
-  return {
-    settleRail,
-    isSettling,
-    getSettlementCount,
-    activeSettlements: Array.from(settlements.keys()),
-    settlements,
+      },
+      onError: settled,
+      onConfirmed: settled,
+      onReverted: settled,
+    });
   };
+
+  const isSettling = useCallback((railId: string) => settlingRails.has(railId), [settlingRails]);
+
+  return { settleRail, isSettling };
 };

@@ -2,7 +2,7 @@ import type { Account, UserToken } from "@filecoin-pay/types";
 import type { ReactNode } from "react";
 import { act, create } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FundingLaunchProvider, useFundingLaunch } from "../FundingLaunchContext";
+import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { FundsSection } from ".";
 
 const USDFC = "0x3333333333333333333333333333333333333333";

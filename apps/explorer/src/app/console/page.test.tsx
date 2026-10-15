@@ -32,10 +32,10 @@ vi.mock("@/components/shared", () => ({
   Balance: () => <div>Filecoin balance</div>,
   ChainSwitcher: () => <div>Filecoin network</div>,
 }));
-vi.mock("@/components/UserConsole/ConsoleProviders", () => ({
+vi.mock("@/components/UserConsole/providers/ConsoleProviders", () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("@/components/UserConsole/TopUpActivityContext", () => ({
+vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({
     isTopUpActive: topUpState.isTopUpActive,
   }),

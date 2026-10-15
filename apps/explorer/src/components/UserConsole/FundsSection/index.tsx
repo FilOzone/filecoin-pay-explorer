@@ -1,6 +1,6 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SpendChart } from "@/components/UserConsole/SpendChart";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
