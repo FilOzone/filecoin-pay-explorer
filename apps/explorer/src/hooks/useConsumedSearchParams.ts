@@ -37,3 +37,12 @@ export function useConsumedSearchParams(keys: readonly string[], keep: readonly 
   }, []);
   return snapshot;
 }
+
+/**
+ * Reads the named search params once on mount and leaves them in the address
+ * bar, for a link that must survive a remount; whoever acts on it calls
+ * `dropSearchParams`. Same snapshot as {@link useConsumedSearchParams}.
+ */
+export function useLinkSearchParams(keys: readonly string[]): URLSearchParams | null {
+  return useConsumedSearchParams([], keys);
+}

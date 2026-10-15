@@ -32,21 +32,23 @@ afterEach(cleanup);
 
 const WARNING = "Requested by the link. Untick it unless this key should be able to do this.";
 
-function renderRequest(prefillScopes: ScopeId[], extra: Partial<React.ComponentProps<typeof CreateKeyFlow>> = {}) {
-  render(
-    <CreateKeyFlow
-      open
-      onOpenChange={() => undefined}
-      network='calibration'
-      account={"0x00000000000000000000000000000000000000aa" as Hex}
-      registry={{ address: "0x00000000000000000000000000000000000000cc" as Hex, abi: [] }}
-      prefillAddress={"0x00000000000000000000000000000000000000bb" as Hex}
-      prefillScopes={prefillScopes}
-      onCreated={() => undefined}
-      {...extra}
-    />,
-  );
-}
+type Extra = Partial<React.ComponentProps<typeof CreateKeyFlow>>;
+
+const request = (prefillScopes: ScopeId[], extra: Extra = {}) => (
+  <CreateKeyFlow
+    open
+    onOpenChange={() => undefined}
+    network='calibration'
+    account={"0x00000000000000000000000000000000000000aa" as Hex}
+    registry={{ address: "0x00000000000000000000000000000000000000cc" as Hex, abi: [] }}
+    prefillAddress={"0x00000000000000000000000000000000000000bb" as Hex}
+    prefillScopes={prefillScopes}
+    onCreated={() => undefined}
+    {...extra}
+  />
+);
+
+const renderRequest = (prefillScopes: ScopeId[], extra: Extra = {}) => render(request(prefillScopes, extra));
 
 const checkbox = (label: string) => screen.getByRole("checkbox", { name: new RegExp(`^${label}`) });
 
@@ -78,6 +80,22 @@ describe("CreateKeyFlow requested scopes", () => {
     const terminate = checkbox("Terminate service") as HTMLInputElement;
     expect({ checked: terminate.checked, disabled: terminate.disabled }).toEqual({ checked: false, disabled: false });
     expect(screen.queryByText(WARNING)).toBeNull();
+    expect(screen.getByText("This key held it before. Check to renew it too.")).not.toBeNull();
+    expect(screen.getByText(/Its previous scopes are checked again, except destructive ones/)).not.toBeNull();
+  });
+
+  it("keeps what the owner changed when the key becomes known while the form is open", () => {
+    const { rerender } = renderRequest(["createDataSet", "addPieces"]);
+    fireEvent.click(checkbox("Add pieces"));
+
+    // A chain sync imports the key: the parent now passes it as an existing key.
+    rerender(
+      request(["createDataSet", "addPieces"], {
+        existingKey: { name: "laptop", scopes: ["createDataSet"], expirySec: null },
+      }),
+    );
+
+    expect((checkbox("Add pieces") as HTMLInputElement).checked).toBe(false);
   });
 
   it("drops the warning and flags the shortfall once the owner unticks it", () => {
