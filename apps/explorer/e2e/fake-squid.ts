@@ -43,14 +43,22 @@ const paymentsAbi = parseAbi([
 /**
  * Squid on Base for one funded payer: the token catalog, quotes and routes that echo the request, a status that
  * reports success, and the Filecoin deposit receipt that credits the route's recipient. Other RPC calls fall
- * through to fake-chain.ts. Returns the route requests Squid received, in order.
+ * through to fake-chain.ts. `executableRoute` adjusts the nth executable route (from 1): a minimum received below
+ * the quotes', or an expiry. Returns the route requests Squid received, in order.
  */
-export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRouteRequest[]> {
+export async function installFakeSquid(
+  page: Page,
+  payer: Hex,
+  {
+    executableRoute = () => ({}),
+  }: { executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number } } = {},
+): Promise<SquidRouteRequest[]> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet } = await import("@filoz/synapse-sdk");
   const payments = mainnet.contracts.filecoinPay.address.toLowerCase();
   const usdfc = mainnet.contracts.usdfc.address;
   const routeRequests: SquidRouteRequest[] = [];
+  let executableRoutes = 0;
   const isPayer = (address: string) => address.toLowerCase() === payer.toLowerCase();
 
   const sent = () =>
@@ -231,6 +239,7 @@ export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRou
       if (!url.pathname.endsWith("/route")) return route.fallback();
       const params = route.request().postDataJSON() as SquidRouteRequest & { quoteOnly: boolean };
       routeRequests.push(params);
+      const { minimumShortfall = 0n, expiresInSeconds } = params.quoteOnly ? {} : executableRoute(++executableRoutes);
       // 1 USDC buys 1 USDFC, 6 decimals to 18.
       const toAmount = (BigInt(params.fromAmount) * 10n ** 12n).toString();
       return route.fulfill({
@@ -240,7 +249,7 @@ export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRou
             params,
             estimate: {
               toAmount,
-              toAmountMin: toAmount,
+              toAmountMin: (BigInt(toAmount) - minimumShortfall).toString(),
               actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
               feeCosts: [],
               // Squid prices the route's source gas; the review budgets the route from it.
@@ -258,6 +267,9 @@ export async function installFakeSquid(page: Page, payer: Hex): Promise<SquidRou
               data: "0x12345678",
               value: "0",
               gasLimit: "500000",
+              ...(expiresInSeconds === undefined
+                ? {}
+                : { expiry: String(Math.floor(Date.now() / 1000) + expiresInSeconds) }),
             },
           },
         },
