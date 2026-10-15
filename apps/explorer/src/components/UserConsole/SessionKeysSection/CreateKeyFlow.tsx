@@ -29,8 +29,9 @@ import { formatAddress, formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   buildLoginArgs,
-  EXPIRY_PRESETS,
+  DEFAULT_EXPIRY_DAYS,
   type ExistingKeyPrefill,
+  MAX_EXPIRY_SEC,
   normalizeKeyName,
   resolveExpiry,
   SCOPE_BY_ID,
@@ -51,6 +52,8 @@ interface CreateKeyFlowProps {
   prefillScopes?: ScopeId[] | null;
   /** Key name the link suggests. Editable; an existing key keeps its own name. */
   prefillName?: string | null;
+  /** Expiry in days the link suggests. Editable; an existing key keeps its own expiry. */
+  prefillDays?: number | null;
   /**
    * Turns the dialog into an add-scopes flow
    */
@@ -120,6 +123,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   prefillAddress,
   prefillScopes,
   prefillName,
+  prefillDays,
   existingKey,
   onCreated,
   onConfirmed,
@@ -129,8 +133,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [txState, setTxState] = useState<TxState>("idle");
   const [name, setName] = useState("");
   const [checkedScopes, setCheckedScopes] = useState<Record<ScopeId, boolean>>(EMPTY_SELECTION);
-  const [presetIndex, setPresetIndex] = useState("1"); // default 30 days
-  const [customDate, setCustomDate] = useState("");
+  const [days, setDays] = useState(String(DEFAULT_EXPIRY_DAYS));
   const [signerMode, setSignerMode] = useState<"generate" | "own">("generate");
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
@@ -204,7 +207,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const inheritExpiry = existingKey?.expirySec ?? null;
   const existingKeyName = existingKey?.name ?? null;
 
-  const expiryChoice = () => inheritExpiry ?? resolveExpiry(presetIndex, customDate, Date.now());
+  const expiryChoice = () => inheritExpiry ?? resolveExpiry(days, Date.now());
+  const expiryPreview = inheritExpiry == null ? resolveExpiry(days, Date.now()) : null;
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
@@ -332,8 +336,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setTxState("idle");
     setName("");
     setCheckedScopes(EMPTY_SELECTION);
-    setPresetIndex("1");
-    setCustomDate("");
+    setDays(String(DEFAULT_EXPIRY_DAYS));
     setSignerMode("generate");
     setOwnAddress("");
     setGenerated(null);
@@ -362,6 +365,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       setOwnAddress(prefillAddress);
       if (existingKeyName != null) setName(existingKeyName);
       else if (prefillName) setName(prefillName);
+      if (prefillDays != null) setDays(String(prefillDays));
       if (requestPresets) {
         setCheckedScopes(
           Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
@@ -371,7 +375,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         );
       }
     }
-  }, [open, prefillAddress, existingKeyName, prefillName, requestPresets]);
+  }, [open, prefillAddress, existingKeyName, prefillName, prefillDays, requestPresets]);
 
   const closeDialog = () => {
     reset();
@@ -565,38 +569,33 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </div>
 
               <div className='flex flex-col gap-1.5'>
-                <Label htmlFor='sk-expiry'>Expiration</Label>
+                <Label htmlFor='sk-expiry'>
+                  Expiration {inheritExpiry == null && <span className='text-zinc-500 font-normal'>(days)</span>}
+                </Label>
                 {inheritExpiry != null ? (
                   <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
                 ) : (
                   <>
-                    <select
-                      disabled={formLocked}
+                    <Input
                       id='sk-expiry'
-                      className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                      value={presetIndex}
-                      onChange={(e) => setPresetIndex(e.target.value)}
-                    >
-                      {EXPIRY_PRESETS.map((preset, i) => (
-                        <option key={preset.label} value={String(i)}>
-                          {preset.label}
-                        </option>
-                      ))}
-                      <option value='custom'>Custom date…</option>
-                    </select>
-                    {presetIndex === "custom" && (
-                      <input
-                        type='date'
-                        disabled={formLocked}
-                        aria-label='Custom expiry date'
-                        className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                        value={customDate}
-                        onChange={(e) => setCustomDate(e.target.value)}
-                      />
+                      type='number'
+                      inputMode='numeric'
+                      min={1}
+                      step={1}
+                      value={days}
+                      onChange={setDays}
+                      disabled={formLocked}
+                    />
+                    {expiryPreview ? (
+                      <p className='text-xs text-zinc-500'>
+                        The key stops working on {formatDateTime(Number(expiryPreview) * 1000)}. Every key has to
+                        expire.
+                      </p>
+                    ) : (
+                      <p className='text-xs text-red-600'>
+                        Enter a whole number of days, at least 1, ending by {formatDateTime(MAX_EXPIRY_SEC * 1000)}.
+                      </p>
                     )}
-                    <p className='text-xs text-zinc-500'>
-                      The key stops working on this date. Every key has to expire.
-                    </p>
                   </>
                 )}
               </div>

@@ -172,6 +172,7 @@ describe("parseAuthorizeLink", () => {
       scopes: ["addPieces"],
       network: "calibration",
       name: null,
+      days: null,
     });
   });
 
@@ -181,6 +182,20 @@ describe("parseAuthorizeLink", () => {
     assert.equal((named("  filecoin-cli  ") as { name: string | null }).name, "filecoin-cli");
     assert.equal((named("ci\u202Evne.yek") as { name: string | null }).name, "civne.yek");
     assert.equal((named("x".repeat(80)) as { name: string | null }).name, "x".repeat(64));
+  });
+
+  it("carries suggested days, and treats unusable days as none, never as a broken link", () => {
+    const withDays = (days: string) =>
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
+        .days;
+    assert.deepEqual(["7", "3650", "0", "1.5", "soon", "999999999999"].map(withDays), [
+      7,
+      3650,
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 
   it("treats a blank or unusable name as none, never as a broken link", () => {

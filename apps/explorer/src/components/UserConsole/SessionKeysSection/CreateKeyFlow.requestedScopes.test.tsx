@@ -14,8 +14,14 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     ...props
   }: React.ComponentProps<"button"> & { variant?: string; size?: string }) => <button {...props}>{children}</button>,
 }));
+// The real Input hands onChange the value, not the event.
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
-  Input: (props: React.ComponentProps<"input">) => <input {...props} />,
+  Input: ({
+    onChange,
+    ...props
+  }: Omit<React.ComponentProps<"input">, "onChange"> & { onChange: (v: string) => void }) => (
+    <input {...props} onChange={(e) => onChange(e.target.value)} />
+  ),
 }));
 vi.mock("@filecoin-pay/ui/components/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => children,
@@ -87,6 +93,37 @@ describe("CreateKeyFlow requested scopes", () => {
 
     expect(screen.queryByText(WARNING)).toBeNull();
     expect(screen.getByText(/Granting fewer scopes than requested/)).not.toBeNull();
+  });
+});
+
+describe("CreateKeyFlow expiry in days", () => {
+  const daysInput = () => screen.getByRole("spinbutton", { name: /^Expiration/ }) as HTMLInputElement;
+
+  it("defaults to 30 days, or the days the link suggests, and stays editable", () => {
+    renderRequest(["createDataSet"], { prefillDays: 7 });
+    expect({ value: daysInput().value, disabled: daysInput().disabled }).toEqual({ value: "7", disabled: false });
+    cleanup();
+
+    renderRequest(["createDataSet"]);
+    expect(daysInput().value).toBe("30");
+  });
+
+  it("holds Authorize when the days land past the last date a JS Date holds", () => {
+    renderRequest(["createDataSet"]);
+
+    fireEvent.change(daysInput(), { target: { value: "100000000" } });
+
+    expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    expect((screen.getByRole("button", { name: /^Authorize as / }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("holds Authorize and says why when the days are unusable", () => {
+    renderRequest(["createDataSet"]);
+
+    fireEvent.change(daysInput(), { target: { value: "0" } });
+
+    expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    expect((screen.getByRole("button", { name: /^Authorize as / }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
