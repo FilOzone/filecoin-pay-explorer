@@ -62,7 +62,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     const name = dialog.getByRole("textbox", { name: /^Name/ });
     await expect(name).toHaveValue("filecoin-cli");
     await expect(name).toBeEditable();
-    const days = dialog.getByRole("spinbutton", { name: /^Expiration/ });
+    const days = dialog.getByRole("textbox", { name: /^Expiration/ });
     await expect(days).toHaveValue("7");
     await expect(days).toBeEditable();
   });

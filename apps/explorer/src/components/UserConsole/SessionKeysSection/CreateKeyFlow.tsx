@@ -208,7 +208,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const existingKeyName = existingKey?.name ?? null;
 
   const expiryChoice = () => inheritExpiry ?? resolveExpiry(days, Date.now());
-  const expiryPreview = inheritExpiry == null ? resolveExpiry(days, Date.now()) : null;
+  // Read once per render for the date shown and the Authorize check; submitting reads the clock again.
+  const expiryPreview = expiryChoice();
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
@@ -216,7 +217,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // A closed and reopened dialog must not send a second login for a key whose first one is still landing.
   const signerAwaited =
     signerMode === "own" && awaitedGrants.some((grant) => grant.signer.toLowerCase() === ownAddress.toLowerCase());
-  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && !isBusy && !signerAwaited;
+  const canCreate = selectedScopes.length > 0 && expiryPreview !== null && signerValid && !isBusy && !signerAwaited;
   // The bring-your-own path stays on the form while its login confirms; the
   // fields freeze so the success screen shows what was actually submitted.
   const formLocked = isBusy;
@@ -587,12 +588,12 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
                 ) : (
                   <>
+                    {/* Text, not number: a number input takes 1e2 or 7.0 as valid, which the form refuses. */}
                     <Input
                       id='sk-expiry'
-                      type='number'
+                      type='text'
                       inputMode='numeric'
-                      min={1}
-                      step={1}
+                      pattern='[0-9]*'
                       value={days}
                       onChange={setDays}
                       disabled={formLocked}

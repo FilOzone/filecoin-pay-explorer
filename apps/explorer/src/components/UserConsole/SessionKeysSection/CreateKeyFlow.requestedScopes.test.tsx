@@ -115,7 +115,7 @@ describe("CreateKeyFlow requested scopes", () => {
 });
 
 describe("CreateKeyFlow expiry in days", () => {
-  const daysInput = () => screen.getByRole("spinbutton", { name: /^Expiration/ }) as HTMLInputElement;
+  const daysInput = () => screen.getByRole("textbox", { name: /^Expiration/ }) as HTMLInputElement;
 
   it("defaults to 30 days, or the days the link suggests, and stays editable", () => {
     renderRequest(["createDataSet"], { prefillDays: 7 });
@@ -133,6 +133,16 @@ describe("CreateKeyFlow expiry in days", () => {
 
     expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
     expect((screen.getByRole("button", { name: /^Authorize as / }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("refuses what a number input would take as valid, like 1e2 or 7.0, and says why", () => {
+    renderRequest(["createDataSet"]);
+
+    for (const value of ["1e2", "7.0"]) {
+      fireEvent.change(daysInput(), { target: { value } });
+      expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    }
+    expect(daysInput().getAttribute("inputmode")).toBe("numeric");
   });
 
   it("holds Authorize and says why when the days are unusable", () => {
