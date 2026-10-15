@@ -46,20 +46,16 @@ export function parseScopesParam(value: string | null | undefined): ScopeId[] | 
 
 /**
  * How each scope checkbox opens in a request-initiated create dialog:
- * - "checked": requested, non-destructive — granted unless the user unchecks it.
- * - "requested-unchecked": requested AND destructive — the CLI asked for it,
- *   but destructive power needs an explicit opt-in click from the owner.
+ * - "checked": requested — granted unless the owner unchecks it. The dialog
+ *   warns on a destructive one, so the owner sees what they are granting.
  * - "locked-off": not requested — reduce-only consent means the dialog never
  *   grants more than the request named; rendered disabled.
  */
-export type RequestedScopePreset = "checked" | "requested-unchecked" | "locked-off";
+export type RequestedScopePreset = "checked" | "locked-off";
 
 export function presetScopeStates(requested: ScopeId[]): Record<ScopeId, RequestedScopePreset> {
   return Object.fromEntries(
-    SESSION_KEY_SCOPES.map((scope) => {
-      if (!requested.includes(scope.id)) return [scope.id, "locked-off"];
-      return [scope.id, scope.destructive ? "requested-unchecked" : "checked"];
-    }),
+    SESSION_KEY_SCOPES.map((scope) => [scope.id, requested.includes(scope.id) ? "checked" : "locked-off"]),
   ) as Record<ScopeId, RequestedScopePreset>;
 }
 

@@ -402,9 +402,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   // Success copy comes from `submitted`, not the checkboxes. Once the login
   // confirms, the parent passes the updated key back as `existingKey`, the
-  // prefill effect runs again, and it unchecks destructive scopes (Delete
-  // data set, Terminate service). Reading the checkboxes here showed an
-  // empty scope list on the success screen.
+  // prefill effect runs again, and it resets the checkboxes to the request.
+  // Reading the checkboxes here could list scopes the owner had unticked.
   const submittedScopeLabels = (submitted?.scopes ?? []).map((id) => SCOPE_BY_ID[id].label).join(", ");
   const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
 
@@ -538,9 +537,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                           {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
                         </span>
                         <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                        {preset === "requested-unchecked" && !checkedScopes[scope.id] && (
+                        {preset === "checked" && scope.destructive && checkedScopes[scope.id] && (
                           <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
-                            Requested, check to include
+                            Requested by the link. Untick it unless this key should be able to do this.
                           </span>
                         )}
                       </span>

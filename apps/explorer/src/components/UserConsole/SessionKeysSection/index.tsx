@@ -113,8 +113,8 @@ const ConnectedSessionKeys = ({
     { label: "Source code", href: SOURCE_CODE_URL },
   ];
   const [createOpen, setCreateOpen] = useState(false);
-  // Only the banner's button carries the link's address and scopes into the
-  // dialog; "+ New session key" always opens a plain form.
+  // Only the link (on arrival, or from the banner's button) carries its address
+  // and scopes into the dialog; "+ New session key" always opens a plain form.
   const [createSource, setCreateSource] = useState<"link" | "manual">("manual");
   const openCreate = (source: "link" | "manual") => {
     setCreateSource(source);
@@ -163,6 +163,15 @@ const ConnectedSessionKeys = ({
   const prefillPending = existingForPrefill?.status === "unknown";
   const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
+  // ?authorize= link: open the prefilled dialog once, as soon as it can open.
+  // Closing it leaves the banner to reopen it; it does not open again by itself.
+  const authorizeLinkOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!cliPrefill || prefillPending || authorizeLinkOpenedRef.current) return;
+    authorizeLinkOpenedRef.current = true;
+    setCreateSource("link");
+    setCreateOpen(true);
+  }, [cliPrefill, prefillPending]);
 
   /** Resolves true when the chain was read, false when the read failed and was reported. */
   const handleSync = useCallback(async (): Promise<boolean> => {

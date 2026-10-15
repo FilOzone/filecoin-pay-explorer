@@ -1,4 +1,4 @@
-/** The page drops a revoke link nothing can act on, so a reload does not report it again. */
+/** Which link params the page leaves in the URL, and which it drops. */
 import { act, create } from "react-test-renderer";
 import { afterEach, expect, it, vi } from "vitest";
 import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
@@ -33,14 +33,20 @@ it.each([
   expect(replaceState).toHaveBeenCalledWith(null, "", "/console/session-keys");
 });
 
-it("leaves a usable revoke link for the section to act on", async () => {
+it.each([
+  [
+    "a usable revoke link for the section to act on",
+    "?revoke=0x00000000000000000000000000000000000000bb&network=calibration",
+  ],
+  // A network or account switch can remount the page; the link must still be there.
+  [
+    "an authorize link in the URL",
+    "?authorize=0x00000000000000000000000000000000000000bb&scopes=createDataSet&network=calibration",
+  ],
+])("leaves %s", async (_case, search) => {
   const replaceState = vi.fn();
   vi.stubGlobal("window", {
-    location: {
-      pathname: "/console/session-keys",
-      search: "?revoke=0x00000000000000000000000000000000000000bb&network=calibration",
-      hash: "",
-    },
+    location: { pathname: "/console/session-keys", search, hash: "" },
     history: { replaceState },
   });
 

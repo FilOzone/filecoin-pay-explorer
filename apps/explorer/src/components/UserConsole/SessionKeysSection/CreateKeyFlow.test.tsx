@@ -67,13 +67,13 @@ describe("CreateKeyFlow success copy", () => {
       renderer = create(<CreateKeyFlow {...props} prefillScopes={[...props.prefillScopes]} />);
     });
 
-    // A destructive requested scope starts unchecked; the owner ticks it, then submits.
+    // The owner unticks the destructive scope the link requested, then submits.
     const [, , , terminate] = renderer.root.findAllByProps({ type: "checkbox" });
-    act(() => terminate.props.onChange({ target: { checked: true } }));
+    act(() => terminate.props.onChange({ target: { checked: false } }));
     await act(() => renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick());
 
     // The parent lists the key and passes it back, which re-runs the prefill
-    // effect and unchecks the destructive scope again.
+    // effect and ticks the requested scope again.
     act(() => {
       renderer.update(
         <CreateKeyFlow
@@ -85,9 +85,7 @@ describe("CreateKeyFlow success copy", () => {
     });
     act(() => onConfirmed?.());
 
-    expect(text(renderer.toJSON())).toContain(
-      `${SIGNER} is now authorized to act for ${OWNER} with Create data set, Terminate service.`,
-    );
+    expect(text(renderer.toJSON())).toContain(`${SIGNER} is now authorized to act for ${OWNER} with Create data set.`);
   });
 });
 

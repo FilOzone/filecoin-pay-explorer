@@ -13,8 +13,9 @@ function linkError<T extends object>(link: T | { error: AuthorizeParamError } | 
 const SessionKeysPage = () => {
   const { address } = useConnection();
   const { network } = useConsoleNetwork();
-  // `revoke` stays in the URL until acted on: a network switch can remount this page.
-  const params = useConsumedSearchParams(["authorize", "scopes", "network"], ["revoke"]);
+  // Link params stay in the URL: a network or account switch can remount this page, and the
+  // link must survive it. `revoke` is dropped once acted on; `authorize` stays.
+  const params = useConsumedSearchParams([], ["authorize", "scopes", "network", "revoke"]);
   const link = useMemo(() => (params ? parseAuthorizeLink(params) : null), [params]);
   const request = link && "address" in link ? link : null;
   const revokeLink = useMemo(() => (params ? parseRevokeLink(params) : null), [params]);
