@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { toAccountId } from "@/utils/hexUtils";
 import { DepositDialog } from "./DepositDialog";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";

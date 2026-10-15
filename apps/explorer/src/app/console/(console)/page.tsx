@@ -8,9 +8,9 @@ import { AlertsBanner, FundsSection, OperatorApprovalsSection, ServicesSection }
 import AddServiceDialog, { type AddServicePrefill } from "@/components/UserConsole/AddServiceDialog";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { getChain } from "@/constants/chains";
 import { useAccountDetails } from "@/hooks/useAccountDetails";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import type { Network } from "@/types";
@@ -40,15 +40,15 @@ const UnreadableFundingLinkNotice = () => (
 /** Shown when the link names a network other than the one the wallet is on. */
 const OtherNetworkFundingLinkNotice = ({
   linkNetwork,
-  walletNetwork,
+  consoleNetwork,
 }: {
   linkNetwork: Network;
-  walletNetwork: Network;
+  consoleNetwork: Network;
 }) => (
   <Notice tone='warn' role='alert' className='p-4'>
     <p className='font-semibold'>
       This funding link is for <span className='capitalize'>{linkNetwork}</span>, but your wallet is connected to{" "}
-      <span className='capitalize'>{walletNetwork}</span>.
+      <span className='capitalize'>{consoleNetwork}</span>.
     </p>
     <p className='text-xs mt-1'>
       Nothing was filled in. Switch your wallet to <span className='capitalize'>{linkNetwork}</span> and open the link
@@ -155,11 +155,11 @@ const UserConsole = () => {
     <div className='flex flex-col gap-15'>
       {hasUnreadableFundingLink && <UnreadableFundingLinkNotice />}
       {isFundingLinkForOtherNetwork && (
-        <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} walletNetwork={network} />
+        <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} consoleNetwork={network} />
       )}
       {depositPrefill && (
         <AddServiceDialog
-          // A chain switch remounts the dialog so token and operator follow the wallet's network.
+          // A chain switch remounts the dialog so token and operator follow the console network.
           key={network}
           network={network}
           open

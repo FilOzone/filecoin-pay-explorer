@@ -4,7 +4,7 @@ import { isAddress } from "viem";
 import { useConnection } from "wagmi";
 import { ServiceDetail } from "@/components/UserConsole/ServiceDetail";
 import { ServiceNotFoundState } from "@/components/UserConsole/ServiceDetail/components";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 
 /**
  * The (console) layout gates on a connected wallet, so `address` is set by the

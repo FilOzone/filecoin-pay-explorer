@@ -1,8 +1,16 @@
 import { useConnection } from "wagmi";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { SQUID_SOURCE_CHAINS } from "@/constants/chains";
+import { supportedChains } from "@/services/wagmi/config";
 import type { Network } from "@/types";
-import { getNetworkFromChainId, isSupportedChainId } from "@/utils/network";
+import { DEFAULT_NETWORK } from "@/utils/constants";
+import { isSupportedChainId } from "@/utils/network";
+
+// Private to this hook: its mainnet fallback would hide a non-Filecoin chain anywhere else.
+function getNetworkFromChainId(chainId: number | undefined): Network {
+  if (!chainId) return DEFAULT_NETWORK;
+  return supportedChains.find((c) => c.id === chainId)?.slug ?? DEFAULT_NETWORK;
+}
 
 /**
  * The Filecoin network the console reads and writes. It follows the wallet chain, except during a Squid top-up,

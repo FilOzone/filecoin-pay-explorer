@@ -20,8 +20,8 @@ import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { getChain } from "@/constants/chains";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {

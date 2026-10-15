@@ -2,7 +2,7 @@
 import { useEffect, useMemo } from "react";
 import { useConnection } from "wagmi";
 import SessionKeysSection from "@/components/UserConsole/SessionKeysSection";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { dropSearchParams, useConsumedSearchParams } from "@/hooks/useConsumedSearchParams";
 import { type AuthorizeParamError, LINK_PARAMS, parseAuthorizeLink, parseRevokeLink } from "@/utils/authorizeParam";
 

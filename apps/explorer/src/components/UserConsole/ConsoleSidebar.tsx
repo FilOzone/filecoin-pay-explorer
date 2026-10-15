@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import { isNotificationsEligibleNetwork } from "@/utils/network";
 

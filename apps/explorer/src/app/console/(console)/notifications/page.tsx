@@ -19,7 +19,7 @@ import {
   PendingVerificationCard,
   UnsubscribeDialog,
 } from "@/components/UserConsole/NotificationsSection/components";
-import { useConsoleNetwork } from "@/hooks/useConsoleNetwork";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
 import { getNotificationsEligibleNetwork, isNotificationsEligibleNetwork } from "@/utils/network";
 
