@@ -14,8 +14,14 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     ...props
   }: React.ComponentProps<"button"> & { variant?: string; size?: string }) => <button {...props}>{children}</button>,
 }));
+// The real Input hands onChange the value, not the event.
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
-  Input: (props: React.ComponentProps<"input">) => <input {...props} />,
+  Input: ({
+    onChange,
+    ...props
+  }: Omit<React.ComponentProps<"input">, "onChange"> & { onChange: (v: string) => void }) => (
+    <input {...props} onChange={(e) => onChange(e.target.value)} />
+  ),
 }));
 vi.mock("@filecoin-pay/ui/components/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => children,
@@ -125,5 +131,19 @@ describe("CreateKeyFlow requested name", () => {
     });
 
     expect(nameInput().value).toBe("laptop");
+  });
+
+  it("keeps a name the owner typed when the key becomes known while the form is open", () => {
+    const { rerender } = renderRequest(["createDataSet"], { prefillName: "filecoin-cli" });
+    fireEvent.change(nameInput(), { target: { value: "my laptop" } });
+
+    rerender(
+      request(["createDataSet"], {
+        prefillName: "filecoin-cli",
+        existingKey: { name: "laptop", scopes: ["createDataSet"], expirySec: null },
+      }),
+    );
+
+    expect(nameInput().value).toBe("my laptop");
   });
 });
