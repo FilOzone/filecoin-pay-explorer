@@ -49,6 +49,8 @@ interface CreateKeyFlowProps {
   explorerUrl?: string;
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
+  /** Key name the link suggests. Editable; an existing key keeps its own name. */
+  prefillName?: string | null;
   /**
    * Turns the dialog into an add-scopes flow
    */
@@ -117,6 +119,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   explorerUrl,
   prefillAddress,
   prefillScopes,
+  prefillName,
   existingKey,
   onCreated,
   onConfirmed,
@@ -358,6 +361,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
       setSignerMode("own");
       setOwnAddress(prefillAddress);
       if (existingKeyName != null) setName(existingKeyName);
+      else if (prefillName) setName(prefillName);
       if (requestPresets) {
         setCheckedScopes(
           Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
@@ -367,7 +371,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         );
       }
     }
-  }, [open, prefillAddress, existingKeyName, requestPresets]);
+  }, [open, prefillAddress, existingKeyName, prefillName, requestPresets]);
 
   const closeDialog = () => {
     reset();

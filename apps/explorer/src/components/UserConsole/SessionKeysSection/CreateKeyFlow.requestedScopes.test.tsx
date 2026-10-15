@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** How the scopes a `?authorize=` link requests open in the create dialog. */
+/** How a `?authorize=` link's request opens in the create dialog. */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Hex } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -32,7 +32,7 @@ afterEach(cleanup);
 
 const WARNING = "Requested by the link. Untick it unless this key should be able to do this.";
 
-function renderRequest(prefillScopes: ScopeId[]) {
+function renderRequest(prefillScopes: ScopeId[], extra: Partial<React.ComponentProps<typeof CreateKeyFlow>> = {}) {
   render(
     <CreateKeyFlow
       open
@@ -43,6 +43,7 @@ function renderRequest(prefillScopes: ScopeId[]) {
       prefillAddress={"0x00000000000000000000000000000000000000bb" as Hex}
       prefillScopes={prefillScopes}
       onCreated={() => undefined}
+      {...extra}
     />,
   );
 }
@@ -76,5 +77,25 @@ describe("CreateKeyFlow requested scopes", () => {
 
     expect(screen.queryByText(WARNING)).toBeNull();
     expect(screen.getByText(/Granting fewer scopes than requested/)).not.toBeNull();
+  });
+});
+
+describe("CreateKeyFlow requested name", () => {
+  const nameInput = () => screen.getByRole("textbox", { name: /^Name/ }) as HTMLInputElement;
+
+  it("prefills the name the link suggests, and lets the owner edit it", () => {
+    renderRequest(["createDataSet"], { prefillName: "filecoin-cli" });
+
+    expect(nameInput().value).toBe("filecoin-cli");
+    expect(nameInput().disabled).toBe(false);
+  });
+
+  it("keeps an existing key's own name over the link's", () => {
+    renderRequest(["createDataSet"], {
+      prefillName: "filecoin-cli",
+      existingKey: { name: "laptop", scopes: ["createDataSet"], expirySec: null },
+    });
+
+    expect(nameInput().value).toBe("laptop");
   });
 });

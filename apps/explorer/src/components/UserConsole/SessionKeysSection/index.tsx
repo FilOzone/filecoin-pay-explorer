@@ -35,6 +35,8 @@ interface SessionKeysSectionProps {
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
   prefillNetwork?: Network | null;
+  /** Key name the link suggests; prefilled and editable. */
+  prefillName?: string | null;
   /** Set when the link carried an `authorize` or `revoke` value that could not be used. */
   prefillError?: AuthorizeParamError | null;
   /** Session key a `?revoke=` link names, from `filecoin-pin logout`. */
@@ -100,6 +102,7 @@ const ConnectedSessionKeys = ({
   prefillAddress,
   prefillScopes,
   prefillNetwork,
+  prefillName,
   prefillError,
   revokeAddress,
   revokeNetwork,
@@ -550,6 +553,7 @@ const ConnectedSessionKeys = ({
         explorerUrl={explorerUrl}
         prefillAddress={linkPrefill}
         prefillScopes={linkPrefill ? prefillScopes : null}
+        prefillName={linkPrefill ? prefillName : null}
         existingKey={linkPrefill ? existingKeyForPrefill : null}
         onCreated={addKey}
         onConfirmed={markConfirmed}
