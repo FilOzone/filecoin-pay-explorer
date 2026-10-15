@@ -7,6 +7,8 @@ import { loginWithTestAccount } from "./privy";
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
 // (filecoin-pin buildFundingUrl, with its default 2 USDFC suggestion).
 const FUNDING_LINK = "/console?deposit=2&operator=fwss&network=mainnet";
+// Nothing to deposit: the account only needs the Warm Storage approval.
+const APPROVAL_LINK = "/console?operator=fwss&network=mainnet";
 
 // Mock mode follows the CLI's default network, mainnet, against the fake Privy and fake chain. Against real
 // Privy the journeys sign real transactions, so they use calibration and the test account's funded wallet.
@@ -113,5 +115,23 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
     // The form renders after a chain read; a cold `next dev` in CI can take well past the default 5s.
     await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2", { timeout: 30_000 });
+  });
+
+  test("signs up from an approval-only funding link and sees Warm Storage filled in, with no deposit", async ({
+    page,
+  }) => {
+    await page.goto(APPROVAL_LINK);
+
+    await loginWithTestAccount(page);
+
+    const dialog = page.getByRole("dialog", { name: "Add a Service" });
+    await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
+    // CI's placeholder subgraph lists no services, so the operator lands as a custom address.
+    const { mainnet } = await import("@filoz/synapse-sdk");
+    await expect(dialog.getByRole("textbox", { name: /^Service contract address/ })).toHaveValue(
+      new RegExp(`^${mainnet.contracts.fwss.address}$`, "i"),
+      { timeout: 30_000 },
+    );
+    await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveValue("");
   });
 });

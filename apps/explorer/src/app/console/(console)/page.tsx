@@ -25,7 +25,8 @@ import { isNotificationsEligibleNetwork } from "@/utils/network";
 function toDialogPrefill(link: DepositLink): AddServicePrefill {
   return {
     token: getChain(link.network).contracts.usdfc.address,
-    amount: link.amount,
+    // An approval-only link leaves the deposit empty; the dialog adds the service without one.
+    amount: link.amount ?? "",
     operator: resolveOperator(link.operator, link.network),
   };
 }
