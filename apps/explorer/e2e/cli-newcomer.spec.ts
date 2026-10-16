@@ -7,6 +7,8 @@ import { loginWithTestAccount } from "./privy";
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
 // (filecoin-pin buildFundingUrl, with its default 2 USDFC suggestion).
 const FUNDING_LINK = "/console?deposit=2&operator=fwss&network=mainnet";
+// Nothing to deposit: the account only needs the Warm Storage approval.
+const APPROVAL_LINK = "/console?operator=fwss&network=mainnet";
 
 // Mock mode follows the CLI's default network, mainnet, against the fake Privy and fake chain. Against real
 // Privy the journeys sign real transactions, so they use calibration and the test account's funded wallet.
@@ -138,5 +140,43 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
     // The form renders after a chain read; a cold `next dev` in CI can take well past the default 5s.
     await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2", { timeout: 30_000 });
+  });
+
+  test("signs up from an approval-only funding link and sees Warm Storage filled in, with no deposit", async ({
+    page,
+  }) => {
+    await page.goto(APPROVAL_LINK);
+
+    await loginWithTestAccount(page);
+
+    const dialog = page.getByRole("dialog", { name: "Add a Service" });
+    await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
+    // A subgraph that lists Warm Storage (real mode) selects it by name and links its contract; CI's
+    // placeholder subgraph lists no services, so the operator lands in the custom-address field instead.
+    const { mainnet } = await import("@filoz/synapse-sdk");
+    const fwss = mainnet.contracts.fwss.address;
+    const custom = dialog.getByRole("textbox", { name: /^Service contract address/ });
+    const curated = dialog.locator(`a[href$="/address/${fwss}" i]`);
+    await expect(custom.or(curated)).toBeVisible({ timeout: 30_000 });
+    if (await custom.isVisible()) await expect(custom).toHaveValue(new RegExp(`^${fwss}$`, "i"));
+    await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveValue("");
+  });
+
+  test("opens an approval-only funding link on an account that already approved Warm Storage and is told so", async ({
+    page,
+  }) => {
+    test.skip(REAL_MODE, "marks the approval in the fake chain");
+    const { mainnet } = await import("@filoz/synapse-sdk");
+    await page.addInitScript((fwss) => {
+      (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [fwss];
+    }, mainnet.contracts.fwss.address);
+    await page.goto(APPROVAL_LINK);
+
+    await loginWithTestAccount(page);
+
+    await expect(page.getByRole("status").filter({ hasText: "Warm Storage is already approved" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("dialog", { name: "Add a Service" })).toHaveCount(0);
   });
 });

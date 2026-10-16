@@ -19,6 +19,10 @@ const accountsAbi = parseAbi([
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
 ]);
 const ACCOUNTS = toFunctionSelector(accountsAbi[0]);
+const operatorApprovalsAbi = parseAbi([
+  "function operatorApprovals(address token, address client, address operator) view returns (bool isApproved, uint256 rateAllowance, uint256 lockupAllowance, uint256 rateUsage, uint256 lockupUsage, uint256 maxLockupPeriod)",
+]);
+const OPERATOR_APPROVALS = toFunctionSelector(operatorApprovalsAbi[0]);
 // The card purchase checks the recipient's USDC on Base before and after buying.
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
@@ -26,8 +30,9 @@ const BASE_RPC_HOST = "base-rpc.publicnode.com";
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
  * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
- * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet. Any other RPC call falls through to the route that blocks it
- * (fixtures.ts).
+ * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet. Filecoin Pay reports no operator approved
+ * unless a spec lists the operator in window.__fakeApprovedOperators. Any other RPC call falls through to the route
+ * that blocks it (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
@@ -40,6 +45,25 @@ export async function installFakeChain(page: Page): Promise<void> {
   const paymentsContracts = [mainnet, calibration].map((chain) => chain.contracts.filecoinPay.address.toLowerCase());
   const registryAt = (to: string) => registries.find((r) => r.address.toLowerCase() === to.toLowerCase());
   const abi = registries[0].abi;
+
+  const approvedOperators = () =>
+    page.evaluate(() =>
+      ((window as unknown as { __fakeApprovedOperators?: string[] }).__fakeApprovedOperators ?? []).map((a) =>
+        a.toLowerCase(),
+      ),
+    );
+
+  const readApproval = (approved: string[], target: string, data: Hex): Hex | undefined => {
+    if (!paymentsContracts.includes(target.toLowerCase()) || !data.startsWith(OPERATOR_APPROVALS)) return undefined;
+    const { args } = decodeFunctionData({ abi: operatorApprovalsAbi, data });
+    const isApproved = approved.includes(args[2].toLowerCase());
+    const limit = isApproved ? 10n ** 18n : 0n;
+    return encodeFunctionResult({
+      abi: operatorApprovalsAbi,
+      functionName: "operatorApprovals",
+      result: [isApproved, limit, limit, 0n, 0n, isApproved ? 86400n : 0n],
+    });
+  };
 
   const sent = () =>
     page.evaluate(
@@ -105,13 +129,17 @@ export async function installFakeChain(page: Page): Promise<void> {
     if (call.method !== "eth_call") return undefined;
     const { to, data } = call.params[0] as { to: string; data: Hex };
     if (registryAt(to)) return readRegistry(await sent(), data);
+    if (data.startsWith(OPERATOR_APPROVALS)) return readApproval(await approvedOperators(), to, data);
     if (to.toLowerCase() !== MULTICALL3) return readBalance(to, data);
     const { functionName, args } = decodeFunctionData({ abi: multicall3Abi, data });
     if (functionName !== "aggregate3") return undefined;
     const txs = await sent();
-    const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) =>
-      registryAt(c.target) ? readRegistry(txs, c.callData) : readBalance(c.target, c.callData),
-    );
+    const approved = await approvedOperators();
+    const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
+      if (registryAt(c.target)) return readRegistry(txs, c.callData);
+      if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
+      return readBalance(c.target, c.callData);
+    });
     if (!results.every((r): r is Hex => r !== undefined)) return undefined;
     return encodeFunctionResult({
       abi: multicall3Abi,

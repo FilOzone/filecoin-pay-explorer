@@ -1,8 +1,8 @@
 "use client";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { Account } from "@filecoin-pay/types";
-import { useMemo, useState } from "react";
-import { useConnection } from "wagmi";
+import { useEffect, useMemo, useState } from "react";
+import { useConnection, useReadContract } from "wagmi";
 import { Notice } from "@/components/shared/Notice";
 import { AlertsBanner, FundsSection, OperatorApprovalsSection, ServicesSection } from "@/components/UserConsole";
 import AddServiceDialog, { type AddServicePrefill } from "@/components/UserConsole/AddServiceDialog";
@@ -25,7 +25,8 @@ import { isNotificationsEligibleNetwork } from "@/utils/network";
 function toDialogPrefill(link: DepositLink): AddServicePrefill {
   return {
     token: getChain(link.network).contracts.usdfc.address,
-    amount: link.amount,
+    // An approval-only link leaves the deposit empty; the dialog adds the service without one.
+    amount: link.amount ?? "",
     operator: resolveOperator(link.operator, link.network),
   };
 }
@@ -34,6 +35,15 @@ function toDialogPrefill(link: DepositLink): AddServicePrefill {
 const UnreadableFundingLinkNotice = () => (
   <Notice tone='warn' role='alert' title='This funding link could not be read' className='p-4'>
     <p className='text-xs mt-1'>Nothing was filled in. Ask for a new link.</p>
+  </Notice>
+);
+
+/** Shown instead of the dialog when an approval-only link asks for an approval the account already has. */
+const AlreadyApprovedFundingLinkNotice = () => (
+  <Notice tone='info' role='status' title='Warm Storage is already approved' className='p-4'>
+    <p className='text-xs mt-1'>
+      This account already approved it, so there is nothing to add and its spending limits were left as they are.
+    </p>
   </Notice>
 );
 
@@ -137,14 +147,42 @@ const UserConsole = () => {
   const fundingLink = useConsumedSearchParams(["deposit", "operator", "network"]);
   const depositLink = useMemo(() => (fundingLink ? parseDepositLink(fundingLink) : null), [fundingLink]);
   const [dialogDismissed, setDialogDismissed] = useState(false);
-  // A funding link ends in exactly one of three states: unreadable, for another
-  // network, or opening the deposit dialog on this one.
+  // A funding link ends in exactly one of four states: unreadable, for another
+  // network, already done (an approval the account has), or opening the dialog on this one.
   const asksToFund = fundingLink !== null && (fundingLink.has("deposit") || fundingLink.has("operator"));
   const hasUnreadableFundingLink = asksToFund && depositLink === null;
   // A link for another network prefills nothing: approving it here would fund the wrong chain's operator.
   const isFundingLinkForOtherNetwork = depositLink !== null && isFilecoinChain && depositLink.network !== network;
   const isFundingLinkForWallet = depositLink !== null && isFilecoinChain && depositLink.network === network;
-  const shouldOpenFundingDialog = isFundingLinkForWallet && !dialogDismissed;
+  // An approval-only link has nothing to do once the operator is approved; opening the dialog
+  // anyway would re-approve with its unlimited defaults over the owner's own limits.
+  const isApprovalOnlyLink = isFundingLinkForWallet && depositLink.amount === null;
+  // Decided once per wallet and network, from the first answer: approving through the dialog
+  // refetches this read, and the owner must not then be told there was nothing to add.
+  const approvalKey = isApprovalOnlyLink && address ? `${network}:${address}` : null;
+  const [settledApproval, setSettledApproval] = useState<{ key: string; approved: boolean } | null>(null);
+  const approvalAtArrival = settledApproval?.key === approvalKey ? settledApproval : null;
+  const chain = getChain(network);
+  const { data: existingApproval, isPending: isCheckingApproval } = useReadContract({
+    address: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    functionName: "operatorApprovals",
+    args:
+      isApprovalOnlyLink && address
+        ? [chain.contracts.usdfc.address, address, resolveOperator(depositLink.operator, network)]
+        : undefined,
+    // A failed read opens the dialog anyway, so retrying would only keep the owner waiting.
+    query: { enabled: approvalKey !== null && approvalAtArrival === null, retry: false },
+  });
+  useEffect(() => {
+    if (approvalKey === null || approvalAtArrival !== null || isCheckingApproval) return;
+    // A failed read counts as not approved: the owner reviews the approval in the dialog.
+    setSettledApproval({ key: approvalKey, approved: existingApproval?.[0] === true });
+  }, [approvalKey, approvalAtArrival, isCheckingApproval, existingApproval]);
+  const isAlreadyApproved = isApprovalOnlyLink && approvalAtArrival?.approved === true;
+  const shouldOpenFundingDialog =
+    isFundingLinkForWallet && !dialogDismissed && (!isApprovalOnlyLink || approvalAtArrival?.approved === false);
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const depositPrefill = useMemo(
     () => (shouldOpenFundingDialog && depositLink ? toDialogPrefill(depositLink) : null),
@@ -154,6 +192,7 @@ const UserConsole = () => {
   return (
     <div className='flex flex-col gap-15'>
       {hasUnreadableFundingLink && <UnreadableFundingLinkNotice />}
+      {isAlreadyApproved && <AlreadyApprovedFundingLinkNotice />}
       {isFundingLinkForOtherNetwork && (
         <OtherNetworkFundingLinkNotice linkNetwork={depositLink.network} consoleNetwork={network} />
       )}
