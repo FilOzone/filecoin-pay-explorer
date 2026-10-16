@@ -188,14 +188,14 @@ describe("parseAuthorizeLink", () => {
     const withDays = (days: string) =>
       (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
         .days;
-    assert.deepEqual(["7", "3650", "0", "1.5", "soon", "999999999999"].map(withDays), [
-      7,
-      3650,
-      null,
-      null,
-      null,
-      null,
-    ]);
+    assert.deepEqual(["7", "365", "0", "1.5", "soon", "-3"].map(withDays), [7, 365, null, null, null, null]);
+  });
+
+  it("caps the days a link may suggest, however many it asks for", () => {
+    const withDays = (days: string) =>
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
+        .days;
+    assert.deepEqual(["366", "3650", "999999999999"].map(withDays), [365, 365, 365]);
   });
 
   it("treats a blank or unusable name as none, never as a broken link", () => {
