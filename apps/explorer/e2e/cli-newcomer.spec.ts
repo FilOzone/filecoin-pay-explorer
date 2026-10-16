@@ -29,7 +29,7 @@ async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchP
     await page.getByRole("button", { name: /Switch network/ }).click();
     await page.getByText("Calibration", { exact: true }).last().click();
   }
-  await page.getByRole("button", { name: "Review & authorize" }).click();
+  // The link opens the prefilled dialog by itself.
   await page.getByRole("button", { name: /^Authorize as / }).click();
   return new URL(link, baseURL).searchParams;
 }
@@ -43,7 +43,11 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
 
-    await expect(page.getByText(`A link is requesting authorization for ${sessionKey}`)).toBeVisible();
+    // The link opens the form by itself, with the key filled in.
+    const dialog = page.getByRole("dialog", { name: "New session key" });
+    // The link carries the address lowercase; the dialog shows it checksummed.
+    await expect(dialog.getByText(new RegExp(`^${sessionKey}$`, "i"))).toBeVisible();
+    await expect(dialog.getByText(/^This address came from the link\./)).toBeVisible();
   });
 
   test("reviews the key and is asked to send the registry login for it", async ({ page, baseURL }) => {

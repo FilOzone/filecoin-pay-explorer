@@ -340,14 +340,17 @@ test("an email user's console stays on their own wallet when an extension connec
   expect(await consoleAccount(page)).toBe(own);
 });
 
-test("an account switch closes a form opened for the previous account", async ({ page, baseURL }) => {
+test("an account switch reopens the link's form for the new account, never the previous one", async ({
+  page,
+  baseURL,
+}) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   const cli = await filecoinPin(`${baseURL}`);
   const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
   await stubAccountBackgroundRequests(page);
   await page.goto(link);
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
-  await page.getByRole("button", { name: "Review & authorize" }).click();
+  // The link opens the form by itself.
   const first = await consoleAccount(page);
   const [start] = first.split("...");
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
@@ -355,7 +358,10 @@ test("an account switch closes a form opened for the previous account", async ({
   await switchExtensionAccount(page);
 
   await expect.poll(() => consoleAccount(page)).not.toBe(first);
-  await expect(page.getByRole("button", { name: /^Authorize as / })).toBeHidden();
+  // The link stays in the URL, so the form opens again, now naming the new account.
+  const [next] = (await consoleAccount(page)).split("...");
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${next}`, "i") })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeHidden();
 });
 
 async function connectAndOpenCardPurchase(page: Page): Promise<string> {

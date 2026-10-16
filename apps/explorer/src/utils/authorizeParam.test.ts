@@ -95,17 +95,22 @@ describe("parseScopesParam", () => {
 });
 
 describe("presetScopeStates", () => {
-  it("checks requested non-destructive scopes", () => {
-    const states = presetScopeStates(["createDataSet", "addPieces"]);
-    assert.equal(states.createDataSet, "checked");
-    assert.equal(states.addPieces, "checked");
+  it("checks every requested scope, destructive ones included", () => {
+    assert.deepEqual(presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]), {
+      createDataSet: "locked-off",
+      addPieces: "checked",
+      schedulePieceRemovals: "checked",
+      terminateService: "checked",
+    });
   });
 
-  it("leaves requested destructive scopes unchecked but marked as requested", () => {
-    const states = presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]);
-    assert.equal(states.terminateService, "requested-unchecked");
-    assert.equal(states.schedulePieceRemovals, "requested-unchecked");
-    assert.equal(states.addPieces, "checked");
+  it("offers a renewed key's destructive scope the link did not request, unticked", () => {
+    assert.deepEqual(presetScopeStates(["addPieces"], ["createDataSet", "terminateService"]), {
+      createDataSet: "checked",
+      addPieces: "checked",
+      schedulePieceRemovals: "locked-off",
+      terminateService: "unchecked",
+    });
   });
 
   it("locks off scopes the request did not name", () => {

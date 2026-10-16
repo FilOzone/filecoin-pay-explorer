@@ -156,8 +156,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const requestPresets = useMemo(() => {
     if (!prefillAddress) return null;
     const renewed = renewedScopes ? (renewedScopes.split(",") as ScopeId[]) : [];
-    const requested = [...new Set([...(prefillScopes ?? []), ...renewed])];
-    return requested.length ? presetScopeStates(requested) : null;
+    // Kept apart from the link's scopes: a renewal must not preselect a destructive scope the link did not ask for.
+    return prefillScopes?.length || renewed.length ? presetScopeStates(prefillScopes ?? [], renewed) : null;
   }, [prefillAddress, prefillScopes, renewedScopes]);
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
@@ -353,19 +353,27 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // Declared AFTER the fresh-attempt
   // reset effect: both fire on the open transition and run in declaration
   // order, so the reset must never clobber the request's prefill.
+  // Applied once per opening and address: a key that becomes known while the
+  // form is open (a chain sync, the login confirming) must not wipe what the
+  // owner entered.
+  const prefillAppliedFor = useRef<Hex | null>(null);
   useEffect(() => {
-    if (open && prefillAddress) {
-      setSignerMode("own");
-      setOwnAddress(prefillAddress);
-      if (existingKeyName != null) setName(existingKeyName);
-      if (requestPresets) {
-        setCheckedScopes(
-          Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
-            ScopeId,
-            boolean
-          >,
-        );
-      }
+    if (!open) {
+      prefillAppliedFor.current = null;
+      return;
+    }
+    if (!prefillAddress || prefillAppliedFor.current === prefillAddress) return;
+    prefillAppliedFor.current = prefillAddress;
+    setSignerMode("own");
+    setOwnAddress(prefillAddress);
+    if (existingKeyName != null) setName(existingKeyName);
+    if (requestPresets) {
+      setCheckedScopes(
+        Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
+          ScopeId,
+          boolean
+        >,
+      );
     }
   }, [open, prefillAddress, existingKeyName, requestPresets]);
 
@@ -400,11 +408,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
 
-  // Success copy comes from `submitted`, not the checkboxes. Once the login
-  // confirms, the parent passes the updated key back as `existingKey`, the
-  // prefill effect runs again, and it unchecks destructive scopes (Delete
-  // data set, Terminate service). Reading the checkboxes here showed an
-  // empty scope list on the success screen.
+  // Success copy comes from `submitted`, not the checkboxes: it must name what
+  // was sent onchain, whatever the live form shows once the login confirms.
   const submittedScopeLabels = (submitted?.scopes ?? []).map((id) => SCOPE_BY_ID[id].label).join(", ");
   const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
 
@@ -442,7 +447,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     renew: {
       title: "Renew session key",
       description:
-        "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired.",
+        "This key has expired. Its previous scopes are checked again, except destructive ones the link did not request. Every scope you select gets the new expiry; unselected scopes stay expired.",
       submit: "Renew key",
     },
     add: {
@@ -538,9 +543,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                           {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
                         </span>
                         <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                        {preset === "requested-unchecked" && !checkedScopes[scope.id] && (
+                        {prefillScopes?.includes(scope.id) && scope.destructive && checkedScopes[scope.id] && (
                           <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
-                            Requested, check to include
+                            Requested by the link. Untick it unless this key should be able to do this.
+                          </span>
+                        )}
+                        {preset === "unchecked" && !checkedScopes[scope.id] && (
+                          <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
+                            This key held it before. Check to renew it too.
                           </span>
                         )}
                       </span>
