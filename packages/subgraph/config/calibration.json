@@ -1,5 +1,8 @@
 {
   "network": "filecoin-testnet",
   "paymentsContractAddress": "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
-  "paymentsContractStartBlock": 3120649
+  "paymentsContractStartBlock": 3120649,
+  "fwssContractAddress": "0x02925630df557F957f70E112bA06e50965417CA0",
+  "fwssContractStartBlock": 2988329,
+  "pdpVerifierAddress": "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C"
 }

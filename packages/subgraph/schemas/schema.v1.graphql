@@ -38,11 +38,13 @@ type Account @entity(immutable: false) {
   totalRails: BigInt!
   totalTokens: BigInt!
   totalApprovals: BigInt!
+  totalDataSets: BigInt!
 
   payerRails: [Rail!]! @derivedFrom(field: "payer")
   payeeRails: [Rail!]! @derivedFrom(field: "payee")
   operatorApprovals: [OperatorApproval!]! @derivedFrom(field: "client")
   userTokens: [UserToken!]! @derivedFrom(field: "account")
+  dataSets: [DataSet!]! @derivedFrom(field: "payer")
 }
 
 type AccountOperator @entity(immutable: false) {
@@ -195,6 +197,39 @@ type OneTimePayment @entity(immutable: true) {
   txHash: Bytes!
   blockNumber: BigInt!
   createdAt: BigInt!
+}
+
+# Warm Storage (FWSS) datasets, keyed by payer. Proving health (possession
+# proofs, faults, challenge windows) is out of scope; the explorer links out
+# to PDP Explorer for that.
+
+enum DataSetStatus {
+  ACTIVE
+  PDP_TERMINATED
+  CDN_TERMINATED
+  TERMINATED
+}
+
+type DataSet @entity(immutable: false) {
+  id: Bytes! # dataSetId
+  dataSetId: BigInt!
+  payer: Account!
+  provider: Bytes! # FWSS serviceProvider address
+  pdpRail: Rail!
+  cacheMissRail: Rail # set only when CDN service was purchased
+  cdnRail: Rail # set only when CDN service was purchased
+  totalSize: BigInt! # unpadded bytes, decoded from each piece's CommPv2 CID
+  lastWriteAt: BigInt! # block timestamp of the most recent PieceAdded, or creation if none yet
+  status: DataSetStatus!
+  createdAt: BigInt!
+}
+
+# Bookkeeping only, so PDPVerifier.PiecesRemoved can subtract the right amount
+# from DataSet.totalSize; the piece's on-chain content isn't exposed elsewhere.
+type Piece @entity(immutable: false) {
+  id: Bytes! # dataSetId + pieceId
+  dataSet: DataSet!
+  size: BigInt! # unpadded bytes, decoded from the piece's CommPv2 CID
 }
 
 # Metrics

@@ -90,6 +90,7 @@ export const createOrLoadAccountByAddress = (address: Address): AccountWithIsNew
     account.totalRails = ZERO_BIG_INT;
     account.totalApprovals = ZERO_BIG_INT;
     account.totalTokens = ZERO_BIG_INT;
+    account.totalDataSets = ZERO_BIG_INT;
     account.save();
     return new AccountWithIsNew(account, true);
   }
