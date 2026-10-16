@@ -65,6 +65,10 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     const days = dialog.getByRole("textbox", { name: /^Expiration/ });
     await expect(days).toHaveValue("7");
     await expect(days).toBeEditable();
+    await expect(days).toHaveAccessibleDescription(/^The key stops working on /);
+    await days.fill("0");
+    await expect(days).toHaveAttribute("aria-invalid", "true");
+    await expect(days).toHaveAccessibleDescription(/^Enter a whole number of days, at least 1/);
   });
 
   test("reviews the key and is asked to send the registry login for it", async ({ page, baseURL }) => {

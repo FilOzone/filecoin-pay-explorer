@@ -145,6 +145,19 @@ describe("CreateKeyFlow expiry in days", () => {
     expect(daysInput().getAttribute("inputmode")).toBe("numeric");
   });
 
+  it("marks the field invalid and points it at the message that says why", () => {
+    renderRequest(["createDataSet"]);
+    const hint = () => document.getElementById(daysInput().getAttribute("aria-describedby") ?? "");
+
+    expect(daysInput().getAttribute("aria-invalid")).toBe("false");
+    expect(hint()?.textContent).toMatch(/^The key stops working on /);
+
+    fireEvent.change(daysInput(), { target: { value: "0" } });
+
+    expect(daysInput().getAttribute("aria-invalid")).toBe("true");
+    expect(hint()?.textContent).toMatch(/^Enter a whole number of days, at least 1, ending by/);
+  });
+
   it("holds Authorize and says why when the days are unusable", () => {
     renderRequest(["createDataSet"]);
 

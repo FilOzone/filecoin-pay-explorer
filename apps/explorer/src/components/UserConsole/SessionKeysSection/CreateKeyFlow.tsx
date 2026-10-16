@@ -588,23 +588,27 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                   <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
                 ) : (
                   <>
-                    {/* Text, not number: a number input takes 1e2 or 7.0 as valid, which the form refuses. */}
-                    <Input
+                    {/* Text, not number: a number input takes 1e2 or 7.0 as valid, which the form refuses.
+                        Native, not the library Input: that one overwrites aria-invalid and aria-describedby. */}
+                    <input
                       id='sk-expiry'
                       type='text'
                       inputMode='numeric'
                       pattern='[0-9]*'
+                      className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
                       value={days}
-                      onChange={setDays}
+                      onChange={(e) => setDays(e.target.value)}
                       disabled={formLocked}
+                      aria-invalid={!expiryPreview}
+                      aria-describedby='sk-expiry-hint'
                     />
                     {expiryPreview ? (
-                      <p className='text-xs text-zinc-500'>
+                      <p id='sk-expiry-hint' className='text-xs text-zinc-500'>
                         The key stops working on {formatDateTime(Number(expiryPreview) * 1000)}. Every key has to
                         expire.
                       </p>
                     ) : (
-                      <p className='text-xs text-red-600'>
+                      <p id='sk-expiry-hint' className='text-xs text-red-600'>
                         Enter a whole number of days, at least 1, ending by {formatDateTime(MAX_EXPIRY_SEC * 1000)}.
                       </p>
                     )}
