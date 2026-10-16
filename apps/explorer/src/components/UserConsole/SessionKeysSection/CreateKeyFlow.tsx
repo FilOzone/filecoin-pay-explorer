@@ -202,7 +202,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
   const inheritExpiry = existingKey?.expirySec ?? null;
-  const existingKeyName = existingKey?.name ?? null;
+  // An unnamed key has name "", which is no name to keep: the link's suggestion fills in instead.
+  const existingKeyName = existingKey?.name || null;
 
   const expiryChoice = () => inheritExpiry ?? resolveExpiry(presetIndex, customDate, Date.now());
 

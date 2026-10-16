@@ -133,6 +133,15 @@ describe("CreateKeyFlow requested name", () => {
     expect(nameInput().value).toBe("laptop");
   });
 
+  it("fills in the link's name when the existing key has none", () => {
+    renderRequest(["createDataSet"], {
+      prefillName: "filecoin-cli",
+      existingKey: { name: "", scopes: ["createDataSet"], expirySec: null },
+    });
+
+    expect(nameInput().value).toBe("filecoin-cli");
+  });
+
   it("keeps a name the owner typed when the key becomes known while the form is open", () => {
     const { rerender } = renderRequest(["createDataSet"], { prefillName: "filecoin-cli" });
     fireEvent.change(nameInput(), { target: { value: "my laptop" } });
