@@ -2,10 +2,10 @@
 /** `withoutDeposit`: the setup page's approval-only step, which funds the account in a step of its own. */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AddServiceDialog from ".";
+import AddServiceDialog, { type AddServicePrefill } from ".";
 
-const TOKEN = "0x1111111111111111111111111111111111111111";
-const OPERATOR = "0x2222222222222222222222222222222222222222";
+const TOKEN = "0x1111111111111111111111111111111111111111" as const;
+const OPERATOR = "0x2222222222222222222222222222222222222222" as const;
 const submit = vi.hoisted(() => vi.fn());
 
 vi.mock("@filecoin-pay/ui/components/dialog", () => ({
@@ -68,17 +68,15 @@ vi.mock("./hooks", () => ({
   useAddServiceSubmit: () => ({ submit, isSubmitting: false, isExecuting: false }),
 }));
 
+// A prefill with an amount, to show the flag wins over it. One object, as a caller keeps it stable.
+const PREFILL: AddServicePrefill = { operator: OPERATOR, token: TOKEN, amount: "2" };
+
 function renderDialog(withoutDeposit: boolean) {
-  render(
-    <AddServiceDialog
-      network='mainnet'
-      open
-      onOpenChange={vi.fn()}
-      // A prefill with an amount, to show the flag wins over it.
-      prefill={{ operator: OPERATOR, token: TOKEN, amount: "2" }}
-      withoutDeposit={withoutDeposit}
-    />,
+  const dialog = (flag: boolean) => (
+    <AddServiceDialog network='mainnet' open onOpenChange={vi.fn()} prefill={PREFILL} withoutDeposit={flag} />
   );
+  const { rerender } = render(dialog(withoutDeposit));
+  return { setWithoutDeposit: (flag: boolean) => rerender(dialog(flag)) };
 }
 
 describe("AddServiceDialog withoutDeposit", () => {
@@ -96,6 +94,21 @@ describe("AddServiceDialog withoutDeposit", () => {
     renderDialog(true);
 
     expect(screen.queryByText("Deposit amount")).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Add Service" }));
+    });
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit.mock.calls[0][0]).toEqual(expect.objectContaining({ parsedDeposit: null, depositAmountLabel: "" }));
+  });
+
+  it("ignores an amount already filled in when the flag turns on while the form is open", async () => {
+    const { setWithoutDeposit } = renderDialog(false);
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("2");
+
+    // The funds arrived another way while the form was open.
+    setWithoutDeposit(true);
     expect(screen.queryByRole("spinbutton")).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Add Service" }));

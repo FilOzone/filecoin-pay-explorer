@@ -24,6 +24,8 @@ import { SetupStep, type StepTone } from "./SetupStep";
 
 export type AvailableFunds = Read<{
   available: bigint;
+  /** Owed beyond the account's funds; `available` is 0 while there is any. */
+  debt: bigint;
   /** Deposits minus withdrawals; see {@link netDeposited}. */
   netDeposited: bigint;
   userToken: UserToken | null;
@@ -45,12 +47,12 @@ export function useAvailableUsdfc(network: Network, account: Hex, enabled = true
   const usdfc = getChain(network).contracts.usdfc.address.toLowerCase();
   // Matched by contract address, so a look-alike symbol can't stand in. An account the index has not seen has none.
   const userToken = data.userTokens.find((token) => token.token.id.toLowerCase() === usdfc) ?? null;
+  // Reckoned at the last read: the poll moves it forward as lockup accrues.
+  const funded = userToken ? calculateFundedUntil(userToken, BigInt(Math.floor(dataUpdatedAt / 1_000))) : null;
   return {
     state: "ready",
-    // Reckoned at the last read: the poll moves it forward as lockup accrues.
-    available: userToken
-      ? calculateFundedUntil(userToken, BigInt(Math.floor(dataUpdatedAt / 1_000))).availableFunds
-      : 0n,
+    available: funded?.availableFunds ?? 0n,
+    debt: funded?.debt ?? 0n,
     netDeposited: netDeposited(userToken),
     userToken,
     userTokens: data.userTokens,

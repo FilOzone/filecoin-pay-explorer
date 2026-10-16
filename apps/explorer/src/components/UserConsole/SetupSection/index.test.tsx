@@ -446,6 +446,36 @@ describe("SetupSection", () => {
     expect(dialogs.deposit.length).toBeGreaterThan(rendered);
   });
 
+  it("offers no deposit for a deposit link until it has read where the balance started", async () => {
+    state.approved = true;
+    state.walletUsdfc = 20n * ONE_USDFC;
+    state.fundsUnreadable = true;
+    const { rerender } = await open("deposit=2&network=mainnet");
+    expect(steps()[1].textContent).toContain("Could not read your balance");
+    expect(within(steps()[1]).queryByRole("button")).toBeNull();
+
+    // The read recovers: the deposit is measured from here.
+    state.fundsUnreadable = false;
+    state.usdfcFunds = 7n * ONE_USDFC;
+    await rerender();
+    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+  });
+
+  it("starts again when the page moves to another setup link without unmounting", async () => {
+    state.approved = true;
+    state.usdfcFunds = 2n * ONE_USDFC;
+    state.walletUsdfc = 20n * ONE_USDFC;
+    let result!: ReturnType<typeof render>;
+    await act(async () => {
+      result = render(<SetupSection query='balance=2&network=mainnet' />);
+    });
+    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+
+    await act(async () => result.rerender(<SetupSection query='balance=10&network=mainnet' />));
+    expect(screen.queryByText("✓ Setup complete")).toBeNull();
+    expect(screen.getByRole("button", { name: "Deposit 8 USDFC" })).toBeTruthy();
+  });
+
   it("says a one-day key expires after 1 day", async () => {
     await open(KEY_LINK.replace("days=7", "days=1"));
 

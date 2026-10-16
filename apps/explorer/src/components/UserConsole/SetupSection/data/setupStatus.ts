@@ -95,6 +95,7 @@ export type Shortfall = { kind: "none" } | { kind: "amount"; amount: bigint } | 
  * What still has to go into Filecoin Pay for the request:
  * - With a `balance`, the gap to that target; the CLI computes it as what is
  *   available plus what it needs, so this is the same comparison it makes.
+ *   Debt counts too: a deposit settles it before any of it becomes available.
  *   Rounded up to the cent: lockup keeps drawing the balance down, and a
  *   deposit that lands a fraction short would leave the step open.
  * - With only a `deposit`, the amount on top that this tab has not yet seen
@@ -104,19 +105,22 @@ export type Shortfall = { kind: "none" } | { kind: "amount"; amount: bigint } | 
  */
 export function shortfall({
   available,
+  debt,
   netDeposited: net,
   baseline,
   deposit,
   balance,
 }: {
   available: bigint;
+  /** What the account owes beyond its funds; `available` is 0 while there is any. */
+  debt: bigint;
   netDeposited: bigint;
   baseline: bigint | null;
   deposit: string | null;
   balance: string | null;
 }): Shortfall {
   if (balance !== null) {
-    const missing = parseUnits(balance, USDFC_DECIMALS) - available;
+    const missing = parseUnits(balance, USDFC_DECIMALS) + debt - available;
     return missing > 0n
       ? { kind: "amount", amount: roundUpUnits(missing, USDFC_DECIMALS, SUGGESTED_TOPUP_DISPLAY_DECIMALS) }
       : { kind: "none" };

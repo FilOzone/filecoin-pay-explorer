@@ -53,7 +53,15 @@ describe("keyGrant", () => {
 describe("shortfall", () => {
   const ONE = 10n ** 18n;
   const missing = (overrides: Partial<Parameters<typeof shortfall>[0]>) =>
-    shortfall({ available: 0n, netDeposited: 0n, baseline: null, deposit: null, balance: null, ...overrides });
+    shortfall({
+      available: 0n,
+      debt: 0n,
+      netDeposited: 0n,
+      baseline: null,
+      deposit: null,
+      balance: null,
+      ...overrides,
+    });
 
   it("asks for some balance until there is any, when the link names no amount", () => {
     assert.deepEqual(missing({}), { kind: "any" });
@@ -72,6 +80,11 @@ describe("shortfall", () => {
       amount: 1001n * 10n ** 16n,
     });
     assert.deepEqual(missing({ available: 17_342n * 10n ** 15n, balance: "17.342" }), { kind: "none" });
+  });
+
+  it("with a balance, adds what the account owes, which a deposit settles first", () => {
+    // 10 owed and nothing available: 2 more would only pay part of the debt.
+    assert.deepEqual(missing({ debt: 10n * ONE, balance: "2" }), { kind: "amount", amount: 12n * ONE });
   });
 
   it("with only a deposit, is the whole amount on top until this tab sees it go in", () => {

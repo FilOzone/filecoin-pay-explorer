@@ -140,13 +140,17 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
   const funds = useAvailableUsdfc(network, account, !request.approvalOnly);
   const walletUsdfc = useWalletUsdfc(network, account, !request.approvalOnly);
   const depositBaseline = useDepositBaseline(network, account, request, funds);
-  // Live, unlike the steps' order: what Filecoin Pay still lacks, and whether the wallet can make it up.
+  // What Filecoin Pay still lacks. A link with a deposit but no balance is measured from the
+  // baseline, so nothing is offered until it is known: a deposit sent before the first good read
+  // would otherwise become part of the baseline and be asked for again.
+  const awaitingBaseline = request.deposit !== null && request.balance === null && depositBaseline === null;
   const liveMissing =
-    funds.state === "loading"
+    funds.state === "loading" || awaitingBaseline
       ? null
       : shortfall({
           // An unreadable balance counts as empty: the steps offered then still work.
           available: funds.state === "ready" ? funds.available : 0n,
+          debt: funds.state === "ready" ? funds.debt : 0n,
           netDeposited: funds.state === "ready" ? funds.netDeposited : 0n,
           baseline: depositBaseline,
           deposit: request.deposit,
@@ -250,7 +254,11 @@ const SetupSection = ({ query }: { query: string }) => {
       {requested !== network ? (
         <SwitchNetwork requested={requested} current={network} />
       ) : (
-        address && <SetupSteps key={`${network}:${address}`} network={network} account={address} request={request} />
+        address && (
+          // Keyed by the link too: moving to another setup link in this tab must not keep the
+          // previous one's deposit baseline or reached funds.
+          <SetupSteps key={`${network}:${address}:${query}`} network={network} account={address} request={request} />
+        )
       )}
     </div>
   );

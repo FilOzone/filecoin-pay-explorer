@@ -197,10 +197,13 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
     setRateAllowance("");
   };
 
+  // The amount the form acts on. `withoutDeposit` can turn on while the form is
+  // open (the funds arrived another way), hiding a field that may still hold a value.
+  const effectiveDepositAmount = withoutDeposit ? "" : depositAmount;
   const parsedDeposit = (() => {
-    if (!depositAmount.trim() || !token) return null;
+    if (!effectiveDepositAmount.trim() || !token) return null;
     try {
-      return parseUnits(depositAmount.trim(), token.decimals);
+      return parseUnits(effectiveDepositAmount.trim(), token.decimals);
     } catch {
       return null;
     }
@@ -231,7 +234,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
     (isUnlimited || lockupInWei > 0n || rateInWei > 0n);
 
   const isOperatorValid = !!operatorAddress;
-  const isDepositValid = !depositAmount.trim() || (isDepositing && supportsPermit);
+  const isDepositValid = !effectiveDepositAmount.trim() || (isDepositing && supportsPermit);
   // Nothing simulates the call client-side, so an over-balance deposit would
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
@@ -263,7 +266,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
         operatorAddress,
         token,
         parsedDeposit,
-        depositAmountLabel: depositAmount,
+        depositAmountLabel: effectiveDepositAmount,
         lockupInWei,
         rateInWei,
       });

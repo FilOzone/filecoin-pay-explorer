@@ -1,5 +1,9 @@
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
+import { answerEmptySubgraph } from "./subgraph";
+
+// See answerEmptySubgraph.
+test.use({ bypassCSP: true });
 
 // Warm Storage approved and USDFC in the wallet: the link's deposit is a plain wallet deposit, not Add funds.
 test.describe("setup link for an approved account with USDFC in the wallet", () => {
@@ -12,6 +16,7 @@ test.describe("setup link for an approved account with USDFC in the wallet", () 
       fake.__fakeApprovedOperators = [fwss];
       fake.__fakeUsdfcBalance = (5n * 10n ** 18n).toString();
     }, mainnet.contracts.fwss.address);
+    await answerEmptySubgraph(page);
     await page.goto("/console/setup?deposit=2&network=mainnet");
     await loginWithTestAccount(page);
 
