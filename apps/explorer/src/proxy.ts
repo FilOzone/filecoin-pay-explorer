@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { supportedChains } from "@/services/wagmi/config";
 import { DEFAULT_NETWORK } from "@/utils/constants";
+import { legacySetupPath } from "@/utils/setupLink";
 
 const VALID_NETWORKS: readonly string[] = supportedChains.map((chain) => chain.slug);
 
@@ -13,7 +14,9 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/console")) {
-    return NextResponse.next();
+    // Older CLIs still print the pre-setup-page links.
+    const setupPath = legacySetupPath(pathname, request.nextUrl.searchParams);
+    return setupPath ? NextResponse.redirect(new URL(setupPath, request.url)) : NextResponse.next();
   }
 
   const networkMatch = pathname.match(/^\/([^/]+)/);

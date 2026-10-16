@@ -340,7 +340,7 @@ test("an email user's console stays on their own wallet when an extension connec
   expect(await consoleAccount(page)).toBe(own);
 });
 
-test("an account switch reopens the link's form for the new account, never the previous one", async ({
+test("an account switch closes the link's form, and reopening it names the new account, never the previous one", async ({
   page,
   baseURL,
 }) => {
@@ -350,16 +350,18 @@ test("an account switch reopens the link's form for the new account, never the p
   await stubAccountBackgroundRequests(page);
   await page.goto(link);
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
-  // The link opens the form by itself.
   const first = await consoleAccount(page);
   const [start] = first.split("...");
+  await page.getByRole("button", { name: "Review and authorize" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
 
   await switchExtensionAccount(page);
 
   await expect.poll(() => consoleAccount(page)).not.toBe(first);
-  // The link stays in the URL, so the form opens again, now naming the new account.
+  await expect(page.getByRole("dialog", { name: "New session key" })).toBeHidden();
+  // The link stays in the URL, so the setup page still offers it, now for the new account.
   const [next] = (await consoleAccount(page)).split("...");
+  await page.getByRole("button", { name: "Review and authorize" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${next}`, "i") })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeHidden();
 });

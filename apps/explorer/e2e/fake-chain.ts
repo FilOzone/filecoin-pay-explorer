@@ -15,6 +15,12 @@ type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
 const BALANCE_OF = toFunctionSelector("balanceOf(address)");
+// The Deposit dialog resolves a token it is given by address from its own metadata.
+const TOKEN_METADATA = {
+  [toFunctionSelector("symbol()")]: { functionName: "symbol", result: "USDFC" },
+  [toFunctionSelector("name()")]: { functionName: "name", result: "USD for Filecoin Community" },
+  [toFunctionSelector("decimals()")]: { functionName: "decimals", result: 18 },
+} as const;
 const accountsAbi = parseAbi([
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
 ]);
@@ -30,7 +36,8 @@ const BASE_RPC_HOST = "base-rpc.publicnode.com";
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
  * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
- * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet. Filecoin Pay reports no operator approved
+ * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet; a spec can set the wallet's USDFC in
+ * window.__fakeUsdfcBalance (base units, as a decimal string). Filecoin Pay reports no operator approved
  * unless a spec lists the operator in window.__fakeApprovedOperators. Any other RPC call falls through to the route
  * that blocks it (fixtures.ts).
  */
@@ -45,6 +52,10 @@ export async function installFakeChain(page: Page): Promise<void> {
   const paymentsContracts = [mainnet, calibration].map((chain) => chain.contracts.filecoinPay.address.toLowerCase());
   const registryAt = (to: string) => registries.find((r) => r.address.toLowerCase() === to.toLowerCase());
   const abi = registries[0].abi;
+
+  const usdfcTokens = [mainnet, calibration].map((chain) => chain.contracts.usdfc.address.toLowerCase());
+  const usdfcBalance = () =>
+    page.evaluate(() => BigInt((window as unknown as { __fakeUsdfcBalance?: string }).__fakeUsdfcBalance ?? "0"));
 
   const approvedOperators = () =>
     page.evaluate(() =>
@@ -92,12 +103,21 @@ export async function installFakeChain(page: Page): Promise<void> {
   };
 
   // The console header's FIL balance (multicall3 getEthBalance) and the known token balances; others reach the guard.
-  const readBalance = (target: string, data: Hex): Hex | undefined => {
+  const readBalance = (target: string, data: Hex, usdfc: bigint): Hex | undefined => {
     if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
       return encodeFunctionResult({ abi: multicall3Abi, functionName: "getEthBalance", result: 0n });
     }
+    const metadata = TOKEN_METADATA[data.slice(0, 10) as keyof typeof TOKEN_METADATA];
+    if (metadata && usdfcTokens.includes(target.toLowerCase())) {
+      return encodeFunctionResult({
+        abi: erc20Abi,
+        functionName: metadata.functionName,
+        result: metadata.result,
+      } as never);
+    }
     if (zeroBalanceTokens.includes(target.toLowerCase()) && data.startsWith(BALANCE_OF)) {
-      return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: 0n });
+      const balance = usdfcTokens.includes(target.toLowerCase()) ? usdfc : 0n;
+      return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: balance });
     }
     if (paymentsContracts.includes(target.toLowerCase()) && data.startsWith(ACCOUNTS)) {
       return encodeFunctionResult({ abi: accountsAbi, functionName: "accounts", result: [0n, 0n, 0n, 0n] });
@@ -130,15 +150,16 @@ export async function installFakeChain(page: Page): Promise<void> {
     const { to, data } = call.params[0] as { to: string; data: Hex };
     if (registryAt(to)) return readRegistry(await sent(), data);
     if (data.startsWith(OPERATOR_APPROVALS)) return readApproval(await approvedOperators(), to, data);
-    if (to.toLowerCase() !== MULTICALL3) return readBalance(to, data);
+    if (to.toLowerCase() !== MULTICALL3) return readBalance(to, data, await usdfcBalance());
     const { functionName, args } = decodeFunctionData({ abi: multicall3Abi, data });
     if (functionName !== "aggregate3") return undefined;
     const txs = await sent();
     const approved = await approvedOperators();
+    const usdfc = await usdfcBalance();
     const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
       if (registryAt(c.target)) return readRegistry(txs, c.callData);
       if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
-      return readBalance(c.target, c.callData);
+      return readBalance(c.target, c.callData, usdfc);
     });
     if (!results.every((r): r is Hex => r !== undefined)) return undefined;
     return encodeFunctionResult({

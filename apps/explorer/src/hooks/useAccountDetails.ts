@@ -84,6 +84,7 @@ interface AccountTokensOptions extends AccountDetailsOptions {
    */
   pageSize?: number;
   enabled?: boolean;
+  refetchInterval?: number | false;
 }
 
 const PAGE_SIZE = 10;
@@ -132,6 +133,7 @@ export const useAccountTokens = (address: string, page: number = 1, options?: Ac
     }),
     enabled: !!accountId && (options?.enabled ?? true),
     networkOverride: options?.networkOverride,
+    refetchInterval: options?.refetchInterval,
   });
 };
 

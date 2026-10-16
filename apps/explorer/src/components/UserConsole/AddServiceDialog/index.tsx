@@ -51,6 +51,8 @@ interface AddServiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: AddServicePrefill | null;
+  /** Approve only: the deposit field is hidden and nothing is deposited, for a caller that funds the account separately. */
+  withoutDeposit?: boolean;
 }
 
 const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: string }> = ({
@@ -106,7 +108,13 @@ const GasNotice = ({ action, children }: { action: ReactNode; children: ReactNod
   </div>
 );
 
-const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOpenChange, prefill }) => {
+const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
+  network,
+  open,
+  onOpenChange,
+  prefill,
+  withoutDeposit = false,
+}) => {
   const serviceSelection = useServiceSelection(network);
   const tokenSelection = useTokenSelection(network, open);
   const [isCheckingGas, setIsCheckingGas] = useState(false);
@@ -178,8 +186,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
       tokenSelection.setTokenChoice(CUSTOM_OPTION);
       tokenSelection.setCustomTokenInput(prefill.token);
     }
-    setDepositAmount(prefill.amount);
-  }, [open, prefill, isLoadingServices, services, serviceSelection, tokenSelection]);
+    setDepositAmount(withoutDeposit ? "" : prefill.amount);
+  }, [open, prefill, isLoadingServices, services, serviceSelection, tokenSelection, withoutDeposit]);
 
   // Amounts are denominated in the token that was on screen when they were
   // typed, so any change of token clears the field rather than reinterpreting it.
@@ -418,14 +426,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
           </div>
 
           {/* Deposit amount */}
-          {token && !supportsPermit && (
+          {!withoutDeposit && token && !supportsPermit && (
             <p className='flex items-center gap-2 text-xs text-muted-foreground'>
               <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
               This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
               separately.
             </p>
           )}
-          {token && supportsPermit && (
+          {!withoutDeposit && token && supportsPermit && (
             <div className='grid gap-2'>
               <div className='flex items-center justify-between'>
                 <Label htmlFor='amount'>Deposit amount</Label>
