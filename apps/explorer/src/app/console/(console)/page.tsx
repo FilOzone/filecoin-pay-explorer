@@ -1,7 +1,7 @@
 "use client";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { Account } from "@filecoin-pay/types";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useConnection, useReadContract } from "wagmi";
 import { Notice } from "@/components/shared/Notice";
 import { AlertsBanner, FundsSection, OperatorApprovalsSection, ServicesSection } from "@/components/UserConsole";
@@ -157,6 +157,11 @@ const UserConsole = () => {
   // An approval-only link has nothing to do once the operator is approved; opening the dialog
   // anyway would re-approve with its unlimited defaults over the owner's own limits.
   const isApprovalOnlyLink = isFundingLinkForWallet && depositLink.amount === null;
+  // Decided once per wallet and network, from the first answer: approving through the dialog
+  // refetches this read, and the owner must not then be told there was nothing to add.
+  const approvalKey = isApprovalOnlyLink && address ? `${network}:${address}` : null;
+  const [settledApproval, setSettledApproval] = useState<{ key: string; approved: boolean } | null>(null);
+  const approvalAtArrival = settledApproval?.key === approvalKey ? settledApproval : null;
   const chain = getChain(network);
   const { data: existingApproval, isPending: isCheckingApproval } = useReadContract({
     address: chain.contracts.payments.address,
@@ -167,12 +172,17 @@ const UserConsole = () => {
       isApprovalOnlyLink && address
         ? [chain.contracts.usdfc.address, address, resolveOperator(depositLink.operator, network)]
         : undefined,
-    query: { enabled: isApprovalOnlyLink && !!address },
+    // A failed read opens the dialog anyway, so retrying would only keep the owner waiting.
+    query: { enabled: approvalKey !== null && approvalAtArrival === null, retry: false },
   });
-  const isAlreadyApproved = isApprovalOnlyLink && existingApproval?.[0] === true;
-  // A failed read still opens the dialog: the owner reviews the approval there.
+  useEffect(() => {
+    if (approvalKey === null || approvalAtArrival !== null || isCheckingApproval) return;
+    // A failed read counts as not approved: the owner reviews the approval in the dialog.
+    setSettledApproval({ key: approvalKey, approved: existingApproval?.[0] === true });
+  }, [approvalKey, approvalAtArrival, isCheckingApproval, existingApproval]);
+  const isAlreadyApproved = isApprovalOnlyLink && approvalAtArrival?.approved === true;
   const shouldOpenFundingDialog =
-    isFundingLinkForWallet && !dialogDismissed && !(isApprovalOnlyLink && isCheckingApproval) && !isAlreadyApproved;
+    isFundingLinkForWallet && !dialogDismissed && (!isApprovalOnlyLink || approvalAtArrival?.approved === false);
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const depositPrefill = useMemo(
     () => (shouldOpenFundingDialog && depositLink ? toDialogPrefill(depositLink) : null),
