@@ -68,12 +68,13 @@ describe("CreateKeyFlow success copy", () => {
     });
 
     // The owner unticks the destructive scope the link requested, then submits.
-    const [, , , terminate] = renderer.root.findAllByProps({ type: "checkbox" });
-    act(() => terminate.props.onChange({ target: { checked: false } }));
+    const terminate = () => renderer.root.findAllByProps({ type: "checkbox" })[3];
+    act(() => terminate().props.onChange({ target: { checked: false } }));
     await act(() => renderer.root.findByProps({ children: "Authorize as 0x0000...00aa" }).props.onClick());
+    // The live form then differs from what was sent: the copy must not read it.
+    act(() => terminate().props.onChange({ target: { checked: true } }));
 
-    // The parent lists the key and passes it back, which re-runs the prefill
-    // effect and ticks the requested scope again.
+    // The parent lists the key and passes it back before the login confirms.
     act(() => {
       renderer.update(
         <CreateKeyFlow

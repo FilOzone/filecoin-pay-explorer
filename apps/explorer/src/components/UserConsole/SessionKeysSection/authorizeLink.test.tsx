@@ -108,6 +108,35 @@ describe("authorize deep link", () => {
     expect(lastCreate()?.open).toBe(false);
   });
 
+  it("drops the link from the URL when the owner closes its form, so a reload does not reopen it", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/console/session-keys?authorize=0xbb&scopes=createDataSet&network=calibration",
+    );
+    render(section());
+
+    await act(async () => lastCreate()?.onOpenChange(false));
+
+    expect(window.location.search).toBe("");
+  });
+
+  it("keeps the link in the URL when a form the owner opened by hand is closed", async () => {
+    hooks.keys = [{ ...listedKey, status: "unknown" }];
+    hooks.statusReadsPending = true;
+    window.history.replaceState(
+      null,
+      "",
+      "/console/session-keys?authorize=0xbb&scopes=createDataSet&network=calibration",
+    );
+    render(section());
+
+    fireEvent.click(screen.getByText("+ New session key"));
+    await act(async () => lastCreate()?.onOpenChange(false));
+
+    expect(window.location.search).not.toBe("");
+  });
+
   it("waits for a listed key's status before opening", async () => {
     hooks.keys = [{ ...listedKey, status: "unknown" }];
     hooks.statusReadsPending = true;
