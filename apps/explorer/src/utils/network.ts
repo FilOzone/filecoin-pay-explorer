@@ -1,17 +1,9 @@
 import { supportedChains } from "@/services/wagmi/config";
 import type { Network } from "@/types";
-import { DEFAULT_NETWORK } from "@/utils/constants";
 
 export function isSupportedChainId(chainId: number | undefined): boolean {
   if (!chainId) return false;
   return supportedChains.some((c) => c.id === chainId);
-}
-
-export function getNetworkFromChainId(chainId: number | undefined): Network {
-  if (!chainId) return DEFAULT_NETWORK;
-
-  const chain = supportedChains.find((c) => c.id === chainId);
-  return chain?.slug || DEFAULT_NETWORK;
 }
 
 function parseEligibleNetwork(): Network {

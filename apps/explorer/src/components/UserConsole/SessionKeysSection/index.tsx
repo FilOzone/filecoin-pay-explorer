@@ -35,6 +35,10 @@ interface SessionKeysSectionProps {
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
   prefillNetwork?: Network | null;
+  /** Key name the link suggests; prefilled and editable. */
+  prefillName?: string | null;
+  /** Expiry in days the link suggests; prefilled and editable. */
+  prefillDays?: number | null;
   /** Set when the link carried an `authorize` or `revoke` value that could not be used. */
   prefillError?: AuthorizeParamError | null;
   /** Session key a `?revoke=` link names, from `filecoin-pin logout`. */
@@ -100,6 +104,8 @@ const ConnectedSessionKeys = ({
   prefillAddress,
   prefillScopes,
   prefillNetwork,
+  prefillName,
+  prefillDays,
   prefillError,
   revokeAddress,
   revokeNetwork,
@@ -113,8 +119,8 @@ const ConnectedSessionKeys = ({
     { label: "Source code", href: SOURCE_CODE_URL },
   ];
   const [createOpen, setCreateOpen] = useState(false);
-  // Only the banner's button carries the link's address and scopes into the
-  // dialog; "+ New session key" always opens a plain form.
+  // Only the link (on arrival, or from the banner's button) carries its address
+  // and scopes into the dialog; "+ New session key" always opens a plain form.
   const [createSource, setCreateSource] = useState<"link" | "manual">("manual");
   const openCreate = (source: "link" | "manual") => {
     setCreateSource(source);
@@ -163,6 +169,18 @@ const ConnectedSessionKeys = ({
   const prefillPending = existingForPrefill?.status === "unknown";
   const prefillUnreadable = prefillPending && !statusReadsPending;
   const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
+  // ?authorize= link: open the prefilled dialog once, as soon as it can open.
+  // Closing it leaves the banner to reopen it; it does not open again by itself.
+  const authorizeLinkOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!cliPrefill || prefillPending || authorizeLinkOpenedRef.current) return;
+    authorizeLinkOpenedRef.current = true;
+    // A form the owner opened by hand while the key's status loaded is theirs:
+    // switching it to the link would replace what they entered.
+    if (createOpen) return;
+    setCreateSource("link");
+    setCreateOpen(true);
+  }, [cliPrefill, prefillPending, createOpen]);
 
   /** Resolves true when the chain was read, false when the read failed and was reported. */
   const handleSync = useCallback(async (): Promise<boolean> => {
@@ -534,16 +552,27 @@ const ConnectedSessionKeys = ({
 
       <CreateKeyFlow
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          // Closing the link's form dismisses the link: a reload must not open it again.
+          // A wallet or network switch remounts this section instead, so the link survives that.
+          if (!open && createSource === "link") dropSearchParams(LINK_PARAMS);
+        }}
         network={network}
         account={account}
         registry={registry}
         explorerUrl={explorerUrl}
         prefillAddress={linkPrefill}
         prefillScopes={linkPrefill ? prefillScopes : null}
+        prefillName={linkPrefill ? prefillName : null}
+        prefillDays={linkPrefill ? prefillDays : null}
         existingKey={linkPrefill ? existingKeyForPrefill : null}
         onCreated={addKey}
-        onConfirmed={markConfirmed}
+        onConfirmed={(signer) => {
+          markConfirmed(signer);
+          // Done: a reload must not reopen the form for a key that is now authorized.
+          if (cliPrefill && signer.toLowerCase() === cliPrefill.toLowerCase()) dropSearchParams(LINK_PARAMS);
+        }}
         onFailed={removeKey}
       />
       <RevokeDialog

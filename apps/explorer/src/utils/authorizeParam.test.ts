@@ -95,17 +95,22 @@ describe("parseScopesParam", () => {
 });
 
 describe("presetScopeStates", () => {
-  it("checks requested non-destructive scopes", () => {
-    const states = presetScopeStates(["createDataSet", "addPieces"]);
-    assert.equal(states.createDataSet, "checked");
-    assert.equal(states.addPieces, "checked");
+  it("checks every requested scope, destructive ones included", () => {
+    assert.deepEqual(presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]), {
+      createDataSet: "locked-off",
+      addPieces: "checked",
+      schedulePieceRemovals: "checked",
+      terminateService: "checked",
+    });
   });
 
-  it("leaves requested destructive scopes unchecked but marked as requested", () => {
-    const states = presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]);
-    assert.equal(states.terminateService, "requested-unchecked");
-    assert.equal(states.schedulePieceRemovals, "requested-unchecked");
-    assert.equal(states.addPieces, "checked");
+  it("offers a renewed key's destructive scope the link did not request, unticked", () => {
+    assert.deepEqual(presetScopeStates(["addPieces"], ["createDataSet", "terminateService"]), {
+      createDataSet: "checked",
+      addPieces: "checked",
+      schedulePieceRemovals: "locked-off",
+      terminateService: "unchecked",
+    });
   });
 
   it("locks off scopes the request did not name", () => {
@@ -166,7 +171,42 @@ describe("parseAuthorizeLink", () => {
       address: CHECKSUMMED,
       scopes: ["addPieces"],
       network: "calibration",
+      name: null,
+      days: null,
     });
+  });
+
+  it("carries a suggested name, cleaned like any other key name", () => {
+    const named = (name: string) =>
+      link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=${encodeURIComponent(name)}`);
+    assert.equal((named("  filecoin-cli  ") as { name: string | null }).name, "filecoin-cli");
+    assert.equal((named("ci\u202Evne.yek") as { name: string | null }).name, "civne.yek");
+    assert.equal((named("x".repeat(80)) as { name: string | null }).name, "x".repeat(64));
+  });
+
+  it("carries suggested days, and treats unusable days as none, never as a broken link", () => {
+    const withDays = (days: string) =>
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
+        .days;
+    assert.deepEqual(["7", "365", "0", "1.5", "soon", "-3"].map(withDays), [7, 365, null, null, null, null]);
+  });
+
+  it("caps the days a link may suggest, however many it asks for", () => {
+    const withDays = (days: string) =>
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
+        .days;
+    assert.deepEqual(["366", "3650", "999999999999"].map(withDays), [365, 365, 365]);
+  });
+
+  it("treats a blank or unusable name as none, never as a broken link", () => {
+    assert.equal(
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=`) as { name: null }).name,
+      null,
+    );
+    assert.equal(
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=%E2%80%AE`) as { name: null }).name,
+      null,
+    );
   });
 
   it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {

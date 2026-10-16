@@ -9,7 +9,7 @@
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
-import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
+import { normalizeKeyName, type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 /**
  * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
@@ -46,19 +46,25 @@ export function parseScopesParam(value: string | null | undefined): ScopeId[] | 
 
 /**
  * How each scope checkbox opens in a request-initiated create dialog:
- * - "checked": requested, non-destructive — granted unless the user unchecks it.
- * - "requested-unchecked": requested AND destructive — the CLI asked for it,
- *   but destructive power needs an explicit opt-in click from the owner.
- * - "locked-off": not requested — reduce-only consent means the dialog never
+ * - "checked": the link requested it, or a renewed key held it and it is not
+ *   destructive — granted unless the owner unchecks it. The dialog warns on a
+ *   destructive one the link requested, so the owner sees what they are granting.
+ * - "unchecked": a destructive scope a renewed key held that the link did not
+ *   request — offered, never preselected.
+ * - "locked-off": neither — reduce-only consent means the dialog never
  *   grants more than the request named; rendered disabled.
  */
-export type RequestedScopePreset = "checked" | "requested-unchecked" | "locked-off";
+export type RequestedScopePreset = "checked" | "unchecked" | "locked-off";
 
-export function presetScopeStates(requested: ScopeId[]): Record<ScopeId, RequestedScopePreset> {
+export function presetScopeStates(
+  requested: readonly ScopeId[],
+  renewed: readonly ScopeId[] = [],
+): Record<ScopeId, RequestedScopePreset> {
   return Object.fromEntries(
     SESSION_KEY_SCOPES.map((scope) => {
-      if (!requested.includes(scope.id)) return [scope.id, "locked-off"];
-      return [scope.id, scope.destructive ? "requested-unchecked" : "checked"];
+      if (requested.includes(scope.id)) return [scope.id, "checked"];
+      if (!renewed.includes(scope.id)) return [scope.id, "locked-off"];
+      return [scope.id, scope.destructive ? "unchecked" : "checked"];
     }),
   ) as Record<ScopeId, RequestedScopePreset>;
 }
@@ -78,8 +84,21 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
+/**
+ * The longest expiry a link may suggest, matching the `filecoin` CLI's `--days`.
+ * The owner can still type a longer one; a link alone cannot ask for it.
+ */
+export const MAX_LINK_EXPIRY_DAYS = 365;
+
+/** `?days=`: a whole number of days, at least 1, capped at {@link MAX_LINK_EXPIRY_DAYS}; null when unusable. */
+export function parseDaysParam(value: string | null | undefined): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return null;
+  const days = Number(value.trim());
+  return days >= 1 ? Math.min(days, MAX_LINK_EXPIRY_DAYS) : null;
+}
+
 /** Every search param a CLI link can carry; acting on one clears them all. */
-export const LINK_PARAMS = ["authorize", "scopes", "network", "revoke"] as const;
+export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "days", "revoke"] as const;
 
 export interface RevokeLink {
   address: `0x${string}`;
@@ -100,6 +119,10 @@ export interface AuthorizeLink {
   address: `0x${string}`;
   scopes: ScopeId[] | null;
   network: "mainnet" | "calibration";
+  /** Suggested key name; optional, so a missing or unusable one never refuses the link. The owner can edit it. */
+  name: string | null;
+  /** Suggested expiry in days, at most {@link MAX_LINK_EXPIRY_DAYS}; optional like `name`, and editable. */
+  days: number | null;
 }
 
 /**
@@ -119,5 +142,11 @@ export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { e
   // and reduce-only consent has nothing to reduce to.
   const scopes = parseScopesParam(params.get("scopes"));
   if (!scopes) return { error: "no-scopes" };
-  return { address: requested.address, scopes, network };
+  return {
+    address: requested.address,
+    scopes,
+    network,
+    name: normalizeKeyName(params.get("name") ?? "") || null,
+    days: parseDaysParam(params.get("days")),
+  };
 }

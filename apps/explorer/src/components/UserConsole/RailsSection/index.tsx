@@ -209,6 +209,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
 
       {settleSelection && (
         <SettleRailDialog
+          chainId={chain.id}
           rail={settleSelection.rail}
           userAddress={userAddress}
           currentEpoch={settleSelection.currentEpoch}

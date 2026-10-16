@@ -2,7 +2,8 @@
  * Validate the `?deposit=` / `?operator=` search params a CLI funding link
  * carries into `/console`, so the deposit-and-approve dialog opens filled in.
  * Both are untrusted URL input and never throw. The parameter names are a
- * contract shared with filecoin-pin: `/console?deposit=<amount>&operator=fwss&network=<mainnet|calibration>`.
+ * contract shared with the CLIs: `/console?operator=fwss&network=<mainnet|calibration>[&deposit=<amount>]`.
+ * Without `deposit` the link asks only for the operator approval.
  */
 
 import { getChain } from "@/constants/chains";
@@ -14,8 +15,8 @@ export type OperatorSlug = "fwss";
 
 /** A funding link with every field validated: the console prefills nothing from a partial one. */
 export interface DepositLink {
-  /** Decimal token amount as typed into the amount field, e.g. "2" or "1.5". */
-  amount: string;
+  /** Decimal token amount as typed into the amount field, e.g. "2" or "1.5"; null when the link asks only for the approval. */
+  amount: string | null;
   operator: OperatorSlug;
   network: Network;
 }
@@ -41,13 +42,16 @@ export function resolveOperator(slug: OperatorSlug, network: Network): `0x${stri
 }
 
 /**
- * null unless amount, operator, and network are all usable. A link is a
- * request for one specific deposit and approval; filling in part of it
- * (say, unlimited allowances without an amount) would invite a mistake.
+ * null unless operator and network are usable, and so is the amount when the
+ * link names one. A link is a request for one specific approval and, when it
+ * says so, one specific deposit; an amount that cannot be read refuses the
+ * whole link rather than approving with no deposit the link never asked for.
  */
 export function parseDepositLink(params: URLSearchParams): DepositLink | null {
-  const amount = parseDepositParam(params.get("deposit"));
   const operator = parseOperatorParam(params.get("operator"));
   const network = parseNetworkParam(params.get("network"));
-  return amount && operator && network ? { amount, operator, network } : null;
+  if (!operator || !network) return null;
+  if (!params.has("deposit")) return { amount: null, operator, network };
+  const amount = parseDepositParam(params.get("deposit"));
+  return amount ? { amount, operator, network } : null;
 }
