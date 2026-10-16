@@ -546,7 +546,12 @@ const ConnectedSessionKeys = ({
 
       <CreateKeyFlow
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          // Closing the link's form dismisses the link: a reload must not open it again.
+          // A wallet or network switch remounts this section instead, so the link survives that.
+          if (!open && createSource === "link") dropSearchParams(LINK_PARAMS);
+        }}
         network={network}
         account={account}
         registry={registry}
