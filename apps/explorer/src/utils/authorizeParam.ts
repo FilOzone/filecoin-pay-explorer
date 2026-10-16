@@ -9,7 +9,7 @@
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
-import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
+import { normalizeKeyName, type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 /**
  * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
@@ -85,7 +85,7 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
 }
 
 /** Every search param a CLI link can carry; acting on one clears them all. */
-export const LINK_PARAMS = ["authorize", "scopes", "network", "revoke"] as const;
+export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "revoke"] as const;
 
 export interface RevokeLink {
   address: `0x${string}`;
@@ -106,6 +106,8 @@ export interface AuthorizeLink {
   address: `0x${string}`;
   scopes: ScopeId[] | null;
   network: "mainnet" | "calibration";
+  /** Suggested key name; optional, so a missing or unusable one never refuses the link. The owner can edit it. */
+  name: string | null;
 }
 
 /**
@@ -125,5 +127,5 @@ export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { e
   // and reduce-only consent has nothing to reduce to.
   const scopes = parseScopesParam(params.get("scopes"));
   if (!scopes) return { error: "no-scopes" };
-  return { address: requested.address, scopes, network };
+  return { address: requested.address, scopes, network, name: normalizeKeyName(params.get("name") ?? "") || null };
 }

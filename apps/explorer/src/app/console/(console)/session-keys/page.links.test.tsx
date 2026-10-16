@@ -39,5 +39,6 @@ it.each([
   ["no network", "?authorize=0x00000000000000000000000000000000000000bb&scopes=createDataSet"],
   ["no scopes", "?authorize=0x00000000000000000000000000000000000000bb&network=calibration"],
 ])("drops an authorize link with %s, so a reload does not report it again", async (_case, search) => {
-  expect(await openAt(search)).toBe("");
+  // The suggested name goes with it.
+  expect(await openAt(`${search}&name=ci`)).toBe("");
 });

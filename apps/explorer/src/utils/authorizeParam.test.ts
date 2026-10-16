@@ -171,7 +171,27 @@ describe("parseAuthorizeLink", () => {
       address: CHECKSUMMED,
       scopes: ["addPieces"],
       network: "calibration",
+      name: null,
     });
+  });
+
+  it("carries a suggested name, cleaned like any other key name", () => {
+    const named = (name: string) =>
+      link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=${encodeURIComponent(name)}`);
+    assert.equal((named("  filecoin-cli  ") as { name: string | null }).name, "filecoin-cli");
+    assert.equal((named("ci\u202Evne.yek") as { name: string | null }).name, "civne.yek");
+    assert.equal((named("x".repeat(80)) as { name: string | null }).name, "x".repeat(64));
+  });
+
+  it("treats a blank or unusable name as none, never as a broken link", () => {
+    assert.equal(
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=`) as { name: null }).name,
+      null,
+    );
+    assert.equal(
+      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=%E2%80%AE`) as { name: null }).name,
+      null,
+    );
   });
 
   it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {

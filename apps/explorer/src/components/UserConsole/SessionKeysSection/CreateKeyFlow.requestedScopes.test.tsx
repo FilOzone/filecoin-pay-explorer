@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** How the scopes a `?authorize=` link requests open in the create dialog. */
+/** How a `?authorize=` link's request opens in the create dialog. */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Hex } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,14 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
     ...props
   }: React.ComponentProps<"button"> & { variant?: string; size?: string }) => <button {...props}>{children}</button>,
 }));
+// The real Input hands onChange the value, not the event.
 vi.mock("@filecoin-foundation/ui-filecoin/Input", () => ({
-  Input: (props: React.ComponentProps<"input">) => <input {...props} />,
+  Input: ({
+    onChange,
+    ...props
+  }: Omit<React.ComponentProps<"input">, "onChange"> & { onChange: (v: string) => void }) => (
+    <input {...props} onChange={(e) => onChange(e.target.value)} />
+  ),
 }));
 vi.mock("@filecoin-pay/ui/components/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => children,
@@ -105,5 +111,48 @@ describe("CreateKeyFlow requested scopes", () => {
 
     expect(screen.queryByText(WARNING)).toBeNull();
     expect(screen.getByText(/Granting fewer scopes than requested/)).not.toBeNull();
+  });
+});
+
+describe("CreateKeyFlow requested name", () => {
+  const nameInput = () => screen.getByRole("textbox", { name: /^Name/ }) as HTMLInputElement;
+
+  it("prefills the name the link suggests, and lets the owner edit it", () => {
+    renderRequest(["createDataSet"], { prefillName: "filecoin-cli" });
+
+    expect(nameInput().value).toBe("filecoin-cli");
+    expect(nameInput().disabled).toBe(false);
+  });
+
+  it("keeps an existing key's own name over the link's", () => {
+    renderRequest(["createDataSet"], {
+      prefillName: "filecoin-cli",
+      existingKey: { name: "laptop", scopes: ["createDataSet"], expirySec: null },
+    });
+
+    expect(nameInput().value).toBe("laptop");
+  });
+
+  it("fills in the link's name when the existing key has none", () => {
+    renderRequest(["createDataSet"], {
+      prefillName: "filecoin-cli",
+      existingKey: { name: "", scopes: ["createDataSet"], expirySec: null },
+    });
+
+    expect(nameInput().value).toBe("filecoin-cli");
+  });
+
+  it("keeps a name the owner typed when the key becomes known while the form is open", () => {
+    const { rerender } = renderRequest(["createDataSet"], { prefillName: "filecoin-cli" });
+    fireEvent.change(nameInput(), { target: { value: "my laptop" } });
+
+    rerender(
+      request(["createDataSet"], {
+        prefillName: "filecoin-cli",
+        existingKey: { name: "laptop", scopes: ["createDataSet"], expirySec: null },
+      }),
+    );
+
+    expect(nameInput().value).toBe("my laptop");
   });
 });
