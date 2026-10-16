@@ -33,6 +33,7 @@ const SessionKeysPage = () => {
       prefillScopes={request?.scopes}
       prefillNetwork={request?.network}
       prefillName={request?.name}
+      prefillDays={request?.days}
       prefillError={linkError(link) ?? linkError(revokeLink)}
       revokeAddress={revokeRequest?.address}
       revokeNetwork={revokeRequest?.network}

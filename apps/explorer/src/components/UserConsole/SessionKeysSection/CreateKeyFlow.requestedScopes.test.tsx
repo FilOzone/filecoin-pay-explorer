@@ -114,6 +114,60 @@ describe("CreateKeyFlow requested scopes", () => {
   });
 });
 
+describe("CreateKeyFlow expiry in days", () => {
+  const daysInput = () => screen.getByRole("textbox", { name: /^Expiration/ }) as HTMLInputElement;
+
+  it("defaults to 30 days, or the days the link suggests, and stays editable", () => {
+    renderRequest(["createDataSet"], { prefillDays: 7 });
+    expect({ value: daysInput().value, disabled: daysInput().disabled }).toEqual({ value: "7", disabled: false });
+    cleanup();
+
+    renderRequest(["createDataSet"]);
+    expect(daysInput().value).toBe("30");
+  });
+
+  it("holds Authorize when the days land past the last date a JS Date holds", () => {
+    renderRequest(["createDataSet"]);
+
+    fireEvent.change(daysInput(), { target: { value: "100000000" } });
+
+    expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    expect((screen.getByRole("button", { name: /^Authorize as / }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("refuses what a number input would take as valid, like 1e2 or 7.0, and says why", () => {
+    renderRequest(["createDataSet"]);
+
+    for (const value of ["1e2", "7.0"]) {
+      fireEvent.change(daysInput(), { target: { value } });
+      expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    }
+    expect(daysInput().getAttribute("inputmode")).toBe("numeric");
+  });
+
+  it("marks the field invalid and points it at the message that says why", () => {
+    renderRequest(["createDataSet"]);
+    const hint = () => document.getElementById(daysInput().getAttribute("aria-describedby") ?? "");
+
+    expect(daysInput().getAttribute("aria-invalid")).toBe("false");
+    expect(hint()?.textContent).toMatch(/^The key stops working on /);
+
+    fireEvent.change(daysInput(), { target: { value: "0" } });
+
+    expect(daysInput().getAttribute("aria-invalid")).toBe("true");
+    expect(hint()?.textContent).toMatch(/^Enter a whole number of days, at least 1, ending by/);
+  });
+
+  it("holds Authorize and says why when the days are unusable", () => {
+    renderRequest(["createDataSet"]);
+
+    fireEvent.change(daysInput(), { target: { value: "0" } });
+
+    expect(screen.getByText(/^Enter a whole number of days, at least 1, ending by/)).not.toBeNull();
+    expect((screen.getByRole("button", { name: /^Authorize as / }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe("CreateKeyFlow requested name", () => {
   const nameInput = () => screen.getByRole("textbox", { name: /^Name/ }) as HTMLInputElement;
 

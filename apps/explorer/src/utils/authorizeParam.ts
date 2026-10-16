@@ -84,8 +84,21 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
+/**
+ * The longest expiry a link may suggest, matching the `filecoin` CLI's `--days`.
+ * The owner can still type a longer one; a link alone cannot ask for it.
+ */
+export const MAX_LINK_EXPIRY_DAYS = 365;
+
+/** `?days=`: a whole number of days, at least 1, capped at {@link MAX_LINK_EXPIRY_DAYS}; null when unusable. */
+export function parseDaysParam(value: string | null | undefined): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return null;
+  const days = Number(value.trim());
+  return days >= 1 ? Math.min(days, MAX_LINK_EXPIRY_DAYS) : null;
+}
+
 /** Every search param a CLI link can carry; acting on one clears them all. */
-export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "revoke"] as const;
+export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "days", "revoke"] as const;
 
 export interface RevokeLink {
   address: `0x${string}`;
@@ -108,6 +121,8 @@ export interface AuthorizeLink {
   network: "mainnet" | "calibration";
   /** Suggested key name; optional, so a missing or unusable one never refuses the link. The owner can edit it. */
   name: string | null;
+  /** Suggested expiry in days, at most {@link MAX_LINK_EXPIRY_DAYS}; optional like `name`, and editable. */
+  days: number | null;
 }
 
 /**
@@ -127,5 +142,11 @@ export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { e
   // and reduce-only consent has nothing to reduce to.
   const scopes = parseScopesParam(params.get("scopes"));
   if (!scopes) return { error: "no-scopes" };
-  return { address: requested.address, scopes, network, name: normalizeKeyName(params.get("name") ?? "") || null };
+  return {
+    address: requested.address,
+    scopes,
+    network,
+    name: normalizeKeyName(params.get("name") ?? "") || null,
+    days: parseDaysParam(params.get("days")),
+  };
 }

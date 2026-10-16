@@ -50,17 +50,25 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     await expect(dialog.getByText(/^This address came from the link\./)).toBeVisible();
   });
 
-  test("sees the name the link suggests prefilled, and can edit it", async ({ page, baseURL }) => {
+  test("sees the name and days the link suggests prefilled, and can edit them", async ({ page, baseURL }) => {
     const cli = await filecoinPin(`${baseURL}`);
-    // The pinned filecoin-pin sends no name; the `filecoin` CLI does.
-    const link = `${consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`)}&name=filecoin-cli`;
+    // The pinned filecoin-pin sends neither; the `filecoin` CLI does.
+    const link = `${consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`)}&name=filecoin-cli&days=7`;
     await page.goto(link);
 
     await loginWithTestAccount(page);
 
-    const name = page.getByRole("dialog", { name: "New session key" }).getByRole("textbox", { name: /^Name/ });
+    const dialog = page.getByRole("dialog", { name: "New session key" });
+    const name = dialog.getByRole("textbox", { name: /^Name/ });
     await expect(name).toHaveValue("filecoin-cli");
     await expect(name).toBeEditable();
+    const days = dialog.getByRole("textbox", { name: /^Expiration/ });
+    await expect(days).toHaveValue("7");
+    await expect(days).toBeEditable();
+    await expect(days).toHaveAccessibleDescription(/^The key stops working on /);
+    await days.fill("0");
+    await expect(days).toHaveAttribute("aria-invalid", "true");
+    await expect(days).toHaveAccessibleDescription(/^Enter a whole number of days, at least 1/);
   });
 
   test("reviews the key and is asked to send the registry login for it", async ({ page, baseURL }) => {
