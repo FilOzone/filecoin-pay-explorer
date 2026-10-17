@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   network: "mainnet" as "mainnet" | "calibration",
   approved: false as boolean | undefined,
   grants: undefined as { status: "success"; result: bigint }[] | undefined,
+  /** The account's `funds` in Filecoin Pay, as the chain reports them; null for an account with none. */
   usdfcFunds: null as bigint | null,
   /** Allowances an approved account holds: unlimited unless a test sets limits. */
   limits: null as [bigint, bigint, bigint] | null,
@@ -23,7 +24,10 @@ const state = vi.hoisted(() => ({
   approvalRefetchFailed: false,
   /** The Filecoin Pay balance has never been read. */
   fundsUnreadable: false,
+  /** The approval has never been read. */
+  approvalUnreadable: false,
 }));
+const refetchApproval = vi.hoisted(() => vi.fn());
 const execute = vi.hoisted(() => vi.fn());
 const switchChain = vi.hoisted(() => vi.fn());
 const openAddFunds = vi.hoisted(() => vi.fn());
@@ -37,17 +41,29 @@ vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
   useConnection: () => ({ address: OWNER, chainId: state.network === "mainnet" ? 314 : 314159 }),
   useSwitchChain: () => ({ switchChain, isPending: false }),
-  useReadContract: ({ functionName }: { functionName: string }) => {
-    if (functionName === "balanceOf") return { data: state.walletUsdfc, isPending: false, isError: false };
+  // Only the Warm Storage approval is a single read.
+  useReadContract: () => {
     if (state.approved === undefined) return { data: undefined, isPending: true, isError: false };
+    if (state.approvalUnreadable) return { data: undefined, isPending: false, isError: true, refetch: refetchApproval };
     const [rate, lockup, period] = state.approved ? (state.limits ?? [maxUint256, maxUint256, 86_400n]) : [0n, 0n, 0n];
     return {
       data: [state.approved, rate, lockup, 0n, 0n, period],
       isPending: false,
       isError: state.approvalRefetchFailed,
+      refetch: refetchApproval,
     };
   },
-  useReadContracts: () => ({ data: state.grants, dataUpdatedAt: Date.now(), refetch: vi.fn() }),
+  // Two batched reads: the setup funds (Filecoin Pay account, wallet USDFC, block) and the key grant.
+  useReadContracts: ({ contracts }: { contracts: { functionName: string }[] }) => {
+    if (contracts[0]?.functionName !== "accounts") {
+      return { data: state.grants, dataUpdatedAt: Date.now(), refetch: vi.fn() };
+    }
+    const account = state.fundsUnreadable
+      ? { status: "failure" as const, error: new Error("boom") }
+      : { status: "success" as const, result: [state.usdfcFunds ?? 0n, 0n, 0n, 0n] };
+    const wallet = { status: "success" as const, result: state.walletUsdfc };
+    return { data: [account, wallet, { status: "success" as const, result: 1_000n }], isPending: false };
+  },
 }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute, isExecuting: false }),
@@ -66,15 +82,15 @@ vi.mock("@/hooks/useSessionKeys", () => ({
     registry: { address: "0x00000000000000000000000000000000000000cc", abi: [] },
   }),
 }));
+// The subgraph only fills in the Deposit dialog's token picker.
 vi.mock("@/hooks/useAccountDetails", () => ({
   CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () =>
     state.fundsUnreadable
-      ? { isPending: false, isError: true, data: undefined, dataUpdatedAt: 0 }
+      ? { isPending: false, isError: true, data: undefined }
       : {
           isPending: false,
           isError: false,
-          dataUpdatedAt: Date.now(),
           data: {
             userTokens:
               state.usdfcFunds === null
@@ -144,6 +160,8 @@ describe("SetupSection", () => {
     state.walletUsdfc = 0n;
     state.approvalRefetchFailed = false;
     state.fundsUnreadable = false;
+    state.approvalUnreadable = false;
+    refetchApproval.mockReset();
     execute.mockReset().mockResolvedValue("0xhash");
     switchChain.mockReset();
     openAddFunds.mockReset();
@@ -474,6 +492,33 @@ describe("SetupSection", () => {
     await act(async () => result.rerender(<SetupSection query='balance=10&network=mainnet' />));
     expect(screen.queryByText("✓ Setup complete")).toBeNull();
     expect(screen.getByRole("button", { name: "Deposit 8 USDFC" })).toBeTruthy();
+  });
+
+  it("counts an approval and its deposit as soon as the chain shows them, offering no second deposit", async () => {
+    state.walletUsdfc = 5n * ONE_USDFC;
+    const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
+    expect(screen.getByRole("button", { name: "Approve and deposit 2 USDFC" })).toBeTruthy();
+
+    // The receipt lands: approval and deposit in the same read, whatever the subgraph has indexed.
+    state.approved = true;
+    state.usdfcFunds = 2n * ONE_USDFC;
+    state.walletUsdfc = 3n * ONE_USDFC;
+    await rerender();
+    expect(screen.queryByRole("button", { name: /^Deposit/ })).toBeNull();
+    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+  });
+
+  it("offers a Retry, not an approval, when the approval could not be read", async () => {
+    state.approvalUnreadable = true;
+    state.walletUsdfc = 5n * ONE_USDFC;
+    await open("deposit=2&operator=fwss&network=mainnet");
+
+    expect(steps()[0].textContent).toContain("Could not read the approval");
+    expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
+    // The funds step waits too, rather than depositing beside an approval it may not need.
+    expect(within(steps()[1]).queryByRole("button")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Could not read the approval. Retry" }));
+    expect(refetchApproval).toHaveBeenCalledTimes(1);
   });
 
   it("says a one-day key expires after 1 day", async () => {

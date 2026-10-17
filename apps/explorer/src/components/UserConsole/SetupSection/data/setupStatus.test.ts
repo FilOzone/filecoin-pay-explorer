@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { maxUint256 } from "viem";
 import { describe, it } from "vitest";
 import {
+  accountBalanceAt,
   approvalState,
   DEPOSIT_BASELINE_TTL_MS,
   depositPrefill,
@@ -10,7 +11,6 @@ import {
   isSetupComplete,
   keyGrant,
   limitShortfalls,
-  netDeposited,
   readDepositBaseline,
   shortfall,
   shortfallLabel,
@@ -56,7 +56,7 @@ describe("shortfall", () => {
     shortfall({
       available: 0n,
       debt: 0n,
-      netDeposited: 0n,
+      funds: 0n,
       baseline: null,
       deposit: null,
       balance: null,
@@ -89,42 +89,54 @@ describe("shortfall", () => {
 
   it("with only a deposit, is the whole amount on top until this tab sees it go in", () => {
     const ten = { deposit: "10", available: 7n * ONE };
-    assert.deepEqual(missing({ ...ten, netDeposited: 7n * ONE, baseline: null }), {
+    assert.deepEqual(missing({ ...ten, funds: 7n * ONE, baseline: null }), {
       kind: "amount",
       amount: 10n * ONE,
     });
-    assert.deepEqual(missing({ ...ten, netDeposited: 7n * ONE, baseline: 7n * ONE }), {
+    assert.deepEqual(missing({ ...ten, funds: 7n * ONE, baseline: 7n * ONE }), {
       kind: "amount",
       amount: 10n * ONE,
     });
     // 4 went in: 6 left.
-    assert.deepEqual(missing({ ...ten, netDeposited: 11n * ONE, baseline: 7n * ONE }), {
+    assert.deepEqual(missing({ ...ten, funds: 11n * ONE, baseline: 7n * ONE }), {
       kind: "amount",
       amount: 6n * ONE,
     });
-    assert.deepEqual(missing({ ...ten, netDeposited: 17n * ONE, baseline: 7n * ONE }), { kind: "none" });
+    assert.deepEqual(missing({ ...ten, funds: 17n * ONE, baseline: 7n * ONE }), { kind: "none" });
   });
 
   it("with only a deposit, ignores what Filecoin Pay already held", () => {
     // Already holding more than the deposit is not the deposit going in.
-    assert.deepEqual(missing({ deposit: "10", available: 12n * ONE, netDeposited: 12n * ONE, baseline: 12n * ONE }), {
+    assert.deepEqual(missing({ deposit: "10", available: 12n * ONE, funds: 12n * ONE, baseline: 12n * ONE }), {
       kind: "amount",
       amount: 10n * ONE,
     });
   });
 
   it("does not count a withdrawal since the page opened as less than nothing deposited", () => {
-    assert.deepEqual(missing({ deposit: "10", netDeposited: 5n * ONE, baseline: 7n * ONE }), {
+    assert.deepEqual(missing({ deposit: "10", funds: 5n * ONE, baseline: 7n * ONE }), {
       kind: "amount",
       amount: 10n * ONE,
     });
   });
 });
 
-describe("netDeposited", () => {
-  it("is deposits minus withdrawals: funds plus what was paid out, less what was collected", () => {
-    assert.equal(netDeposited({ funds: "70", payout: "30", fundsCollected: "5" }), 95n);
-    assert.equal(netDeposited(null), 0n);
+describe("accountBalanceAt", () => {
+  const account = { funds: 100n, lockupCurrent: 20n, lockupRate: 2n, lockupLastSettledAt: 1_000n };
+
+  it("rolls the lockup forward from the last settlement to the epoch read", () => {
+    assert.deepEqual(accountBalanceAt(account, 1_000n), { available: 80n, debt: 0n });
+    // 10 epochs at 2 a epoch: 20 more locked.
+    assert.deepEqual(accountBalanceAt(account, 1_010n), { available: 60n, debt: 0n });
+  });
+
+  it("reports what is owed beyond the funds as debt, with nothing available", () => {
+    // 50 epochs: 120 owed against 100.
+    assert.deepEqual(accountBalanceAt(account, 1_050n), { available: 0n, debt: 20n });
+  });
+
+  it("does not roll backwards from an epoch before the last settlement", () => {
+    assert.deepEqual(accountBalanceAt(account, 900n), { available: 80n, debt: 0n });
   });
 });
 
@@ -258,7 +270,6 @@ describe("fundsOffer", () => {
 
   it("deposits with the approval while Warm Storage needs approving and the wallet holds the amount", () => {
     assert.equal(offer({ walletUsdfc: wallet(10n * ONE) }), "with-approval");
-    assert.equal(offer({ walletUsdfc: wallet(10n * ONE), approval: "unreadable" }), "with-approval");
   });
 
   it("deposits on its own once Warm Storage is approved, limits or not", () => {
@@ -285,6 +296,8 @@ describe("fundsOffer", () => {
     assert.equal(offer({ missing: null }), "checking");
     assert.equal(offer({ walletUsdfc: { state: "loading" } }), "checking");
     assert.equal(offer({ walletUsdfc: wallet(10n * ONE), approval: "loading" }), "checking");
+    // An approval that could not be read may already exist: the approve step offers a Retry, not Add a Service.
+    assert.equal(offer({ walletUsdfc: wallet(10n * ONE), approval: "unreadable" }), "checking");
   });
 });
 

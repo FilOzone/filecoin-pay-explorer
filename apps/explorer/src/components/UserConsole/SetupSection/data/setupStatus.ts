@@ -99,14 +99,17 @@ export type Shortfall = { kind: "none" } | { kind: "amount"; amount: bigint } | 
  *   Rounded up to the cent: lockup keeps drawing the balance down, and a
  *   deposit that lands a fraction short would leave the step open.
  * - With only a `deposit`, the amount on top that this tab has not yet seen
- *   go in: `netDeposited` (see {@link netDeposited}) against `baseline`, its
- *   value when the page first opened. Until the baseline is known, the whole amount.
+ *   go in: the account's `funds` against `baseline`, their value when the page
+ *   first opened. Deposits raise `funds` and lockup does not move it, so a
+ *   deposit counts the moment its receipt lands. A rail settled during the
+ *   visit lowers it, so the step may ask for that much more; it never counts
+ *   a deposit that did not happen. Until the baseline is known, the whole amount.
  * - With neither, some balance until there is any.
  */
 export function shortfall({
   available,
   debt,
-  netDeposited: net,
+  funds,
   baseline,
   deposit,
   balance,
@@ -114,7 +117,8 @@ export function shortfall({
   available: bigint;
   /** What the account owes beyond its funds; `available` is 0 while there is any. */
   debt: bigint;
-  netDeposited: bigint;
+  /** The account's `funds`, deposits and all, before lockup. */
+  funds: bigint;
   baseline: bigint | null;
   deposit: string | null;
   balance: string | null;
@@ -127,7 +131,7 @@ export function shortfall({
   }
   if (deposit !== null) {
     const amount = parseUnits(deposit, USDFC_DECIMALS);
-    const added = baseline === null ? 0n : net - baseline;
+    const added = baseline === null ? 0n : funds - baseline;
     return added >= amount ? { kind: "none" } : { kind: "amount", amount: amount - (added > 0n ? added : 0n) };
   }
   return available > 0n ? { kind: "none" } : { kind: "any" };
@@ -160,18 +164,26 @@ export function readDepositBaseline(stored: string | null, nowMs: number): bigin
   }
 }
 
-/** Subgraph amounts arrive as decimal strings, though the generated types say bigint. */
-type Amount = bigint | string;
+/** A Filecoin Pay account as `accounts(token, owner)` returns it. */
+export interface PayAccount {
+  funds: bigint;
+  lockupCurrent: bigint;
+  lockupRate: bigint;
+  /** The epoch `lockupCurrent` was last settled to. */
+  lockupLastSettledAt: bigint;
+}
 
 /**
- * Deposits minus withdrawals into Filecoin Pay, from an account's USDFC
- * record: settlements move `funds` and `payout` by the same amount, and lockup
- * moves neither, so this changes only when money goes in or out. (Commission
- * paid to a fee recipient lands in `funds` alone; a setup account is not one.)
+ * What the account can spend at `epoch`, and what it owes beyond its funds,
+ * rolling its lockup forward from the last settlement the way the contract
+ * does: the same figures `calculateFundedUntil` derives from the subgraph,
+ * from the chain's own answer.
  */
-export function netDeposited(token: { funds: Amount; payout: Amount; fundsCollected: Amount } | null): bigint {
-  if (!token) return 0n;
-  return BigInt(token.funds) + BigInt(token.payout) - BigInt(token.fundsCollected);
+export function accountBalanceAt(account: PayAccount, epoch: bigint): { available: bigint; debt: bigint } {
+  const { funds, lockupCurrent, lockupRate, lockupLastSettledAt } = account;
+  const elapsed = epoch > lockupLastSettledAt ? epoch - lockupLastSettledAt : 0n;
+  const owed = lockupCurrent + lockupRate * elapsed;
+  return { available: funds > owed ? funds - owed : 0n, debt: owed > funds ? owed - funds : 0n };
 }
 
 /** Whether the wallet's own USDFC can make up the shortfall, so a deposit is all it takes. */
@@ -200,6 +212,8 @@ export type Read<T> = { state: "loading" } | { state: "unreadable" } | ({ state:
  * - "done": Filecoin Pay holds what the request asks for.
  * - "with-approval": the approval above deposits it in the same transaction,
  *   because Warm Storage still needs approving and the wallet holds enough.
+ *   An approval that could not be read waits here like one still loading:
+ *   the approve step offers a Retry, not Add a Service, until it answers.
  * - "deposit": the wallet holds enough; the Deposit dialog moves it in.
  * - "add-funds": it does not, so the usual Add funds flow, which deposits
  *   into Filecoin Pay. An unreadable wallet counts as not holding enough.
@@ -220,9 +234,9 @@ export function fundsOffer({
   if (missing.kind === "none") return "done";
   if (walletUsdfc.state === "loading") return "checking";
   if (walletUsdfc.state !== "ready" || !walletCovers(missing, walletUsdfc.balance)) return "add-funds";
-  if (approval === "loading") return "checking";
+  if (approval === "loading" || approval === "unreadable") return "checking";
   // The approve step offers Add a Service exactly while Warm Storage is not approved.
-  return approval === "not-approved" || approval === "unreadable" ? "with-approval" : "deposit";
+  return approval === "not-approved" ? "with-approval" : "deposit";
 }
 
 /** The request is set up once every step it asked for is done; the funds step only counts when it named an amount. */

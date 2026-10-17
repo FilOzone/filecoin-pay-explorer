@@ -14,6 +14,9 @@ type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
 
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
+// The setup page reads the epoch with Filecoin Pay's account, to roll its lockup forward.
+const getBlockNumberAbi = parseAbi(["function getBlockNumber() view returns (uint256)"]);
+const GET_BLOCK_NUMBER = toFunctionSelector(getBlockNumberAbi[0]);
 const BALANCE_OF = toFunctionSelector("balanceOf(address)");
 // The Deposit dialog resolves a token it is given by address from its own metadata.
 const TOKEN_METADATA = {
@@ -106,6 +109,9 @@ export async function installFakeChain(page: Page): Promise<void> {
   const readBalance = (target: string, data: Hex, usdfc: bigint): Hex | undefined => {
     if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
       return encodeFunctionResult({ abi: multicall3Abi, functionName: "getEthBalance", result: 0n });
+    }
+    if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_BLOCK_NUMBER)) {
+      return encodeFunctionResult({ abi: getBlockNumberAbi, functionName: "getBlockNumber", result: 1_000_000n });
     }
     const metadata = TOKEN_METADATA[data.slice(0, 10) as keyof typeof TOKEN_METADATA];
     if (metadata && usdfcTokens.includes(target.toLowerCase())) {

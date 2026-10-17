@@ -25,7 +25,12 @@ import {
 import { RemoveLimitsDialog } from "./RemoveLimitsDialog";
 import { SetupStep, type StepTone } from "./SetupStep";
 
-export type WarmStorageApproval = { state: ApprovalState; terms: OperatorApprovalTerms | null };
+export type WarmStorageApproval = {
+  state: ApprovalState;
+  terms: OperatorApprovalTerms | null;
+  /** Reads the approval again, for a first read that failed. */
+  retry: () => void;
+};
 
 /**
  * The account's Warm Storage approval, read from Filecoin Pay. With
@@ -37,7 +42,7 @@ export function useWarmStorageApproval(
   unlimitedRequired: boolean,
 ): WarmStorageApproval {
   const chain = getChain(network);
-  const { data, isPending } = useReadContract({
+  const { data, isPending, refetch } = useReadContract({
     address: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
@@ -46,12 +51,13 @@ export function useWarmStorageApproval(
     // Polled so an approval made in another tab or by the tool shows up here too.
     query: { refetchInterval: SETUP_POLL_MS },
   });
-  if (isPending) return { state: "loading", terms: null };
+  const retry = () => void refetch();
+  if (isPending) return { state: "loading", terms: null, retry };
   // A failed refetch keeps the last answer: dropping it would offer an approval over the owner's limits.
-  if (!data) return { state: "unreadable", terms: null };
+  if (!data) return { state: "unreadable", terms: null, retry };
   const [isApproved, rateAllowance, lockupAllowance, , , maxLockupPeriod] = data;
   const terms = { isApproved, rateAllowance, lockupAllowance, maxLockupPeriod };
-  return { state: approvalState(terms, unlimitedRequired), terms };
+  return { state: approvalState(terms, unlimitedRequired), terms, retry };
 }
 
 const APPROVAL_STATUS: Record<ApprovalState, { tone: StepTone; label: string }> = {
@@ -159,7 +165,8 @@ export const WarmStorageStep = ({ number, network, account, approval, deposit }:
     }),
     [network, amount],
   );
-  const canApprove = approval.state === "not-approved" || approval.state === "unreadable";
+  // Only once the chain says there is none: an approval that could not be read may already exist.
+  const canApprove = approval.state === "not-approved";
   const approveLabel = deposit ? `Approve and deposit${amount ? ` ${amount} USDFC` : ""}` : "Approve Warm Storage";
 
   return (
@@ -186,6 +193,11 @@ export const WarmStorageStep = ({ number, network, account, approval, deposit }:
           open={removeLimitsOpen}
           onOpenChange={setRemoveLimitsOpen}
         />
+      )}
+      {approval.state === "unreadable" && (
+        <Button variant='ghost' size='compact' onClick={approval.retry}>
+          Could not read the approval. Retry
+        </Button>
       )}
       {canApprove && (
         <Button

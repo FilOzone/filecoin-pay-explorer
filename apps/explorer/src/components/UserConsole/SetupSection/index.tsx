@@ -18,7 +18,7 @@ import {
   shortfall,
   writeDepositBaseline,
 } from "./data/setupStatus";
-import { type AvailableFunds, FundsStep, useAvailableUsdfc, useWalletUsdfc } from "./FundsStep";
+import { type AvailableFunds, FundsStep, useSetupFunds } from "./FundsStep";
 import { SessionKeyStep, useKeyGrant } from "./SessionKeyStep";
 import { useWarmStorageApproval, WarmStorageStep } from "./WarmStorageStep";
 
@@ -108,7 +108,7 @@ function useDepositBaseline(network: Network, account: Hex, request: SetupReques
     request.sessionKey?.address.toLowerCase() ?? "no-key",
     request.deposit,
   ].join(":");
-  const current = funds.state === "ready" ? funds.netDeposited : null;
+  const current = funds.state === "ready" ? funds.funds : null;
   const [baseline, setBaseline] = useState<bigint | null>(null);
   useEffect(() => {
     if (!wanted || baseline !== null || current === null) return;
@@ -137,8 +137,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
   const { grant, refetch: refetchGrant } = useKeyGrant(network, account, request.sessionKey);
   const approval = useWarmStorageApproval(network, account, request.unlimitedApproval);
   // An approval-only link never shows funds, so it reads none.
-  const funds = useAvailableUsdfc(network, account, !request.approvalOnly);
-  const walletUsdfc = useWalletUsdfc(network, account, !request.approvalOnly);
+  const { funds, wallet: walletUsdfc } = useSetupFunds(network, account, !request.approvalOnly);
   const depositBaseline = useDepositBaseline(network, account, request, funds);
   // What Filecoin Pay still lacks. A link with a deposit but no balance is measured from the
   // baseline, so nothing is offered until it is known: a deposit sent before the first good read
@@ -151,7 +150,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
           // An unreadable balance counts as empty: the steps offered then still work.
           available: funds.state === "ready" ? funds.available : 0n,
           debt: funds.state === "ready" ? funds.debt : 0n,
-          netDeposited: funds.state === "ready" ? funds.netDeposited : 0n,
+          funds: funds.state === "ready" ? funds.funds : 0n,
           baseline: depositBaseline,
           deposit: request.deposit,
           balance: request.balance,
@@ -200,6 +199,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
           <FundsStep
             number={first + 1}
             network={network}
+            account={account}
             deposit={request.deposit}
             funds={funds}
             missing={missing}

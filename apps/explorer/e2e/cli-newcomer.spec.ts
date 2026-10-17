@@ -3,7 +3,6 @@ import { decodeFunctionData, type Hex } from "viem";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
-import { answerEmptySubgraph } from "./subgraph";
 
 // The "deposit & approve" link login prints once the key is authorized and the account can't upload yet
 // (filecoin-pin buildFundingUrl, with its default 2 USDFC suggestion). The console redirects it to /console/setup.
@@ -38,10 +37,6 @@ async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchP
 }
 
 test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`", () => {
-  // See answerEmptySubgraph.
-  test.use({ bypassCSP: true });
-  test.beforeEach(({ page }) => answerEmptySubgraph(page));
-
   test("signs up by email from the link and sees the key pre-filled for review", async ({ page, baseURL }) => {
     const cli = await filecoinPin(`${baseURL}`);
     const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);

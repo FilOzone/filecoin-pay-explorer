@@ -2,19 +2,18 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import type { UserToken } from "@filecoin-pay/types";
 import { useState } from "react";
-import { erc20Abi, type Hex } from "viem";
-import { useReadContract } from "wagmi";
+import { erc20Abi, type Hex, parseAbi } from "viem";
+import { useReadContracts } from "wagmi";
 import { DepositDialog } from "@/components/UserConsole/DepositDialog";
-import { calculateFundedUntil } from "@/components/UserConsole/FundsSection/utils/calculateFundedUntil";
 import { formatTokenAmount } from "@/components/UserConsole/FundsSection/utils/formatTokenAmount";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import type { Network } from "@/types";
 import {
+  accountBalanceAt,
   depositPrefill,
   type FundsOffer,
-  netDeposited,
   type Read,
   SETUP_POLL_MS,
   type Shortfall,
@@ -26,56 +25,65 @@ export type AvailableFunds = Read<{
   available: bigint;
   /** Owed beyond the account's funds; `available` is 0 while there is any. */
   debt: bigint;
-  /** Deposits minus withdrawals; see {@link netDeposited}. */
-  netDeposited: bigint;
-  userToken: UserToken | null;
-  userTokens: UserToken[];
+  /** The account's `funds`, deposits and all, before lockup; see `shortfall`. */
+  funds: bigint;
 }>;
-
-/** USDFC the account can spend now, as the dashboard's funds overview reckons it. */
-export function useAvailableUsdfc(network: Network, account: Hex, enabled = true): AvailableFunds {
-  const { data, dataUpdatedAt, isPending } = useAccountTokens(account, 1, {
-    networkOverride: network,
-    pageSize: CONSOLE_TOKEN_PAGE_SIZE,
-    enabled,
-    // Polled so a deposit made in another tab or by the tool shows up here too.
-    refetchInterval: SETUP_POLL_MS,
-  });
-  if (isPending) return { state: "loading" };
-  // A failed refetch keeps the last answer rather than reading as an empty account.
-  if (!data) return { state: "unreadable" };
-  const usdfc = getChain(network).contracts.usdfc.address.toLowerCase();
-  // Matched by contract address, so a look-alike symbol can't stand in. An account the index has not seen has none.
-  const userToken = data.userTokens.find((token) => token.token.id.toLowerCase() === usdfc) ?? null;
-  // Reckoned at the last read: the poll moves it forward as lockup accrues.
-  const funded = userToken ? calculateFundedUntil(userToken, BigInt(Math.floor(dataUpdatedAt / 1_000))) : null;
-  return {
-    state: "ready",
-    available: funded?.availableFunds ?? 0n,
-    debt: funded?.debt ?? 0n,
-    netDeposited: netDeposited(userToken),
-    userToken,
-    userTokens: data.userTokens,
-  };
-}
 
 export type WalletUsdfc = Read<{ balance: bigint }>;
 
-/** USDFC in the wallet itself, which a deposit moves into Filecoin Pay. */
-export function useWalletUsdfc(network: Network, account: Hex, enabled = true): WalletUsdfc {
+/** Multicall3's block number, which viem's bundled Multicall3 ABI leaves out. */
+const getBlockNumberAbi = parseAbi(["function getBlockNumber() view returns (uint256)"]);
+
+/**
+ * The account's USDFC in Filecoin Pay and in the wallet, in one read of the
+ * chain at one block: the steps decide what to offer from live chain state,
+ * as the approval and the key grant do, so a deposit counts as soon as its
+ * receipt lands rather than once the subgraph has indexed it. Polled so a
+ * deposit made in another tab or by the tool shows up here too.
+ */
+export function useSetupFunds(
+  network: Network,
+  account: Hex,
+  enabled = true,
+): { funds: AvailableFunds; wallet: WalletUsdfc } {
   const chain = getChain(network);
-  const { data, isPending } = useReadContract({
-    address: chain.contracts.usdfc.address,
-    abi: erc20Abi,
-    chainId: chain.id,
-    functionName: "balanceOf",
-    args: [account],
+  const usdfc = chain.contracts.usdfc.address;
+  const { data, isPending } = useReadContracts({
+    contracts: [
+      {
+        address: chain.contracts.payments.address,
+        abi: chain.contracts.payments.abi,
+        chainId: chain.id,
+        functionName: "accounts",
+        args: [usdfc, account],
+      },
+      { address: usdfc, abi: erc20Abi, chainId: chain.id, functionName: "balanceOf", args: [account] },
+      // The epoch the account is read at, to roll its lockup forward to.
+      {
+        address: chain.contracts.multicall3.address,
+        abi: getBlockNumberAbi,
+        chainId: chain.id,
+        functionName: "getBlockNumber",
+      },
+    ],
     query: { enabled, refetchInterval: SETUP_POLL_MS },
   });
-  if (isPending) return { state: "loading" };
-  // As above: a failed refetch keeps the last balance.
-  if (data === undefined) return { state: "unreadable" };
-  return { state: "ready", balance: data };
+  if (isPending) return { funds: { state: "loading" }, wallet: { state: "loading" } };
+  // A failed refetch keeps the last answer; only a read that never answered is unreadable.
+  const [payAccount, walletBalance, block] = data ?? [];
+  const wallet: WalletUsdfc =
+    walletBalance?.status === "success" ? { state: "ready", balance: walletBalance.result } : { state: "unreadable" };
+  if (payAccount?.status !== "success" || block?.status !== "success")
+    return { funds: { state: "unreadable" }, wallet };
+  const [funds, lockupCurrent, lockupRate, lockupLastSettledAt] = payAccount.result;
+  return {
+    funds: {
+      state: "ready",
+      funds,
+      ...accountBalanceAt({ funds, lockupCurrent, lockupRate, lockupLastSettledAt }, block.result),
+    },
+    wallet,
+  };
 }
 
 const balanceStatus = (funds: AvailableFunds, done: boolean): { tone: StepTone; label: string } => {
@@ -96,9 +104,23 @@ function offerText(offer: FundsOffer, missing: Shortfall | null): string | null 
   }
 }
 
+/**
+ * The account's token records, only to fill in the Deposit dialog's token
+ * picker; nothing the steps offer depends on them. Without one (an account
+ * the index has not seen, or a failed read) the dialog opens on USDFC by address.
+ */
+function useDepositTokens(network: Network, account: Hex): { usdfc: UserToken | null; all: UserToken[] } {
+  const { data } = useAccountTokens(account, 1, { networkOverride: network, pageSize: CONSOLE_TOKEN_PAGE_SIZE });
+  const usdfc = getChain(network).contracts.usdfc.address.toLowerCase();
+  const all = data?.userTokens ?? [];
+  // Matched by contract address, so a look-alike symbol can't stand in.
+  return { usdfc: all.find((token) => token.token.id.toLowerCase() === usdfc) ?? null, all };
+}
+
 interface FundsStepProps {
   number: number;
   network: Network;
+  account: Hex;
   /** The amount to add the link names; null asks for a balance, or for some balance at all. */
   deposit: string | null;
   funds: AvailableFunds;
@@ -113,10 +135,10 @@ interface FundsStepProps {
  * USDFC and the shortfall, when it can. The Deposit dialog stays mounted
  * throughout, so a deposit in flight keeps its own lifecycle once it lands.
  */
-export const FundsStep = ({ number, network, deposit, funds, missing, offer }: FundsStepProps) => {
+export const FundsStep = ({ number, network, account, deposit, funds, missing, offer }: FundsStepProps) => {
   const { openAddFunds } = useFundingLaunch();
   const [depositOpen, setDepositOpen] = useState(false);
-  const ready = funds.state === "ready" ? funds : null;
+  const tokens = useDepositTokens(network, account);
   const text = offerText(offer, missing);
 
   return (
@@ -146,10 +168,10 @@ export const FundsStep = ({ number, network, deposit, funds, missing, offer }: F
         network={network}
         open={depositOpen}
         onOpenChange={setDepositOpen}
-        depositToken={ready?.userToken ?? null}
+        depositToken={tokens.usdfc}
         initialTokenAddress={getChain(network).contracts.usdfc.address}
         initialAmount={missing ? depositPrefill(missing) : null}
-        tokens={ready?.userTokens ?? []}
+        tokens={tokens.all}
       />
     </SetupStep>
   );
