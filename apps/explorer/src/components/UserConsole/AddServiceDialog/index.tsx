@@ -51,6 +51,8 @@ interface AddServiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: AddServicePrefill | null;
+  /** Approve only: the deposit field is hidden and nothing is deposited, for a caller that funds the account separately. */
+  withoutDeposit?: boolean;
 }
 
 const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: string }> = ({
@@ -106,7 +108,13 @@ const GasNotice = ({ action, children }: { action: ReactNode; children: ReactNod
   </div>
 );
 
-const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOpenChange, prefill }) => {
+const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
+  network,
+  open,
+  onOpenChange,
+  prefill,
+  withoutDeposit = false,
+}) => {
   const serviceSelection = useServiceSelection(network);
   const tokenSelection = useTokenSelection(network, open);
   const [isCheckingGas, setIsCheckingGas] = useState(false);
@@ -178,8 +186,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
       tokenSelection.setTokenChoice(CUSTOM_OPTION);
       tokenSelection.setCustomTokenInput(prefill.token);
     }
-    setDepositAmount(prefill.amount);
-  }, [open, prefill, isLoadingServices, services, serviceSelection, tokenSelection]);
+    setDepositAmount(withoutDeposit ? "" : prefill.amount);
+  }, [open, prefill, isLoadingServices, services, serviceSelection, tokenSelection, withoutDeposit]);
 
   // Amounts are denominated in the token that was on screen when they were
   // typed, so any change of token clears the field rather than reinterpreting it.
@@ -189,10 +197,13 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
     setRateAllowance("");
   };
 
+  // The amount the form acts on. `withoutDeposit` can turn on while the form is
+  // open (the funds arrived another way), hiding a field that may still hold a value.
+  const effectiveDepositAmount = withoutDeposit ? "" : depositAmount;
   const parsedDeposit = (() => {
-    if (!depositAmount.trim() || !token) return null;
+    if (!effectiveDepositAmount.trim() || !token) return null;
     try {
-      return parseUnits(depositAmount.trim(), token.decimals);
+      return parseUnits(effectiveDepositAmount.trim(), token.decimals);
     } catch {
       return null;
     }
@@ -223,7 +234,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
     (isUnlimited || lockupInWei > 0n || rateInWei > 0n);
 
   const isOperatorValid = !!operatorAddress;
-  const isDepositValid = !depositAmount.trim() || (isDepositing && supportsPermit);
+  const isDepositValid = !effectiveDepositAmount.trim() || (isDepositing && supportsPermit);
   // Nothing simulates the call client-side, so an over-balance deposit would
   // collect a permit signature and then revert on the ERC-20 transfer.
   const hasSufficientBalance =
@@ -255,7 +266,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
         operatorAddress,
         token,
         parsedDeposit,
-        depositAmountLabel: depositAmount,
+        depositAmountLabel: effectiveDepositAmount,
         lockupInWei,
         rateInWei,
       });
@@ -418,14 +429,14 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({ network, open, onOp
           </div>
 
           {/* Deposit amount */}
-          {token && !supportsPermit && (
+          {!withoutDeposit && token && !supportsPermit && (
             <p className='flex items-center gap-2 text-xs text-muted-foreground'>
               <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
               This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
               separately.
             </p>
           )}
-          {token && supportsPermit && (
+          {!withoutDeposit && token && supportsPermit && (
             <div className='grid gap-2'>
               <div className='flex items-center justify-between'>
                 <Label htmlFor='amount'>Deposit amount</Label>

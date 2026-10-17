@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
-import { parseDepositLink, parseDepositParam, parseOperatorParam, resolveOperator } from "./depositParam";
+import { parseDepositParam, parseOperatorParam, resolveOperator } from "./depositParam";
 
 describe("parseDepositParam", () => {
   it("accepts whole and fractional amounts as typed", () => {
@@ -37,37 +37,6 @@ describe("parseOperatorParam", () => {
     assert.equal(parseOperatorParam("someone"), null);
     assert.equal(parseOperatorParam(""), null);
     assert.equal(parseOperatorParam(null), null);
-  });
-});
-
-describe("parseDepositLink", () => {
-  const link = (query: string) => parseDepositLink(new URLSearchParams(query));
-
-  it("reads a complete CLI funding link", () => {
-    assert.deepEqual(link("deposit=2&operator=fwss&network=calibration"), {
-      amount: "2",
-      operator: "fwss",
-      network: "calibration",
-    });
-  });
-
-  it("reads a link with no deposit as asking only for the approval", () => {
-    assert.deepEqual(link("operator=fwss&network=calibration"), {
-      amount: null,
-      operator: "fwss",
-      network: "calibration",
-    });
-  });
-
-  it("refuses a link missing or misspelling any field it carries, so nothing partial is prefilled", () => {
-    assert.equal(link("deposit=junk&operator=fwss&network=calibration"), null);
-    // Named but empty or zero is not "no deposit": the link asked for an amount it did not give.
-    assert.equal(link("deposit=&operator=fwss&network=calibration"), null);
-    assert.equal(link("deposit=0&operator=fwss&network=calibration"), null);
-    assert.equal(link("deposit=2&network=calibration"), null);
-    assert.equal(link("deposit=2&operator=fwss"), null);
-    assert.equal(link("deposit=2&operator=fwss&network=calibraiton"), null);
-    assert.equal(link(""), null);
   });
 });
 

@@ -2,15 +2,15 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { ConsoleContent } from "./(console)/ConsoleContent";
-import { ConsoleWalletControls } from "./(console)/ConsoleWalletControls";
+import { ConsoleContent } from "./_shell/ConsoleContent";
+import { ConsoleWalletControls } from "./_shell/ConsoleWalletControls";
 import {
   getConsoleAccessState,
   getConsoleAccountState,
   getConsoleDisplayAccessState,
   keepReadyThroughResync,
   rememberReadyConnection,
-} from "./(console)/console-access";
+} from "./_shell/console-access";
 
 vi.mock("@/components/shared/Balance", () => ({ default: () => <span>Filecoin balance</span> }));
 vi.mock("@/components/shared/ChainSwitcher", () => ({ default: () => <span>Filecoin network</span> }));
