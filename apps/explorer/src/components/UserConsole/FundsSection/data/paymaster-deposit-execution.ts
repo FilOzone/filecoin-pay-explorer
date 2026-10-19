@@ -136,7 +136,12 @@ export function toPaymasterAccount(client: PublicClient<Transport, Chain>, payer
     signTypedData: signsThroughWallet,
   });
   // viem types the owner as a private key; building an operation only reads its address.
-  return toSimple7702SmartAccount({ client, owner: owner as PrivateKeyAccount });
+  // The implementation is pinned so the account matches the delegate the authorization and delegation check use.
+  return toSimple7702SmartAccount({
+    client,
+    implementation: SIMPLE_7702_ACCOUNT_ADDRESS,
+    owner: owner as PrivateKeyAccount,
+  });
 }
 
 /** Binds the payer's 7702 account to the bundler. */
