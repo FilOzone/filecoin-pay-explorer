@@ -1,8 +1,14 @@
 import { entryPoint07Address, entryPoint08Address } from "viem/account-abstraction";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CIRCLE_PAYMASTER_ADDRESS } from "@/components/UserConsole/FundsSection/data/circle-paymaster";
 import { POST } from "./route";
 
-const userOperation = { sender: "0x1111111111111111111111111111111111111111", nonce: "0x0", callData: "0x" };
+const userOperation = {
+  sender: "0x1111111111111111111111111111111111111111",
+  nonce: "0x0",
+  callData: "0x",
+  paymaster: CIRCLE_PAYMASTER_ADDRESS,
+};
 const userOperationHash = `0x${"ab".repeat(32)}`;
 
 function call(body: unknown, headers: Record<string, string> = {}) {
@@ -57,7 +63,6 @@ describe("POST /api/bundler", () => {
   it.each([
     ["eth_estimateUserOperationGas", [userOperation, entryPoint08Address]],
     ["eth_getUserOperationReceipt", [userOperationHash]],
-    ["eth_getUserOperationByHash", [userOperationHash]],
     ["pimlico_getUserOperationGasPrice", []],
   ])("allows %s", async (method, params) => {
     const fetchMock = upstreamReturning({ jsonrpc: "2.0", id: 7, result: null });
@@ -88,6 +93,20 @@ describe("POST /api/bundler", () => {
     ["a method outside the allow-list", rpc("eth_sendRawTransaction", ["0x"]), -32601],
     ["an inherited property name", rpc("toString", []), -32601],
     ["another EntryPoint", rpc("eth_sendUserOperation", [userOperation, entryPoint07Address]), -32602],
+    [
+      "an operation paid by another paymaster",
+      rpc("eth_sendUserOperation", [
+        { ...userOperation, paymaster: "0x2222222222222222222222222222222222222222" },
+        entryPoint08Address,
+      ]),
+      -32602,
+    ],
+    [
+      "a self-paid operation",
+      rpc("eth_estimateUserOperationGas", [{ ...userOperation, paymaster: undefined }, entryPoint08Address]),
+      -32602,
+    ],
+    ["a method the deposit never calls", rpc("eth_getUserOperationByHash", [userOperationHash]), -32601],
     [
       "a user operation without a sender",
       rpc("eth_sendUserOperation", [{ nonce: "0x0" }, entryPoint08Address]),

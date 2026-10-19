@@ -1,7 +1,11 @@
 import { isAddress, isHex } from "viem";
 import { entryPoint08Address } from "viem/account-abstraction";
+import {
+  CIRCLE_PAYMASTER_ADDRESS,
+  CIRCLE_PAYMASTER_CHAIN_ID,
+} from "@/components/UserConsole/FundsSection/data/circle-paymaster";
 
-const PIMLICO_BASE_URL = "https://api.pimlico.io/v2/8453/rpc";
+const PIMLICO_BASE_URL = `https://api.pimlico.io/v2/${CIRCLE_PAYMASTER_CHAIN_ID}/rpc`;
 // A user operation carrying a Squid route and a 7702 authorization is a few kilobytes of hex.
 const MAX_REQUEST_BYTES = 64 * 1024;
 const UPSTREAM_TIMEOUT_MS = 15_000;
@@ -18,6 +22,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const isUserOperationHash = (value: unknown) => typeof value === "string" && isHex(value) && value.length === 66;
 
+// Only Circle-paid operations pass, so the key cannot bundle arbitrary operations for anyone who finds the route.
 function hasUserOperationParams(params: unknown[]): boolean {
   const [userOperation, entryPoint] = params;
   return (
@@ -25,6 +30,8 @@ function hasUserOperationParams(params: unknown[]): boolean {
     isObject(userOperation) &&
     typeof userOperation.sender === "string" &&
     isAddress(userOperation.sender) &&
+    typeof userOperation.paymaster === "string" &&
+    userOperation.paymaster.toLowerCase() === CIRCLE_PAYMASTER_ADDRESS.toLowerCase() &&
     typeof entryPoint === "string" &&
     entryPoint.toLowerCase() === entryPoint08Address.toLowerCase()
   );
@@ -35,7 +42,6 @@ const ALLOWED_METHODS: Record<string, (params: unknown[]) => boolean> = {
   eth_estimateUserOperationGas: hasUserOperationParams,
   eth_sendUserOperation: hasUserOperationParams,
   eth_getUserOperationReceipt: (params) => params.length === 1 && isUserOperationHash(params[0]),
-  eth_getUserOperationByHash: (params) => params.length === 1 && isUserOperationHash(params[0]),
   pimlico_getUserOperationGasPrice: (params) => params.length === 0,
 };
 
@@ -49,7 +55,7 @@ function serviceError(message: string, status: number) {
 
 /**
  * Forwards the user-operation calls of a USDC-gas deposit to Pimlico's Base bundler, keeping its key on the
- * server. Only single calls for EntryPoint v0.8 pass; the upstream is pinned to Base.
+ * server. Only single calls for EntryPoint v0.8 and Circle's paymaster pass; the upstream is pinned to Base.
  */
 export async function POST(request: Request) {
   const apiKey = process.env.PIMLICO_API_KEY?.trim();
