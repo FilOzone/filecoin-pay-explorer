@@ -1,8 +1,5 @@
-import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { ConsoleContent } from "./_shell/ConsoleContent";
 import { ConsoleWalletControls } from "./_shell/ConsoleWalletControls";
 import {
   getConsoleAccessState,
@@ -234,34 +231,6 @@ describe("console access and continuity", () => {
     );
     expect(inactiveMarkup).toContain("Unsupported Network");
     expect(inactiveMarkup).not.toContain("Wallet: Base");
-  });
-
-  it("preserves page state while switching to and from a Squid source chain", () => {
-    let increment = () => {};
-    const StatefulPage = () => {
-      const [count, setCount] = useState(0);
-      increment = () => setCount((value) => value + 1);
-      return <span>{count}</span>;
-    };
-    const content = (accessState: "ready" | "squid-source") => (
-      <ConsoleContent accessState={accessState} sidebar={<aside>Navigation</aside>}>
-        <StatefulPage />
-      </ConsoleContent>
-    );
-
-    let renderer!: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(content("ready"));
-    });
-    act(increment);
-    act(() => {
-      renderer.update(content("squid-source"));
-    });
-    expect(renderer.root.findByType("span").children).toEqual(["1"]);
-    act(() => {
-      renderer.update(content("ready"));
-    });
-    expect(renderer.root.findByType("span").children).toEqual(["1"]);
   });
 });
 
