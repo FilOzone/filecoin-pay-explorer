@@ -11,7 +11,7 @@ import {
   readUserOperationGasPrice,
   toPaymasterAccount,
 } from "../data/paymaster-deposit-execution";
-import { planPaymasterDeposit } from "../data/paymaster-deposit-plan";
+import { getUsdcGasStatus, planPaymasterDeposit } from "../data/paymaster-deposit-plan";
 import { isPaymasterEligible } from "../data/paymaster-eligibility";
 import type { SquidClient, SquidDepositQuote, SquidDepositRouteRequest } from "../data/squid-deposit-route";
 import type { PendingSquidDeposit } from "../data/squid-deposit-tracker";
@@ -20,18 +20,14 @@ const USDC_GAS_ENABLED = process.env.NEXT_PUBLIC_USDC_GAS_ENABLED === "true";
 // "Check again" asks the bundler once more rather than waiting out a full inclusion window.
 const RESUME_RECEIPT_TIMEOUT_MS = 15_000;
 
-/** Where the form's USDC-gas plan stands; the review blocker reads it in place of the native balance. */
-export type UsdcGasStatus = "planning" | "failed" | "insufficient" | "conflict" | "ready";
-
 type ExecuteInput = Pick<
   ExecutePaymasterDepositInput,
   "assertCurrentContext" | "destinationClient" | "getCurrentOwner" | "onStage" | "plan" | "quote" | "request"
 > & {
   walletClient: Parameters<typeof createPaymasterOperations>[1];
-  /** How the pending marker names the amount in flight. */
   sourceDecimals: number;
   sourceSymbol: string;
-  /** Persists the pending marker; called before the operation is sent and again once it is included. */
+  // Called before the operation is sent, so a reload finds it, and again once it is included.
   onSave(pending: PendingSquidDeposit): void;
   onBroadcast(transactionHash: Hash): void;
 };
@@ -96,17 +92,11 @@ export function useUsdcGasDeposit({
         withFilGasTopUp,
       });
     },
-    queryKey: ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp, quote?.quoteId],
+    queryKey: ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp],
     retry: false,
   });
   const plan = isEligible ? planQuery.data : undefined;
-  const status = ((): UsdcGasStatus | undefined => {
-    if (!isEligible) return undefined;
-    if (planQuery.isError || plan?.kind === "not-converged") return "failed";
-    if (!plan) return "planning";
-    if (plan.kind === "conflicting-delegation") return "conflict";
-    return plan.kind === "insufficient-usdc" ? "insufficient" : "ready";
-  })();
+  const status = isEligible ? getUsdcGasStatus(plan, planQuery.isError) : undefined;
 
   const execute = async ({
     onBroadcast,
@@ -147,15 +137,17 @@ export function useUsdcGasDeposit({
     });
   };
 
-  /** The bundle transaction of a pending deposit's operation, once Base includes it. */
-  const waitForOperation = ({ owner, userOperationHash }: PendingSquidDeposit) => {
-    if (!bundler || !userOperationHash) throw new Error("USDC network fees are unavailable");
-    return awaitPaymasterOperation(
+  // Follows a pending deposit's operation to its bundle transaction and saves the marker with it.
+  const waitForOperation = async (pending: PendingSquidDeposit, onSave: (pending: PendingSquidDeposit) => void) => {
+    if (!bundler || !pending.userOperationHash) throw new Error("USDC network fees are unavailable");
+    const transactionHash = await awaitPaymasterOperation(
       { waitForReceipt: (hash, timeout) => bundler.waitForUserOperationReceipt({ hash, timeout }) },
-      userOperationHash,
-      owner,
+      pending.userOperationHash,
+      pending.owner,
       RESUME_RECEIPT_TIMEOUT_MS,
     );
+    onSave({ ...pending, executionStage: "swap-broadcast", transactionHash });
+    return transactionHash;
   };
 
   return { execute, plan: plan?.kind === "sized" ? plan : undefined, status, waitForOperation };

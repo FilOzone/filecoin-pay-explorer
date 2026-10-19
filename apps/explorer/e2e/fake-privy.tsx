@@ -22,7 +22,7 @@ function sentTransactions(): SentTransaction[] {
 
 type AuthorizationRequest = { contractAddress: Hex; chainId?: number; nonce?: number };
 
-/** Every 7702 authorization the embedded wallet signed, readable from Playwright as `window.__fakePrivyAuthorizations`. */
+// Every 7702 authorization the embedded wallet signed, readable from Playwright as `window.__fakePrivyAuthorizations`.
 function signedAuthorizations(): SignedAuthorization[] {
   const w = window as typeof window & { __fakePrivyAuthorizations?: SignedAuthorization[] };
   w.__fakePrivyAuthorizations ??= [];
@@ -214,7 +214,7 @@ type Wallet = {
   getEthereumProvider: () => Promise<ReturnType<typeof createProvider>["provider"]>;
   switchChain: (id: number) => Promise<void>;
   disconnect?: () => void;
-  /** Only the embedded wallet signs EIP-7702 authorizations, as with real Privy. */
+  // Only the embedded wallet signs EIP-7702 authorizations, as with real Privy.
   signAuthorization?: (request: AuthorizationRequest) => Promise<SignedAuthorization>;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
@@ -595,11 +595,9 @@ export function useFiatOnramp() {
 export function useSign7702Authorization() {
   const { wallets } = useFakePrivy();
   return {
-    signAuthorization: async (request: AuthorizationRequest, options: { address?: string } = {}) => {
+    signAuthorization: async (request: AuthorizationRequest, options: { address: string }) => {
       const wallet = wallets.find(
-        (candidate) =>
-          candidate.signAuthorization &&
-          (!options.address || candidate.address.toLowerCase() === options.address.toLowerCase()),
+        (candidate) => candidate.signAuthorization && candidate.address.toLowerCase() === options.address.toLowerCase(),
       );
       if (!wallet?.signAuthorization) throw new Error("No embedded wallet can sign this 7702 authorization.");
       return wallet.signAuthorization(request);

@@ -141,7 +141,7 @@ type ReviewedDeposit = {
   usdcGas?: undefined;
 };
 
-/** Base gas and the bridge fee come out of the USDC set aside, so none of the native-fee fields apply. */
+// Base gas and the bridge fee come out of the USDC set aside, so none of the native-fee fields apply.
 type UsdcGasReviewedDeposit = Pick<
   ReviewedDeposit,
   "amount" | "context" | "quote" | "sourceDecimals" | "sourceSymbol"
@@ -728,16 +728,11 @@ export function DirectSquidDepositDialog({
     setError(null);
     try {
       await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, async () => {
-        const transactionHash = pendingHash ?? (await usdcGas.waitForOperation(pending));
-        if (!pendingHash) {
-          setPending(
-            savePendingSquidDeposit(window.localStorage, {
-              ...pending,
-              executionStage: "swap-broadcast",
-              transactionHash,
-            }),
-          );
-        }
+        const transactionHash =
+          pendingHash ??
+          (await usdcGas.waitForOperation(pending, (next) =>
+            setPending(savePendingSquidDeposit(window.localStorage, next)),
+          ));
         const result = await awaitSquidDepositSettlement({
           destinationClient: destinationClient as SquidDepositDestinationClient,
           fundsBefore: pending.fundsBefore,
@@ -1381,29 +1376,7 @@ export function DirectSquidDepositDialog({
                 )
                   return;
                 setNotice(null);
-                if (usdcGas.plan) {
-                  setReviewed({
-                    amount,
-                    context: {
-                      owner,
-                      recipient,
-                      sourceAmount: parsedAmount,
-                      sourceChainId,
-                      sourceToken: getAddress(sourceToken.token),
-                    },
-                    quote: usdcGas.plan.quote,
-                    sourceDecimals: sourceToken.decimals,
-                    sourceSymbol: sourceToken.symbol,
-                    usdcGas: usdcGas.plan,
-                  });
-                  return;
-                }
-                setReviewed({
-                  approvalRequired: !isSourceNative && balancesQuery.data.allowance !== parsedAmount,
-                  approvalResetRequired:
-                    !isSourceNative &&
-                    balancesQuery.data.allowance > 0n &&
-                    balancesQuery.data.allowance !== parsedAmount,
+                const review = {
                   amount,
                   context: {
                     owner,
@@ -1412,11 +1385,23 @@ export function DirectSquidDepositDialog({
                     sourceChainId,
                     sourceToken: getAddress(sourceToken.token),
                   },
+                  sourceDecimals: sourceToken.decimals,
+                  sourceSymbol: sourceToken.symbol,
+                };
+                if (usdcGas.plan) {
+                  setReviewed({ ...review, quote: usdcGas.plan.quote, usdcGas: usdcGas.plan });
+                  return;
+                }
+                setReviewed({
+                  approvalRequired: !isSourceNative && balancesQuery.data.allowance !== parsedAmount,
+                  approvalResetRequired:
+                    !isSourceNative &&
+                    balancesQuery.data.allowance > 0n &&
+                    balancesQuery.data.allowance !== parsedAmount,
+                  ...review,
                   maxNativeFee: budget.maximum,
                   quote,
                   requiredNative,
-                  sourceDecimals: sourceToken.decimals,
-                  sourceSymbol: sourceToken.symbol,
                   transactions: budget.transactions,
                 });
               }}

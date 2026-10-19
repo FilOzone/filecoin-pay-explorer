@@ -9,7 +9,7 @@ export const CIRCLE_PAYMASTER_CHAIN_ID = base.id;
 /** Circle's quickstart value; covers the permit call and the USDC pull during validation. */
 const PAYMASTER_VERIFICATION_GAS_LIMIT = 200_000n;
 /** Circle documents up to a 10% surcharge; a higher live spread fails closed rather than charging more than reviewed. */
-const MAX_PAYMASTER_FEE_SPREAD_BIPS = 1_000n;
+export const MAX_PAYMASTER_FEE_SPREAD_BIPS = 1_000n;
 /** The oracle price is read again at validation; the permit is signed for this much drift above the reviewed price. */
 const PAYMASTER_PRICE_HEADROOM_BIPS = 1_000n;
 

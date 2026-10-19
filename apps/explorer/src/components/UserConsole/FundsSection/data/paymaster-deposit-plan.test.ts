@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type PlanPaymasterDepositInput, planPaymasterDeposit } from "./paymaster-deposit-plan";
+import { getUsdcGasStatus, type PlanPaymasterDepositInput, planPaymasterDeposit } from "./paymaster-deposit-plan";
 import { quoteSquidDeposit, type SquidDepositQuote } from "./squid-deposit-route";
 
 vi.mock("./squid-deposit-route", async (importOriginal) => ({
@@ -119,5 +119,26 @@ describe("planPaymasterDeposit", () => {
 
     await expect(planPaymasterDeposit(input(10_000_000n))).resolves.toEqual({ kind: "conflicting-delegation" });
     expect(quoteSquidDeposit).not.toHaveBeenCalled();
+  });
+});
+
+describe("getUsdcGasStatus", () => {
+  const sized = {
+    kind: "sized",
+    gasMaximum: 1n,
+    maxSwapInput: 0n,
+    maxTransactionValue: 0n,
+    quote: quoteFor(1n),
+  } as const;
+
+  it.each([
+    ["a plan still loading", undefined, false, "planning"],
+    ["a failed plan read", undefined, true, "failed"],
+    ["a quote that kept moving", { kind: "not-converged" }, false, "failed"],
+    ["another delegate", { kind: "conflicting-delegation" }, false, "conflict"],
+    ["a budget the reserves use up", { kind: "insufficient-usdc", reserved: 1n }, false, "insufficient"],
+    ["a sized deposit", sized, false, "ready"],
+  ] as const)("reports %s as %s", (_label, plan, failed, status) => {
+    expect(getUsdcGasStatus(plan, failed)).toBe(status);
   });
 });

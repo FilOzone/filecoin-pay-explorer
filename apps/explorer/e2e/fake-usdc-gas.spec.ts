@@ -3,7 +3,7 @@ import { createPublicClient, custom, encodeFunctionData, erc20Abi, parseAbi } fr
 import { createBundlerClient, getUserOperationHash, toSimple7702SmartAccount } from "viem/account-abstraction";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
-import { type FakeUsdcGas, installFakeUsdcGas } from "./fake-usdc-gas";
+import { type FakeUsdcGasOptions, installFakeUsdcGas } from "./fake-usdc-gas";
 import { expect, test } from "./fixtures";
 
 // Drives the fake with viem's own account-abstraction client, as the console will, so the fake stays
@@ -29,7 +29,7 @@ function viaPage(page: Page, url: string) {
   });
 }
 
-async function setUp(page: Page, initial: Partial<Omit<FakeUsdcGas, "operations" | "read">> = {}) {
+async function setUp(page: Page, initial: FakeUsdcGasOptions = {}) {
   const owner = privateKeyToAccount(generatePrivateKey());
   const fake = await installFakeUsdcGas(page, owner.address, initial);
   await page.goto("/console");

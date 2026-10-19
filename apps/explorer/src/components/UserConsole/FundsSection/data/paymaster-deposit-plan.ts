@@ -42,6 +42,16 @@ export type PaymasterDepositPlanResult =
   /** The account delegates to a contract the console did not install, and it never replaces one. */
   | { kind: "conflicting-delegation" };
 
+/** Where the form's USDC-gas plan stands; the review blocker reads it in place of the native balance. */
+export type UsdcGasStatus = "planning" | "failed" | "insufficient" | "conflict" | "ready";
+
+export function getUsdcGasStatus(plan: PaymasterDepositPlanResult | undefined, failed: boolean): UsdcGasStatus {
+  if (failed || plan?.kind === "not-converged") return "failed";
+  if (!plan) return "planning";
+  if (plan.kind === "conflicting-delegation") return "conflict";
+  return plan.kind === "insufficient-usdc" ? "insufficient" : "ready";
+}
+
 export interface PlanPaymasterDepositInput {
   /** USDC the user set aside: the deposit, the bridge-fee swap and gas all come out of it. */
   budget: bigint;

@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { decodeFunctionData, erc20Abi, type Hex, parseAbi } from "viem";
 import { installFakeSquid } from "./fake-squid";
-import { type FakeUsdcGas, installFakeUsdcGas } from "./fake-usdc-gas";
+import { type FakeUsdcGasOptions, installFakeUsdcGas } from "./fake-usdc-gas";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -62,9 +62,8 @@ async function reviewDeposit(
     executableRoute,
     payerEth = 0n,
     ...initial
-  }: Pick<NonNullable<Parameters<typeof installFakeSquid>[2]>, "executableRoute"> & {
-    payerEth?: bigint;
-  } & Partial<Omit<FakeUsdcGas, "operations" | "read">> = {},
+  }: Pick<NonNullable<Parameters<typeof installFakeSquid>[2]>, "executableRoute" | "payerEth"> &
+    FakeUsdcGasOptions = {},
 ) {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
@@ -91,7 +90,7 @@ const sentTransactions = (page: Page) =>
 const signedAuthorizations = (page: Page) =>
   page.evaluate(() => (window as unknown as { __fakePrivyAuthorizations?: unknown[] }).__fakePrivyAuthorizations ?? []);
 
-/** The batch as target and function, read from Simple7702Account's executeBatch call data. */
+// The batch as target and function, read from Simple7702Account's executeBatch call data.
 function describeBatch(callData: Hex) {
   const { args } = decodeFunctionData({
     abi: parseAbi(["function executeBatch((address target, uint256 value, bytes data)[] calls)"]),

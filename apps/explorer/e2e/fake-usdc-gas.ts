@@ -22,6 +22,7 @@ import { recoverAuthorizationAddress } from "viem/utils";
 
 type RpcCall = { id: number | string; jsonrpc: "2.0"; method: string; params: unknown[] };
 type RpcAuthorization = { address: Hex; chainId: Hex; nonce: Hex; r: Hex; s: Hex; yParity: Hex };
+type SentUserOperation = RpcUserOperation<"0.8"> & { eip7702Auth?: RpcAuthorization };
 
 // Written out rather than imported from the app, so a wrong address in the app fails the spec.
 const BASE_CHAIN_ID = 8453;
@@ -40,6 +41,14 @@ const ADDITIONAL_GAS_CHARGE = 35_000n;
 export const FAKE_ETH_PRICE = 2_500_000_000n;
 const GAS_PRICE = 1_000_000n;
 
+const hashOf = (userOperation: UserOperation<"0.8">) =>
+  getUserOperationHash({
+    chainId: BASE_CHAIN_ID,
+    entryPointAddress: ENTRY_POINT,
+    entryPointVersion: "0.8",
+    userOperation,
+  });
+
 const paymasterAbi = parseAbi([
   "function additionalGasCharge() view returns (uint32)",
   "function feeSpread() view returns (uint32)",
@@ -54,8 +63,6 @@ const permitAbi = parseAbi([
   "function version() view returns (string)",
   "function nonces(address owner) view returns (uint256)",
 ]);
-/** The payer's USDC, as fake-squid.ts funds it; the executor reads it in one batch with the permit state. */
-const PAYER_USDC = 100_000_000n;
 
 /**
  * What the bundler does with the next operation sent: include it (`included`), include it with the batch reverted
@@ -70,6 +77,8 @@ export interface SubmittedOperation {
   outcome: Exclude<FakeOperationOutcome, "rejected">;
   bundleHash: Hex;
 }
+
+export type FakeUsdcGasOptions = Partial<Omit<FakeUsdcGas, "operations" | "read">>;
 
 export interface FakeUsdcGas {
   /** The payer's EIP-7702 delegation; an operation carrying an authorization installs ours, even when it reverts. */
@@ -89,15 +98,13 @@ export interface FakeUsdcGas {
 }
 
 /**
- * USDC gas on Base for one payer: Circle's paymaster reads, the Uniswap quoter, the payer's delegation, USDC
- * permit nonces and paymaster allowance, the EntryPoint nonce, and a Pimlico bundler behind `/api/bundler` that
- * checks what a real one would (sender, EntryPoint, 7702 authorization, operation signature). Other RPC calls fall
+ * USDC gas on Base for one payer, with a bundler behind `/api/bundler` that validates like a real one; other calls fall
  * through to the fakes installed before it. Mutate the returned object to script delegation and outcomes.
  */
 export async function installFakeUsdcGas(
   page: Page,
   payer: Hex,
-  initial: Partial<Omit<FakeUsdcGas, "operations" | "read">> = {},
+  initial: FakeUsdcGasOptions = {},
 ): Promise<FakeUsdcGas> {
   const fake: FakeUsdcGas = {
     delegation: "none",
@@ -147,11 +154,6 @@ export async function installFakeUsdcGas(
     }
     if (to === BASE_USDC && data.startsWith(toFunctionSelector("version()"))) {
       return encodeFunctionResult({ abi: permitAbi, functionName: "version", result: "2" });
-    }
-    if (to === BASE_USDC && data.startsWith(toFunctionSelector("balanceOf(address)"))) {
-      const { args } = decodeFunctionData({ abi: erc20Abi, data });
-      if (!isPayer(args[0])) return undefined;
-      return encodeFunctionResult({ abi: erc20Abi, functionName: "balanceOf", result: PAYER_USDC });
     }
     if (to === BASE_USDC && data.startsWith(toFunctionSelector("allowance(address,address)"))) {
       const { args, functionName } = decodeFunctionData({ abi: erc20Abi, data });
@@ -210,7 +212,7 @@ export async function installFakeUsdcGas(
     }
   };
 
-  const toUserOperation = (rpc: RpcUserOperation<"0.8"> & { eip7702Auth?: RpcAuthorization }) => {
+  const toUserOperation = (rpc: SentUserOperation) => {
     const { eip7702Auth, ...fields } = rpc;
     const userOperation = formatUserOperation(fields) as UserOperation<"0.8">;
     if (!eip7702Auth) return userOperation;
@@ -227,7 +229,7 @@ export async function installFakeUsdcGas(
     };
   };
 
-  /** The validation error a real bundler would return for this operation, if any. */
+  // The validation error a real bundler would return for this operation, if any.
   const validationError = async (userOperation: UserOperation<"0.8">, entryPoint: unknown, signed: boolean) => {
     if (typeof entryPoint !== "string" || entryPoint.toLowerCase() !== ENTRY_POINT) return "unsupported EntryPoint";
     if (!isPayer(userOperation.sender)) return "fake bundler only knows the payer";
@@ -248,12 +250,7 @@ export async function installFakeUsdcGas(
       return "AA23 reverted: sender delegates to another account";
     }
     if (!signed) return undefined;
-    const hash = getUserOperationHash({
-      chainId: BASE_CHAIN_ID,
-      entryPointAddress: ENTRY_POINT,
-      entryPointVersion: "0.8",
-      userOperation,
-    });
+    const hash = hashOf(userOperation);
     const signer = await recoverAddress({ hash, signature: userOperation.signature });
     return isPayer(signer) ? undefined : "AA24 signature error";
   };
@@ -281,7 +278,7 @@ export async function installFakeUsdcGas(
         return { result: { slow: fee, standard: fee, fast: fee } };
       }
       case "eth_estimateUserOperationGas": {
-        const [rpc, entryPoint] = call.params as [RpcUserOperation<"0.8"> & { eip7702Auth?: RpcAuthorization }, Hex];
+        const [rpc, entryPoint] = call.params as [SentUserOperation, Hex];
         const error = await validationError(toUserOperation(rpc), entryPoint, false);
         if (error) return { error: { code: -32500, message: error } };
         return {
@@ -295,19 +292,14 @@ export async function installFakeUsdcGas(
         };
       }
       case "eth_sendUserOperation": {
-        const [rpc, entryPoint] = call.params as [RpcUserOperation<"0.8"> & { eip7702Auth?: RpcAuthorization }, Hex];
+        const [rpc, entryPoint] = call.params as [SentUserOperation, Hex];
         const userOperation = toUserOperation(rpc);
         const error = await validationError(userOperation, entryPoint, true);
         if (error) return { error: { code: -32500, message: error } };
         const { outcome } = fake;
         if (outcome === "rejected")
           return { error: { code: -32500, message: "AA33 reverted: paymaster validation failed" } };
-        const hash = getUserOperationHash({
-          chainId: BASE_CHAIN_ID,
-          entryPointAddress: ENTRY_POINT,
-          entryPointVersion: "0.8",
-          userOperation,
-        });
+        const hash = hashOf(userOperation);
         const bundleHash = concat(["0xbb", hash.slice(4) as Hex]);
         fake.operations.push({ hash, userOperation, outcome, bundleHash });
         if (outcome !== "unresolved" && userOperation.authorization) fake.delegation = "ours";

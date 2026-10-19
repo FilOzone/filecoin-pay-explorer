@@ -1,3 +1,5 @@
+import type { UsdcGasStatus } from "./paymaster-deposit-plan";
+
 /**
  * Why Review is disabled:
  * - missing: the form needs more input
@@ -40,7 +42,7 @@ export function getSquidReviewBlocker({
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
   /** Set when network fees can only be paid in USDC; its plan then stands in for the native balance. */
-  usdcGas?: "planning" | "failed" | "insufficient" | "conflict" | "ready";
+  usdcGas?: UsdcGasStatus;
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
