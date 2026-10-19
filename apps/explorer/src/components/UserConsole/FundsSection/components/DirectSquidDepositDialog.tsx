@@ -683,6 +683,10 @@ export function DirectSquidDepositDialog({
   const fail = async (failure: unknown, owner?: Address) => {
     setStage(null);
     let reportedFailure = failure;
+    // A USDC-gas plan is sized from its quote, so a changed quote is planned again from the form.
+    if (reportedFailure instanceof SquidQuoteChangedError && reviewed?.usdcGas) {
+      reportedFailure = new PaymasterReviewError(reportedFailure.message);
+    }
     if (
       (reportedFailure instanceof SquidDepositBudgetError || reportedFailure instanceof SquidQuoteChangedError) &&
       reviewed &&

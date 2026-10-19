@@ -165,21 +165,6 @@ test("an account delegated to another contract is not offered USDC gas", async (
   expect(fake.delegation).toBe("conflict");
 });
 
-test("a route that drops below the reviewed minimum sends nothing and is not priced as an ETH deposit", async ({
-  page,
-}) => {
-  const { fake, squid } = await reviewDeposit(page, { executableRoute: () => ({ minimumShortfall: 10n ** 17n }) });
-  await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
-
-  await expect(page.getByText("The minimum USDFC received fell below the reviewed amount.")).toBeVisible({
-    timeout: 30_000,
-  });
-  expect(fake.operations).toEqual([]);
-  await expect(page.getByText(/enough native token/)).toBeHidden();
-  await expect(page.getByText("Review the updated quote")).toBeHidden();
-});
-
 test("a reverted operation says gas was charged in USDC and keeps the delegation", async ({ page }) => {
   const { fake, squid } = await reviewDeposit(page, { outcome: "reverted" });
   await squid.getByRole("button", { name: "Review" }).click();
@@ -214,6 +199,25 @@ test("a bundler estimate above the reviewed USDC maximum asks for a review that 
   expect(fake.operations).toEqual([]);
 
   // The next review reserves what execution needed, so the same spike now fits.
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toHaveLength(1);
+});
+
+test("a route that drops below the reviewed minimum returns USDC gas to review, then deposits", async ({ page }) => {
+  const { fake, squid } = await reviewDeposit(page, {
+    executableRoute: (n) => (n === 1 ? { minimumShortfall: 10n ** 17n } : {}),
+  });
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(
+    squid.getByText("The minimum USDFC received fell below the reviewed amount. Review the deposit again."),
+  ).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toEqual([]);
+  await expect(page.getByText(/enough native token/)).toBeHidden();
+
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
