@@ -39,8 +39,8 @@ export function getSquidReviewBlocker({
   quoteReady: boolean;
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
-  /** Set when network fees are paid in USDC; its plan then stands in for the native balance. */
-  usdcGas?: "planning" | "failed" | "insufficient" | "ready";
+  /** Set when network fees can only be paid in USDC; its plan then stands in for the native balance. */
+  usdcGas?: "planning" | "failed" | "insufficient" | "conflict" | "ready";
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
@@ -68,6 +68,12 @@ export function getSquidReviewBlocker({
     return {
       kind: "funds",
       message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees.`,
+    };
+  }
+  if (usdcGas === "conflict") {
+    return {
+      kind: "funds",
+      message: `${payerLabel} is set up with another smart account, so its network fees can't be paid in ${sourceSymbol}. Add ${nativeSymbol} to pay them.`,
     };
   }
   if (usdcGas === "ready") return null;

@@ -108,8 +108,6 @@ export async function installFakeUsdcGas(
     operations: [],
     read: (target, data) => readBase(target, data),
   };
-  // The bundler hands an operation back in the hex form it was sent in.
-  const sentAsRpc = new Map<Hex, RpcUserOperation<"0.8">>();
   const isPayer = (address: unknown) => typeof address === "string" && address.toLowerCase() === payer.toLowerCase();
   const delegationCode = (): Hex => {
     if (fake.delegation === "none") return "0x";
@@ -312,7 +310,6 @@ export async function installFakeUsdcGas(
         });
         const bundleHash = concat(["0xbb", hash.slice(4) as Hex]);
         fake.operations.push({ hash, userOperation, outcome, bundleHash });
-        sentAsRpc.set(hash, rpc);
         if (outcome !== "unresolved" && userOperation.authorization) fake.delegation = "ours";
         if (outcome === "included") fake.paymasterAllowance = 0n;
         return { result: hash };
@@ -320,19 +317,6 @@ export async function installFakeUsdcGas(
       case "eth_getUserOperationReceipt": {
         const op = fake.operations.find((candidate) => candidate.hash === call.params[0]);
         return { result: op && op.outcome !== "unresolved" ? receiptOf(op) : null };
-      }
-      case "eth_getUserOperationByHash": {
-        const op = fake.operations.find((candidate) => candidate.hash === call.params[0]);
-        if (!op || op.outcome === "unresolved") return { result: null };
-        return {
-          result: {
-            userOperation: sentAsRpc.get(op.hash),
-            entryPoint: ENTRY_POINT,
-            transactionHash: op.bundleHash,
-            blockHash: op.bundleHash,
-            blockNumber: "0x1",
-          },
-        };
       }
       default:
         return { error: { code: -32601, message: `fake bundler does not support ${call.method}` } };

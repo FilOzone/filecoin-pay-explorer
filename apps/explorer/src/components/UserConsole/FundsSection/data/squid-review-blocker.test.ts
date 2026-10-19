@@ -26,6 +26,14 @@ describe("getSquidReviewBlocker", () => {
       "insufficient",
       { kind: "funds", message: "0x1111...1111 doesn't have enough USDC for the deposit and its fees." },
     ],
+    [
+      "conflict",
+      {
+        kind: "funds",
+        message:
+          "0x1111...1111 is set up with another smart account, so its network fees can't be paid in USDC. Add ETH to pay them.",
+      },
+    ],
     ["ready", null],
   ] as const)("lets a USDC-gas plan that is %s stand in for the ETH balance", (usdcGas, expected) => {
     expect(getSquidReviewBlocker({ ...ready, balances: { native: 0n, token: 100n }, usdcGas })).toEqual(expected);

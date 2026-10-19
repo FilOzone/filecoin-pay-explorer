@@ -89,6 +89,15 @@ describe("planPaymasterDeposit", () => {
     });
   });
 
+  it("sizes from a quote already fetched for the whole budget instead of quoting it again", async () => {
+    const { input } = setUp();
+
+    await expect(
+      planPaymasterDeposit({ ...input(10_000_000n), firstQuote: quoteFor(10_000_000n) }),
+    ).resolves.toMatchObject({ kind: "sized", quote: quoteFor(8_839_659n) });
+    expect(vi.mocked(quoteSquidDeposit).mock.calls.map(([request]) => request.sourceAmount)).toEqual([8_839_659n]);
+  });
+
   it("assumes a 1M-gas route when Squid reports no gas limit", async () => {
     const { input } = setUp({ routeGas: 0n });
 

@@ -58,7 +58,13 @@ async function stubAccountBackgroundRequests(page: Page): Promise<void> {
 
 async function reviewDeposit(
   page: Page,
-  { payerEth = 0n, ...initial }: { payerEth?: bigint } & Partial<Omit<FakeUsdcGas, "operations" | "read">> = {},
+  {
+    executableRoute,
+    payerEth = 0n,
+    ...initial
+  }: Pick<NonNullable<Parameters<typeof installFakeSquid>[2]>, "executableRoute"> & {
+    payerEth?: bigint;
+  } & Partial<Omit<FakeUsdcGas, "operations" | "read">> = {},
 ) {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
@@ -68,7 +74,7 @@ async function reviewDeposit(
     () => (window as unknown as { __fakePrivyEmbeddedAccount: Hex }).__fakePrivyEmbeddedAccount,
   );
   const fake = await installFakeUsdcGas(page, payer, initial);
-  await installFakeSquid(page, payer, { alsoRead: fake.read, nativeFee: BRIDGE_FEE, payerEth });
+  await installFakeSquid(page, payer, { alsoRead: fake.read, executableRoute, nativeFee: BRIDGE_FEE, payerEth });
 
   await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
   await page.getByRole("menuitem", { name: "Add funds" }).click();
@@ -151,9 +157,28 @@ test("an email account that holds ETH keeps paying network fees in ETH", async (
 test("an account delegated to another contract is not offered USDC gas", async ({ page }) => {
   const { fake, squid } = await reviewDeposit(page, { delegation: "conflict" });
 
-  await expect(squid.getByText(/doesn't have enough ETH for network fees/)).toBeVisible();
+  await expect(
+    squid.getByText(
+      /is set up with another smart account, so its network fees can't be paid in USDC\. Add ETH to pay them\./,
+    ),
+  ).toBeVisible();
   await expect(squid.getByRole("button", { name: "Review" })).toBeDisabled();
   expect(fake.delegation).toBe("conflict");
+});
+
+test("a route that drops below the reviewed minimum sends nothing and is not priced as an ETH deposit", async ({
+  page,
+}) => {
+  const { fake, squid } = await reviewDeposit(page, { executableRoute: () => ({ minimumShortfall: 10n ** 17n }) });
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(page.getByText("The minimum USDFC received fell below the reviewed amount.")).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(fake.operations).toEqual([]);
+  await expect(page.getByText(/enough native token/)).toBeHidden();
+  await expect(page.getByText("Review the updated quote")).toBeHidden();
 });
 
 test("a reverted operation says gas was charged in USDC and keeps the delegation", async ({ page }) => {

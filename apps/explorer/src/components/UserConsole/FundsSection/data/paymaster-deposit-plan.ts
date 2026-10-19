@@ -50,6 +50,8 @@ export interface PlanPaymasterDepositInput {
   squid: SquidClient;
   client: Pick<PublicClient, "getCode" | "multicall" | "simulateContract">;
   maxFeePerGas: bigint;
+  /** A quote already fetched for the whole budget, used for the first sizing round instead of quoting it again. */
+  firstQuote?: SquidDepositQuote;
 }
 
 function getRouteCallGas(quote: SquidDepositQuote): bigint {
@@ -76,6 +78,7 @@ function getReviewGasMaximum(quote: SquidDepositQuote, fees: PaymasterFees, maxF
 export async function planPaymasterDeposit({
   budget,
   client,
+  firstQuote,
   maxFeePerGas,
   request,
   squid,
@@ -85,7 +88,10 @@ export async function planPaymasterDeposit({
   if (getDelegationState(code) === "conflict") return { kind: "conflicting-delegation" };
   const sizing = await sizePaymasterDeposit(budget, {
     quoteRoute: async (amount) => {
-      const route = await quoteSquidDeposit({ ...request, sourceAmount: amount }, squid, { withFilGasTopUp });
+      const route =
+        firstQuote?.sourceAmount === amount
+          ? firstQuote
+          : await quoteSquidDeposit({ ...request, sourceAmount: amount }, squid, { withFilGasTopUp });
       return { route, nativeFee: captureReviewedSquidDepositCaps(route, request.sourceToken).maxTransactionValue };
     },
     quoteSwapInput: (nativeFee) => quoteSwapInputCap(client, request.sourceToken, nativeFee),
