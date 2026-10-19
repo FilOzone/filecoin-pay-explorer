@@ -74,6 +74,13 @@ type DepositDialogProps = {
    * so a later change to this prop must not swap the target of a part-filled form.
    */
   depositToken?: UserToken | null;
+  /**
+   * Seeds a token the account has never held, by contract address, through the
+   * custom-address path. Ignored when `depositToken` is set.
+   */
+  initialTokenAddress?: Hex | null;
+  /** Seeds the amount field when the dialog opens; the user can still edit it. */
+  initialAmount?: string | null;
   /** The Filecoin network the deposit goes to. */
   network: Network;
   /** Tokens already held by the account, resolved by the caller. */
@@ -82,7 +89,15 @@ type DepositDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChange }: DepositDialogProps) => {
+export const DepositDialog = ({
+  depositToken,
+  initialTokenAddress,
+  initialAmount,
+  network,
+  tokens,
+  open,
+  onOpenChange,
+}: DepositDialogProps) => {
   const { address: userAddress } = useAccount();
 
   const [amount, setAmount] = useState("");
@@ -124,6 +139,12 @@ export const DepositDialog = ({ depositToken, network, tokens, open, onOpenChang
   const seedSelection = useEffectEvent(() => {
     const seedToken = depositToken ?? null;
     setSelectedUserToken(seedToken);
+    if (initialAmount) setAmount(initialAmount);
+    if (!seedToken && initialTokenAddress) {
+      setCustomAddress(initialTokenAddress);
+      setPickerMode("custom");
+      return;
+    }
     // Without a preselected token there is nothing to collapse, and the first
     // thing the user has to do is pick one — so open on the list.
     setPickerMode(seedToken ? "collapsed" : "list");

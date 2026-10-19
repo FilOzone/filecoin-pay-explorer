@@ -2,8 +2,13 @@ import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 test("clicking another field while a select is open keeps the dialog open", async ({ page }) => {
-  await page.goto("/console?deposit=2&operator=fwss&network=mainnet");
+  // USDFC in the wallet makes the setup page approve and deposit in one dialog, which has the deposit field.
+  await page.addInitScript(() => {
+    (window as unknown as { __fakeUsdfcBalance: string }).__fakeUsdfcBalance = (5n * 10n ** 18n).toString();
+  });
+  await page.goto("/console/setup?deposit=2&operator=fwss&network=mainnet");
   await loginWithTestAccount(page);
+  await page.getByRole("button", { name: "Approve and deposit 2 USDFC" }).click({ timeout: 30_000 });
 
   const dialog = page.getByRole("dialog", { name: "Add a Service" });
   const heading = dialog.getByRole("heading", { name: "Add a Service" });

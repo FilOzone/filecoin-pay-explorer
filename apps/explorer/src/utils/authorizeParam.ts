@@ -1,7 +1,7 @@
 /**
  * Validate the `?authorize=` / `?scopes=` search params used by the
- * filecoin-pin CLI pairing flow (`session create --console`). Both params are
- * untrusted URL input and never throw:
+ * filecoin-pin CLI pairing flow (`session create --console`), read by
+ * `parseSetupLink`. Both params are untrusted URL input and never throw:
  * - `authorize` is either a real 20-byte EVM address, checksummed here so
  *   the UI only ever renders the canonical form, or a typed error the page
  *   shows instead of dropping the request.
@@ -9,17 +9,23 @@
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
-import { normalizeKeyName, type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
+import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 /**
  * Why an `?authorize=` value was refused. "bad-checksum" is hex of the right
  * shape whose letter case does not match EIP-55: mixed case with the wrong
  * checksum, or all uppercase. All-lowercase input never hits it.
  */
-export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network" | "no-scopes";
+export type AuthorizeParamError = AddressParamError | "no-network" | "no-scopes";
+
+/** Why an address value alone was refused; see {@link AuthorizeParamError}. */
+export type AddressParamError = "bad-checksum" | "not-an-address";
+
+/** Why a `?revoke=` link was refused. It names no scopes, so it can never lack them. */
+export type RevokeLinkError = AddressParamError | "no-network";
 
 /** null means the param was absent or blank, so there is no request to show at all. */
-export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
+export type AuthorizeParamResult = { address: `0x${string}` } | { error: AddressParamError } | null;
 
 export function parseAuthorizeParam(value: string | null | undefined): AuthorizeParamResult {
   if (typeof value !== "string") return null;
@@ -97,7 +103,10 @@ export function parseDaysParam(value: string | null | undefined): number | null 
   return days >= 1 ? Math.min(days, MAX_LINK_EXPIRY_DAYS) : null;
 }
 
-/** Every search param a CLI link can carry; acting on one clears them all. */
+/**
+ * Every search param a CLI link can carry. Acting on a revoke link clears
+ * them all: an `authorize` left behind would reopen as a setup request on reload.
+ */
 export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "days", "revoke"] as const;
 
 export interface RevokeLink {
@@ -106,47 +115,11 @@ export interface RevokeLink {
 }
 
 /** `?revoke=&network=`, as `filecoin-pin logout` prints it. Same rules as the pairing link; network required. */
-export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: AuthorizeParamError } | null {
+export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: RevokeLinkError } | null {
   if (!params.has("revoke")) return null;
   const requested = parseAuthorizeParam(params.get("revoke")) ?? { error: "not-an-address" as const };
   if ("error" in requested) return requested;
   const network = parseNetworkParam(params.get("network"));
   if (!network) return { error: "no-network" };
   return { address: requested.address, network };
-}
-
-export interface AuthorizeLink {
-  address: `0x${string}`;
-  scopes: ScopeId[] | null;
-  network: "mainnet" | "calibration";
-  /** Suggested key name; optional, so a missing or unusable one never refuses the link. The owner can edit it. */
-  name: string | null;
-  /** Suggested expiry in days, at most {@link MAX_LINK_EXPIRY_DAYS}; optional like `name`, and editable. */
-  days: number | null;
-}
-
-/**
- * The whole pairing request from a page's search params: null when there is
- * none, an error when any part is unusable, otherwise every field validated.
- */
-export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
-  // A revoke link also carries `network`; it wins, it only removes authority.
-  if (params.has("revoke")) return null;
-  if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
-  // Scopes or a network without an address is still a pairing request, just a broken one.
-  const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };
-  if ("error" in requested) return requested;
-  const network = parseNetworkParam(params.get("network"));
-  if (!network) return { error: "no-network" };
-  // The CLI always names scopes; a link without any usable one is malformed,
-  // and reduce-only consent has nothing to reduce to.
-  const scopes = parseScopesParam(params.get("scopes"));
-  if (!scopes) return { error: "no-scopes" };
-  return {
-    address: requested.address,
-    scopes,
-    network,
-    name: normalizeKeyName(params.get("name") ?? "") || null,
-    days: parseDaysParam(params.get("days")),
-  };
 }
