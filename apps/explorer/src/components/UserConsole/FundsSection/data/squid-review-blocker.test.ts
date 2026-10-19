@@ -19,6 +19,18 @@ const ready = {
 };
 
 describe("getSquidReviewBlocker", () => {
+  it.each([
+    ["planning", { kind: "waiting", message: "Setting aside USDC for network fees…" }],
+    ["failed", { kind: "failed", message: "USDC network fees could not be estimated." }],
+    [
+      "insufficient",
+      { kind: "funds", message: "0x1111...1111 doesn't have enough USDC for the deposit and its fees." },
+    ],
+    ["ready", null],
+  ] as const)("lets a USDC-gas plan that is %s stand in for the ETH balance", (usdcGas, expected) => {
+    expect(getSquidReviewBlocker({ ...ready, balances: { native: 0n, token: 100n }, usdcGas })).toEqual(expected);
+  });
+
   it("allows Review once every requirement is met", () => {
     expect(getSquidReviewBlocker(ready)).toBeNull();
   });

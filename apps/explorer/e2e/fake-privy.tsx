@@ -120,8 +120,10 @@ function createProvider(
   };
 }
 
+// Its address is readable from Playwright as `window.__fakePrivyEmbeddedAccount` once the user has logged in.
 function createEmbeddedWallet(): Wallet {
   const account = privateKeyToAccount(generatePrivateKey());
+  (window as typeof window & { __fakePrivyEmbeddedAccount?: Hex }).__fakePrivyEmbeddedAccount = account.address;
   const wallet = createProvider(() => [account]);
   return {
     address: account.address,

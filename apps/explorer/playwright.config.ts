@@ -8,6 +8,8 @@ import { defineConfig, devices } from "@playwright/test";
 const E2E_ENV = path.join(__dirname, ".env.e2e.local");
 if (existsSync(E2E_ENV)) process.loadEnvFile(E2E_ENV);
 process.env.E2E_MODE = process.env.E2E_MODE === "real" ? "real" : "mock";
+// Mock mode covers USDC gas against the fake bundler; against real Privy it stays as the environment sets it.
+if (process.env.E2E_MODE === "mock") process.env.NEXT_PUBLIC_USDC_GAS_ENABLED = "true";
 
 // Any free port, except against real Privy: the staging app only allows http://localhost:3000 as an origin.
 const DEV_PORT = process.env.E2E_MODE === "real" ? 3000 : 0;

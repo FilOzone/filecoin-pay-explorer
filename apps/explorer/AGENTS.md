@@ -178,6 +178,9 @@ Never read `.env` files. Use documented variable names and inspect code referenc
 - `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`
 - `NEXT_PUBLIC_NOTIFICATIONS_API_URL`
 - `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS`
+- `NEXT_PUBLIC_USDC_GAS_ENABLED`
+
+Server-only configuration: `PIMLICO_API_KEY`, read by `src/app/api/bundler`.
 
 Do not hardcode deployment endpoints, credentials, private keys, or new environment-specific values in source. Validate required configuration at its boundary and name a missing variable without printing its value.
 
