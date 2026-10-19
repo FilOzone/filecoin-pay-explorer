@@ -65,7 +65,7 @@ import {
   isNativeToken,
   listTransactionLabels,
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
-  planFilGasTopUp,
+  quoteSquidDeposit,
   requestSquidDepositRoute,
   type SquidClient,
   type SquidDepositExchangeRate,
@@ -360,15 +360,7 @@ export function DirectSquidDepositDialog({
         sourceChainId,
         sourceToken: sourceToken.token,
       };
-      const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
-      if (!isFilGasTopUpEnabled) return quote;
-      const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
-      if (!filGasTopUp) {
-        throw new Error(
-          `Squid could not safely add ${FIL_GAS_TOP_UP_LABEL} for this amount. Increase the amount or turn off the FIL option.`,
-        );
-      }
-      return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
+      return quoteSquidDeposit(request, squid, { withFilGasTopUp: isFilGasTopUpEnabled });
     },
     queryKey: [
       "direct-squid-deposit-quote",

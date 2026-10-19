@@ -30,6 +30,7 @@ import {
   WaitForUserOperationReceiptTimeoutError,
 } from "viem/account-abstraction";
 import { type PrivateKeyAccount, toAccount } from "viem/accounts";
+import { PERMIT_TYPES } from "@/utils/permit";
 import {
   CIRCLE_PAYMASTER_ADDRESS,
   CIRCLE_PAYMASTER_CHAIN_ID,
@@ -53,7 +54,7 @@ import {
 } from "./squid-deposit-execution";
 import type { ExecutableSquidDepositQuote, SquidClient, SquidDepositRouteRequest } from "./squid-deposit-route";
 
-/** Waiting for inclusion before the deposit is reported unresolved; Base includes a bundle in seconds. */
+// Waiting for inclusion before the deposit is reported unresolved; Base includes a bundle in seconds.
 const OPERATION_RECEIPT_TIMEOUT_MS = 120_000;
 
 const permitAbi = parseAbi([
@@ -64,23 +65,14 @@ const permitAbi = parseAbi([
 
 type GasPrice = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint };
 type PermitMessage = { owner: Address; spender: Address; value: bigint; nonce: bigint; deadline: bigint };
-const PERMIT_TYPES = {
-  Permit: [
-    { name: "owner", type: "address" },
-    { name: "spender", type: "address" },
-    { name: "value", type: "uint256" },
-    { name: "nonce", type: "uint256" },
-    { name: "deadline", type: "uint256" },
-  ],
-} as const;
 type PimlicoGasPriceSchema = {
   Method: "pimlico_getUserOperationGasPrice";
   Parameters: [];
   ReturnType: Record<"slow" | "standard" | "fast", { maxFeePerGas: Hex; maxPriorityFeePerGas: Hex }>;
 };
 
-/** The parts of an operation receipt the deposit checks. */
-export type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "sender" | "success" | "userOpHash"> & {
+// The parts of an operation receipt the deposit checks.
+type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "sender" | "success" | "userOpHash"> & {
   receipt: { transactionHash: Hash };
 };
 
@@ -90,13 +82,11 @@ export interface PaymasterOperationRequest {
   paymasterData: Hex;
   paymasterVerificationGasLimit: bigint;
   paymasterPostOpGasLimit: bigint;
-  gasPrice: GasPrice;
 }
 
 /** What a USDC-gas deposit needs from the payer's 7702 account and the bundler. */
 export interface PaymasterOperations {
-  getGasPrice(): Promise<GasPrice>;
-  /** The operation with nonce, call data and gas limits filled in by the bundler's estimate. */
+  /** The operation with nonce, call data and gas limits filled in by the bundler's estimate, at its current price. */
   prepare(request: PaymasterOperationRequest): Promise<UserOperation<"0.8">>;
   /** Signs Circle's USDC permit, which lets the paymaster take up to `value` for gas. */
   signPermit(domain: TypedDataDomain, message: PermitMessage): Promise<Hex>;
@@ -106,16 +96,16 @@ export interface PaymasterOperations {
 }
 
 /** Pimlico's Base bundler behind `/api/bundler`, which keeps the key on the server. */
-export function createPaymasterBundler(client: PublicClient<Transport, Chain>, bundlerUrl = "/api/bundler") {
+export function createPaymasterBundler(client: PublicClient<Transport, Chain>) {
   return createBundlerClient({
     chain: client.chain,
     client,
     rpcSchema: rpcSchema<[...BundlerRpcSchema, PimlicoGasPriceSchema]>(),
-    transport: http(bundlerUrl),
+    transport: http("/api/bundler"),
   });
 }
 
-export type PaymasterBundler = ReturnType<typeof createPaymasterBundler>;
+type PaymasterBundler = ReturnType<typeof createPaymasterBundler>;
 
 /** The fee per gas the bundler currently requires to include an operation promptly. */
 export async function readUserOperationGasPrice(bundler: PaymasterBundler): Promise<GasPrice> {
@@ -151,15 +141,14 @@ export function createPaymasterOperations(
   bundler: PaymasterBundler,
 ): PaymasterOperations {
   return {
-    getGasPrice: () => readUserOperationGasPrice(bundler),
-    prepare: async ({ authorization, calls, gasPrice, ...paymaster }) => {
+    prepare: async ({ authorization, calls, ...paymaster }) => {
       const { account: _account, ...userOperation } = await bundler.prepareUserOperation({
         account,
         authorization,
         calls,
         paymaster: CIRCLE_PAYMASTER_ADDRESS,
         ...paymaster,
-        ...gasPrice,
+        ...(await readUserOperationGasPrice(bundler)),
       });
       return userOperation;
     },
@@ -188,12 +177,10 @@ const hashUserOperation = (userOperation: UserOperation<"0.8">) =>
     userOperation,
   });
 
-/** A bundler answers a failed validation with an ERC-4337 AA code; nothing was included and no gas was charged. */
-function isValidationRejection(error: unknown): boolean {
-  return error instanceof BaseError
-    ? Boolean(error.walk((cause) => cause instanceof Error && /\bAA[1-5]\d\b/.test(cause.message)))
-    : error instanceof Error && /\bAA[1-5]\d\b/.test(error.message);
-}
+// A bundler answers a failed validation with an ERC-4337 AA code; nothing was included and no gas was charged.
+const hasAACode = (error: unknown) => error instanceof Error && /\bAA[1-5]\d\b/.test(error.message);
+const isValidationRejection = (error: unknown) =>
+  error instanceof BaseError ? Boolean(error.walk(hasAACode)) : hasAACode(error);
 
 /**
  * Waits for the operation's own receipt. A successful bundle does not prove the operation inside it
@@ -282,31 +269,43 @@ export async function executePaymasterSquidDeposit({
   if (quote.sourceChainId !== CIRCLE_PAYMASTER_CHAIN_ID || request.sourceChainId !== CIRCLE_PAYMASTER_CHAIN_ID) {
     throw new Error("USDC gas is only available on Base");
   }
-  if (isRouteExpiring(quote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
   const assertSigner = async () => {
+    if (isRouteExpiring(quote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
     assertCurrentContext();
     const owner = await getCurrentOwner();
     assertCurrentContext();
     if (owner?.toLowerCase() !== payer.toLowerCase()) throw new Error("Wallet account changed before signing");
   };
 
-  const fundsBefore = await readFilecoinPayFunds(destinationClient, request);
-  const [code, fees, balance, paymasterAllowance, permitNonce, authorizationNonce, permitName, permitVersion] =
-    await Promise.all([
-      sourceClient.getCode({ address: payer }),
-      readPaymasterFees(sourceClient),
-      sourceClient.readContract({ abi: erc20Abi, address: token, functionName: "balanceOf", args: [payer] }),
-      sourceClient.readContract({
-        abi: erc20Abi,
-        address: token,
-        functionName: "allowance",
-        args: [payer, CIRCLE_PAYMASTER_ADDRESS],
-      }),
-      sourceClient.readContract({ abi: permitAbi, address: token, functionName: "nonces", args: [payer] }),
-      sourceClient.getTransactionCount({ address: payer }),
-      sourceClient.readContract({ abi: permitAbi, address: token, functionName: "name" }),
-      sourceClient.readContract({ abi: permitAbi, address: token, functionName: "version" }),
-    ]);
+  const nativeFee = quote.transaction.value;
+  const [
+    fundsBefore,
+    code,
+    fees,
+    balance,
+    paymasterAllowance,
+    permitNonce,
+    authorizationNonce,
+    permitName,
+    permitVersion,
+    maxSwapInput,
+  ] = await Promise.all([
+    readFilecoinPayFunds(destinationClient, request),
+    sourceClient.getCode({ address: payer }),
+    readPaymasterFees(sourceClient),
+    sourceClient.readContract({ abi: erc20Abi, address: token, functionName: "balanceOf", args: [payer] }),
+    sourceClient.readContract({
+      abi: erc20Abi,
+      address: token,
+      functionName: "allowance",
+      args: [payer, CIRCLE_PAYMASTER_ADDRESS],
+    }),
+    sourceClient.readContract({ abi: permitAbi, address: token, functionName: "nonces", args: [payer] }),
+    sourceClient.getTransactionCount({ address: payer }),
+    sourceClient.readContract({ abi: permitAbi, address: token, functionName: "name" }),
+    sourceClient.readContract({ abi: permitAbi, address: token, functionName: "version" }),
+    quoteSwapInputCap(sourceClient, token, nativeFee),
+  ]);
   const delegation = getDelegationState(code);
   if (delegation === "conflict") {
     throw new Error("This account delegates to another smart account, so it cannot pay network fees in USDC.");
@@ -315,9 +314,9 @@ export async function executePaymasterSquidDeposit({
   if (paymasterAllowance > plan.gasMaximum) {
     throw new Error("An earlier USDC allowance to Circle's paymaster exceeds the reviewed gas maximum.");
   }
-  const nativeFee = quote.transaction.value;
-  if (nativeFee > plan.maxNativeFee) throw new Error("The bridge fee rose above the reviewed maximum. Review again.");
-  const maxSwapInput = await quoteSwapInputCap(sourceClient, token, nativeFee);
+  if (nativeFee > plan.maxTransactionValue) {
+    throw new Error("The bridge fee rose above the reviewed maximum. Review again.");
+  }
   if (maxSwapInput > plan.maxSwapInput) {
     throw new Error("Buying the bridge fee now costs more USDC than reviewed. Review again.");
   }
@@ -356,25 +355,20 @@ export async function executePaymasterSquidDeposit({
   const prepared = await operations.prepare({
     authorization,
     calls,
-    gasPrice: await operations.getGasPrice(),
     paymasterData: encodePacked(["uint8", "address", "uint256", "bytes"], [0, token, plan.gasMaximum, permitSignature]),
     ...getPaymasterGasLimits(fees),
   });
   const gasMaximum = getPaymasterGasMaximum(
     {
-      callGasLimit: prepared.callGasLimit,
-      verificationGasLimit: prepared.verificationGasLimit,
-      preVerificationGas: prepared.preVerificationGas,
+      ...prepared,
       paymasterVerificationGasLimit: prepared.paymasterVerificationGasLimit ?? 0n,
       paymasterPostOpGasLimit: prepared.paymasterPostOpGasLimit ?? 0n,
-      maxFeePerGas: prepared.maxFeePerGas,
     },
     fees,
   );
   if (gasMaximum > plan.gasMaximum) {
     throw new Error("Network fees rose above the reviewed USDC maximum. Review again.");
   }
-  if (isRouteExpiring(quote, 0)) throw new Error("The Squid route expired. Refresh the quote.");
   await assertSigner();
   const userOperation = { ...prepared, signature: await operations.sign(prepared) };
   const userOperationHash = hashUserOperation(userOperation);

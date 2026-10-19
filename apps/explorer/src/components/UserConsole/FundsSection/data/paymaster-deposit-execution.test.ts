@@ -1,5 +1,6 @@
 import type { Hash, Hex } from "viem";
 import {
+  entryPoint08Address,
   getUserOperationHash,
   type UserOperation,
   WaitForUserOperationReceiptTimeoutError,
@@ -45,7 +46,7 @@ const quote: ExecutableSquidDepositQuote = {
 };
 const plan: PaymasterDepositPlan = {
   gasMaximum: 100_000n,
-  maxNativeFee: 450_000_000_000_000n,
+  maxTransactionValue: 450_000_000_000_000n,
   maxSwapInput: 1_200_000n,
   quote,
 };
@@ -90,7 +91,7 @@ function sourceClient({ balance = 10_000_000n, code, paymasterAllowance = 0n, sw
 const hashOf = (userOperation: UserOperation<"0.8">) =>
   getUserOperationHash({
     chainId: 8453,
-    entryPointAddress: "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108",
+    entryPointAddress: entryPoint08Address,
     entryPointVersion: "0.8",
     userOperation,
   });
@@ -98,13 +99,12 @@ const hashOf = (userOperation: UserOperation<"0.8">) =>
 function operations(overrides: Partial<PaymasterOperations> = {}) {
   const events: string[] = [];
   const ops: PaymasterOperations = {
-    getGasPrice: vi.fn(async () => ({ maxFeePerGas: 2_000_000n, maxPriorityFeePerGas: 1_000_000n })),
     prepare: vi.fn(
       async (operation: PaymasterOperationRequest): Promise<UserOperation<"0.8">> => ({
         callData: "0x",
         callGasLimit: 600_000n,
-        maxFeePerGas: operation.gasPrice.maxFeePerGas,
-        maxPriorityFeePerGas: operation.gasPrice.maxPriorityFeePerGas,
+        maxFeePerGas: 2_000_000n,
+        maxPriorityFeePerGas: 1_000_000n,
         nonce: 0n,
         paymaster: CIRCLE_PAYMASTER_ADDRESS,
         paymasterData: operation.paymasterData,
@@ -272,28 +272,22 @@ describe("executePaymasterSquidDeposit", () => {
 
 describe("awaitPaymasterOperation", () => {
   const hash = `0x${"aa".repeat(32)}` as Hash;
-  const receiptOps = (receipt: Awaited<ReturnType<PaymasterOperations["waitForReceipt"]>>) => ({
-    waitForReceipt: vi.fn(async () => receipt),
+  const receiptOps = (overrides: { sender?: Hex; success?: boolean } = {}) => ({
+    waitForReceipt: vi.fn(async () => ({
+      receipt: { transactionHash: BUNDLE_HASH },
+      sender: PAYER,
+      success: true,
+      userOpHash: hash,
+      ...overrides,
+    })),
   });
 
   it("returns the bundle hash of a successful operation", async () => {
-    await expect(
-      awaitPaymasterOperation(
-        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: true, userOpHash: hash }),
-        hash,
-        PAYER,
-      ),
-    ).resolves.toBe(BUNDLE_HASH);
+    await expect(awaitPaymasterOperation(receiptOps(), hash, PAYER)).resolves.toBe(BUNDLE_HASH);
   });
 
   it("treats a failed operation inside a successful bundle as reverted, with gas charged", async () => {
-    await expect(
-      awaitPaymasterOperation(
-        receiptOps({ receipt: { transactionHash: BUNDLE_HASH }, sender: PAYER, success: false, userOpHash: hash }),
-        hash,
-        PAYER,
-      ),
-    ).rejects.toMatchObject({
+    await expect(awaitPaymasterOperation(receiptOps({ success: false }), hash, PAYER)).rejects.toMatchObject({
       message: expect.stringContaining("Network fees were still charged in USDC"),
       reason: "reverted",
       transactionHash: BUNDLE_HASH,
@@ -302,16 +296,7 @@ describe("awaitPaymasterOperation", () => {
 
   it("does not accept another payer's receipt", async () => {
     await expect(
-      awaitPaymasterOperation(
-        receiptOps({
-          receipt: { transactionHash: BUNDLE_HASH },
-          sender: "0x2222222222222222222222222222222222222222",
-          success: true,
-          userOpHash: hash,
-        }),
-        hash,
-        PAYER,
-      ),
+      awaitPaymasterOperation(receiptOps({ sender: "0x2222222222222222222222222222222222222222" }), hash, PAYER),
     ).rejects.toMatchObject({ reason: "timeout" });
   });
 

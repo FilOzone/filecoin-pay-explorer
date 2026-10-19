@@ -73,7 +73,7 @@ describe("planPaymasterDeposit", () => {
     await expect(planPaymasterDeposit(input(10_000_000n))).resolves.toEqual({
       kind: "sized",
       gasMaximum: 24_091n,
-      maxNativeFee: 450_000_000_000_000n,
+      maxTransactionValue: 450_000_000_000_000n,
       maxSwapInput: 1_136_250n,
       quote: quoteFor(8_839_659n),
     });

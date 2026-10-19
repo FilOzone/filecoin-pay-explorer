@@ -22,14 +22,14 @@ import {
 const BATCH_CALL_GAS = 400_000n;
 const ROUTE_CALL_GAS_FALLBACK = 1_000_000n;
 const VERIFICATION_GAS = 250_000n;
-/** Base's L1 data charge for an operation carrying a Squid route, which bundlers fold into pre-verification gas. */
+// Base's L1 data charge for an operation carrying a Squid route, which bundlers fold into pre-verification gas.
 const PRE_VERIFICATION_GAS = 1_500_000n;
 
 /** A reviewed USDC-gas deposit: the sized route and the USDC caps execution must stay within. */
 export interface PaymasterDepositPlan {
   quote: SquidDepositQuote;
-  /** The most native fee the route may carry, as the ETH path caps it; the swap is reserved for this much. */
-  maxNativeFee: bigint;
+  /** The reviewed cap on the route's native `value` (its bridge fee); the swap is reserved for this much. */
+  maxTransactionValue: bigint;
   maxSwapInput: bigint;
   /** USDC gas maximum the user reviews and the permit allows. */
   gasMaximum: bigint;
@@ -49,7 +49,6 @@ export interface PlanPaymasterDepositInput {
   withFilGasTopUp: boolean;
   squid: SquidClient;
   client: Pick<PublicClient, "getCode" | "multicall" | "simulateContract">;
-  /** The bundler's current fee per gas. */
   maxFeePerGas: bigint;
 }
 
@@ -96,7 +95,7 @@ export async function planPaymasterDeposit({
   return {
     kind: "sized",
     quote: sizing.route,
-    maxNativeFee: sizing.nativeFee,
+    maxTransactionValue: sizing.nativeFee,
     maxSwapInput: sizing.maxSwapInput,
     gasMaximum: sizing.gasMaximum,
   };
