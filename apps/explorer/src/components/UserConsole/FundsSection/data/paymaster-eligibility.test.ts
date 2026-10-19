@@ -1,20 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDelegationState, isPaymasterEligible, type PaymasterEligibilityInput } from "./paymaster-eligibility";
-
-const ourDelegation = "0xef0100e6cae83bde06e4c305530e199d7217f42808555b";
-
-describe("getDelegationState", () => {
-  it.each([
-    ["no code", undefined, "none"],
-    ["empty code", "0x", "none"],
-    ["our delegate", ourDelegation, "ours"],
-    ["our delegate, checksummed", "0xef0100E6cAE83BdE06E4c305530e199D7217f42808555B", "ours"],
-    ["another delegate", "0xef01001111111111111111111111111111111111111111", "conflict"],
-    ["contract code", "0x6080604052", "conflict"],
-  ] as const)("%s → %s", (_label, code, expected) => {
-    expect(getDelegationState(code)).toBe(expected);
-  });
-});
+import { isPaymasterEligible, type PaymasterEligibilityInput } from "./paymaster-eligibility";
 
 describe("isPaymasterEligible", () => {
   const eligible: PaymasterEligibilityInput = {

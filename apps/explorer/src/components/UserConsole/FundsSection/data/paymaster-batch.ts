@@ -1,15 +1,15 @@
 import { type Address, encodeFunctionData, erc20Abi, type Hex, type PublicClient, parseAbi } from "viem";
 import { CIRCLE_PAYMASTER_ADDRESS } from "./circle-paymaster";
-import type { SquidDepositTransaction } from "./squid-deposit-route";
+import { ceilDiv, type SquidDepositTransaction } from "./squid-deposit-route";
 
 /** Uniswap v3 SwapRouter02 on Base: swaps and unwraps in one multicall, with plain ERC-20 approvals. */
 export const BASE_SWAP_ROUTER_ADDRESS: Address = "0x2626664c2603336E57B271c5C0b26F421741e481";
 export const BASE_QUOTER_V2_ADDRESS: Address = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 export const BASE_WETH_ADDRESS: Address = "0x4200000000000000000000000000000000000006";
 /** The 0.05% USDC/WETH pool, Base's deepest for the pair. */
-export const BASE_USDC_WETH_POOL_FEE = 500;
+const BASE_USDC_WETH_POOL_FEE = 500;
 /** The pool can move before inclusion; past this the swap reverts the whole operation instead of overpaying. */
-export const SWAP_INPUT_SLIPPAGE_BIPS = 100n;
+const SWAP_INPUT_SLIPPAGE_BIPS = 100n;
 // SwapRouter02's recipient marker for the router itself, so the WETH stays there for `unwrapWETH9`.
 const ROUTER_ADDRESS_THIS: Address = "0x0000000000000000000000000000000000000002";
 
@@ -31,6 +31,7 @@ export async function quoteSwapInputCap(
   sourceToken: Address,
   nativeFee: bigint,
 ): Promise<bigint> {
+  if (nativeFee === 0n) return 0n;
   // QuoterV2 runs the swap and reverts it internally, so its quotes are not `view` and must be simulated.
   const { result } = await client.simulateContract({
     abi: quoterV2Abi,
@@ -47,12 +48,12 @@ export async function quoteSwapInputCap(
     functionName: "quoteExactOutputSingle",
   });
   const [amountIn] = result;
-  return amountIn + (amountIn * SWAP_INPUT_SLIPPAGE_BIPS + 9_999n) / 10_000n;
+  return amountIn + ceilDiv(amountIn * SWAP_INPUT_SLIPPAGE_BIPS, 10_000n);
 }
 
 export type BatchCall = { to: Address; data: Hex; value: bigint };
 
-export interface PaymasterDepositBatchInput {
+interface PaymasterDepositBatchInput {
   /** The delegated account; it receives the unwrapped ETH the route spends. */
   payer: Address;
   sourceToken: Address;
@@ -62,11 +63,7 @@ export interface PaymasterDepositBatchInput {
   maxSwapInput: bigint;
 }
 
-/**
- * The calls one user operation runs, in order. Every allowance it grants ends at 0: the router's is reset,
- * Squid spends exactly `sourceAmount`, and the paymaster's permit leftover is cleared because its post-op
- * refund is a transfer, not a pull.
- */
+/** The calls one user operation runs, in order; every allowance it grants ends at 0. */
 export function buildPaymasterDepositCalls({
   maxSwapInput,
   payer,
@@ -79,49 +76,42 @@ export function buildPaymasterDepositCalls({
     data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
     value: 0n,
   });
-  const swap =
-    transaction.value === 0n
-      ? []
-      : [
-          approve(BASE_SWAP_ROUTER_ADDRESS, maxSwapInput),
-          {
-            to: BASE_SWAP_ROUTER_ADDRESS,
-            data: encodeFunctionData({
-              abi: swapRouter02Abi,
-              functionName: "multicall",
-              args: [
-                [
-                  encodeFunctionData({
-                    abi: swapRouter02Abi,
-                    functionName: "exactOutputSingle",
-                    args: [
-                      {
-                        tokenIn: sourceToken,
-                        tokenOut: BASE_WETH_ADDRESS,
-                        fee: BASE_USDC_WETH_POOL_FEE,
-                        recipient: ROUTER_ADDRESS_THIS,
-                        amountOut: transaction.value,
-                        amountInMaximum: maxSwapInput,
-                        sqrtPriceLimitX96: 0n,
-                      },
-                    ],
-                  }),
-                  encodeFunctionData({
-                    abi: swapRouter02Abi,
-                    functionName: "unwrapWETH9",
-                    args: [transaction.value, payer],
-                  }),
-                ],
-              ],
-            }),
-            value: 0n,
-          },
-          approve(BASE_SWAP_ROUTER_ADDRESS, 0n),
-        ];
-  return [
-    ...swap,
+  const routeCalls = [
     approve(transaction.approvalSpender ?? transaction.target, sourceAmount),
     { to: transaction.target, data: transaction.data, value: transaction.value },
+    // The paymaster refunds by transfer rather than pulling, so the permit's leftover allowance would linger.
     approve(CIRCLE_PAYMASTER_ADDRESS, 0n),
+  ];
+  if (transaction.value === 0n) return routeCalls;
+
+  const swap = encodeFunctionData({
+    abi: swapRouter02Abi,
+    functionName: "exactOutputSingle",
+    args: [
+      {
+        tokenIn: sourceToken,
+        tokenOut: BASE_WETH_ADDRESS,
+        fee: BASE_USDC_WETH_POOL_FEE,
+        recipient: ROUTER_ADDRESS_THIS,
+        amountOut: transaction.value,
+        amountInMaximum: maxSwapInput,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
+  const unwrap = encodeFunctionData({
+    abi: swapRouter02Abi,
+    functionName: "unwrapWETH9",
+    args: [transaction.value, payer],
+  });
+  return [
+    approve(BASE_SWAP_ROUTER_ADDRESS, maxSwapInput),
+    {
+      to: BASE_SWAP_ROUTER_ADDRESS,
+      data: encodeFunctionData({ abi: swapRouter02Abi, functionName: "multicall", args: [[swap, unwrap]] }),
+      value: 0n,
+    },
+    approve(BASE_SWAP_ROUTER_ADDRESS, 0n),
+    ...routeCalls,
   ];
 }

@@ -1,24 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { type PaymasterSizingQuotes, sizePaymasterDeposit } from "./paymaster-sizing";
 
-type Route = { transaction: { value: bigint } };
-
 const nativeFee = 300_000_000_000_000n;
 
-function quotes({
-  fee = nativeFee,
-  swapInput = 731_894n,
-  gasMaximum = () => 24_740n,
-}: {
-  fee?: bigint;
-  swapInput?: bigint;
-  gasMaximum?: () => bigint;
-} = {}) {
+function quotes({ gasMaximum = () => 24_740n }: { gasMaximum?: () => bigint } = {}) {
   return {
-    quoteRoute: vi.fn(async (_amount: bigint): Promise<Route> => ({ transaction: { value: fee } })),
-    quoteSwapInput: vi.fn(async (_fee: bigint) => swapInput),
-    estimateGasMaximum: vi.fn(async () => gasMaximum()),
-  } satisfies PaymasterSizingQuotes<Route>;
+    quoteRoute: vi.fn(async (amount: bigint) => ({ route: `route for ${amount}`, nativeFee })),
+    quoteSwapInput: vi.fn(async (_fee: bigint) => 731_894n),
+    estimateGasMaximum: vi.fn(async (_route: string) => gasMaximum()),
+  } satisfies PaymasterSizingQuotes<string>;
 }
 
 describe("sizePaymasterDeposit", () => {
@@ -28,34 +18,21 @@ describe("sizePaymasterDeposit", () => {
     await expect(sizePaymasterDeposit(10_000_000n, sizing)).resolves.toEqual({
       kind: "sized",
       amount: 9_243_366n,
-      route: { transaction: { value: nativeFee } },
+      route: "route for 9243366",
+      nativeFee,
       maxSwapInput: 731_894n,
       gasMaximum: 24_740n,
     });
     expect(sizing.quoteRoute.mock.calls).toEqual([[10_000_000n], [9_243_366n]]);
     expect(sizing.quoteSwapInput.mock.calls).toEqual([[nativeFee], [nativeFee]]);
+    expect(sizing.estimateGasMaximum.mock.calls).toEqual([["route for 10000000"], ["route for 9243366"]]);
   });
 
-  it("reserves no swap when the route carries no native fee", async () => {
-    const sizing = quotes({ fee: 0n });
-
-    await expect(sizePaymasterDeposit(10_000_000n, sizing)).resolves.toMatchObject({
-      kind: "sized",
-      amount: 9_975_260n,
-      maxSwapInput: 0n,
-    });
-    expect(sizing.quoteSwapInput).not.toHaveBeenCalled();
-  });
-
-  it("reports the reserve when the swap cap and gas maximum use up the balance", async () => {
-    await expect(sizePaymasterDeposit(500_000n, quotes())).resolves.toEqual({
-      kind: "insufficient-usdc",
-      reserved: 756_634n,
-    });
-  });
-
-  it("treats a balance that exactly covers the reserves as insufficient", async () => {
-    await expect(sizePaymasterDeposit(756_634n, quotes())).resolves.toEqual({
+  it.each([
+    ["the swap cap and gas maximum use up the balance", 500_000n],
+    ["the balance exactly covers the reserves", 756_634n],
+  ])("reports the reserve as insufficient when %s", async (_label, balance) => {
+    await expect(sizePaymasterDeposit(balance, quotes())).resolves.toEqual({
       kind: "insufficient-usdc",
       reserved: 756_634n,
     });

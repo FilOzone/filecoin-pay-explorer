@@ -114,6 +114,13 @@ describe("quoteSwapInputCap", () => {
     );
   });
 
+  it("reserves nothing without quoting when the route carries no native fee", async () => {
+    const client = clientQuoting(724_648n);
+
+    await expect(quoteSwapInputCap(client, usdc, 0n)).resolves.toBe(0n);
+    expect(client.simulateContract).not.toHaveBeenCalled();
+  });
+
   it("rounds the slippage up so a tiny quote still gets headroom", async () => {
     await expect(quoteSwapInputCap(clientQuoting(1n), usdc, 1n)).resolves.toBe(2n);
   });

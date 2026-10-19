@@ -1,18 +1,30 @@
-import { type Address, type PublicClient, parseAbi } from "viem";
+import { type Address, type Hex, type PublicClient, parseAbi } from "viem";
+import { base } from "viem/chains";
 
 /** Circle Paymaster v0.8 on Base: takes USDC for gas, paired with EntryPoint v0.8. */
 export const CIRCLE_PAYMASTER_ADDRESS: Address = "0x0578cFB241215b77442a541325d6A4E6dFE700Ec";
 /** The paymaster's only accepted token: native USDC on Base. */
 export const CIRCLE_PAYMASTER_TOKEN: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-export const CIRCLE_PAYMASTER_CHAIN_ID = 8453;
+export const CIRCLE_PAYMASTER_CHAIN_ID = base.id;
 /** Circle's quickstart value; covers the permit call and the USDC pull during validation. */
-export const PAYMASTER_VERIFICATION_GAS_LIMIT = 200_000n;
+const PAYMASTER_VERIFICATION_GAS_LIMIT = 200_000n;
 /** Circle documents up to a 10% surcharge; a higher live spread fails closed rather than charging more than reviewed. */
-export const MAX_PAYMASTER_FEE_SPREAD_BIPS = 1_000n;
+const MAX_PAYMASTER_FEE_SPREAD_BIPS = 1_000n;
 /** The oracle price is read again at validation; the permit is signed for this much drift above the reviewed price. */
-export const PAYMASTER_PRICE_HEADROOM_BIPS = 1_000n;
+const PAYMASTER_PRICE_HEADROOM_BIPS = 1_000n;
 
 const BIPS = 10_000n;
+
+/** eth-infinitism Simple7702Account for EntryPoint v0.8, the delegate viem's `toSimple7702SmartAccount` signs for. */
+export const SIMPLE_7702_ACCOUNT_ADDRESS: Address = "0xe6Cae83BdE06E4c305530e199D7217f42808555B";
+
+const OUR_DELEGATION = `0xef0100${SIMPLE_7702_ACCOUNT_ADDRESS.slice(2)}`.toLowerCase();
+
+/** `ours` reuses the delegation; `conflict` is another delegate (or a contract) the console must never overwrite. */
+export function getDelegationState(code: Hex | undefined): "none" | "ours" | "conflict" {
+  if (code === undefined || code === "0x") return "none";
+  return code.toLowerCase() === OUR_DELEGATION ? "ours" : "conflict";
+}
 
 export const circlePaymasterAbi = parseAbi([
   "function additionalGasCharge() view returns (uint32)",
@@ -64,11 +76,7 @@ export function getPaymasterGasLimits(fees: Pick<PaymasterFees, "additionalGasCh
   };
 }
 
-/**
- * USDC the paymaster pulls during validation, as `TokenPaymasterV08.validatePaymasterUserOp` computes it:
- * the EntryPoint's maximum cost plus the paymaster's own gas, priced in USDC, plus its spread.
- * The unused part is refunded after execution.
- */
+/** USDC the paymaster pulls in `TokenPaymasterV08.validatePaymasterUserOp`; the unused part is refunded. */
 export function getPaymasterPrefund(gas: UserOperationGas, fees: PaymasterFees): bigint {
   const maxCost =
     (gas.callGasLimit +
