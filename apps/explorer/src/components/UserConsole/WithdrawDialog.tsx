@@ -13,8 +13,9 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
-import { formatUnits, parseUnits } from "viem";
-import { useConnection, useReadContract, useWalletClient } from "wagmi";
+import { formatUnits } from "viem";
+import { useConnection, useReadContract } from "wagmi";
+import { parseFundingAmount } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { AccountInfo, Network } from "@/types";
@@ -36,7 +37,6 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const chain = getChain(network);
-  const { data: walletClient } = useWalletClient();
 
   // Use the contract transaction hook
   const { execute, isExecuting } = useContractTransaction({
@@ -79,19 +79,11 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
 
   const lockupRate = accountInfo ? (accountInfo as AccountInfo)[3] : 0n;
 
-  // viem rejects an empty or malformed amount, and <input type=number> accepts
-  // values it rejects (such as 1e5), so parse once and treat failures as "no amount".
-  const parsedAmount = (() => {
-    if (!amount.trim()) return null;
-    try {
-      return parseUnits(amount.trim(), currentToken.decimals);
-    } catch {
-      return null;
-    }
-  })();
+  // <input type=number> accepts values viem rejects (such as 1e5), so treat those as "no amount".
+  const parsedAmount = parseFundingAmount(amount.trim(), currentToken.decimals);
 
   const handleWithdraw = async () => {
-    if (parsedAmount === null || parsedAmount <= 0n || !walletClient || !userAddress) return;
+    if (parsedAmount === null || !userAddress) return;
 
     setIsSubmitting(true);
     try {
@@ -129,11 +121,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
   };
 
   const hasAvailableFunds = !!accountInfo && (parsedAmount === null || parsedAmount <= (accountInfo as AccountInfo)[2]);
-  const canWithdraw = hasAvailableFunds && parsedAmount !== null && parsedAmount > 0n;
-  // useWalletClient resolves asynchronously after a connect or chain switch; until then a click could not sign.
-  const isWalletReady = !!walletClient && !!userAddress;
-  const submitLabel = isWalletReady ? "Withdraw" : "Connecting wallet…";
-  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo && isWalletReady;
+  const canWithdraw = hasAvailableFunds && parsedAmount !== null;
+  const canExecute = !isExecuting && canWithdraw && !isLoadingAccountInfo && !isRefetchingAccountInfo;
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -219,8 +208,8 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
                 Max includes a small buffer to prevent transaction failures from ongoing payment streams.
               </p>
             )}
-            {amount.trim() && (parsedAmount === null || parsedAmount <= 0n) ? (
-              <p className='text-xs text-red-500'>Enter a plain number greater than 0, like 1.5.</p>
+            {amount.trim() && parsedAmount === null ? (
+              <p className='text-xs text-destructive'>Enter a plain number greater than 0, like 1.5.</p>
             ) : null}
             <p className='text-xs text-red-500'>
               {hasAvailableFunds ? "" : "Insufficient Available funds in contract account"}
@@ -244,7 +233,7 @@ export const WithdrawDialog: React.FC<WithdrawDialogProps> = ({ network, userTok
                 Processing...
               </span>
             ) : (
-              submitLabel
+              "Withdraw"
             )}
           </Button>
         </DialogFooter>

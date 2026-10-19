@@ -12,7 +12,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2, Wallet } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { erc20Abi, formatUnits, type Hex, isAddress, parseUnits } from "viem";
+import { erc20Abi, formatUnits, type Hex, isAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract, useReadContracts, useWalletClient } from "wagmi";
 import DepositTokenPicker, {
   type CustomTokenStatus,
@@ -25,6 +25,7 @@ import {
   calculateProjectedFundingRunway,
   defaultTopUpSuggestion,
   ONE_YEAR_EPOCHS,
+  parseFundingAmount,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
 import { parseTopUpAmount } from "@/components/UserConsole/FundsSection/data/guided-top-up";
 import { getChain } from "@/constants/chains";
@@ -316,15 +317,7 @@ export const DepositDialog = ({
     }
   };
 
-  const parsedDepositAmount = (() => {
-    if (!currentToken || amount === "") return null;
-    try {
-      const parsed = parseUnits(amount, currentToken.decimals);
-      return parsed > 0n ? parsed : null;
-    } catch {
-      return null;
-    }
-  })();
+  const parsedDepositAmount = currentToken ? parseFundingAmount(amount, currentToken.decimals) : null;
   const hasInsufficientBalance = parsedDepositAmount !== null && balance !== undefined && parsedDepositAmount > balance;
 
   const handleDeposit = async () => {

@@ -13,7 +13,6 @@ import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAcc
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { trackConsoleView } from "@/utils/funnel-analytics";
-import { ConsoleContent } from "./ConsoleContent";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
   type ConsoleAccessState,
@@ -113,9 +112,12 @@ export const ConsoleShell = ({
               {focused ? (
                 <div key={account?.address}>{children}</div>
               ) : (
-                <ConsoleContent key={account?.address} sidebar={<ConsoleSidebar />}>
-                  {children}
-                </ConsoleContent>
+                <div key={account?.address} className='flex gap-8'>
+                  <div className='hidden border-r pr-4 lg:flex'>
+                    <ConsoleSidebar />
+                  </div>
+                  <div className='min-w-0 flex-1'>{children}</div>
+                </div>
               )}
             </ConsoleAccessGate>
             {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
