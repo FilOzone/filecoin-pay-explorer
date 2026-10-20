@@ -2,28 +2,25 @@ import { Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
 import { afterEach, assert, clearInBlockStore, clearStore, describe, test } from "matchstick-as";
 
 import { DataSet } from "../../generated/schema";
+import { handleDataSetDeleted, handlePiecesRemoved } from "../../src/pdpVerifier";
 import { getDataSetEntityId, getPieceEntityId, getRailEntityId } from "../../src/utils/keys";
 import {
   handleCDNServiceTerminated,
-  handleDataSetDeleted,
-  handleDataSetServiceProviderChanged,
   handlePDPPaymentTerminated,
   handlePieceAdded,
-  handlePiecesRemoved,
   handleServiceTerminated,
 } from "../../src/warmStorage";
-import { resetEventLogIndex as resetPaymentsEventLogIndex } from "../payments/events";
+import { resetEventLogIndex } from "../payments/events";
+import { TEST_ADDRESSES } from "../payments/fixtures";
 import {
   createCDNServiceTerminatedEvent,
   createDataSetDeletedEvent,
-  createDataSetServiceProviderChangedEvent,
   createPDPPaymentTerminatedEvent,
   createPieceAddedEvent,
   createPiecesRemovedEvent,
   createServiceTerminatedEvent,
-  resetEventLogIndex,
 } from "./events";
-import { setupDataSet, TEST_ADDRESSES } from "./fixtures";
+import { APPROVER, SERVICE_PROVIDER, setupDataSet } from "./fixtures";
 
 const DATA_SET_ID = GraphBN.fromI32(1);
 const PDP_RAIL_ID = GraphBN.fromI32(1);
@@ -47,15 +44,14 @@ describe("warmStorage handlers", () => {
     clearStore();
     clearInBlockStore();
     resetEventLogIndex();
-    resetPaymentsEventLogIndex();
   });
 
   test("handleDataSetCreated links the payer, provider, providerId and pdpRail", () => {
     setupDataSet(DATA_SET_ID, PDP_RAIL_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID);
 
     const id = dataSetEntityId();
-    assert.fieldEquals("DataSet", id, "payer", TEST_ADDRESSES.PAYER.toHexString());
-    assert.fieldEquals("DataSet", id, "provider", TEST_ADDRESSES.SERVICE_PROVIDER.toHexString());
+    assert.fieldEquals("DataSet", id, "payer", TEST_ADDRESSES.ACCOUNT.toHexString());
+    assert.fieldEquals("DataSet", id, "provider", SERVICE_PROVIDER.toHexString());
     assert.fieldEquals("DataSet", id, "providerId", "1");
     assert.fieldEquals("DataSet", id, "pdpRail", getRailEntityId(PDP_RAIL_ID).toHexString());
     assert.fieldEquals("DataSet", id, "cacheMissRail", getRailEntityId(CACHE_MISS_RAIL_ID).toHexString());
@@ -110,7 +106,7 @@ describe("warmStorage handlers", () => {
     assert.fieldEquals("Piece", getPieceEntityId(dataSetB, pieceB).toHexString(), "size", "254");
   });
 
-  test("handleDataSetDeleted marks the dataset DELETED and zeroes its size", () => {
+  test("handleDataSetDeleted marks the dataset DELETED and drops its pieces", () => {
     setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
     handlePieceAdded(createPieceAddedEvent(DATA_SET_ID, GraphBN.fromI32(1), PIECE_CID_127_BYTES));
     handlePDPPaymentTerminated(createPDPPaymentTerminatedEvent(DATA_SET_ID, GraphBN.fromI32(100), PDP_RAIL_ID));
@@ -119,20 +115,7 @@ describe("warmStorage handlers", () => {
 
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "DELETED");
     assert.fieldEquals("DataSet", dataSetEntityId(), "totalSize", "0");
-  });
-
-  test("handleDataSetServiceProviderChanged updates the provider", () => {
-    setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
-
-    handleDataSetServiceProviderChanged(
-      createDataSetServiceProviderChangedEvent(
-        DATA_SET_ID,
-        TEST_ADDRESSES.SERVICE_PROVIDER,
-        TEST_ADDRESSES.NEW_SERVICE_PROVIDER,
-      ),
-    );
-
-    assert.fieldEquals("DataSet", dataSetEntityId(), "provider", TEST_ADDRESSES.NEW_SERVICE_PROVIDER.toHexString());
+    assert.notInStore("Piece", getPieceEntityId(DATA_SET_ID, GraphBN.fromI32(1)).toHexString());
   });
 
   test("PDP and CDN termination combine into TERMINATED regardless of order", () => {
@@ -141,9 +124,7 @@ describe("warmStorage handlers", () => {
     handlePDPPaymentTerminated(createPDPPaymentTerminatedEvent(DATA_SET_ID, GraphBN.fromI32(100), PDP_RAIL_ID));
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "PDP_TERMINATED");
 
-    handleCDNServiceTerminated(
-      createCDNServiceTerminatedEvent(TEST_ADDRESSES.APPROVER, DATA_SET_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID),
-    );
+    handleCDNServiceTerminated(createCDNServiceTerminatedEvent(APPROVER, DATA_SET_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID));
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "TERMINATED");
   });
 
@@ -151,7 +132,7 @@ describe("warmStorage handlers", () => {
     setupDataSet(DATA_SET_ID, PDP_RAIL_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID);
 
     handleServiceTerminated(
-      createServiceTerminatedEvent(TEST_ADDRESSES.APPROVER, DATA_SET_ID, PDP_RAIL_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID),
+      createServiceTerminatedEvent(APPROVER, DATA_SET_ID, PDP_RAIL_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID),
     );
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "TERMINATED");
 

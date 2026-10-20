@@ -5,25 +5,11 @@ import { newMockEvent } from "matchstick-as";
 import {
   CDNServiceTerminated,
   DataSetCreated,
-  DataSetServiceProviderChanged,
   PDPPaymentTerminated,
   PieceAdded,
   ServiceTerminated,
 } from "../../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { DataSetDeleted, PiecesRemoved } from "../../generated/PDPVerifier/PDPVerifier";
-
-let nextLogIndex = 1;
-
-export function resetEventLogIndex(): void {
-  nextLogIndex = 1;
-}
-
-function newEvent(): ethereum.Event {
-  const event = newMockEvent();
-  event.logIndex = GraphBN.fromI32(nextLogIndex);
-  nextLogIndex += 1;
-  return event;
-}
 
 export function createDataSetCreatedEvent(
   dataSetId: GraphBN,
@@ -37,7 +23,7 @@ export function createDataSetCreatedEvent(
   metadataKeys: string[] = [],
   metadataValues: string[] = [],
 ): DataSetCreated {
-  const event = changetype<DataSetCreated>(newEvent());
+  const event = changetype<DataSetCreated>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
   event.parameters.push(new ethereum.EventParam("providerId", ethereum.Value.fromUnsignedBigInt(providerId)));
@@ -60,7 +46,7 @@ export function createPieceAddedEvent(
   keys: string[] = [],
   values: string[] = [],
 ): PieceAdded {
-  const event = changetype<PieceAdded>(newEvent());
+  const event = changetype<PieceAdded>(newMockEvent());
 
   const pieceCid = new ethereum.Tuple();
   pieceCid.push(ethereum.Value.fromBytes(pieceCidData));
@@ -74,26 +60,12 @@ export function createPieceAddedEvent(
   return event;
 }
 
-export function createDataSetServiceProviderChangedEvent(
-  dataSetId: GraphBN,
-  oldServiceProvider: Address,
-  newServiceProvider: Address,
-): DataSetServiceProviderChanged {
-  const event = changetype<DataSetServiceProviderChanged>(newEvent());
-
-  event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
-  event.parameters.push(new ethereum.EventParam("oldServiceProvider", ethereum.Value.fromAddress(oldServiceProvider)));
-  event.parameters.push(new ethereum.EventParam("newServiceProvider", ethereum.Value.fromAddress(newServiceProvider)));
-
-  return event;
-}
-
 export function createPDPPaymentTerminatedEvent(
   dataSetId: GraphBN,
   endEpoch: GraphBN,
   pdpRailId: GraphBN,
 ): PDPPaymentTerminated {
-  const event = changetype<PDPPaymentTerminated>(newEvent());
+  const event = changetype<PDPPaymentTerminated>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
   event.parameters.push(new ethereum.EventParam("endEpoch", ethereum.Value.fromUnsignedBigInt(endEpoch)));
@@ -108,7 +80,7 @@ export function createCDNServiceTerminatedEvent(
   cacheMissRailId: GraphBN,
   cdnRailId: GraphBN,
 ): CDNServiceTerminated {
-  const event = changetype<CDNServiceTerminated>(newEvent());
+  const event = changetype<CDNServiceTerminated>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("caller", ethereum.Value.fromAddress(caller)));
   event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
@@ -125,7 +97,7 @@ export function createServiceTerminatedEvent(
   cacheMissRailId: GraphBN,
   cdnRailId: GraphBN,
 ): ServiceTerminated {
-  const event = changetype<ServiceTerminated>(newEvent());
+  const event = changetype<ServiceTerminated>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("approver", ethereum.Value.fromAddress(approver)));
   event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
@@ -137,7 +109,7 @@ export function createServiceTerminatedEvent(
 }
 
 export function createPiecesRemovedEvent(setId: GraphBN, pieceIds: GraphBN[]): PiecesRemoved {
-  const event = changetype<PiecesRemoved>(newEvent());
+  const event = changetype<PiecesRemoved>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("setId", ethereum.Value.fromUnsignedBigInt(setId)));
   event.parameters.push(new ethereum.EventParam("pieceIds", ethereum.Value.fromUnsignedBigIntArray(pieceIds)));
@@ -146,7 +118,7 @@ export function createPiecesRemovedEvent(setId: GraphBN, pieceIds: GraphBN[]): P
 }
 
 export function createDataSetDeletedEvent(setId: GraphBN, deletedLeafCount: GraphBN): DataSetDeleted {
-  const event = changetype<DataSetDeleted>(newEvent());
+  const event = changetype<DataSetDeleted>(newMockEvent());
 
   event.parameters.push(new ethereum.EventParam("setId", ethereum.Value.fromUnsignedBigInt(setId)));
   event.parameters.push(

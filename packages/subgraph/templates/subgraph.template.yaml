@@ -76,7 +76,6 @@ dataSources:
       entities:
         - DataSet
         - Piece
-        - Account
         - Rail
       abis:
         - name: FilecoinWarmStorageService
@@ -86,8 +85,6 @@ dataSources:
           handler: handleDataSetCreated
         - event: PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])
           handler: handlePieceAdded
-        - event: DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)
-          handler: handleDataSetServiceProviderChanged
         - event: PDPPaymentTerminated(indexed uint256,uint256,uint256)
           handler: handlePDPPaymentTerminated
         - event: CDNServiceTerminated(indexed address,indexed uint256,uint256,uint256)
@@ -121,7 +118,7 @@ dataSources:
           handler: handlePiecesRemoved
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
-      file: ./src/warmStorage.ts
+      file: ./src/pdpVerifier.ts
 
 templates:
 

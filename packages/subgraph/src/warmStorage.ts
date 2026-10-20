@@ -1,19 +1,13 @@
-import { log, store } from "@graphprotocol/graph-ts";
+import { log } from "@graphprotocol/graph-ts";
 import {
   CDNServiceTerminated as CDNServiceTerminatedEvent,
   DataSetCreated as DataSetCreatedEvent,
-  DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
   PDPPaymentTerminated as PDPPaymentTerminatedEvent,
   PieceAdded as PieceAddedEvent,
   ServiceTerminated as ServiceTerminatedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
-import {
-  DataSetDeleted as DataSetDeletedEvent,
-  PiecesRemoved as PiecesRemovedEvent,
-} from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, Piece, Rail } from "../generated/schema";
 import { decodeCommPv2Size } from "./utils/cid";
-import { createOrLoadAccountByAddress } from "./utils/helpers";
 import { getDataSetEntityId, getPieceEntityId, getRailEntityId } from "./utils/keys";
 import { ZERO_BIG_INT } from "./utils/metrics/constants";
 
@@ -22,7 +16,6 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   const pdpRailId = event.params.pdpRailId;
   const cacheMissRailId = event.params.cacheMissRailId;
   const cdnRailId = event.params.cdnRailId;
-  const payer = event.params.payer;
 
   // FWSS creates the payment rails via the Payments contract before emitting this
   // event, so the Rail entities must already exist by the time this handler runs.
@@ -35,11 +28,9 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
     return;
   }
 
-  createOrLoadAccountByAddress(payer);
-
   const dataSet = new DataSet(getDataSetEntityId(dataSetId));
   dataSet.dataSetId = dataSetId;
-  dataSet.payer = payer;
+  dataSet.payer = event.params.payer;
   dataSet.provider = event.params.serviceProvider;
   dataSet.providerId = event.params.providerId;
   dataSet.pdpRail = pdpRail.id;
@@ -77,55 +68,6 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
 
   dataSet.totalSize = dataSet.totalSize.plus(size);
   dataSet.lastWriteAt = event.block.timestamp;
-  dataSet.save();
-}
-
-// PDPVerifier finalizes piece removal (FWSS.piecesScheduledRemove only schedules it), so
-// this is the source of truth for keeping DataSet.totalSize accurate over time.
-export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
-  const dataSetId = event.params.setId;
-  const dataSet = DataSet.load(getDataSetEntityId(dataSetId));
-  if (!dataSet) return; // not an FWSS-tracked dataset, or predates our start block
-
-  const pieceIds = event.params.pieceIds;
-  let removedSize = ZERO_BIG_INT;
-  for (let i = 0; i < pieceIds.length; i++) {
-    const pieceEntityId = getPieceEntityId(dataSetId, pieceIds[i]);
-    const piece = Piece.load(pieceEntityId);
-    if (!piece) {
-      log.warning("[handlePiecesRemoved] Piece not found for dataSetId: {} pieceId: {}", [
-        dataSetId.toString(),
-        pieceIds[i].toString(),
-      ]);
-      continue;
-    }
-    removedSize = removedSize.plus(piece.size);
-    store.remove("Piece", pieceEntityId.toHexString());
-  }
-
-  dataSet.totalSize = dataSet.totalSize.minus(removedSize);
-  if (dataSet.totalSize.lt(ZERO_BIG_INT)) dataSet.totalSize = ZERO_BIG_INT;
-  dataSet.save();
-}
-
-export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
-  const dataSet = DataSet.load(getDataSetEntityId(event.params.setId));
-  if (!dataSet) return; // not an FWSS-tracked dataset, or predates our start block
-
-  dataSet.status = "DELETED";
-  dataSet.totalSize = ZERO_BIG_INT;
-  dataSet.save();
-}
-
-export function handleDataSetServiceProviderChanged(event: DataSetServiceProviderChangedEvent): void {
-  const dataSetId = event.params.dataSetId;
-  const dataSet = DataSet.load(getDataSetEntityId(dataSetId));
-  if (!dataSet) {
-    log.warning("[handleDataSetServiceProviderChanged] DataSet not found for dataSetId: {}", [dataSetId.toString()]);
-    return;
-  }
-
-  dataSet.provider = event.params.newServiceProvider;
   dataSet.save();
 }
 

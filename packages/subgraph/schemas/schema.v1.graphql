@@ -198,7 +198,7 @@ type OneTimePayment @entity(immutable: true) {
   createdAt: BigInt!
 }
 
-# Warm Storage (FWSS) datasets, keyed by payer. Proving health (possession
+# Warm Storage (FWSS) datasets, queried by payer. Proving health (possession
 # proofs, faults, challenge windows) is out of scope; the explorer links out
 # to PDP Explorer for that.
 
@@ -223,6 +223,7 @@ type DataSet @entity(immutable: false) {
   lastWriteAt: BigInt! # block timestamp of the most recent PieceAdded, or creation if none yet
   status: DataSetStatus!
   createdAt: BigInt!
+  pieces: [Piece!]! @derivedFrom(field: "dataSet")
 }
 
 # Bookkeeping only, so PDPVerifier.PiecesRemoved can subtract the right amount
