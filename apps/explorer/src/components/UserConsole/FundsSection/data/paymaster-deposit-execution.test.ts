@@ -1,3 +1,4 @@
+import { NATIVE_TOKEN_ADDRESS } from "@filecoin-project/squid-evm-funding";
 import { encodeAbiParameters, type Hash, type Hex, type Log, pad, toEventSelector } from "viem";
 import {
   entryPoint08Address,
@@ -37,7 +38,13 @@ const request: SquidDepositRouteRequest = {
 };
 const quote: ExecutableSquidDepositQuote = {
   destinationAmount: 9_000_000_000_000_000_000n,
-  fees: [],
+  fees: [
+    {
+      amount: BRIDGE_FEE,
+      name: "Bridge fee",
+      token: { address: NATIVE_TOKEN_ADDRESS, chainId: 8453, decimals: 18, symbol: "ETH" },
+    },
+  ],
   gasCosts: [],
   minimumDestinationAmount: 8_900_000_000_000_000_000n,
   quoteId: "quote-1",
@@ -226,6 +233,12 @@ describe("executePaymasterSquidDeposit", () => {
       {},
       { quote: { ...quote, transaction: { ...quote.transaction, value: 450_000_000_000_001n } } },
       "bridge fee rose",
+    ],
+    [
+      "the route's minimum received fell below the reviewed amount",
+      {},
+      { quote: { ...quote, minimumDestinationAmount: quote.minimumDestinationAmount - 1n } },
+      "minimum USDFC received fell below",
     ],
     ["buying the bridge fee costs more than reviewed", { swapInput: 1_190_000n }, {}, "costs more USDC than reviewed"],
     ["the balance no longer covers the deposit and its fees", { balance: 9_857_499n }, {}, "no longer covers"],

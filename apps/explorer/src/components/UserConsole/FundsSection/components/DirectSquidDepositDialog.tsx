@@ -35,7 +35,6 @@ import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
 import type { PaymasterDepositPlan } from "../data/paymaster-deposit-plan";
-
 import {
   getSourceTokenBalance,
   getSourceTokenBalancesQueryKey,
@@ -682,11 +681,14 @@ export function DirectSquidDepositDialog({
 
   const fail = async (failure: unknown, owner?: Address) => {
     setStage(null);
-    let reportedFailure = failure;
-    // A USDC-gas plan is sized from its quote, so a changed quote is planned again from the form.
-    if (reportedFailure instanceof SquidQuoteChangedError && reviewed?.usdcGas) {
-      reportedFailure = new PaymasterReviewError(reportedFailure.message);
+    // Nothing was sent: the form comes back to review a fresh USDC-gas plan, reserving what execution needed.
+    if (failure instanceof PaymasterReviewError) {
+      setReviewed(null);
+      usdcGas.reviewAgain(failure.gasMaximumFloor);
+      setError(`${failure.message} Review the deposit again.`);
+      return;
     }
+    let reportedFailure = failure;
     if (
       (reportedFailure instanceof SquidDepositBudgetError || reportedFailure instanceof SquidQuoteChangedError) &&
       reviewed &&
@@ -698,13 +700,6 @@ export function DirectSquidDepositDialog({
       } catch (reviewFailure) {
         reportedFailure = reviewFailure;
       }
-    }
-    // Nothing was sent: the form comes back to review a fresh plan, reserving what execution needed.
-    if (reportedFailure instanceof PaymasterReviewError) {
-      setReviewed(null);
-      usdcGas.reviewAgain(reportedFailure.gasMaximumFloor);
-      setError(`${reportedFailure.message} Review the deposit again.`);
-      return;
     }
     if (reportedFailure instanceof SquidDepositError) {
       setError(reportedFailure.message);
@@ -865,7 +860,6 @@ export function DirectSquidDepositDialog({
         });
         const executable = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
         if (!isExecutableQuote(executable)) throw new Error("Squid did not return an executable route");
-        assertExecutableQuoteWithinReview(executable, reviewedCaps);
         let saved: PendingSquidDeposit | null = null;
         const save = (next: PendingSquidDeposit) => {
           saved = savePendingSquidDeposit(window.localStorage, next);
@@ -895,6 +889,7 @@ export function DirectSquidDepositDialog({
           await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
           return;
         }
+        assertExecutableQuoteWithinReview(executable, reviewedCaps);
         const result = await executeSquidDeposit({
           approvalRequired: reviewed.approvalRequired,
           approvalResetRequired: reviewed.approvalResetRequired,
@@ -995,7 +990,6 @@ export function DirectSquidDepositDialog({
     quoteLoading: quoteQuery.isFetching,
     quoteReady: !!quote,
     requiredNative,
-    sourceDecimals: sourceToken?.decimals,
     sourceSymbol: sourceToken?.symbol,
     usdcGas: usdcGas.status,
   });

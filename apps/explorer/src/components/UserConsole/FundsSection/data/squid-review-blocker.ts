@@ -1,4 +1,5 @@
 import { formatUnits } from "viem";
+import { CIRCLE_PAYMASTER_TOKEN_DECIMALS } from "./circle-paymaster";
 import type { UsdcGasStatus } from "./paymaster-deposit-plan";
 
 /**
@@ -25,7 +26,6 @@ export function getSquidReviewBlocker({
   quoteLoading,
   quoteReady,
   requiredNative,
-  sourceDecimals,
   sourceSymbol,
   usdcGas,
 }: {
@@ -42,12 +42,11 @@ export function getSquidReviewBlocker({
   quoteLoading: boolean;
   quoteReady: boolean;
   requiredNative: bigint | null;
-  sourceDecimals: number | undefined;
   sourceSymbol: string | undefined;
   /** Set when network fees can only be paid in USDC; its plan then stands in for the native balance. */
   usdcGas?: UsdcGasStatus;
 }): SquidReviewBlocker | null {
-  if (!sourceSymbol || sourceDecimals === undefined) return { kind: "missing", message: "Choose a source token." };
+  if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
   if (parsedAmount === null) return { kind: "missing", message: "Enter a valid amount." };
   if (balancesFailed) return { kind: "failed", message: `The ${sourceSymbol} balance could not be loaded.` };
@@ -75,7 +74,7 @@ export function getSquidReviewBlocker({
     case "insufficient":
       return {
         kind: "funds",
-        message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees, which need up to ${formatUnits(usdcGas.reserved, sourceDecimals)} ${sourceSymbol}.`,
+        message: `${payerLabel} doesn't have enough ${sourceSymbol} for the deposit and its fees, which need up to ${formatUnits(usdcGas.reserved, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} ${sourceSymbol}.`,
       };
     case "conflict":
       return {

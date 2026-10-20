@@ -5,6 +5,7 @@ import { base } from "viem/chains";
 export const CIRCLE_PAYMASTER_ADDRESS: Address = "0x0578cFB241215b77442a541325d6A4E6dFE700Ec";
 /** The paymaster's only accepted token: native USDC on Base. */
 export const CIRCLE_PAYMASTER_TOKEN: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export const CIRCLE_PAYMASTER_TOKEN_DECIMALS = 6;
 export const CIRCLE_PAYMASTER_CHAIN_ID = base.id;
 /** Circle's quickstart value; covers the permit call and the USDC pull during validation. */
 const PAYMASTER_VERIFICATION_GAS_LIMIT = 200_000n;
@@ -30,6 +31,7 @@ export const circlePaymasterAbi = parseAbi([
   "function additionalGasCharge() view returns (uint32)",
   "function feeSpread() view returns (uint32)",
   "function fetchPrice() view returns (uint256)",
+  "event UserOperationSponsored(address indexed token, address indexed sender, bytes32 userOpHash, uint256 nativeTokenPrice, uint256 actualTokenNeeded, uint256 feeTokenAmount)",
 ]);
 
 export interface PaymasterFees {

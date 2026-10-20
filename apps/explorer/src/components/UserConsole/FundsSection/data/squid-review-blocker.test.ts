@@ -15,7 +15,6 @@ const ready = {
   quoteLoading: false,
   quoteReady: true,
   requiredNative: 10n,
-  sourceDecimals: 6,
   sourceSymbol: "USDC",
 };
 

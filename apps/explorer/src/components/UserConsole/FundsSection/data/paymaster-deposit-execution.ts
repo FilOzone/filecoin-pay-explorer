@@ -36,6 +36,8 @@ import { PERMIT_TYPES } from "@/utils/permit";
 import {
   CIRCLE_PAYMASTER_ADDRESS,
   CIRCLE_PAYMASTER_CHAIN_ID,
+  CIRCLE_PAYMASTER_TOKEN_DECIMALS,
+  circlePaymasterAbi,
   getDelegationState,
   getPaymasterGasLimits,
   getPaymasterGasMaximum,
@@ -56,9 +58,12 @@ import {
 } from "./squid-deposit-execution";
 import {
   applyNetworkFeeReviewHeadroom,
+  assertExecutableQuoteWithinReview,
+  captureReviewedSquidDepositCaps,
   type ExecutableSquidDepositQuote,
   type SquidClient,
   type SquidDepositRouteRequest,
+  SquidQuoteChangedError,
 } from "./squid-deposit-route";
 
 /**
@@ -210,14 +215,10 @@ function getValidationRejection(error: unknown): string | undefined {
   return cause instanceof Error ? cause.message.match(VALIDATION_REASON)?.[0].trim() : undefined;
 }
 
-const circlePaymasterEventsAbi = parseAbi([
-  "event UserOperationSponsored(address indexed token, address indexed sender, bytes32 userOpHash, uint256 nativeTokenPrice, uint256 actualTokenNeeded, uint256 feeTokenAmount)",
-]);
-
 // The USDC Circle's paymaster kept for this operation, from the event it emits after refunding the rest.
 function getChargedUsdc(receipt: PaymasterOperationReceipt): bigint | undefined {
   return parseEventLogs({
-    abi: circlePaymasterEventsAbi,
+    abi: circlePaymasterAbi,
     eventName: "UserOperationSponsored",
     logs: receipt.logs,
   }).find(
@@ -253,7 +254,10 @@ export async function awaitPaymasterOperation(
   }
   if (!receipt.success) {
     const charged = getChargedUsdc(receipt);
-    const fees = charged === undefined ? "Network fees were" : `Network fees of ${formatUnits(charged, 6)} USDC were`;
+    const fees =
+      charged === undefined
+        ? "Network fees were"
+        : `Network fees of ${formatUnits(charged, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} USDC were`;
     throw new SquidDepositError(
       `The deposit reverted on Base, so no USDC went to Squid and it is still in this account. ${fees} still charged, and this account keeps its USDC-gas setup for the next try.`,
       "reverted",
@@ -325,6 +329,15 @@ export async function executePaymasterSquidDeposit({
   };
 
   const nativeFee = quote.transaction.value;
+  if (nativeFee > plan.maxTransactionValue) {
+    throw new PaymasterReviewError("The bridge fee rose above the reviewed maximum.");
+  }
+  // The plan is sized from its quote, so a worse route is planned again rather than re-reviewed.
+  try {
+    assertExecutableQuoteWithinReview(quote, captureReviewedSquidDepositCaps(plan.quote, token));
+  } catch (error) {
+    throw error instanceof SquidQuoteChangedError ? new PaymasterReviewError(error.message) : error;
+  }
   const [
     fundsBefore,
     code,
@@ -360,9 +373,6 @@ export async function executePaymasterSquidDeposit({
   // The paymaster falls back to an existing allowance when its permit fails, so that allowance is a cap too.
   if (paymasterAllowance > plan.gasMaximum) {
     throw new Error("An earlier USDC allowance to Circle's paymaster exceeds the reviewed gas maximum.");
-  }
-  if (nativeFee > plan.maxTransactionValue) {
-    throw new PaymasterReviewError("The bridge fee rose above the reviewed maximum.");
   }
   if (maxSwapInput > plan.maxSwapInput) {
     throw new PaymasterReviewError("Buying the bridge fee now costs more USDC than reviewed.");

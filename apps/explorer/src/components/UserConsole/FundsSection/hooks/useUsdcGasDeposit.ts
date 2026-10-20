@@ -64,10 +64,10 @@ export function useUsdcGasDeposit({
 }) {
   const { signAuthorization } = useSign7702Authorization();
   const queryClient = useQueryClient();
-  const inputs = JSON.stringify([request, budget?.toString(), withFilGasTopUp]);
+  const planKey = ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp] as const;
   // What an execution needed above its review; it only applies to the inputs it was measured for.
   const [floor, setFloor] = useState<{ inputs: string; amount: bigint }>();
-  const gasMaximumFloor = floor?.inputs === inputs ? floor.amount : undefined;
+  const gasMaximumFloor = floor?.inputs === JSON.stringify(planKey) ? floor.amount : undefined;
   const bundler = useMemo(() => (sourceClient ? createPaymasterBundler(sourceClient) : undefined), [sourceClient]);
   const isEligible =
     !!wallet &&
@@ -99,7 +99,7 @@ export function useUsdcGasDeposit({
         withFilGasTopUp,
       });
     },
-    queryKey: ["direct-squid-usdc-gas-plan", request, budget?.toString(), withFilGasTopUp, gasMaximumFloor?.toString()],
+    queryKey: [...planKey, gasMaximumFloor?.toString()],
     retry: false,
   });
   const plan = isEligible ? planQuery.data : undefined;
@@ -112,8 +112,8 @@ export function useUsdcGasDeposit({
 
   // The reviewed plan no longer holds: drop it so Review waits for a fresh one that reserves at least `gasFloor`.
   const reviewAgain = (gasFloor: bigint | undefined) => {
-    if (gasFloor !== undefined) setFloor({ inputs, amount: gasFloor });
-    void queryClient.resetQueries({ queryKey: ["direct-squid-usdc-gas-plan"] });
+    if (gasFloor !== undefined) setFloor({ inputs: JSON.stringify(planKey), amount: gasFloor });
+    void queryClient.resetQueries({ queryKey: planKey });
   };
 
   const execute = async ({
