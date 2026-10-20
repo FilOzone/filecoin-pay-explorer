@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useConnection } from "wagmi";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
-import { getNetworkFromChainId, isNotificationsEligibleNetwork } from "@/utils/network";
+import { isNotificationsEligibleNetwork } from "@/utils/network";
 
 type ConsoleSidebarProps = {
   /**
@@ -55,10 +56,9 @@ const SidebarLink = ({ href, isActive, onNavigate, children }: SidebarLinkProps)
 
 export const ConsoleSidebar = ({ onNavigate }: ConsoleSidebarProps) => {
   const pathname = usePathname();
-  const { address, chainId } = useConnection();
-
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const isNotificationsEligible = isNotificationsEligibleNetwork(walletNetwork);
+  const { address } = useConnection();
+  const { network } = useConsoleNetwork();
+  const isNotificationsEligible = isNotificationsEligibleNetwork(network);
 
   // Also read by the console page; React Query dedupes the two subscriptions.
   const { data: notificationStatus } = useNotificationStatus(address);

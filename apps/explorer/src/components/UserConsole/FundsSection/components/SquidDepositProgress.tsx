@@ -51,6 +51,12 @@ export function SquidDepositProgress({
         ))}
       </ol>
       <p className='text-muted-foreground'>{describeSquidDepositStage(stage, { isEmbedded, signature, symbol })}</p>
+      {/* An extension account switch moves the console to that account, which closes this dialog. */}
+      {isEmbedded ? null : (
+        <p className='text-xs text-muted-foreground'>
+          Don't switch accounts in your wallet until the deposit finishes. Switching closes this window.
+        </p>
+      )}
       {transactionHash ? (
         <div className='flex flex-wrap gap-3 text-xs'>
           {explorerUrl ? (

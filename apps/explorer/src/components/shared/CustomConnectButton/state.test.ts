@@ -3,30 +3,13 @@ import { exitWalletSession, getWalletEntryState, getWalletExitAction, isUserCanc
 
 describe("getWalletEntryState", () => {
   it("waits for Privy before presenting login actions", () => {
-    expect(getWalletEntryState({ ready: false, walletsReady: false, authenticated: false, isConnected: false })).toBe(
-      "loading",
-    );
-    expect(getWalletEntryState({ ready: true, walletsReady: false, authenticated: false, isConnected: false })).toBe(
-      "loading",
-    );
-    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: false, isConnected: false })).toBe(
-      "login",
-    );
+    expect(getWalletEntryState({ ready: false, walletsReady: false, authenticated: false })).toBe("loading");
+    expect(getWalletEntryState({ ready: true, walletsReady: false, authenticated: false })).toBe("loading");
+    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: false })).toBe("login");
   });
 
-  it("waits for an authenticated user's embedded wallet to reach wagmi", () => {
-    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: true, isConnected: false })).toBe(
-      "preparing",
-    );
-    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: true, isConnected: true })).toBe(
-      "connected",
-    );
-  });
-
-  it("accepts a connected-only external wallet without a Privy account", () => {
-    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: false, isConnected: true })).toBe(
-      "connected",
-    );
+  it("offers only the exits while a signed-in user's wallet is still being prepared", () => {
+    expect(getWalletEntryState({ ready: true, walletsReady: true, authenticated: true })).toBe("preparing");
   });
 });
 
@@ -39,45 +22,87 @@ describe("getWalletExitAction", () => {
     expect(getWalletExitAction(false, "wallet_connect_v2")).toBe("disconnect");
   });
 
-  it("calls only the exit operation for the active session type", async () => {
+  it("ends only the active session type, then clears the console account", async () => {
     const logout = vi.fn(async () => undefined);
     const disconnect = vi.fn();
-    const pauseSelection = vi.fn();
+    const disconnectConnection = vi.fn(async () => undefined);
+    const clearAccount = vi.fn();
 
-    await exitWalletSession({ authenticated: true, logout, disconnect, pauseSelection });
-    expect(pauseSelection).toHaveBeenCalledOnce();
+    await exitWalletSession({ authenticated: true, logout, disconnect, disconnectConnection, clearAccount });
     expect(logout).toHaveBeenCalledOnce();
     expect(disconnect).not.toHaveBeenCalled();
+    expect(clearAccount).toHaveBeenCalledOnce();
+    expect(logout.mock.invocationCallOrder[0]).toBeLessThan(clearAccount.mock.invocationCallOrder[0]);
 
     logout.mockClear();
-    pauseSelection.mockClear();
-    const disconnectConnection = vi.fn(async () => undefined);
-    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection, pauseSelection });
+    clearAccount.mockClear();
+    await exitWalletSession({ authenticated: false, logout, disconnect, disconnectConnection, clearAccount });
     expect(logout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
+    expect(clearAccount).toHaveBeenCalledOnce();
+  });
+
+  it("disconnects wagmi before the account is cleared, so an extension can revoke the site's access", async () => {
+    const logout = vi.fn(async () => undefined);
+    const disconnectConnection = vi.fn(async () => undefined);
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({ authenticated: true, logout, disconnectConnection, clearAccount });
+
     expect(disconnectConnection).toHaveBeenCalledOnce();
-    expect(pauseSelection).toHaveBeenCalledOnce();
-    expect(pauseSelection.mock.invocationCallOrder[0]).toBeLessThan(disconnect.mock.invocationCallOrder[0]);
-    expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(disconnectConnection.mock.invocationCallOrder[0]);
+    expect(disconnectConnection.mock.invocationCallOrder[0]).toBeLessThan(logout.mock.invocationCallOrder[0]);
+    expect(disconnectConnection.mock.invocationCallOrder[0]).toBeLessThan(clearAccount.mock.invocationCallOrder[0]);
   });
 
-  it("restores wallet selection when a connect-only wallet cannot be disconnected", async () => {
-    const resumeSelection = vi.fn();
+  it("clears the console account when its wallet is already gone", async () => {
+    const clearAccount = vi.fn();
 
-    await expect(
-      exitWalletSession({
-        authenticated: false,
-        logout: async () => undefined,
-        pauseSelection: vi.fn(),
-        resumeSelection,
-      }),
-    ).rejects.toThrow("Connected wallet was not found");
-    expect(resumeSelection).toHaveBeenCalledOnce();
+    await exitWalletSession({
+      authenticated: false,
+      logout: async () => undefined,
+      disconnectConnection: async () => undefined,
+      clearAccount,
+    });
+
+    expect(clearAccount).toHaveBeenCalledOnce();
   });
 
-  it("restores wallet selection when logout fails", async () => {
+  it("still ends the session and clears the account when wagmi's disconnect fails", async () => {
+    const logout = vi.fn(async () => undefined);
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({
+      authenticated: true,
+      logout,
+      disconnectConnection: async () => {
+        throw new Error("provider unavailable");
+      },
+      clearAccount,
+    });
+
+    expect(logout).toHaveBeenCalledOnce();
+    expect(clearAccount).toHaveBeenCalledOnce();
+  });
+
+  it("still clears the account when the wallet's own disconnect fails", async () => {
+    const clearAccount = vi.fn();
+
+    await exitWalletSession({
+      authenticated: false,
+      logout: async () => undefined,
+      disconnect: () => {
+        throw new Error("disconnect failed");
+      },
+      disconnectConnection: async () => undefined,
+      clearAccount,
+    });
+
+    expect(clearAccount).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the console account when logout fails", async () => {
     const error = new Error("logout failed");
-    const resumeSelection = vi.fn();
+    const clearAccount = vi.fn();
 
     await expect(
       exitWalletSession({
@@ -85,11 +110,11 @@ describe("getWalletExitAction", () => {
         logout: async () => {
           throw error;
         },
-        pauseSelection: vi.fn(),
-        resumeSelection,
+        disconnectConnection: async () => undefined,
+        clearAccount,
       }),
     ).rejects.toThrow(error);
-    expect(resumeSelection).toHaveBeenCalledOnce();
+    expect(clearAccount).not.toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { getAddress, isAddress } from "viem";
+import { toAccountId } from "./hexUtils";
 
 /**
  * Subgraph-backed queries lag the chain by a block or two, so one pass right
@@ -14,12 +14,13 @@ const ACCOUNT_REFRESH_DELAYS_MS: readonly number[] = [10_000, 30_000];
  * be swapped out underneath the user.
  */
 function getAccountQueryPrefixes(address: string): readonly (readonly unknown[])[] {
-  const ids = [...new Set([address, address.toLowerCase(), ...(isAddress(address) ? [getAddress(address)] : [])])];
   return [
-    ...ids.map((id) => ["account", id] as const),
+    ["account", toAccountId(address)],
     ["payments", "account-summary"],
     ["balance"],
     ["readContract"],
+    // wagmi keys batched reads apart from single ones, and prefixes match whole key elements.
+    ["readContracts"],
     ["rail"],
     ["rails"],
     ["railSettlementAmounts"],
@@ -52,7 +53,7 @@ export function invalidateAccountQueries(
   address: string,
   { repeatAfterMs = ACCOUNT_REFRESH_DELAYS_MS }: { repeatAfterMs?: readonly number[] } = {},
 ) {
-  const key = address.toLowerCase();
+  const key = toAccountId(address);
   for (const timer of scheduledRefreshes.get(key) ?? []) clearTimeout(timer);
   scheduledRefreshes.set(
     key,

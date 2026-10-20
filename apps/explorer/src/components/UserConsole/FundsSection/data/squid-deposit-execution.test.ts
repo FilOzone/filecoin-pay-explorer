@@ -8,6 +8,7 @@ import {
   getAddress,
   type Hash,
   type Hex,
+  WaitForTransactionReceiptTimeoutError,
 } from "viem";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -165,8 +166,9 @@ function fakeSource({
         return Promise.all(contracts.map((contract) => source.readContract(contract)));
       },
     ),
-    waitForTransactionReceipt: vi.fn(async () => ({
+    waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: Hash }) => ({
       status: receiptStatus,
+      transactionHash: hash,
       ...(receiptBlock === undefined ? {} : { blockNumber: receiptBlock }),
     })),
   };
@@ -272,6 +274,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -282,7 +285,7 @@ describe("awaitSquidDepositSettlement", () => {
       destinationTransactionHash: DESTINATION_HASH,
       transactionHash: ROUTE_HASH,
     });
-    expect(stages).toEqual(["bridging", "verifying"]);
+    expect(stages).toEqual(["swap-broadcast", "bridging", "verifying"]);
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -295,6 +298,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 314,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -315,6 +319,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -331,6 +336,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch: vi.fn(async () => statusResponse("needs_gas")) },
       target,
       transactionHash: ROUTE_HASH,
@@ -349,6 +355,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -371,6 +378,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       target,
       transactionHash: ROUTE_HASH,
@@ -396,6 +404,7 @@ describe("awaitSquidDepositSettlement", () => {
       quoteId: "quote-1",
       sleep: noSleep,
       sourceChainId: 8453,
+      sourceClient: fakeSource(),
       squid: { integratorId: "id", fetch },
       statusRequestTimeoutMs: 1,
       target,
@@ -418,6 +427,7 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 8453,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id", fetch },
         target,
         transactionHash: ROUTE_HASH,
@@ -436,6 +446,7 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 314,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id" },
         target,
         transactionHash: ROUTE_HASH,
@@ -452,11 +463,124 @@ describe("awaitSquidDepositSettlement", () => {
         quoteId: "quote-1",
         sleep: noSleep,
         sourceChainId: 314,
+        sourceClient: fakeSource(),
         squid: { integratorId: "id" },
         target,
         transactionHash: ROUTE_HASH,
       }),
     ).rejects.toMatchObject({ reason: "failed", transactionHash: ROUTE_HASH });
+  });
+
+  describe("on the source network", () => {
+    const REPLACEMENT_HASH = `0x${"e".repeat(64)}` as Hash;
+    const replacingSource = (reason: "cancelled" | "replaced" | "repriced") =>
+      ({
+        waitForTransactionReceipt: vi.fn(async ({ onReplaced }: { onReplaced?: (replacement: unknown) => void }) => {
+          onReplaced?.({ reason });
+          return { status: "success", transactionHash: REPLACEMENT_HASH };
+        }),
+      }) as unknown as SquidDepositSourceClient;
+    const settle = (input: Partial<Parameters<typeof awaitSquidDepositSettlement>[0]>) =>
+      awaitSquidDepositSettlement({
+        destinationClient: fakeDestination(),
+        fundsBefore: 100n,
+        minimumDestinationAmount: 1n,
+        quoteId: "quote-1",
+        sleep: noSleep,
+        sourceChainId: 8453,
+        sourceClient: fakeSource(),
+        squid: { integratorId: "id", fetch: vi.fn() },
+        target,
+        transactionHash: ROUTE_HASH,
+        ...input,
+      });
+
+    it("follows a sped-up route under its replacement hash", async () => {
+      const fetch = vi.fn(async () => statusResponse("success"));
+      const onReplaced = vi.fn();
+      const result = await settle({
+        onReplaced,
+        sourceClient: replacingSource("repriced"),
+        squid: { integratorId: "id", fetch },
+      });
+      expect(result).toEqual({
+        depositedAmount: 95n,
+        destinationTransactionHash: DESTINATION_HASH,
+        transactionHash: REPLACEMENT_HASH,
+      });
+      expect(onReplaced).toHaveBeenCalledWith(REPLACEMENT_HASH);
+      const [url] = fetch.mock.calls[0] as unknown as [string];
+      expect(url).toContain(`transactionId=${REPLACEMENT_HASH}`);
+    });
+
+    it.each(["cancelled", "replaced"] as const)(
+      "fails without asking Squid when the wallet %s the route",
+      async (reason) => {
+        const fetch = vi.fn();
+        const attempt = settle({ sourceClient: replacingSource(reason), squid: { integratorId: "id", fetch } });
+        await expect(attempt).rejects.toMatchObject({ reason: "failed", transactionHash: ROUTE_HASH });
+        await expect(attempt).rejects.toThrow("nothing was sent to Squid");
+        expect(fetch).not.toHaveBeenCalled();
+      },
+    );
+
+    const lostRouteMessage =
+      "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.";
+    const failingSource = (error: Error) =>
+      ({
+        waitForTransactionReceipt: vi.fn(async () => {
+          throw error;
+        }),
+      }) as unknown as SquidDepositSourceClient;
+    const lostSource = () => failingSource(new WaitForTransactionReceiptTimeoutError({ hash: ROUTE_HASH }));
+
+    // The fake Pay account holds 100; the route's minimum is 92.
+    it.each([
+      ["has not moved", 100n, lostRouteMessage],
+      ["grew by less than the route's minimum", 10n, lostRouteMessage],
+      [
+        "grew by at least the route's minimum",
+        0n,
+        "The source network has no record of this swap, but the Pay account's balance has grown by 0.0000000000000001 USDFC since it started, so your wallet likely re-sent it under a new hash. Check your wallet's activity before you dismiss this.",
+      ],
+    ])(
+      "stops instead of polling Squid when the route never lands and the balance %s",
+      async (_case, fundsBefore, message) => {
+        const fetch = vi.fn(async () => statusResponse(null, 404));
+        const attempt = settle({
+          fundsBefore,
+          minimumDestinationAmount: 92n,
+          sourceClient: lostSource(),
+          squid: { integratorId: "id", fetch },
+        });
+        await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+        await expect(attempt).rejects.toThrow(message);
+        expect(fetch).not.toHaveBeenCalled();
+      },
+    );
+
+    it("does not call the route lost when the source network cannot be reached", async () => {
+      const fetch = vi.fn();
+      const attempt = settle({
+        sourceClient: failingSource(new Error("429 Too Many Requests")),
+        squid: { integratorId: "id", fetch },
+      });
+      await expect(attempt).rejects.toMatchObject({ reason: "timeout", transactionHash: ROUTE_HASH });
+      await expect(attempt).rejects.toThrow(
+        "The source network could not be reached to confirm this swap. Check again in a moment.",
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("reports a reverted route without asking Squid", async () => {
+      const fetch = vi.fn();
+      const attempt = settle({
+        sourceClient: fakeSource({ receiptStatus: "reverted" }),
+        squid: { integratorId: "id", fetch },
+      });
+      await expect(attempt).rejects.toMatchObject({ reason: "reverted", transactionHash: ROUTE_HASH });
+      expect(fetch).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -1061,38 +1185,38 @@ describe("executeSquidDeposit", () => {
     expect(onBroadcast).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "destination account changed",
-    "dialog unmounted",
-  ])("rechecks the live context after transaction preparation when the %s", async (change) => {
-    const wallet = fakeWallet();
-    const source = fakeSource({ allowance: request.sourceAmount });
-    let mounted = true;
-    let liveRecipient: Address = RECIPIENT;
-    // The plan check prices the route from Squid's gas limit; the send simulates it, and that is when the context moves.
-    source.estimateGas.mockImplementationOnce(async () => {
-      if (change === "dialog unmounted") mounted = false;
-      else liveRecipient = OWNER;
-      return 599_399n;
-    });
-    const assertCurrentContext = () => {
-      if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
-    };
-    await expect(
-      executeSquidDeposit({
-        ...signingChecks,
-        approvalRequired: false,
-        assertCurrentContext,
-        destinationClient: fakeDestination(),
-        quote,
-        request,
-        sourceClient: source,
-        squid: { integratorId: "id" },
-        walletClient: wallet,
-      }),
-    ).rejects.toThrow("Funding details changed after review");
-    expect(wallet.sendTransaction).not.toHaveBeenCalled();
-  });
+  it.each(["destination account changed", "dialog unmounted"])(
+    "rechecks the live context after transaction preparation when the %s",
+    async (change) => {
+      const wallet = fakeWallet();
+      const source = fakeSource({ allowance: request.sourceAmount });
+      let mounted = true;
+      let liveRecipient: Address = RECIPIENT;
+      // The plan check prices the route from Squid's gas limit; the send simulates it, and that is when the context moves.
+      source.estimateGas.mockImplementationOnce(async () => {
+        if (change === "dialog unmounted") mounted = false;
+        else liveRecipient = OWNER;
+        return 599_399n;
+      });
+      const assertCurrentContext = () => {
+        if (!mounted || liveRecipient !== RECIPIENT) throw new Error("Funding details changed after review");
+      };
+      await expect(
+        executeSquidDeposit({
+          ...signingChecks,
+          approvalRequired: false,
+          assertCurrentContext,
+          destinationClient: fakeDestination(),
+          quote,
+          request,
+          sourceClient: source,
+          squid: { integratorId: "id" },
+          walletClient: wallet,
+        }),
+      ).rejects.toThrow("Funding details changed after review");
+      expect(wallet.sendTransaction).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     [

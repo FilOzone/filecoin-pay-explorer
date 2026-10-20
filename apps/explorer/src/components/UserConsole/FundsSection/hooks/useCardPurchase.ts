@@ -1,12 +1,13 @@
 "use client";
 
-import { useFiatOnramp, useLogin, usePrivy } from "@privy-io/react-auth";
+import { type ConnectedWallet, useFiatOnramp, useLoginWithSiwe, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { erc20Abi, getAddress, isAddress, type PublicClient } from "viem";
-import { usePublicClient } from "wagmi";
+import { usePublicClient, useSignMessage } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { isLinkedWallet } from "@/components/UserConsole/console-wallet";
 import { config } from "@/services/wagmi/config";
 import { invalidateSourceBalanceQueries } from "@/utils/query-invalidation";
 import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
@@ -117,6 +118,13 @@ function isFundingExit(error: unknown) {
   );
 }
 
+// Privy rejects once it stops confirming a payment (after ten minutes, or when its status checks keep failing), but
+// the payment can still settle, so it is tracked like a submission.
+// ponytail: matches Privy 3.43's wording; recheck after a Privy upgrade.
+function isUnconfirmedPurchase(error: unknown) {
+  return error instanceof Error && /^(could not confirm|unable to check) payment status\b/i.test(error.message);
+}
+
 function getOnrampEnvironment() {
   return /^(1|true|yes|on)$/i.test(process.env.NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX?.trim() ?? "")
     ? "sandbox"
@@ -126,22 +134,31 @@ function getOnrampEnvironment() {
 export function useCardPurchase({
   address,
   contextKey,
+  isPickerOpen,
   onPurchased,
 }: {
   address: string;
   contextKey: string;
+  /** Closing the picker pauses the balance check, so a late arrival never opens Squid over other work. */
+  isPickerOpen: boolean;
   onPurchased: (amount: bigint) => void;
 }) {
-  const { authenticated } = usePrivy();
+  const { authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+  // A Privy login only counts for its own wallets, never for an account the extension switched to.
+  const isLoggedInAsRecipient = isLinkedWallet(user, address);
   const { fund } = useFiatOnramp();
+  const { generateSiweMessage, loginWithSiwe } = useLoginWithSiwe();
+  const { mutateAsync: signMessageAsync } = useSignMessage();
   const publicClient = usePublicClient({ chainId: CARD_CHAIN_ID });
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "waiting">("idle");
-  const continueAfterLogin = useRef<LoginContext | null>(null);
+  const [status, setStatus] = useState<"delayed" | "idle" | "opening" | "verifying" | "waiting">("idle");
   const pendingPurchase = useRef<PurchaseContext | null>(null);
   const isMounted = useRef(true);
   const latestContext = useRef(contextKey);
   latestContext.current = contextKey;
+  // Each balance check runs under its own number; a newer number ends the older check.
+  const checkRun = useRef(0);
 
   useEffect(() => {
     isMounted.current = true;
@@ -149,6 +166,12 @@ export function useCardPurchase({
       isMounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (isPickerOpen) return;
+    checkRun.current += 1;
+    setStatus((current) => (current === "waiting" ? "delayed" : current));
+  }, [isPickerOpen]);
 
   useEffect(() => {
     const restored = loadPendingCardPurchase(address);
@@ -161,29 +184,25 @@ export function useCardPurchase({
     isMounted.current &&
     latestContext.current === startedContext &&
     getAccount(config).address?.toLowerCase() === recipient.toLowerCase();
-  const checkPendingPurchase = async (submitted = false) => {
+  const checkPendingPurchase = async () => {
     const pending = pendingPurchase.current;
     if (!pending) return;
     if (!publicClient) return reportBaseClientUnavailable();
-    const current = () => isCurrent(pending);
+    checkRun.current += 1;
+    const run = checkRun.current;
+    const current = () => isCurrent(pending) && checkRun.current === run;
     setStatus("waiting");
     const landed = await waitForPurchasedUsdc({
       before: pending.before,
       isCurrent: current,
       read: () => readUsdcBalance(publicClient, pending.recipient),
     });
-    if (landed.status === "changed") {
-      if (isMounted.current) {
-        setStatus("delayed");
-        reportWalletChanged();
-      }
-      return;
-    }
-    if (landed.status === "delayed") {
+    // Closing the picker or Start over ended this check and already set the status.
+    if (checkRun.current !== run) return;
+    if (landed.status !== "funded") {
+      if (!isMounted.current) return;
       setStatus("delayed");
-      toast.info(submitted ? "Card purchase submitted" : "Card purchase not yet visible", {
-        description: "Base USDC has not arrived yet. Keep this account connected and check again after it appears.",
-      });
+      if (landed.status === "changed") reportWalletChanged();
       return;
     }
 
@@ -197,7 +216,7 @@ export function useCardPurchase({
   const purchase = async (requested?: LoginContext) => {
     if (!publicClient) return reportBaseClientUnavailable();
     const intent = requested ?? { contextKey, recipient: getAddress(address) };
-    let purchaseStatus: "confirmed" | "submitted" | undefined;
+    let submitted = false;
 
     setStatus("opening");
     try {
@@ -211,12 +230,14 @@ export function useCardPurchase({
         const before = await readUsdcBalance(publicClient, intent.recipient);
         if (!isCurrent(intent)) return null;
         const next = { before, ...intent };
-        const result = await fund({
+        await fund({
           source: {},
           destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
           environment: getOnrampEnvironment(),
+        }).catch((error: unknown) => {
+          if (!isUnconfirmedPurchase(error)) throw error;
         });
-        purchaseStatus = result.status;
+        submitted = true;
         pendingPurchase.current = next;
         savePendingCardPurchase(next);
         return next;
@@ -226,7 +247,7 @@ export function useCardPurchase({
         return;
       }
       pendingPurchase.current = pending;
-      if (!purchaseStatus) {
+      if (!submitted) {
         setStatus("delayed");
         return;
       }
@@ -235,9 +256,9 @@ export function useCardPurchase({
         reportWalletChanged();
         return;
       }
-      await checkPendingPurchase(purchaseStatus === "submitted");
+      await checkPendingPurchase();
     } catch (error) {
-      if (purchaseStatus) {
+      if (submitted) {
         if (isMounted.current) setStatus("delayed");
         return;
       }
@@ -251,33 +272,46 @@ export function useCardPurchase({
     }
   };
 
-  const { login } = useLogin({
-    onComplete: () => {
-      const intent = continueAfterLogin.current;
-      continueAfterLogin.current = null;
-      if (!intent) return;
-      if (!isCurrent(intent)) {
-        if (isMounted.current) {
-          setStatus("idle");
-          toast.error("Wallet changed during login", {
-            description: "Return to Add funds from the account you want to fund.",
-          });
-        }
-        return;
-      }
-      void purchase(intent);
-    },
-    onError: () => {
-      continueAfterLogin.current = null;
+  // Signs in as the recipient itself, so card funding never adds another wallet or identity. Headless SIWE
+  // settles only after Privy is signed in, unlike Privy's modal flows, whose login callbacks may never fire.
+  const verifyThenPurchase = async (wallet: ConnectedWallet, intent: LoginContext) => {
+    setStatus("verifying");
+    try {
+      const chainId = Number(wallet.chainId.replace("eip155:", ""));
+      const message = await generateSiweMessage({ address: intent.recipient, chainId: `eip155:${chainId}` });
+      // Naming the recipient makes the wallet sign as it or refuse, never as whichever account it has selected.
+      const signature = await signMessageAsync({ account: intent.recipient, message });
+      await loginWithSiwe({
+        message,
+        signature,
+        walletClientType: wallet.walletClientType,
+        connectorType: wallet.connectorType,
+      });
+    } catch (error) {
       if (isMounted.current) setStatus("idle");
-    },
-  });
+      if (!isFundingExit(error)) {
+        toast.error("Unable to verify wallet", { description: error instanceof Error ? error.message : undefined });
+      }
+      return;
+    }
+    if (!isCurrent(intent)) {
+      if (isMounted.current) {
+        setStatus("idle");
+        toast.error("Wallet changed during login", {
+          description: "Return to Add funds from the account you want to fund.",
+        });
+      }
+      return;
+    }
+    await purchase(intent);
+  };
 
   // A purchase that never lands would otherwise pin this account on "Check for
   // purchased USDC" for good; the picker asks for confirmation before calling this.
   const startOver = () => {
     const pending = pendingPurchase.current;
     pendingPurchase.current = null;
+    checkRun.current += 1;
     if (pending) {
       try {
         clearPendingCardPurchase(pending.recipient);
@@ -288,27 +322,45 @@ export function useCardPurchase({
     setStatus("idle");
   };
 
+  // Only Privy's own windows hold the picker; the balance check does not.
+  const isBusy = status === "opening" || status === "verifying";
+  const isChecking = status === "waiting";
   const buyWithCard = () => {
-    if (status === "opening" || status === "waiting") return;
+    if (isBusy || isChecking) return;
     if (pendingPurchase.current || status === "delayed") return checkPendingPurchase();
-    if (authenticated) return purchase();
-    continueAfterLogin.current = { contextKey, recipient: getAddress(address) };
-    setStatus("opening");
-    login();
+    if (isLoggedInAsRecipient) return purchase();
+    // Privy refuses to log in over another login, and the console account provider is already ending it.
+    if (authenticated) {
+      toast.error("Card purchase unavailable", {
+        description: "Finishing the previous sign-out. Try again in a moment.",
+      });
+      return;
+    }
+    const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === address.toLowerCase());
+    if (!recipientWallet) {
+      toast.error("Card purchase unavailable", { description: "Reconnect your wallet and try again." });
+      return;
+    }
+    return verifyThenPurchase(recipientWallet, { contextKey, recipient: getAddress(address) });
   };
 
-  const purchaseLabel = authenticated ? "Buy USDC with card" : "Log in to buy USDC with card";
+  const purchaseLabel = isLoggedInAsRecipient ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
+  // Privy reports "submitted" both for a payment still settling and for a provider window closed without paying.
   const statusMessages = {
-    delayed: "Purchase submitted, but Base USDC has not arrived yet. Check again after it appears.",
+    delayed:
+      "No purchased USDC on Base yet. If you paid, check again in a few minutes. If you closed the purchase without paying, choose Start over.",
     idle: null,
     opening: "Opening card purchase…",
-    waiting: "Waiting for Base USDC to arrive…",
+    verifying: "Confirm the sign-in message in your wallet…",
+    waiting: "Looking for purchased USDC on Base… If you closed the purchase without paying, choose Start over.",
   };
+  const isPending = status === "delayed" || status === "waiting";
   return {
     buyWithCard,
-    canStartOver: status === "delayed",
-    isBusy: status === "opening" || status === "waiting",
-    label: status === "delayed" ? "Check for purchased USDC" : purchaseLabel,
+    canStartOver: isPending,
+    isBusy,
+    isChecking,
+    label: isPending ? "Check for purchased USDC" : purchaseLabel,
     startOver,
     statusMessage: statusMessages[status],
   };

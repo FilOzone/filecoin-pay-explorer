@@ -1,7 +1,8 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { FundingHost } from "./FundingHost";
-import { FundingLaunchProvider, useFundingLaunch } from "./FundingLaunchContext";
 import type { SquidDepositInitialSource } from "./FundsSection/components/DirectSquidDepositDialog";
 
 const wallet = vi.hoisted(() => ({
@@ -98,10 +99,12 @@ async function renderHost() {
   let renderer!: ReturnType<typeof create>;
   await act(async () => {
     renderer = create(
-      <FundingLaunchProvider>
-        <Launcher />
-        <FundingHost />
-      </FundingLaunchProvider>,
+      <TopUpActivityProvider>
+        <FundingLaunchProvider>
+          <Launcher />
+          <FundingHost />
+        </FundingLaunchProvider>
+      </TopUpActivityProvider>,
     );
   });
   return renderer;
@@ -110,10 +113,12 @@ async function renderHost() {
 async function rerenderHost(renderer: ReturnType<typeof create>) {
   await act(async () => {
     renderer.update(
-      <FundingLaunchProvider>
-        <Launcher />
-        <FundingHost />
-      </FundingLaunchProvider>,
+      <TopUpActivityProvider>
+        <FundingLaunchProvider>
+          <Launcher />
+          <FundingHost />
+        </FundingLaunchProvider>
+      </TopUpActivityProvider>,
     );
   });
 }

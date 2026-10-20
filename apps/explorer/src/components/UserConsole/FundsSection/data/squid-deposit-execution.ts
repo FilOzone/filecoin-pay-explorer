@@ -3,12 +3,15 @@ import {
   type Address,
   encodeFunctionData,
   erc20Abi,
+  formatUnits,
   type Hash,
   type Hex,
   isHash,
   type PublicClient,
   parseEventLogs,
+  type ReplacementReason,
   type TransactionReceipt,
+  WaitForTransactionReceiptTimeoutError,
   type WalletClient,
 } from "viem";
 import { formatAddress } from "@/utils/formatter";
@@ -383,13 +386,18 @@ export interface AwaitSquidDepositInput extends PollingOptions, SquidDepositRef 
   fundsBefore: bigint;
   minimumDestinationAmount: bigint;
   destinationClient: SquidDepositDestinationClient;
+  sourceClient: Pick<PublicClient, "waitForTransactionReceipt">;
   squid: SquidClient;
   onStage?: (stage: SquidDepositStage, transactionHash?: Hash) => void;
+  /** Fires when the wallet re-sent the route under a new hash (a speed-up), so a resume follows that one. */
+  onReplaced?: (transactionHash: Hash) => void;
 }
 
 const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 /** Squid answers status requests in well under a second; a request still open after this is stalled. */
 export const STATUS_REQUEST_TIMEOUT_MS = 15_000;
+// How long a broadcast route may go without a source receipt before it counts as lost.
+const SOURCE_RECEIPT_TIMEOUT_MS = 180_000;
 
 export function readFilecoinPayFunds(
   client: SquidDepositDestinationClient,
@@ -447,28 +455,77 @@ export async function fetchSquidDepositStatus(
 }
 
 /**
- * Follows a broadcast route to its exact Filecoin transaction, then verifies
- * the expected Filecoin Pay deposit event from that receipt.
+ * Confirms a broadcast route on the source network, follows it to its exact
+ * Filecoin transaction, then verifies the expected Filecoin Pay deposit event
+ * from that receipt.
  */
 export async function awaitSquidDepositSettlement({
   destinationClient,
+  fundsBefore,
   minimumDestinationAmount,
   maxStatusAttempts = 90,
   maxStatusFailures = 6,
   maxVerifyAttempts = 12,
+  onReplaced,
   onStage,
   pollIntervalMs = 10_000,
   quoteId,
   sleep = defaultSleep,
   sourceChainId,
+  sourceClient,
   squid,
   statusRequestTimeoutMs = STATUS_REQUEST_TIMEOUT_MS,
   target,
-  transactionHash,
+  transactionHash: broadcastHash,
 }: AwaitSquidDepositInput): Promise<SquidDepositResult> {
   // Squid delivers to the recipient, which is the Pay account's address and not
   // always the paying wallet, so failure messages name where the USDFC went.
   const recipientLabel = formatAddress(target.recipient);
+  onStage?.("swap-broadcast", broadcastHash);
+  // Squid answers 404 for a hash that never landed, so the source network decides whether there is a route to follow.
+  let replacementReason: ReplacementReason | undefined;
+  let sourceReceipt: TransactionReceipt;
+  try {
+    sourceReceipt = await sourceClient.waitForTransactionReceipt({
+      hash: broadcastHash,
+      onReplaced: ({ reason }) => {
+        replacementReason = reason;
+      },
+      timeout: SOURCE_RECEIPT_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (!(error instanceof WaitForTransactionReceiptTimeoutError)) {
+      throw new SquidDepositError(
+        "The source network could not be reached to confirm this swap. Check again in a moment.",
+        "timeout",
+        broadcastHash,
+      );
+    }
+    // A speed-up whose original hash the RPC has forgotten cannot be traced, so a missing hash is not proof nothing ran.
+    // Growth of at least the route's minimum hints that it did; settlements draw funds too, so no growth proves nothing.
+    const funds = await readFilecoinPayFunds(destinationClient, target).catch(() => fundsBefore);
+    const grown = funds - fundsBefore;
+    throw new SquidDepositError(
+      grown > 0n && grown >= minimumDestinationAmount
+        ? `The source network has no record of this swap, but the Pay account's balance has grown by ${formatUnits(grown, 18)} USDFC since it started, so your wallet likely re-sent it under a new hash. Check your wallet's activity before you dismiss this.`
+        : "The source network has no record of this swap yet. Your wallet may still be sending it, or may have re-sent it under a new hash that can still deposit. Check your wallet's activity before you dismiss this and start another deposit.",
+      "timeout",
+      broadcastHash,
+    );
+  }
+  if (replacementReason && replacementReason !== "repriced") {
+    throw new SquidDepositError(
+      "Your wallet cancelled or replaced the swap transaction, so nothing was sent to Squid.",
+      "failed",
+      broadcastHash,
+    );
+  }
+  // A sped-up route's receipt is its replacement's, so this is the hash Squid knows.
+  const transactionHash = sourceReceipt.transactionHash;
+  if (transactionHash !== broadcastHash) onReplaced?.(transactionHash);
+  if (sourceReceipt.status !== "success") {
+    throw new SquidDepositError("The Squid transaction reverted on the source network", "reverted", transactionHash);
+  }
   let destinationTransactionHash = transactionHash;
   if (sourceChainId !== FILECOIN_CHAIN_ID) {
     onStage?.("bridging", transactionHash);
@@ -730,21 +787,19 @@ export async function executeSquidDeposit({
     account: walletClient.account,
     chain: undefined,
   });
-  onStage?.("swap-broadcast", transactionHash);
   onBroadcast?.({ transactionHash, fundsBefore, quote: routeQuote });
-  const receipt = await sourceClient.waitForTransactionReceipt({ hash: transactionHash });
-  if (receipt.status !== "success") {
-    throw new SquidDepositError("The Squid transaction reverted on the source network", "reverted", transactionHash);
-  }
 
   return awaitSquidDepositSettlement({
     ...polling,
     destinationClient,
     fundsBefore,
     minimumDestinationAmount: routeQuote.minimumDestinationAmount,
+    onReplaced: (replacementHash) =>
+      onBroadcast?.({ transactionHash: replacementHash, fundsBefore, quote: routeQuote }),
     onStage,
     quoteId: routeQuote.quoteId,
     sourceChainId: request.sourceChainId,
+    sourceClient,
     squid,
     target: request,
     transactionHash,

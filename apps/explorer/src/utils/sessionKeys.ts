@@ -1,19 +1,20 @@
 /**
  * A "permission" in SessionKeyRegistry is the EIP-712 typehash of the FWSS
- * operation the key may sign. Constants below are keccak256 of the
- * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol`;
- * the unit tests recompute them from the preimages to guard against drift.
- *
- * Canonical source: `DefaultFwssPermissions` in `@filoz/synapse-core/session-key`.
- * The explorer pins `@filoz/synapse-sdk` 0.41, which neither re-exports that
- * module nor ships a synapse-core with the current `TerminateService` hash
- * (0.5.2 still has `DeleteDataSet`). Switch to the import once the SDK is
- * bumped to a version whose synapse-core is 0.7 or newer.
+ * operation the key may sign. The hashes come from
+ * `@filoz/synapse-core/session-key`; the unit tests recompute them from the
+ * preimages in filecoin-services v1.3.0 `SignatureVerificationLib.sol` to
+ * guard against drift.
  *
  * NOTE: this module stays free of `@/` imports and side effects so its logic
  * stays unit-testable in isolation.
  */
 
+import {
+  AddPiecesPermission,
+  CreateDataSetPermission,
+  SchedulePieceRemovalsPermission,
+  TerminateServicePermission,
+} from "@filoz/synapse-core/session-key";
 import { type Address, type Hex, isAddress } from "viem";
 
 export type ScopeId = "createDataSet" | "addPieces" | "schedulePieceRemovals" | "terminateService";
@@ -33,26 +34,26 @@ export const SESSION_KEY_SCOPES: SessionKeyScope[] = [
     id: "createDataSet",
     label: "Create data set",
     description: "Key may create new Warm Storage data sets billed to your account.",
-    typehash: "0x25ebf20299107c91b4624d5bac3a16d32cabf0db23b450ee09ab7732983b1dc9",
+    typehash: CreateDataSetPermission,
   },
   {
     id: "addPieces",
     label: "Add pieces",
     description: "Key may add pieces to your existing data sets.",
-    typehash: "0x954bdc254591a7eab1b73f03842464d9283a08352772737094d710a4428fd183",
+    typehash: AddPiecesPermission,
   },
   {
     id: "schedulePieceRemovals",
     label: "Schedule piece removals",
     description: "Key may schedule pieces for removal from your data sets. Removed data is gone once the removal runs.",
-    typehash: "0x5415701e313bb627e755b16924727217bb356574fe20e7061442c200b0822b22",
+    typehash: SchedulePieceRemovalsPermission,
     destructive: true,
   },
   {
     id: "terminateService",
     label: "Terminate service",
     description: "Key may end storage service for whole data sets, which stops proving and payment for them.",
-    typehash: "0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc",
+    typehash: TerminateServicePermission,
     destructive: true,
   },
 ];
@@ -148,27 +149,33 @@ export function existingKeyPrefill(key: ExistingKeyPrefillInput | undefined): Ex
   return { name: key.name, scopes, expirySec: keepExpiry ? key.maxExpiry : null };
 }
 
-export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
-  { label: "7 days", seconds: 7 * 86400 },
-  { label: "30 days", seconds: 30 * 86400 },
-  { label: "90 days", seconds: 90 * 86400 },
-];
+/** Days a new key lasts unless the owner or the link picks otherwise. */
+export const DEFAULT_EXPIRY_DAYS = 30;
+
+/** The latest expiry (unix seconds) the form offers: the last moment a JS Date can hold, so it always shows as a date. */
+export const MAX_EXPIRY_SEC = 8.64e12;
 
 /**
- * Absolute expiry (unix seconds) for the create form. A preset index is a
- * duration added to `nowMs`; "custom" is an absolute `YYYY-MM-DD` taken as
- * end of day in local time. Returns null when the choice is missing or in
- * the past.
+ * A whole number of days, at least 1, or null: every key has to expire. No
+ * count past {@link MAX_EXPIRY_SEC} even from the epoch can ever be usable.
  */
-export function resolveExpiry(presetIndex: string, customDate: string, nowMs: number): bigint | null {
-  const nowSec = Math.floor(nowMs / 1000);
-  if (presetIndex === "custom") {
-    if (!customDate) return null;
-    const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
-    return ts > nowSec ? BigInt(ts) : null;
-  }
-  const preset = EXPIRY_PRESETS[Number(presetIndex)];
-  return preset ? BigInt(nowSec + preset.seconds) : null;
+export function parseExpiryDays(value: string | null | undefined): number | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const days = Number(trimmed);
+  return days >= 1 && days * 86400 <= MAX_EXPIRY_SEC ? days : null;
+}
+
+/**
+ * Absolute expiry (unix seconds) for the create form: `days` whole days after
+ * `nowMs`, or null when the days are unusable or land past {@link MAX_EXPIRY_SEC}.
+ */
+export function resolveExpiry(days: string, nowMs: number): bigint | null {
+  const parsed = parseExpiryDays(days);
+  if (parsed == null) return null;
+  const expiry = Math.floor(nowMs / 1000) + parsed * 86400;
+  return expiry <= MAX_EXPIRY_SEC ? BigInt(expiry) : null;
 }
 
 export interface SessionKeyWithStatus extends SessionKeyRecord {

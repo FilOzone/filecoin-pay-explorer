@@ -1,0 +1,68 @@
+name: Deploy Explorer
+
+# Deploys run under the team VERCEL_TOKEN instead of the Vercel Git integration,
+# which rejects commits whose author lacks a deploying Vercel role.
+# Git deploys are disabled in apps/explorer/vercel.json.
+#
+# SECURITY: VERCEL_TOKEN is team-wide. This job must never run repository code
+# (no install, no build): `vercel deploy` uploads the source and Vercel builds it
+# remotely, as the Git integration did.
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    # Fork and Dependabot PRs get no repository secrets.
+    if: >
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Preview' }}
+      url: ${{ steps.alias.outputs.url || steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Deploy the PR head, not the merge commit, like the Git integration did.
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@60.0.0
+
+      - name: Deploy
+        id: deploy
+        run: |
+          url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --yes --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # PR previews get a stable host under *.preview.pay.filecoin.cloud, which the
+      # dev Privy app client allows; hashed *.vercel.app URLs can't be allowlisted.
+      - name: Alias
+        id: alias
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/staging'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          ALIAS: ${{ github.event_name == 'pull_request' && format('pr-{0}.preview.pay.filecoin.cloud', github.event.pull_request.number) || 'filecoin-pay-explorer-staging.vercel.app' }}
+        run: |
+          vercel alias set "$DEPLOYMENT_URL" "$ALIAS" --token="$VERCEL_TOKEN"
+          echo "url=https://$ALIAS" >> "$GITHUB_OUTPUT"
