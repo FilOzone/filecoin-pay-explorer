@@ -80,7 +80,7 @@ dataSources:
         - Rail
       abis:
         - name: FilecoinWarmStorageService
-          file: ./config/FilecoinWarmStorageService-abi.json
+          file: ./abis/FilecoinWarmStorageService-abi.json
       eventHandlers:
         - event: DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])
           handler: handleDataSetCreated
@@ -115,7 +115,7 @@ dataSources:
         - Piece
       abis:
         - name: PDPVerifier
-          file: ./config/PDPVerifier-abi.json
+          file: ./abis/PDPVerifier-abi.json
       eventHandlers:
         - event: PiecesRemoved(indexed uint256,uint256[])
           handler: handlePiecesRemoved
