@@ -19,13 +19,9 @@ import {
   PendingVerificationCard,
   UnsubscribeDialog,
 } from "@/components/UserConsole/NotificationsSection/components";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
-import {
-  getNetworkFromChainId,
-  getNotificationsEligibleNetwork,
-  isNotificationsEligibleNetwork,
-  isSupportedChainId,
-} from "@/utils/network";
+import { getNotificationsEligibleNetwork, isNotificationsEligibleNetwork } from "@/utils/network";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 const POLL_INTERVAL_MS = 10_000;
@@ -413,8 +409,8 @@ const NotificationsContent = ({
 
 const NotificationsPage = () => {
   const { address, isConnected, chainId } = useConnection();
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const isEligibleNetwork = isSupportedChainId(chainId) && isNotificationsEligibleNetwork(walletNetwork);
+  const { network, isFilecoinChain } = useConsoleNetwork();
+  const isEligibleNetwork = isFilecoinChain && isNotificationsEligibleNetwork(network);
   const [viewType, setViewType] = useState<NotificationsView["type"]>("loading");
   const updateEmailRef = useRef<(() => void) | null>(null);
 

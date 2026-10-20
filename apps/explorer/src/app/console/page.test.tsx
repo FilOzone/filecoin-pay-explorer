@@ -27,15 +27,17 @@ const sectionNetworks = vi.hoisted(() => ({
 vi.mock("wagmi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("wagmi")>()),
   useConnection: () => wallet,
+  // The approval check only runs for an approval-only funding link, which these tests do not open.
+  useReadContract: () => ({ data: undefined, isPending: false }),
 }));
 vi.mock("@/components/shared", () => ({
   Balance: () => <div>Filecoin balance</div>,
   ChainSwitcher: () => <div>Filecoin network</div>,
 }));
-vi.mock("@/components/UserConsole/ConsoleProviders", () => ({
+vi.mock("@/components/UserConsole/providers/ConsoleProviders", () => ({
   default: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock("@/components/UserConsole/TopUpActivityContext", () => ({
+vi.mock("@/components/UserConsole/providers/TopUpActivityContext", () => ({
   useTopUpActivity: () => ({
     isTopUpActive: topUpState.isTopUpActive,
   }),

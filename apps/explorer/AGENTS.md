@@ -10,7 +10,7 @@ These instructions apply to `apps/explorer/**`. They supplement the repository-r
 - Server state: TanStack Query
 - Wallet and contracts: wagmi, viem, RainbowKit, and Synapse SDK
 - Data source: GraphQL subgraphs and current chain data
-- Tests: Vitest
+- Tests: Vitest (unit, `src/**`) and Playwright (end-to-end, `e2e/`)
 - Formatting and linting: Biome
 
 ## Application Structure
@@ -34,6 +34,8 @@ Connected-wallet pages live under `src/app/console/(console)/**`. The shared lay
 
 Do not repeat those providers or access gates inside individual console pages.
 
+CLI links land on `/console/setup`, in the `(setup)` route group: the same shell (`src/app/console/_shell/`, shared by both groups) with `focused` set, which drops the sidebar. Its search params are a contract shared with the CLIs (`src/utils/setupLink.ts`); `src/proxy.ts` redirects the older `/console/session-keys?authorize=` and `/console?deposit=` links there. A `?revoke=` link stays on the session keys page.
+
 `src/app/console/notifications/verify/page.tsx` deliberately sits outside the `(console)` route group. Verification links must work without a connected wallet or console-only providers.
 
 ### API routes
@@ -47,7 +49,7 @@ Keep privileged service calls and non-public configuration on the server. Valida
 Before editing, inspect the closest route, shared layout, component, hook, and co-located tests. Useful starting points are:
 
 - `src/components/shared/SiteLayout.tsx` and `Providers.tsx` — application shell, network context, TanStack Query, tooltips, progress, and toasts
-- `src/components/UserConsole/ConsoleProviders.tsx` — console-only wagmi, RainbowKit, Synapse, and top-up activity state
+- `src/components/UserConsole/providers/` — console-only providers: Privy, the console account and the wagmi connection that follows it, Synapse, and funding state
 - `src/services/grapql/queries.ts` — shared GraphQL documents; keep the existing `grapql` spelling unless a task explicitly includes renaming it
 - `src/hooks/useGraphQLQuery.ts` — network-aware query and infinite-query wrappers
 - `src/constants/chains.ts`, `src/services/wagmi/config.tsx`, and `src/utils/network.ts` — Filecoin and wallet-chain definitions and checks
@@ -92,6 +94,12 @@ Render loading, empty, and error states explicitly. Follow the matching list or 
 - Preserve the URL-to-context synchronization under `src/app/[network]`. Network-sensitive data must not reuse cache entries from another network.
 - Keep token amounts, epochs, rates, allowances, and transaction values exact. Use `bigint` and the established viem and formatting helpers; do not pass exact values through JavaScript `number` when precision can be lost.
 - Reuse `useContractTransaction` and existing domain flows before creating another write lifecycle.
+
+In the console, the wallet `chainId` and the console `network` are different values. During a Squid top-up the wallet sits on the source chain while the console keeps showing mainnet.
+
+- `network` selects contracts (`getChain(network)`), subgraph queries, and what the console displays. Read it with `useConsoleNetwork()` in console routes and top-level hosts such as `FundingHost`, `ConsoleSidebar`, and `Balance`, then pass it as a prop. Components and dialogs below take `network` as a prop and do not read it themselves.
+- Use the wallet `chainId` only for connector readiness, access gates, chain-mismatch and chain-switch UI, Squid source-chain detection, SIWE, and resetting dialogs on a chain change. Never use it to pick contracts or queries.
+- `getNetworkFromChainId` is private to `useConsoleNetwork` (`src/components/UserConsole/useConsoleNetwork.ts`); its mainnet fallback hides non-Filecoin chains. Do not read console contract configuration from `useSynapse()` or the explorer URL context (`useNetwork()`).
 
 Contract dialogs and transaction hooks own behavior such as wallet signature progress, duplicate-submission guards, receipt tracking, pending and success toasts, query invalidation, and close restrictions while work is pending. UI refactors must preserve handlers, disabled states, callback timing, and mount lifetime.
 
@@ -177,14 +185,14 @@ Do not hardcode deployment endpoints, credentials, private keys, or new environm
 
 ## Testing
 
-Vitest runs in the Node environment and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
+Vitest runs in the Node environment by default and discovers `src/**/*.test.ts` and `src/**/*.test.tsx`. Co-locate tests with source files:
 
 ```text
 Component.tsx
 Component.test.tsx
 ```
 
-Follow existing `react-test-renderer` and module-mocking patterns for component tests unless intentionally changing the test environment.
+Write new component tests with `@testing-library/react`. Start the file with `// @vitest-environment jsdom` and register `afterEach(cleanup)`, as in `src/components/shared/Providers.test.tsx`. Do not add new `react-test-renderer` tests; existing ones are migrating under [#498](https://github.com/FilOzone/filecoin-pay-explorer/issues/498). Follow existing module-mocking patterns.
 
 - Add regression coverage for bug fixes and tests for new behavior.
 - Test observable outputs and state transitions, not component internals.
@@ -193,6 +201,10 @@ Follow existing `react-test-renderer` and module-mocking patterns for component 
 - Cover mainnet and calibration differences and wallet states when they affect the change.
 - Mock GraphQL, `fetch`, RPC, and wallet boundaries. Tests must not depend on live networks or hosted services.
 - For server routes, test validation, success, upstream failure, thrown or timeout failure, status propagation, and cache headers as relevant.
+
+### End-to-end tests
+
+Playwright specs live in `e2e/`. `test:e2e` runs them against a fake Privy (`e2e/fake-privy.tsx`), the mode for CI. `test:e2e:real` logs in to the staging Privy app and is on-demand only; copy `.env.e2e.example` to `.env.e2e.local` for its credentials, and setup lives in `playwright.config.ts`. When the app starts using another Privy export, add it to the fake. Specs import `test` and `expect` from `e2e/fixtures.ts`: in the fake mode a request off localhost fails the test, so answer new RPC reads in `e2e/fake-chain.ts`. Specs that follow a `filecoin-pin` link run the pinned `filecoin-pin` devDependency through `e2e/filecoin-pin.ts` against the test server; set `FILECOIN_PIN_BIN` to a local `dist/cli.js` to test an unreleased CLI.
 
 During development, run the narrowest useful checks from the repository root:
 
@@ -232,3 +244,13 @@ Run `pnpm type-check --filter @filecoin-pay/explorer` for TypeScript changes and
 5. Keep unrelated cleanup outside the change.
 
 Keep edits local to `apps/explorer` unless behavior truly crosses a workspace boundary. Avoid opportunistic rewrites of the large console dialogs or query catalog. If a task changes subgraph entities, generated types, shared UI, or notification-service behavior, state the expanded scope before editing those packages and follow their local instructions.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

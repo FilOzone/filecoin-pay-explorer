@@ -13,19 +13,22 @@ import { ArrowUpRightIcon, Check, Copy, KeyRound, LogOut, Wallet } from "lucide-
 import { useState } from "react";
 import { toast } from "sonner";
 import { type Address, erc20Abi, formatEther } from "viem";
-import { useAccount, useBalance, useReadContract, useWalletClient } from "wagmi";
+import { useBalance, useConnection, useReadContract, useWalletClient } from "wagmi";
 import FilecoinLogo from "@/assests/FilecoinLogo";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { WALLET_EXIT_LABEL } from "@/components/shared/CustomConnectButton/state";
 import { useWalletExit } from "@/components/shared/CustomConnectButton/useWalletExit";
 import { isPrivyEmbeddedWallet } from "@/components/UserConsole/console-wallet";
-import { useFundingLaunch } from "@/components/UserConsole/FundingLaunchContext";
-import useSynapse from "@/hooks/useSynapse";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
+import { getChain } from "@/constants/chains";
 import { formatAddress } from "@/utils/formatter";
 
 const Balance = () => {
-  const { constants } = useSynapse();
-  const { address } = useAccount();
+  const { address } = useConnection();
+  const { network } = useConsoleNetwork();
+  // The header shows balances only while the wallet is on a Filecoin chain, so its chain is the displayed network.
+  const chain = getChain(network);
   const { wallets } = useWallets();
   const { data: walletClient } = useWalletClient();
   const activeWallet = wallets.find((candidate) => candidate.address.toLowerCase() === address?.toLowerCase());
@@ -33,15 +36,19 @@ const Balance = () => {
   const { exportWallet } = useExportWallet();
   // Privy creates a separate embedded wallet per app for the same login, so the key is the only way to carry it elsewhere.
   const canExportKey = activeWallet !== undefined && isPrivyEmbeddedWallet(activeWallet);
+  const walletLabel =
+    activeWallet && isPrivyEmbeddedWallet(activeWallet) ? "Filecoin Pay wallet" : (activeWallet?.meta.name ?? "Wallet");
   const [copied, setCopied] = useState(false);
   const { openAddFunds } = useFundingLaunch();
   const { data: tFilBalance, isLoading: isLoadingtFilBalance } = useBalance({
     address,
+    chainId: chain.id,
     query: { enabled: !!address },
   });
   const { data: usdfcBalance, isLoading: isLoadingUSDFCBalance } = useReadContract({
-    address: constants.contracts.usdfc,
+    address: chain.contracts.usdfc.address,
     abi: erc20Abi,
+    chainId: chain.id,
     functionName: "balanceOf",
     args: [address as Address],
     query: { enabled: !!address },
@@ -66,7 +73,7 @@ const Balance = () => {
       await walletClient.watchAsset({
         type: "ERC20",
         options: {
-          address: constants.contracts.usdfc,
+          address: chain.contracts.usdfc.address,
           symbol: "USDFC",
           decimals: 18,
         },
@@ -98,7 +105,8 @@ const Balance = () => {
   };
 
   return (
-    <DropdownMenu>
+    // Non-modal: a closing modal menu's aria-hidden would be saved by the Add funds dialog and restored on close.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant='outline' className='min-w-0 flex-1 justify-start overflow-hidden md:w-fit md:flex-none'>
           <div className='flex min-w-0 items-center gap-3'>
@@ -131,7 +139,7 @@ const Balance = () => {
           </span>
         </div>
         <DropdownMenuSeparator className='sm:hidden' />
-        <DropdownMenuLabel className='text-zinc-600 py-2'>Wallet</DropdownMenuLabel>
+        <DropdownMenuLabel className='text-zinc-600 py-2'>{walletLabel}</DropdownMenuLabel>
         <DropdownMenuItem
           onSelect={(e) => e.preventDefault()}
           onClick={copyToClipboard}
@@ -159,7 +167,7 @@ const Balance = () => {
         <DropdownMenuItem onClick={addUsdfcToken} className='cursor-pointer'>
           <span className='text-base text-zinc-950'>Add USDFC Token</span>
         </DropdownMenuItem>
-        {constants.faucets?.map((faucet) => (
+        {chain.faucets?.map((faucet) => (
           <DropdownMenuItem asChild key={faucet.name} className='py-2'>
             <a href={faucet.url} target='_blank' rel='noopener noreferrer' className='w-full cursor-pointer'>
               <span className='text-base text-zinc-950'>{faucet.name}</span>

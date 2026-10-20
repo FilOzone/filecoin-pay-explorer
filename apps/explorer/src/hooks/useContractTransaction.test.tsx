@@ -1,4 +1,5 @@
 import { act, create } from "react-test-renderer";
+import { toast } from "sonner";
 import type { TransactionReceipt } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useContractTransaction } from "./useContractTransaction";
@@ -29,7 +30,7 @@ vi.mock("@/utils/query-invalidation", () => ({
   invalidateAccountQueries: wagmi.invalidateAccountQueries,
 }));
 vi.mock("wagmi", () => ({
-  useConfig: () => ({}),
+  useConfig: () => ({ chains: [{ id: 314, name: "Filecoin - Mainnet" }] }),
   useWriteContract: () => ({ writeContractAsync: wagmi.writeContractAsync, isPending: false }),
   usePublicClient: wagmi.usePublicClient,
 }));
@@ -135,6 +136,11 @@ describe("useContractTransaction", () => {
       hook().execute({ functionName: "depositWithPermit", args: [], metadata: { type: "deposit" } }),
     ).rejects.toThrow("connected network changed");
     expect(wagmi.writeContractAsync).not.toHaveBeenCalled();
+    // Every caller names the network from the wagmi config, not only those that pass a name.
+    expect(toast.error).toHaveBeenLastCalledWith("Transaction Rejected", {
+      description: "Your wallet is on another network. Switch it to Filecoin - Mainnet and try again.",
+      duration: 4000,
+    });
   });
 
   it("rejects a write from a different account", async () => {

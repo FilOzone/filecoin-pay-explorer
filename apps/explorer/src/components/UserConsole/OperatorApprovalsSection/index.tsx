@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
 import { IncreaseApprovalDialog } from "@/components/UserConsole/IncreaseApprovalDialog";
-import { useAccountApprovals } from "@/hooks/useAccountDetails";
+import { useInfiniteAccountApprovals } from "@/hooks/useAccountDetails";
 import type { Network } from "@/types";
 import { ApprovalsEmptyState, ApprovalsErrorState, ApprovalsLoadingState, ApprovalsTable } from "./components";
 
@@ -18,7 +18,18 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
   const [increaseDialogOpen, setIncreaseDialogOpen] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<OperatorApproval | null>(null);
 
-  const { data, isLoading, isError } = useAccountApprovals(account.id, 1, { networkOverride: network });
+  // An approval belongs to one account on one network; submitting it after a switch would target the wrong contract.
+  const scope = `${account.id}:${network}`;
+  const [selectionScope, setSelectionScope] = useState(scope);
+  if (selectionScope !== scope) {
+    setSelectionScope(scope);
+    setSelectedApproval(null);
+    setIncreaseDialogOpen(false);
+  }
+
+  const { data, isLoading, isError, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
+    useInfiniteAccountApprovals(account.id, { networkOverride: network });
+  const approvals = useMemo(() => data?.pages.flatMap((page) => page.operatorApprovals) ?? [], [data]);
 
   const handleIncrease = useCallback((approval: OperatorApproval) => {
     setSelectedApproval(approval);
@@ -29,31 +40,15 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
     setApproveDialogOpen(true);
   }, []);
 
-  // Prepare table data with onIncrease handler
-  const tableData = useMemo(
-    () => data?.operatorApprovals.map((approval) => ({ ...approval, onIncrease: handleIncrease })) || [],
-    [data, handleIncrease],
-  );
-
+  let content: React.ReactNode;
   if (isLoading) {
-    return <ApprovalsLoadingState onApprove={handleOpenApprove} />;
-  }
-
-  if (isError) {
-    return <ApprovalsErrorState onApprove={handleOpenApprove} />;
-  }
-
-  if (!data || data.operatorApprovals.length === 0) {
-    return (
-      <>
-        <ApprovalsEmptyState onApprove={handleOpenApprove} />
-        <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
-      </>
-    );
-  }
-
-  return (
-    <>
+    content = <ApprovalsLoadingState onApprove={handleOpenApprove} />;
+  } else if (isError && !data) {
+    content = <ApprovalsErrorState onApprove={handleOpenApprove} />;
+  } else if (approvals.length === 0) {
+    content = <ApprovalsEmptyState onApprove={handleOpenApprove} />;
+  } else {
+    content = (
       <div className='flex flex-col gap-4'>
         <div className='flex items-center justify-between'>
           <h3 className='text-2xl font-medium'>Authorized Services</h3>
@@ -65,14 +60,34 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
           </Button>
         </div>
 
-        <ApprovalsTable data={tableData} />
+        <ApprovalsTable data={approvals} onIncrease={handleIncrease} />
+
+        {hasNextPage ? (
+          <div className='flex flex-col items-center gap-2'>
+            {isFetchNextPageError ? (
+              <p role='alert' className='text-sm text-destructive'>
+                Couldn't load more approvals. Try again.
+              </p>
+            ) : null}
+            <Button variant='tertiary' size='compact' onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        ) : null}
       </div>
+    );
+  }
+
+  return (
+    <>
+      {content}
 
       {/* Dialogs */}
-      <AddServiceDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
+      <AddServiceDialog network={network} open={approveDialogOpen} onOpenChange={setApproveDialogOpen} />
       {selectedApproval && (
         <IncreaseApprovalDialog
           approval={selectedApproval}
+          network={network}
           open={increaseDialogOpen}
           onOpenChange={setIncreaseDialogOpen}
         />

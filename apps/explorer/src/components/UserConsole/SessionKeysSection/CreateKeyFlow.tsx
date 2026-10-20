@@ -16,8 +16,10 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { Abi, Hex } from "viem";
 import { isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { useReadContracts } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
+import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { SessionKeysIdentity } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
@@ -27,8 +29,9 @@ import { formatAddress, formatDateTime } from "@/utils/formatter";
 import {
   buildEnvSnippet,
   buildLoginArgs,
-  EXPIRY_PRESETS,
+  DEFAULT_EXPIRY_DAYS,
   type ExistingKeyPrefill,
+  MAX_EXPIRY_SEC,
   normalizeKeyName,
   resolveExpiry,
   SCOPE_BY_ID,
@@ -47,6 +50,10 @@ interface CreateKeyFlowProps {
   explorerUrl?: string;
   prefillAddress?: Hex | null;
   prefillScopes?: ScopeId[] | null;
+  /** Key name the link suggests. Editable; an existing key keeps its own name. */
+  prefillName?: string | null;
+  /** Expiry in days the link suggests. Editable; an existing key keeps its own expiry. */
+  prefillDays?: number | null;
   /**
    * Turns the dialog into an add-scopes flow
    */
@@ -66,7 +73,11 @@ interface GeneratedKey {
   walletAddress: Hex;
 }
 
-type TxState = "idle" | "pending" | "confirmed" | "failed";
+// "wallet": the wallet has the request and has not answered. "pending": it answered with a tx hash.
+type TxState = "idle" | "wallet" | "pending" | "confirmed" | "failed";
+
+/** A submitted login, read back from the registry until its grant lands (see `finish` in handleCreate). */
+type AwaitedGrant = { signer: Hex; permissions: Hex[]; expiry: bigint; finish: () => void };
 
 type CreateMode = "renew" | "add" | "new";
 
@@ -111,6 +122,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   explorerUrl,
   prefillAddress,
   prefillScopes,
+  prefillName,
+  prefillDays,
   existingKey,
   onCreated,
   onConfirmed,
@@ -120,8 +133,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const [txState, setTxState] = useState<TxState>("idle");
   const [name, setName] = useState("");
   const [checkedScopes, setCheckedScopes] = useState<Record<ScopeId, boolean>>(EMPTY_SELECTION);
-  const [presetIndex, setPresetIndex] = useState("1"); // default 30 days
-  const [customDate, setCustomDate] = useState("");
+  const [days, setDays] = useState(String(DEFAULT_EXPIRY_DAYS));
   const [signerMode, setSignerMode] = useState<"generate" | "own">("generate");
   const [ownAddress, setOwnAddress] = useState("");
   const [generated, setGenerated] = useState<GeneratedKey | null>(null);
@@ -133,6 +145,9 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // an earlier submission cannot touch a fresh form; the row callbacks run
   // for every attempt regardless, since the row exists either way.
   const shownAttemptRef = useRef<object | null>(null);
+  // Outlives the dialog: a closed dialog or a wallet that never answers still gets its row once the chain shows the
+  // grant. One entry per submission, so a second attempt does not drop the first one's read.
+  const [awaitedGrants, setAwaitedGrants] = useState<AwaitedGrant[]>([]);
 
   const isExistingKey = prefillAddress != null && existingKey != null;
   // A known key with no live expiry and lapsed scopes is being renewed, not
@@ -147,31 +162,66 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   const requestPresets = useMemo(() => {
     if (!prefillAddress) return null;
     const renewed = renewedScopes ? (renewedScopes.split(",") as ScopeId[]) : [];
-    const requested = [...new Set([...(prefillScopes ?? []), ...renewed])];
-    return requested.length ? presetScopeStates(requested) : null;
+    // Kept apart from the link's scopes: a renewal must not preselect a destructive scope the link did not ask for.
+    return prefillScopes?.length || renewed.length ? presetScopeStates(prefillScopes ?? [], renewed) : null;
   }, [prefillAddress, prefillScopes, renewedScopes]);
   // A link-supplied address is shown, not edited: a wrong address means a bad link, not a typo.
   const addressLocked = prefillAddress != null;
 
+  const chainId = getChain(network).id;
   const { execute } = useContractTransaction({
+    account,
+    chainId,
     contractAddress: registry.address,
     abi: registry.abi,
     explorerUrl,
   });
 
+  // Privy's embedded wallet answers only after its own receipt wait and an "All Done" click, and never if its
+  // dialog is closed after sending, so the grant is read from the registry too.
+  const grantChecks = awaitedGrants.flatMap((grant) => grant.permissions.map((permission) => ({ grant, permission })));
+  const { data: grantReads } = useReadContracts({
+    contracts: grantChecks.map(({ grant, permission }) => ({
+      address: registry.address,
+      abi: registry.abi,
+      functionName: "authorizationExpiry" as const,
+      args: [account, grant.signer, permission],
+      chainId,
+    })),
+    query: { enabled: grantChecks.length > 0, refetchInterval: 5_000 },
+  });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: grantChecks is derived from awaitedGrants
+  useEffect(() => {
+    if (grantReads?.length !== grantChecks.length) return;
+    for (const grant of awaitedGrants) {
+      const landed = grantChecks.every(({ grant: checked }, i) => {
+        const read = grantReads[i];
+        return checked !== grant || (typeof read.result === "bigint" && read.result >= grant.expiry);
+      });
+      if (landed) grant.finish();
+    }
+  }, [awaitedGrants, grantReads]);
+
   const selectedScopes = SESSION_KEY_SCOPES.filter((s) => checkedScopes[s.id]).map((s) => s.id);
 
   const inheritExpiry = existingKey?.expirySec ?? null;
-  const existingKeyName = existingKey?.name ?? null;
+  // An unnamed key has name "", which is no name to keep: the link's suggestion fills in instead.
+  const existingKeyName = existingKey?.name || null;
 
-  const expiryChoice = () => inheritExpiry ?? resolveExpiry(presetIndex, customDate, Date.now());
+  const expiryChoice = () => inheritExpiry ?? resolveExpiry(days, Date.now());
+  // Read once per render for the date shown and the Authorize check; submitting reads the clock again.
+  const expiryPreview = expiryChoice();
 
   const signerValid = signerMode === "generate" || isAddress(ownAddress);
   // name is optional: the chain doesn't require an origin
-  const canCreate = selectedScopes.length > 0 && expiryChoice() !== null && signerValid && txState !== "pending";
+  const isBusy = txState === "wallet" || txState === "pending";
+  // A closed and reopened dialog must not send a second login for a key whose first one is still landing.
+  const signerAwaited =
+    signerMode === "own" && awaitedGrants.some((grant) => grant.signer.toLowerCase() === ownAddress.toLowerCase());
+  const canCreate = selectedScopes.length > 0 && expiryPreview !== null && signerValid && !isBusy && !signerAwaited;
   // The bring-your-own path stays on the form while its login confirms; the
   // fields freeze so the success screen shows what was actually submitted.
-  const formLocked = txState === "pending";
+  const formLocked = isBusy;
   // normalizeKeyName: the raw input reaches toast titles, the dialog chrome,
   // the download filename, and the onchain origin field — strip control/bidi
   // characters and cap the length once, here, before any of those sinks.
@@ -217,7 +267,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     // and the reveal describe this login, and a rejection under any wallet
     // must bring the form back rather than leave "Waiting" on screen.
     const shown = () => shownAttemptRef.current === attempt;
-    setTxState("pending");
+    setTxState("wallet");
     // Reveal the secret NOW — before confirmation — so a mid-flight close can
     // never lose the key of an authorization that lands anyway. The BYO path
     // has no secret, so it stays on the form until the login confirms.
@@ -232,28 +282,45 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         { name: cleanName, sessionKeyPublic: signerAddress, scopes: selectedScopes, createdAt: Date.now(), txHash },
         identity,
       );
+    const loginArgs = buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName);
+    // The wallet's receipt and the registry read race; whichever lands first confirms, once.
+    let finished = false;
+    const settle = () => {
+      finished = true;
+      setAwaitedGrants((grants) => grants.filter((pending) => pending !== grant));
+    };
+    const finish = () => {
+      if (finished) return;
+      settle();
+      commitRow();
+      if (shown()) {
+        setTxState("confirmed");
+        setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
+      }
+      onConfirmed?.(signerAddress);
+    };
+    // Confirming at the submitted expiry, not any expiry, keeps a renewal from matching the old grant.
+    const grant: AwaitedGrant = { signer: signerAddress, permissions: loginArgs[2], expiry, finish };
+    setAwaitedGrants((grants) => [...grants, grant]);
     try {
       txHash = await execute({
         functionName: "login",
-        args: buildLoginArgs(signerAddress, expiry, selectedScopes, cleanName),
+        args: loginArgs,
         metadata: { type: isExistingKey ? "authorizeSessionKey" : "createSessionKey", keyName: cleanName },
-        onConfirmed: () => {
-          if (isExistingKey) commitRow();
-          if (shown()) {
-            setTxState("confirmed");
-            setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
-          }
-          onConfirmed?.(signerAddress);
-        },
+        onConfirmed: finish,
         onReverted: () => {
+          settle();
           if (!isExistingKey) onFailed?.(signerAddress, identity);
           if (shown()) setTxState("failed");
         },
       });
+      if (!finished && shown()) setTxState("pending");
       if (!isExistingKey) commitRow();
     } catch {
       // wallet rejected / submission failed: nothing onchain, no row added.
       // Form inputs are preserved so the user can retry without retyping.
+      if (finished) return;
+      settle();
       if (shown()) {
         shownAttemptRef.current = null;
         setGenerated(null);
@@ -271,8 +338,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     setTxState("idle");
     setName("");
     setCheckedScopes(EMPTY_SELECTION);
-    setPresetIndex("1");
-    setCustomDate("");
+    setDays(String(DEFAULT_EXPIRY_DAYS));
     setSignerMode("generate");
     setOwnAddress("");
     setGenerated(null);
@@ -295,21 +361,31 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   // Declared AFTER the fresh-attempt
   // reset effect: both fire on the open transition and run in declaration
   // order, so the reset must never clobber the request's prefill.
+  // Applied once per opening and address: a key that becomes known while the
+  // form is open (a chain sync, the login confirming) must not wipe what the
+  // owner entered.
+  const prefillAppliedFor = useRef<Hex | null>(null);
   useEffect(() => {
-    if (open && prefillAddress) {
-      setSignerMode("own");
-      setOwnAddress(prefillAddress);
-      if (existingKeyName != null) setName(existingKeyName);
-      if (requestPresets) {
-        setCheckedScopes(
-          Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
-            ScopeId,
-            boolean
-          >,
-        );
-      }
+    if (!open) {
+      prefillAppliedFor.current = null;
+      return;
     }
-  }, [open, prefillAddress, existingKeyName, requestPresets]);
+    if (!prefillAddress || prefillAppliedFor.current === prefillAddress) return;
+    prefillAppliedFor.current = prefillAddress;
+    setSignerMode("own");
+    setOwnAddress(prefillAddress);
+    if (existingKeyName != null) setName(existingKeyName);
+    else if (prefillName) setName(prefillName);
+    if (prefillDays != null) setDays(String(prefillDays));
+    if (requestPresets) {
+      setCheckedScopes(
+        Object.fromEntries(SESSION_KEY_SCOPES.map((s) => [s.id, requestPresets[s.id] === "checked"])) as Record<
+          ScopeId,
+          boolean
+        >,
+      );
+    }
+  }, [open, prefillAddress, existingKeyName, prefillName, prefillDays, requestPresets]);
 
   const closeDialog = () => {
     reset();
@@ -317,6 +393,8 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
   };
 
   const handleOpenChange = (next: boolean) => {
+    // Dismissing while busy would abandon the attempt in flight.
+    if (!next && isBusy) return;
     if (!next && step === "reveal" && generated) {
       // Every dismissal path except the explicit Done button warns first:
       // once this dialog closes, the secret is gone for good.
@@ -340,15 +418,21 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
   const expiryLabel = expirySec > 0n ? formatDateTime(Number(expirySec) * 1000) : "—";
 
-  // Success copy comes from `submitted`, not the checkboxes. Once the login
-  // confirms, the parent passes the updated key back as `existingKey`, the
-  // prefill effect runs again, and it unchecks destructive scopes (Delete
-  // data set, Terminate service). Reading the checkboxes here showed an
-  // empty scope list on the success screen.
+  // Success copy comes from `submitted`, not the checkboxes: it must name what
+  // was sent onchain, whatever the live form shows once the login confirms.
   const submittedScopeLabels = (submitted?.scopes ?? []).map((id) => SCOPE_BY_ID[id].label).join(", ");
   const submittedKeyLabel = submitted ? submitted.name || formatAddress(submitted.signer) : "";
 
   const txBanners: Partial<Record<TxState, ReactNode>> = {
+    wallet: (
+      <Notice tone='info' className='flex items-center gap-2'>
+        <Loader2 className='h-4 w-4 animate-spin shrink-0' />
+        <span>
+          <b>Finish in your wallet.</b> Approve the transaction there. A Privy wallet shows &ldquo;Transaction
+          complete&rdquo; once it confirms; click <b>All Done</b> to finish here.
+        </span>
+      </Notice>
+    ),
     pending: (
       <Notice tone='info' className='flex items-center gap-2'>
         <Loader2 className='h-4 w-4 animate-spin shrink-0' />
@@ -373,7 +457,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
     renew: {
       title: "Renew session key",
       description:
-        "This key has expired. Its previous scopes are already checked. Every scope you select gets the new expiry; unselected scopes stay expired.",
+        "This key has expired. Its previous scopes are checked again, except destructive ones the link did not request. Every scope you select gets the new expiry; unselected scopes stay expired.",
       submit: "Renew key",
     },
     add: {
@@ -403,7 +487,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               <DialogDescription>{formCopy.description}</DialogDescription>
             </DialogHeader>
             {/* Only the bring-your-own path fails while still on the form; the generated path is already on reveal. */}
-            {txState === "failed" && txBanner}
+            {(txState === "wallet" || txState === "failed") && txBanner}
             {addressLocked && (
               <Notice tone='info' className='p-3'>
                 Authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. The session key
@@ -469,9 +553,14 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
                           {lockedOff && <span className='ml-2 text-xs font-normal text-zinc-500'>Not requested</span>}
                         </span>
                         <span className='block text-xs text-zinc-500'>{scope.description}</span>
-                        {preset === "requested-unchecked" && !checkedScopes[scope.id] && (
+                        {prefillScopes?.includes(scope.id) && scope.destructive && checkedScopes[scope.id] && (
                           <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
-                            Requested, check to include
+                            Requested by the link. Untick it unless this key should be able to do this.
+                          </span>
+                        )}
+                        {preset === "unchecked" && !checkedScopes[scope.id] && (
+                          <span className='block text-xs mt-1 text-amber-700 dark:text-amber-400'>
+                            This key held it before. Check to renew it too.
                           </span>
                         )}
                       </span>
@@ -493,38 +582,37 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
               </div>
 
               <div className='flex flex-col gap-1.5'>
-                <Label htmlFor='sk-expiry'>Expiration</Label>
+                <Label htmlFor='sk-expiry'>
+                  Expiration {inheritExpiry == null && <span className='text-zinc-500 font-normal'>(days)</span>}
+                </Label>
                 {inheritExpiry != null ? (
                   <p className='text-sm'>{formatDateTime(Number(inheritExpiry) * 1000)}</p>
                 ) : (
                   <>
-                    <select
-                      disabled={formLocked}
+                    {/* Text, not number: a number input takes 1e2 or 7.0 as valid, which the form refuses.
+                        Native, not the library Input: that one overwrites aria-invalid and aria-describedby. */}
+                    <input
                       id='sk-expiry'
+                      type='text'
+                      inputMode='numeric'
+                      pattern='[0-9]*'
                       className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                      value={presetIndex}
-                      onChange={(e) => setPresetIndex(e.target.value)}
-                    >
-                      {EXPIRY_PRESETS.map((preset, i) => (
-                        <option key={preset.label} value={String(i)}>
-                          {preset.label}
-                        </option>
-                      ))}
-                      <option value='custom'>Custom date…</option>
-                    </select>
-                    {presetIndex === "custom" && (
-                      <input
-                        type='date'
-                        disabled={formLocked}
-                        aria-label='Custom expiry date'
-                        className='rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm'
-                        value={customDate}
-                        onChange={(e) => setCustomDate(e.target.value)}
-                      />
+                      value={days}
+                      onChange={(e) => setDays(e.target.value)}
+                      disabled={formLocked}
+                      aria-invalid={!expiryPreview}
+                      aria-describedby='sk-expiry-hint'
+                    />
+                    {expiryPreview ? (
+                      <p id='sk-expiry-hint' className='text-xs text-zinc-500'>
+                        The key stops working on {formatDateTime(Number(expiryPreview) * 1000)}. Every key has to
+                        expire.
+                      </p>
+                    ) : (
+                      <p id='sk-expiry-hint' className='text-xs text-red-600'>
+                        Enter a whole number of days, at least 1, ending by {formatDateTime(MAX_EXPIRY_SEC * 1000)}.
+                      </p>
                     )}
-                    <p className='text-xs text-zinc-500'>
-                      The key stops working on this date. Every key has to expire.
-                    </p>
                   </>
                 )}
               </div>
@@ -597,9 +685,10 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
             <DialogFooter>
               <Button variant='primary' size='compact' disabled={!canCreate} onClick={handleCreate}>
-                {txState === "pending" ? (
+                {isBusy || signerAwaited ? (
                   <span className='flex items-center gap-2'>
-                    <Loader2 className='h-4 w-4 animate-spin' /> Waiting for confirmation…
+                    <Loader2 className='h-4 w-4 animate-spin' />{" "}
+                    {txState === "wallet" ? "Waiting for your wallet…" : "Waiting for confirmation…"}
                   </span>
                 ) : (
                   submitLabel

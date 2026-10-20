@@ -19,6 +19,7 @@ import {
   readSourceFeesPerGas,
   requestSquidDepositRoute,
   type SquidDepositFeeClient,
+  SquidQuoteChangedError,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
   squidDepositAbi,
   sushiSwapRouterAbi,
@@ -651,12 +652,14 @@ describe("parseSquidDepositRoute", () => {
         reviewed,
       ),
     ).not.toThrow();
-    expect(() =>
-      assertExecutableQuoteWithinReview(
-        { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
-        reviewed,
-      ),
-    ).toThrow("minimum USDFC");
+    const lowerMinimum = { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n };
+    expect(() => assertExecutableQuoteWithinReview(lowerMinimum, reviewed)).toThrow(
+      expect.objectContaining({
+        name: "SquidQuoteChangedError",
+        message: expect.stringContaining("minimum USDFC"),
+        quote: lowerMinimum,
+      }),
+    );
     expect(() =>
       assertExecutableQuoteWithinReview(
         { ...executable, fees: [{ ...executable.fees[0], amount: feeCap + 1n }] },
@@ -668,7 +671,24 @@ describe("parseSquidDepositRoute", () => {
         { ...executable, transaction: { ...executable.transaction, value: reviewed.maxTransactionValue + 1n } },
         reviewed,
       ),
-    ).toThrow("native route payment");
+    ).toThrow(expect.objectContaining({ name: "Error", message: expect.stringContaining("native route payment") }));
+  });
+
+  it("offers for re-review only a route that passes a review made from it", () => {
+    const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now), USDC);
+    const executable = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);
+    if (!isExecutableQuote(executable)) throw new Error("expected executable quote");
+    const drifted = [
+      { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
+      { ...executable, fees: [{ ...executable.fees[0], amount: executable.fees[0].amount * 10n }] },
+      { ...executable, gasCosts: [{ ...executable.gasCosts[0], amount: executable.gasCosts[0].amount * 10n }] },
+    ];
+    for (const route of drifted) {
+      expect(() => assertExecutableQuoteWithinReview(route, reviewed)).toThrow(SquidQuoteChangedError);
+      expect(() =>
+        assertExecutableQuoteWithinReview(route, captureReviewedSquidDepositCaps(route, USDC)),
+      ).not.toThrow();
+    }
   });
 
   it.each([

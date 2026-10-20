@@ -15,6 +15,8 @@ import { SettlementNotices } from "./SettlementNotices";
 import { type SettleRail, useSettleRailDialog } from "./useSettleRailDialog";
 
 interface SettleRailDialogProps {
+  /** Chain the rail lives on: the displayed network's, not necessarily the wallet's. */
+  chainId: number;
   rail: Rail;
   userAddress: string;
   currentEpoch?: bigint;
@@ -25,6 +27,7 @@ interface SettleRailDialogProps {
 }
 
 export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
+  chainId,
   rail,
   userAddress,
   currentEpoch,
@@ -34,6 +37,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
   settleRail,
 }) => {
   const settlement = useSettleRailDialog({
+    chainId,
     rail,
     userAddress,
     currentEpoch,

@@ -13,8 +13,47 @@ const markdownRule = {
   },
 };
 
+const isDevelopment = process.env.NODE_ENV === "development";
+// Playwright's default mode swaps Privy for a local fake; `test:e2e:real` runs the real one.
+const privyAlias =
+  process.env.E2E_MODE === "mock" && isDevelopment ? { "@privy-io/react-auth": "./e2e/fake-privy.tsx" } : undefined;
+const isVercelPreview = process.env.VERCEL_ENV === "preview";
+
+// ConsoleProviders falls back to the development Privy app when these are unset (#443); a production build must not.
+const missingPrivyVars = ["NEXT_PUBLIC_PRIVY_APP_ID", "NEXT_PUBLIC_PRIVY_CLIENT_ID"].filter(
+  (name) => !process.env[name]?.trim(),
+);
+if (process.env.VERCEL_ENV === "production" && missingPrivyVars.length > 0) {
+  throw new Error(`A production deployment needs its own Privy app: set ${missingPrivyVars.join(" and ")}.`);
+}
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  // 'unsafe-inline': the Next runtime and the Plausible init snippet are inline scripts.
+  `script-src 'self' 'unsafe-inline' ${isDevelopment ? "'unsafe-eval' " : ""}https://plausible.io https://challenges.cloudflare.com https://*.stripe.com${isVercelPreview ? " https://vercel.live" : ""}`,
+  `style-src 'self' 'unsafe-inline'${isVercelPreview ? " https://vercel.live" : ""}`,
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
+  `frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://*.stripe.com${isVercelPreview ? " https://vercel.live" : ""}`,
+  // eth.merkle.io through 56.rpc.thirdweb.com are viem chain defaults; createChainTransport falls back to them.
+  `connect-src 'self' https://auth.privy.io https://*.rpc.privy.systems https://api.moonpay.com https://*.stripe.com wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org wss://www.walletlink.org https://api.goldsky.com https://*.glif.io https://*.publicnode.com https://*.drpc.org https://eth.merkle.io https://arb1.arbitrum.io https://mainnet.base.org https://mainnet.optimism.io https://api.avax.network https://56.rpc.thirdweb.com https://v2.api.squidrouter.com https://*.filbeam.com https://*.filoz.workers.dev https://plausible.io https://filecoin.blockscout.com https://filecoin-testnet.blockscout.com${isVercelPreview ? " https://vercel.live wss://ws-us3.pusher.com" : ""}`,
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+].join("; ");
+
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+];
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.0.*"],
+  headers: async () => [{ source: "/(.*)", headers: securityHeaders }],
   images: {
     qualities: [75, 100],
   },
@@ -24,6 +63,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   turbopack: {
+    resolveAlias: privyAlias,
     rules: {
       "*.svg": {
         loaders: ["@svgr/webpack"],

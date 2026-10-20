@@ -94,6 +94,8 @@ When subgraph changes are detected, the body also includes one of two warnings:
 
 Review and approve the promotion PR. Merge it using a **merge commit** (not squash). This triggers any production deployment pipelines configured on `main`.
 
+The Explorer deploys from `.github/workflows/deploy-explorer.yml`, not the Vercel Git integration, so the merger needs no Vercel access. If the production deploy fails, it shows as a failed check on the merge commit; re-run that workflow run, or run the workflow manually on `main`.
+
 ### Merge strategy requirement
 
 The promotion PR **must be merged with a merge commit**, not a squash merge. Squash-merging creates a single commit on `main` that does not share ancestry with `staging`'s commits, on the next push to `staging`, the workflow would see those commits as still unreachable from `main` and re-list them in the promotion PR body.

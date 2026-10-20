@@ -90,4 +90,12 @@ describe("SquidDepositProgress", () => {
     const renderer = render({ explorerUrl: undefined, stage: "bridging", transactionHash: ROUTE_HASH });
     expect(renderer.root.findAllByType("a").map((link) => link.children.join(""))).toEqual(["Squid route / add gas"]);
   });
+
+  it("warns against switching wallet accounts, except for a Privy wallet the extension cannot switch", () => {
+    const paragraphs = (renderer: ReactTestRenderer) =>
+      renderer.root.findAllByType("p").map((paragraph) => paragraph.children.join(""));
+    const hint = expect.stringContaining("Don't switch accounts in your wallet");
+    expect(paragraphs(render())).toContainEqual(hint);
+    expect(paragraphs(render({ isEmbedded: true }))).not.toContainEqual(hint);
+  });
 });

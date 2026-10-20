@@ -11,20 +11,17 @@ import {
   useSwitchChain,
   useWalletClient,
 } from "wagmi";
+import { getChain } from "@/constants/chains";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
-import useSynapse from "@/hooks/useSynapse";
+import type { Network } from "@/types";
+import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
 
-// A service contract reserves upcoming charges from the deposit for its lockup
-// period (30 days for Filecoin Warm Storage Service), so the approval must
-// allow at least that long. Submitted with every approval — 30 days in
-// Filecoin epochs (2,880/day) — instead of asking users to reason about
-// epochs.
-const DEFAULT_MAX_LOCKUP_PERIOD = 86_400n;
 const PERMIT_DEADLINE_SECONDS = 3600;
 
 /** Sentinel for the "Custom … address" entries in both selects. */
@@ -43,14 +40,14 @@ export interface ServiceSelection {
 }
 
 // Everything in this dialog — service list, token list, payments contract,
-// permit domain — derives from the same useSynapse chain so a wallet/app
+// permit domain — derives from the same displayed network so a wallet/app
 // network divergence can't mix networks within one submission.
-export function useServiceSelection(): ServiceSelection {
-  const { constants } = useSynapse();
+export function useServiceSelection(network: Network): ServiceSelection {
+  const chain = getChain(network);
   const [serviceChoice, setServiceChoice] = useState("");
   const [customServiceInput, setCustomServiceInput] = useState("");
   const { services, isLoading: isLoadingServices } = useApprovableServices({
-    networkOverride: constants.chain.slug,
+    networkOverride: chain.slug,
   });
 
   const selectedService =
@@ -128,11 +125,12 @@ export interface TokenSelection {
   reset: () => void;
 }
 
-export function useTokenSelection(open: boolean): TokenSelection {
-  const { constants } = useSynapse();
+export function useTokenSelection(network: Network, open: boolean): TokenSelection {
+  const chain = getChain(network);
+  const chainId = chain.id;
   const { address: userAddress } = useAccount();
 
-  const knownTokens: PaymentTokenDetails[] = paymentTokensByChainId[constants.chain.id] ?? [];
+  const knownTokens: PaymentTokenDetails[] = paymentTokensByChainId[chainId] ?? [];
   const [tokenChoice, setTokenChoice] = useState("");
   const [customTokenInput, setCustomTokenInput] = useState("");
 
@@ -149,11 +147,11 @@ export function useTokenSelection(open: boolean): TokenSelection {
   } = useReadContracts({
     contracts: customTokenAddress
       ? [
-          { address: customTokenAddress, abi: erc20Abi, functionName: "symbol" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "decimals" },
-          { address: customTokenAddress, abi: erc20Abi, functionName: "name" },
-          { address: customTokenAddress, abi: permitNoncesAbi, functionName: "nonces", args: [zeroAddress] },
-          { address: customTokenAddress, abi: permitDomainSeparatorAbi, functionName: "DOMAIN_SEPARATOR" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "symbol" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "decimals" },
+          { address: customTokenAddress, abi: erc20Abi, chainId, functionName: "name" },
+          { address: customTokenAddress, abi: permitNoncesAbi, chainId, functionName: "nonces", args: [zeroAddress] },
+          { address: customTokenAddress, abi: permitDomainSeparatorAbi, chainId, functionName: "DOMAIN_SEPARATOR" },
         ]
       : [],
     query: { enabled: !!customTokenAddress && open },
@@ -185,7 +183,7 @@ export function useTokenSelection(open: boolean): TokenSelection {
         noncesRead?.status === "success" &&
         domainSeparatorRead?.status === "success" &&
         String(domainSeparatorRead.result).toLowerCase() ===
-          getPermitDomainSeparator(customTokenAddress as Hex, chainToken.name, constants.chain.id)
+          getPermitDomainSeparator(customTokenAddress as Hex, chainToken.name, chain.id)
       );
 
   // Checks ordered by precedence: an empty field never reports invalid, an
@@ -201,6 +199,7 @@ export function useTokenSelection(open: boolean): TokenSelection {
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
     address: (token?.address as Hex | undefined) ?? undefined,
     abi: erc20Abi,
+    chainId,
     functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
     query: { enabled: !!token && !!userAddress && open },
@@ -226,13 +225,13 @@ export function useTokenSelection(open: boolean): TokenSelection {
   };
 }
 
-export function useFilecoinGasBalance(open: boolean) {
-  const { constants } = useSynapse();
+export function useFilecoinGasBalance(network: Network, open: boolean) {
+  const chain = getChain(network);
   const { address: owner, chainId } = useConnection();
   const { isPending: isSwitchingNetwork, switchChain } = useSwitchChain();
   const query = useBalance({
     address: owner,
-    chainId: constants.chain.id,
+    chainId: chain.id,
     query: { enabled: !!owner && open, refetchInterval: open ? 15_000 : false, refetchOnMount: "always" },
   });
   const status = getFilecoinGasBalanceStatus({
@@ -247,13 +246,13 @@ export function useFilecoinGasBalance(open: boolean) {
   }, [refetch]);
   return {
     chainId,
-    isCorrectChain: chainId === constants.chain.id,
+    isCorrectChain: chainId === chain.id,
     isSwitchingNetwork,
     owner,
     refresh,
     status,
-    switchToFilecoin: () => switchChain({ chainId: constants.chain.id }),
-    targetChainId: constants.chain.id,
+    switchToFilecoin: () => switchChain({ chainId: chain.id }),
+    targetChainId: chain.id,
   };
 }
 
@@ -268,19 +267,20 @@ export interface SubmitArgs {
   rateInWei: bigint;
 }
 
-export function useAddServiceSubmit(onSubmitOnChain: () => void) {
-  const { constants } = useSynapse();
+export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => void) {
+  const chain = getChain(network);
   const { address: userAddress } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const publicClient = usePublicClient();
+  // Permit nonce and domain reads must come from the approval's chain, not whichever chain the wallet is on.
+  const publicClient = usePublicClient({ chainId: chain.id });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { execute, isExecuting } = useContractTransaction({
     account: userAddress,
-    contractAddress: constants.contracts.payments.address,
-    abi: constants.contracts.payments.abi,
-    chainId: constants.chain.id,
-    explorerUrl: constants.chain.blockExplorers?.default.url,
+    contractAddress: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    explorerUrl: chain.blockExplorers?.default.url,
   });
 
   const submit = async ({
@@ -310,10 +310,10 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
               tokenAddress,
               tokenName: token.name,
               ownerAddress: userAddress,
-              spenderAddress: constants.contracts.payments.address,
+              spenderAddress: chain.contracts.payments.address,
               amount: parsedDeposit,
               deadline,
-              chainId: constants.chain.id,
+              chainId: chain.id,
             },
             walletClient,
             publicClient,
@@ -352,6 +352,7 @@ export function useAddServiceSubmit(onSubmitOnChain: () => void) {
             operator: operatorAddress,
           },
           onSubmitOnChain,
+          onConfirmed: () => trackDepositConfirmed(chain.id, tokenAddress, parsedDeposit),
         });
       } else {
         await execute({
