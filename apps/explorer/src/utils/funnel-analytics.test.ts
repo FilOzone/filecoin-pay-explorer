@@ -204,10 +204,10 @@ describe("card and USDC-gas deposit events", () => {
 
   it("follows a USDC-gas deposit from submission to its outcome, with a reason label on failure", async () => {
     stubWindow(SITE_QUERY);
-    const { trackUsdcGasDeposit } = await load();
+    const { trackUsdcGasDeposit, trackUsdcGasDepositFailed } = await load();
     trackUsdcGasDeposit("submitted");
     trackUsdcGasDeposit("completed");
-    trackUsdcGasDeposit({ failed: "reverted" });
+    trackUsdcGasDepositFailed("reverted");
     assert.deepEqual(plausible.mock.calls, [
       ["usdc_gas_deposit_submitted", { props: SITE }],
       ["usdc_gas_deposit_completed", { props: SITE }],

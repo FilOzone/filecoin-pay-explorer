@@ -92,7 +92,7 @@ async function reviewDeposit(
   return { fake, payer, squid };
 }
 
-/** The deposit funnel's events, with a failure's reason after a colon. */
+// The deposit funnel's events, with a failure's reason after a colon.
 const depositEvents = async (page: Page) =>
   (await page.evaluate(() => (window as unknown as { __funnel: string[] }).__funnel)).filter(
     (event) => event.startsWith("usdc_gas_") || event === "console_deposit_confirmed",

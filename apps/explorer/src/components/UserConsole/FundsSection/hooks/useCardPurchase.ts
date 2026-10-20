@@ -211,8 +211,10 @@ export function useCardPurchase({
     clearPendingCardPurchase(pending.recipient);
     void invalidateSourceBalanceQueries(queryClient, pending.recipient, CARD_CHAIN_ID);
     setStatus("idle");
-    const recipientWallet = wallets.find((wallet) => wallet.address.toLowerCase() === pending.recipient.toLowerCase());
-    trackCardUsdcLanded(recipientWallet && isPrivyEmbeddedWallet(recipientWallet) ? "embedded" : "external");
+    const isEmbedded = wallets.some(
+      (wallet) => isPrivyEmbeddedWallet(wallet) && wallet.address.toLowerCase() === pending.recipient.toLowerCase(),
+    );
+    trackCardUsdcLanded(isEmbedded ? "embedded" : "external");
     onPurchased(landed.balance - pending.before);
   };
 

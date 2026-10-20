@@ -28,7 +28,7 @@ import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivi
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
-import { trackDepositConfirmed, trackUsdcGasDeposit } from "@/utils/funnel-analytics";
+import { trackDepositConfirmed, trackUsdcGasDeposit, trackUsdcGasDepositFailed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
@@ -161,10 +161,9 @@ function describeWalletConfirmations(reviewed: ReviewedDeposit | UsdcGasReviewed
   return "the Squid transaction.";
 }
 
-// An unresolved deposit is not an outcome yet; "Check again" can still complete it.
 function trackUsdcGasFailure(failure: unknown) {
   const reason = getUsdcGasDepositFailure(failure);
-  if (reason) trackUsdcGasDeposit({ failed: reason });
+  if (reason) trackUsdcGasDepositFailed(reason);
 }
 
 function describePending(pending: PendingSquidDeposit) {
