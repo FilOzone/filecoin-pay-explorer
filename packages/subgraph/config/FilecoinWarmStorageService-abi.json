@@ -4,16 +4,16 @@
     "anonymous": false,
     "inputs": [
       {
+        "name": "caller",
+        "internalType": "address",
+        "type": "address",
+        "indexed": true
+      },
+      {
         "name": "dataSetId",
         "internalType": "uint256",
         "type": "uint256",
         "indexed": true
-      },
-      {
-        "name": "endEpoch",
-        "internalType": "uint256",
-        "type": "uint256",
-        "indexed": false
       },
       {
         "name": "cacheMissRailId",
@@ -28,7 +28,7 @@
         "indexed": false
       }
     ],
-    "name": "CDNPaymentTerminated"
+    "name": "CDNServiceTerminated"
   },
   {
     "type": "event",
@@ -227,36 +227,5 @@
       }
     ],
     "name": "ServiceTerminated"
-  },
-  {
-    "type": "event",
-    "anonymous": false,
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "internalType": "uint256",
-        "type": "uint256",
-        "indexed": true
-      },
-      {
-        "name": "pieceId",
-        "internalType": "uint256",
-        "type": "uint256",
-        "indexed": true
-      },
-      {
-        "name": "keys",
-        "internalType": "string[]",
-        "type": "string[]",
-        "indexed": false
-      },
-      {
-        "name": "values",
-        "internalType": "string[]",
-        "type": "string[]",
-        "indexed": false
-      }
-    ],
-    "name": "PieceAdded"
   }
 ]

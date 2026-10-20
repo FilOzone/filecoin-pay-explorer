@@ -38,7 +38,6 @@ type Account @entity(immutable: false) {
   totalRails: BigInt!
   totalTokens: BigInt!
   totalApprovals: BigInt!
-  totalDataSets: BigInt!
 
   payerRails: [Rail!]! @derivedFrom(field: "payer")
   payeeRails: [Rail!]! @derivedFrom(field: "payee")
@@ -208,6 +207,7 @@ enum DataSetStatus {
   PDP_TERMINATED
   CDN_TERMINATED
   TERMINATED
+  DELETED
 }
 
 type DataSet @entity(immutable: false) {
@@ -215,6 +215,7 @@ type DataSet @entity(immutable: false) {
   dataSetId: BigInt!
   payer: Account!
   provider: Bytes! # FWSS serviceProvider address
+  providerId: BigInt! # ServiceProviderRegistry id
   pdpRail: Rail!
   cacheMissRail: Rail # set only when CDN service was purchased
   cdnRail: Rail # set only when CDN service was purchased

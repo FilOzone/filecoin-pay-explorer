@@ -1,21 +1,12 @@
-import { Address, Bytes, DataSourceContext, ethereum, BigInt as GraphBN } from "@graphprotocol/graph-ts";
-import {
-  afterEach,
-  assert,
-  clearInBlockStore,
-  clearStore,
-  createMockedFunction,
-  dataSourceMock,
-  describe,
-  test,
-} from "matchstick-as";
+import { Bytes, BigInt as GraphBN } from "@graphprotocol/graph-ts";
+import { afterEach, assert, clearInBlockStore, clearStore, describe, test } from "matchstick-as";
 
 import { DataSet } from "../../generated/schema";
 import { getDataSetEntityId, getPieceEntityId, getRailEntityId } from "../../src/utils/keys";
 import {
-  handleCDNPaymentTerminated,
+  handleCDNServiceTerminated,
+  handleDataSetDeleted,
   handleDataSetServiceProviderChanged,
-  handleLegacyPieceAdded,
   handlePDPPaymentTerminated,
   handlePieceAdded,
   handlePiecesRemoved,
@@ -23,9 +14,9 @@ import {
 } from "../../src/warmStorage";
 import { resetEventLogIndex as resetPaymentsEventLogIndex } from "../payments/events";
 import {
-  createCDNPaymentTerminatedEvent,
+  createCDNServiceTerminatedEvent,
+  createDataSetDeletedEvent,
   createDataSetServiceProviderChangedEvent,
-  createLegacyPieceAddedEvent,
   createPDPPaymentTerminatedEvent,
   createPieceAddedEvent,
   createPiecesRemovedEvent,
@@ -33,8 +24,6 @@ import {
   resetEventLogIndex,
 } from "./events";
 import { setupDataSet, TEST_ADDRESSES } from "./fixtures";
-
-const PDP_VERIFIER_ADDRESS = Address.fromString("0x0000000000000000000000000000000000000010");
 
 const DATA_SET_ID = GraphBN.fromI32(1);
 const PDP_RAIL_ID = GraphBN.fromI32(1);
@@ -57,30 +46,22 @@ describe("warmStorage handlers", () => {
   afterEach(() => {
     clearStore();
     clearInBlockStore();
-    dataSourceMock.resetValues();
     resetEventLogIndex();
     resetPaymentsEventLogIndex();
   });
 
-  test("handleDataSetCreated links the payer, provider and pdpRail", () => {
+  test("handleDataSetCreated links the payer, provider, providerId and pdpRail", () => {
     setupDataSet(DATA_SET_ID, PDP_RAIL_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID);
 
     const id = dataSetEntityId();
     assert.fieldEquals("DataSet", id, "payer", TEST_ADDRESSES.PAYER.toHexString());
     assert.fieldEquals("DataSet", id, "provider", TEST_ADDRESSES.SERVICE_PROVIDER.toHexString());
+    assert.fieldEquals("DataSet", id, "providerId", "1");
     assert.fieldEquals("DataSet", id, "pdpRail", getRailEntityId(PDP_RAIL_ID).toHexString());
     assert.fieldEquals("DataSet", id, "cacheMissRail", getRailEntityId(CACHE_MISS_RAIL_ID).toHexString());
     assert.fieldEquals("DataSet", id, "cdnRail", getRailEntityId(CDN_RAIL_ID).toHexString());
     assert.fieldEquals("DataSet", id, "status", "ACTIVE");
     assert.fieldEquals("DataSet", id, "totalSize", "0");
-  });
-
-  test("handleDataSetCreated increments the payer's totalDataSets once per dataset", () => {
-    setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
-    assert.fieldEquals("Account", TEST_ADDRESSES.PAYER.toHexString(), "totalDataSets", "1");
-
-    setupDataSet(GraphBN.fromI32(2), GraphBN.fromI32(4));
-    assert.fieldEquals("Account", TEST_ADDRESSES.PAYER.toHexString(), "totalDataSets", "2");
   });
 
   test("handleDataSetCreated leaves cacheMissRail and cdnRail unset without CDN", () => {
@@ -102,28 +83,6 @@ describe("warmStorage handlers", () => {
     assert.fieldEquals("DataSet", dataSetEntityId(), "totalSize", "381");
   });
 
-  test("handleLegacyPieceAdded backfills the size via PDPVerifier.getPieceCid", () => {
-    setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
-    const pieceId = GraphBN.fromI32(1);
-
-    // Exercises the real lookup path: the address comes from the data source context
-    // (set from config/{network}.json in the real manifest), not a value hardcoded in the test.
-    const context = new DataSourceContext();
-    context.setBytes("pdpVerifierAddress", PDP_VERIFIER_ADDRESS);
-    dataSourceMock.setContext(context);
-
-    const pieceCidTuple = new ethereum.Tuple();
-    pieceCidTuple.push(ethereum.Value.fromBytes(PIECE_CID_127_BYTES));
-    createMockedFunction(PDP_VERIFIER_ADDRESS, "getPieceCid", "getPieceCid(uint256,uint256):((bytes))")
-      .withArgs([ethereum.Value.fromUnsignedBigInt(DATA_SET_ID), ethereum.Value.fromUnsignedBigInt(pieceId)])
-      .returns([ethereum.Value.fromTuple(pieceCidTuple)]);
-
-    handleLegacyPieceAdded(createLegacyPieceAddedEvent(DATA_SET_ID, pieceId));
-
-    assert.fieldEquals("DataSet", dataSetEntityId(), "totalSize", "127");
-    assert.fieldEquals("Piece", getPieceEntityId(DATA_SET_ID, pieceId).toHexString(), "size", "127");
-  });
-
   test("handlePiecesRemoved subtracts the removed pieces' sizes", () => {
     setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
     handlePieceAdded(createPieceAddedEvent(DATA_SET_ID, GraphBN.fromI32(1), PIECE_CID_127_BYTES));
@@ -133,6 +92,33 @@ describe("warmStorage handlers", () => {
 
     assert.fieldEquals("DataSet", dataSetEntityId(), "totalSize", "254");
     assert.notInStore("Piece", getPieceEntityId(DATA_SET_ID, GraphBN.fromI32(1)).toHexString());
+  });
+
+  test("pieces whose concatenated ids would collide stay separate", () => {
+    // fromString gives minimal-length bytes like real event params; fromI32 is always 4 bytes.
+    const dataSetA = GraphBN.fromString("1");
+    const pieceA = GraphBN.fromString("513");
+    const dataSetB = GraphBN.fromString("257");
+    const pieceB = GraphBN.fromString("2");
+    setupDataSet(dataSetA, PDP_RAIL_ID);
+    setupDataSet(dataSetB, GraphBN.fromI32(4));
+
+    handlePieceAdded(createPieceAddedEvent(dataSetA, pieceA, PIECE_CID_127_BYTES));
+    handlePieceAdded(createPieceAddedEvent(dataSetB, pieceB, PIECE_CID_254_BYTES));
+
+    assert.fieldEquals("Piece", getPieceEntityId(dataSetA, pieceA).toHexString(), "size", "127");
+    assert.fieldEquals("Piece", getPieceEntityId(dataSetB, pieceB).toHexString(), "size", "254");
+  });
+
+  test("handleDataSetDeleted marks the dataset DELETED and zeroes its size", () => {
+    setupDataSet(DATA_SET_ID, PDP_RAIL_ID);
+    handlePieceAdded(createPieceAddedEvent(DATA_SET_ID, GraphBN.fromI32(1), PIECE_CID_127_BYTES));
+    handlePDPPaymentTerminated(createPDPPaymentTerminatedEvent(DATA_SET_ID, GraphBN.fromI32(100), PDP_RAIL_ID));
+
+    handleDataSetDeleted(createDataSetDeletedEvent(DATA_SET_ID, GraphBN.fromI32(4)));
+
+    assert.fieldEquals("DataSet", dataSetEntityId(), "status", "DELETED");
+    assert.fieldEquals("DataSet", dataSetEntityId(), "totalSize", "0");
   });
 
   test("handleDataSetServiceProviderChanged updates the provider", () => {
@@ -155,8 +141,8 @@ describe("warmStorage handlers", () => {
     handlePDPPaymentTerminated(createPDPPaymentTerminatedEvent(DATA_SET_ID, GraphBN.fromI32(100), PDP_RAIL_ID));
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "PDP_TERMINATED");
 
-    handleCDNPaymentTerminated(
-      createCDNPaymentTerminatedEvent(DATA_SET_ID, GraphBN.fromI32(100), CACHE_MISS_RAIL_ID, CDN_RAIL_ID),
+    handleCDNServiceTerminated(
+      createCDNServiceTerminatedEvent(TEST_ADDRESSES.APPROVER, DATA_SET_ID, CACHE_MISS_RAIL_ID, CDN_RAIL_ID),
     );
     assert.fieldEquals("DataSet", dataSetEntityId(), "status", "TERMINATED");
   });

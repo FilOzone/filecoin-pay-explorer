@@ -69,10 +69,6 @@ dataSources:
       abi: FilecoinWarmStorageService
       address: "{{fwssContractAddress}}"
       startBlock: {{fwssContractStartBlock}}
-    context:
-      pdpVerifierAddress:
-        type: Bytes
-        data: "{{pdpVerifierAddress}}"
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -85,28 +81,22 @@ dataSources:
       abis:
         - name: FilecoinWarmStorageService
           file: ./config/FilecoinWarmStorageService-abi.json
-        - name: PDPVerifier
-          file: ./config/PDPVerifier-abi.json
       eventHandlers:
         - event: DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])
           handler: handleDataSetCreated
         - event: PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])
           handler: handlePieceAdded
-        # A pre-upgrade PieceAdded that didn't carry pieceCid; handleLegacyPieceAdded
-        # backfills it via PDPVerifier.getPieceCid so old datasets aren't undercounted.
-        - event: PieceAdded(indexed uint256,indexed uint256,string[],string[])
-          handler: handleLegacyPieceAdded
         - event: DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)
           handler: handleDataSetServiceProviderChanged
         - event: PDPPaymentTerminated(indexed uint256,uint256,uint256)
           handler: handlePDPPaymentTerminated
-        - event: CDNPaymentTerminated(indexed uint256,uint256,uint256,uint256)
-          handler: handleCDNPaymentTerminated
+        - event: CDNServiceTerminated(indexed address,indexed uint256,uint256,uint256)
+          handler: handleCDNServiceTerminated
         - event: ServiceTerminated(indexed address,indexed uint256,uint256,uint256,uint256)
           handler: handleServiceTerminated
       file: ./src/warmStorage.ts
 
-  # Scoped to PiecesRemoved only: proving-health events (PossessionProven,
+  # Scoped to PiecesRemoved and DataSetDeleted: proving-health events (PossessionProven,
   # NextProvingPeriod, faults) stay out of this subgraph. Starts at the FWSS
   # start block since no FWSS-tracked dataset's pieces can be removed earlier.
   - kind: ethereum
@@ -129,6 +119,8 @@ dataSources:
       eventHandlers:
         - event: PiecesRemoved(indexed uint256,uint256[])
           handler: handlePiecesRemoved
+        - event: DataSetDeleted(indexed uint256,uint256)
+          handler: handleDataSetDeleted
       file: ./src/warmStorage.ts
 
 templates:

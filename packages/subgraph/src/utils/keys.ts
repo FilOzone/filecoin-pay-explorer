@@ -10,7 +10,8 @@ export function getDataSetEntityId(dataSetId: BigInt): Bytes {
 }
 
 export function getPieceEntityId(dataSetId: BigInt, pieceId: BigInt): Bytes {
-  return getDataSetEntityId(dataSetId).concat(Bytes.fromByteArray(Bytes.fromBigInt(pieceId)));
+  // Delimited: concatenating variable-length ids makes (1, 513) and (257, 2) collide.
+  return Bytes.fromUTF8(`${dataSetId.toString()}-${pieceId.toString()}`);
 }
 
 export function getUserTokenEntityId(account: Bytes, token: Bytes): Bytes {

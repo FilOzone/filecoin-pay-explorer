@@ -19,34 +19,22 @@
     "name": "PiecesRemoved"
   },
   {
-    "type": "function",
+    "type": "event",
+    "anonymous": false,
     "inputs": [
       {
         "name": "setId",
         "internalType": "uint256",
-        "type": "uint256"
+        "type": "uint256",
+        "indexed": true
       },
       {
-        "name": "pieceId",
+        "name": "deletedLeafCount",
         "internalType": "uint256",
-        "type": "uint256"
+        "type": "uint256",
+        "indexed": false
       }
     ],
-    "name": "getPieceCid",
-    "outputs": [
-      {
-        "name": "",
-        "internalType": "struct Cids.Cid",
-        "type": "tuple",
-        "components": [
-          {
-            "name": "data",
-            "internalType": "bytes",
-            "type": "bytes"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
+    "name": "DataSetDeleted"
   }
 ]

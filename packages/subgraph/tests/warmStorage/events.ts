@@ -3,15 +3,14 @@ import { Address, Bytes, ethereum, BigInt as GraphBN } from "@graphprotocol/grap
 import { newMockEvent } from "matchstick-as";
 
 import {
-  CDNPaymentTerminated,
+  CDNServiceTerminated,
   DataSetCreated,
   DataSetServiceProviderChanged,
-  PieceAdded1 as LegacyPieceAdded,
   PDPPaymentTerminated,
   PieceAdded,
   ServiceTerminated,
 } from "../../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
-import { PiecesRemoved } from "../../generated/PDPVerifier/PDPVerifier";
+import { DataSetDeleted, PiecesRemoved } from "../../generated/PDPVerifier/PDPVerifier";
 
 let nextLogIndex = 1;
 
@@ -75,22 +74,6 @@ export function createPieceAddedEvent(
   return event;
 }
 
-export function createLegacyPieceAddedEvent(
-  dataSetId: GraphBN,
-  pieceId: GraphBN,
-  keys: string[] = [],
-  values: string[] = [],
-): LegacyPieceAdded {
-  const event = changetype<LegacyPieceAdded>(newEvent());
-
-  event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
-  event.parameters.push(new ethereum.EventParam("pieceId", ethereum.Value.fromUnsignedBigInt(pieceId)));
-  event.parameters.push(new ethereum.EventParam("keys", ethereum.Value.fromStringArray(keys)));
-  event.parameters.push(new ethereum.EventParam("values", ethereum.Value.fromStringArray(values)));
-
-  return event;
-}
-
 export function createDataSetServiceProviderChangedEvent(
   dataSetId: GraphBN,
   oldServiceProvider: Address,
@@ -119,16 +102,16 @@ export function createPDPPaymentTerminatedEvent(
   return event;
 }
 
-export function createCDNPaymentTerminatedEvent(
+export function createCDNServiceTerminatedEvent(
+  caller: Address,
   dataSetId: GraphBN,
-  endEpoch: GraphBN,
   cacheMissRailId: GraphBN,
   cdnRailId: GraphBN,
-): CDNPaymentTerminated {
-  const event = changetype<CDNPaymentTerminated>(newEvent());
+): CDNServiceTerminated {
+  const event = changetype<CDNServiceTerminated>(newEvent());
 
+  event.parameters.push(new ethereum.EventParam("caller", ethereum.Value.fromAddress(caller)));
   event.parameters.push(new ethereum.EventParam("dataSetId", ethereum.Value.fromUnsignedBigInt(dataSetId)));
-  event.parameters.push(new ethereum.EventParam("endEpoch", ethereum.Value.fromUnsignedBigInt(endEpoch)));
   event.parameters.push(new ethereum.EventParam("cacheMissRailId", ethereum.Value.fromUnsignedBigInt(cacheMissRailId)));
   event.parameters.push(new ethereum.EventParam("cdnRailId", ethereum.Value.fromUnsignedBigInt(cdnRailId)));
 
@@ -158,6 +141,17 @@ export function createPiecesRemovedEvent(setId: GraphBN, pieceIds: GraphBN[]): P
 
   event.parameters.push(new ethereum.EventParam("setId", ethereum.Value.fromUnsignedBigInt(setId)));
   event.parameters.push(new ethereum.EventParam("pieceIds", ethereum.Value.fromUnsignedBigIntArray(pieceIds)));
+
+  return event;
+}
+
+export function createDataSetDeletedEvent(setId: GraphBN, deletedLeafCount: GraphBN): DataSetDeleted {
+  const event = changetype<DataSetDeleted>(newEvent());
+
+  event.parameters.push(new ethereum.EventParam("setId", ethereum.Value.fromUnsignedBigInt(setId)));
+  event.parameters.push(
+    new ethereum.EventParam("deletedLeafCount", ethereum.Value.fromUnsignedBigInt(deletedLeafCount)),
+  );
 
   return event;
 }
