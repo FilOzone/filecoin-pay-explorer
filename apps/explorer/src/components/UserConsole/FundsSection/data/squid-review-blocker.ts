@@ -1,6 +1,6 @@
 import { formatUnits } from "viem";
 import { CIRCLE_PAYMASTER_TOKEN_DECIMALS } from "./circle-paymaster";
-import { FEE_RESERVE_USDC, type UsdcGasStatus } from "./paymaster-deposit-plan";
+import { FEE_RESERVE_USDC, type UsdcGasPayer } from "./usdc-gas-payer";
 
 /**
  * Why Review is disabled:
@@ -43,8 +43,8 @@ export function getSquidReviewBlocker({
   quoteReady: boolean;
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
-  /** Set when network fees are paid in USDC; its check then stands in for the native balance. */
-  usdcGas?: UsdcGasStatus;
+  /** Set when network fees are paid in USDC; its payer check then stands in for the native balance. */
+  usdcGas?: { payer: UsdcGasPayer | undefined; failed: boolean };
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
@@ -54,21 +54,21 @@ export function getSquidReviewBlocker({
   if (balances.token < parsedAmount) {
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${sourceSymbol}.` };
   }
-  switch (usdcGas) {
-    case "failed":
-      return { kind: "failed", message: "USDC network fees could not be estimated." };
-    case "planning":
-      return { kind: "waiting", message: "Checking USDC network fees…" };
-    case "insufficient":
+  if (usdcGas) {
+    if (parsedAmount <= FEE_RESERVE_USDC) {
       return {
         kind: "funds",
         message: `Enter more than ${formatUnits(FEE_RESERVE_USDC, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} ${sourceSymbol}: that much is held for network fees.`,
       };
-    case "conflict":
+    }
+    if (usdcGas.failed) return { kind: "failed", message: "USDC network fees could not be estimated." };
+    if (!usdcGas.payer) return { kind: "waiting", message: "Checking USDC network fees…" };
+    if (usdcGas.payer === "conflict") {
       return {
         kind: "funds",
         message: `${payerLabel} is set up with another smart account, so its network fees can't be paid in ${sourceSymbol}.`,
       };
+    }
   }
   if (quoteFailed) return { kind: "failed", message: "Squid could not quote this amount." };
   if (!quoteReady) {

@@ -34,7 +34,6 @@ import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
-import { FEE_RESERVE_USDC } from "../data/paymaster-deposit-plan";
 import {
   getSourceTokenBalance,
   getSourceTokenBalancesQueryKey,
@@ -100,6 +99,7 @@ import { chooseDefaultPayer, listSquidPayers, readConnectedAccounts, type SquidP
 import { paymentTokensQueryOptions } from "../data/squid-payment-tokens";
 import { squidFetch } from "../data/squid-quote";
 import { getSquidReviewBlocker } from "../data/squid-review-blocker";
+import { FEE_RESERVE_USDC } from "../data/usdc-gas-payer";
 import { useUsdcGasDeposit } from "../hooks/useUsdcGasDeposit";
 import { PayingAccountField } from "./PayingAccountField";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
@@ -329,7 +329,6 @@ export function DirectSquidDepositDialog({
   })();
   const usdcGas = useUsdcGasDeposit({
     active: open && stage === null && !reviewed,
-    budget: parsedAmount,
     request: owner && sourceToken ? { owner, sourceChainId, sourceToken: getAddress(sourceToken.token) } : undefined,
     sourceClient,
     squid,
@@ -1004,7 +1003,7 @@ export function DirectSquidDepositDialog({
     quoteReady: !!quote,
     requiredNative,
     sourceSymbol: sourceToken?.symbol,
-    usdcGas: usdcGas.status,
+    usdcGas: usdcGas.check,
   });
   const canReview = reviewBlocker === null;
   const payerOptions = payers.map((candidate) => {
@@ -1420,7 +1419,7 @@ export function DirectSquidDepositDialog({
                   sourceDecimals: sourceToken.decimals,
                   sourceSymbol: sourceToken.symbol,
                 };
-                if (usdcGas.status === "ready") {
+                if (usdcGas.check?.payer === "ready") {
                   setReviewed({ ...review, quote, usdcGas: true });
                   return;
                 }

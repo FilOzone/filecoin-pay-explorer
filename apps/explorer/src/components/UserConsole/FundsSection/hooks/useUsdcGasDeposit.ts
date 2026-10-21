@@ -6,15 +6,14 @@ import { CIRCLE_PAYMASTER_CHAIN_ID, CIRCLE_PAYMASTER_TOKEN } from "../data/circl
 import {
   awaitPaymasterOperation,
   createPaymasterBundler,
-  createPaymasterOperations,
   type ExecutePaymasterDepositInput,
   executePaymasterSquidDeposit,
   toPaymasterAccount,
 } from "../data/paymaster-deposit-execution";
-import { getUsdcGasStatus, planPaymasterDeposit } from "../data/paymaster-deposit-plan";
 import type { SquidClient, SquidDepositRouteRequest } from "../data/squid-deposit-route";
 import type { PendingSquidDeposit } from "../data/squid-deposit-tracker";
 import { walletErrorMessage } from "../data/squid-execution";
+import { checkUsdcGasPayer } from "../data/usdc-gas-payer";
 
 // "Check again" asks the bundler once more rather than waiting out a full inclusion window.
 const RESUME_RECEIPT_TIMEOUT_MS = 15_000;
@@ -31,7 +30,8 @@ type ExecuteInput = Pick<
   | "refreshQuote"
   | "request"
   | "reviewedQuote"
-> & { walletClient: Parameters<typeof createPaymasterOperations>[1] };
+  | "walletClient"
+>;
 
 /**
  * USDC gas for an embedded wallet paying Base USDC, which always pays Base gas in USDC: checks the payer while the
@@ -39,7 +39,6 @@ type ExecuteInput = Pick<
  */
 export function useUsdcGasDeposit({
   active,
-  budget,
   request,
   sourceClient,
   squid,
@@ -47,7 +46,6 @@ export function useUsdcGasDeposit({
 }: {
   /** The form takes input: nothing is reviewed or executing. */
   active: boolean;
-  budget: bigint | null;
   request: Pick<SquidDepositRouteRequest, "owner" | "sourceChainId" | "sourceToken"> | undefined;
   sourceClient: Parameters<typeof createPaymasterBundler>[0] | undefined;
   squid: SquidClient;
@@ -62,31 +60,31 @@ export function useUsdcGasDeposit({
     isPrivyEmbeddedWallet(wallet) &&
     request.sourceChainId === CIRCLE_PAYMASTER_CHAIN_ID &&
     request.sourceToken.toLowerCase() === CIRCLE_PAYMASTER_TOKEN.toLowerCase();
-  const planKey = ["direct-squid-usdc-gas-plan", request?.owner] as const;
-  const planQuery = useQuery({
+  const payerKey = ["direct-squid-usdc-gas-payer", request?.owner] as const;
+  const payerQuery = useQuery({
     enabled: active && isEligible && !!sourceClient,
     queryFn: () => {
       if (!request || !sourceClient) throw new Error("USDC network fees are unavailable");
-      return planPaymasterDeposit(sourceClient, request.owner);
+      return checkUsdcGasPayer(sourceClient, request.owner);
     },
-    queryKey: planKey,
+    queryKey: payerKey,
     retry: false,
   });
-  const status = isEligible ? getUsdcGasStatus(budget, planQuery.data, planQuery.isError) : undefined;
-  const error =
-    status === "failed"
-      ? `Network fees in USDC could not be estimated. ${walletErrorMessage(planQuery.error, "")}`.trim()
-      : null;
+  const check = isEligible ? { payer: payerQuery.data, failed: payerQuery.isError } : undefined;
+  const error = check?.failed
+    ? `Network fees in USDC could not be estimated. ${walletErrorMessage(payerQuery.error, "")}`.trim()
+    : null;
 
   // The reviewed deposit no longer holds: drop the check so Review waits for a fresh one.
-  const reviewAgain = () => void queryClient.resetQueries({ queryKey: planKey });
+  const reviewAgain = () => void queryClient.resetQueries({ queryKey: payerKey });
 
-  const execute = async ({ walletClient, ...input }: ExecuteInput) => {
+  const execute = async (input: ExecuteInput) => {
     if (!bundler || !sourceClient) throw new Error("USDC network fees are unavailable");
     const { owner } = input.request;
     return executePaymasterSquidDeposit({
       ...input,
-      operations: createPaymasterOperations(await toPaymasterAccount(sourceClient, owner), walletClient, bundler),
+      account: await toPaymasterAccount(sourceClient, owner),
+      bundler,
       signAuthorization: (authorization) => signAuthorization(authorization, { address: owner }),
       sourceClient,
       squid,
@@ -107,12 +105,12 @@ export function useUsdcGasDeposit({
   };
 
   return {
+    check,
     error,
     execute,
     isEligible,
-    retry: () => void planQuery.refetch(),
+    retry: () => void payerQuery.refetch(),
     reviewAgain,
-    status,
     waitForOperation,
   };
 }

@@ -1,5 +1,5 @@
 import { NATIVE_TOKEN_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { type Hash, type Hex, stringToHex } from "viem";
+import { type Hash, type Hex, type SignedAuthorization, stringToHex } from "viem";
 import {
   entryPoint08Address,
   getUserOperationHash,
@@ -12,8 +12,6 @@ import {
   awaitPaymasterOperation,
   type ExecutePaymasterDepositInput,
   executePaymasterSquidDeposit,
-  type PaymasterOperationRequest,
-  type PaymasterOperations,
   PaymasterReviewError,
 } from "./paymaster-deposit-execution";
 import { awaitSquidDepositSettlement, SquidDepositError } from "./squid-deposit-execution";
@@ -98,11 +96,21 @@ const hashOf = (userOperation: UserOperation<"0.8">) =>
     userOperation,
   });
 
-function operations(overrides: Partial<PaymasterOperations> = {}) {
+type PreparedRequest = {
+  authorization?: SignedAuthorization;
+  calls: { data: Hex }[];
+  paymasterData: Hex;
+  paymasterPostOpGasLimit: bigint;
+  paymasterVerificationGasLimit: bigint;
+};
+type PermitTypedData = { domain: Record<string, unknown>; message: { value: bigint } };
+
+// The bundler and the wallet, with a handle on each call the deposit makes through them.
+function operations() {
   const events: string[] = [];
-  const ops: PaymasterOperations = {
+  const ops = {
     prepare: vi.fn(
-      async (operation: PaymasterOperationRequest): Promise<UserOperation<"0.8">> => ({
+      async (operation: PreparedRequest): Promise<UserOperation<"0.8">> => ({
         callData: "0x",
         callGasLimit: 600_000n,
         maxFeePerGas: 2_000_000n,
@@ -122,24 +130,33 @@ function operations(overrides: Partial<PaymasterOperations> = {}) {
       events.push("sign");
       return "0x5167" as Hex;
     }),
-    signPermit: vi.fn(async () => "0x9e41" as Hex),
-    send: vi.fn(async (userOperation) => {
+    signPermit: vi.fn(async (_permit: PermitTypedData) => "0x9e41" as Hex),
+    send: vi.fn(async (userOperation: UserOperation<"0.8">) => {
       events.push("send");
       return hashOf(userOperation);
     }),
-    waitForUserOperationReceipt: vi.fn(async ({ hash }) => ({
+  };
+  const bundler = {
+    prepareUserOperation: ops.prepare,
+    request: vi.fn(async () => ({ fast: { maxFeePerGas: "0x1e8480", maxPriorityFeePerGas: "0xf4240" } })),
+    sendUserOperation: ops.send,
+    waitForUserOperationReceipt: vi.fn(async ({ hash }: { hash: Hash }) => ({
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
       success: true,
       userOpHash: hash,
     })),
-    ...overrides,
-  };
-  return { events, ops };
+  } as unknown as ExecutePaymasterDepositInput["bundler"];
+  const walletClient = {
+    account: { address: PAYER, type: "json-rpc" },
+    signTypedData: (typedData: PermitTypedData & { primaryType: string }) =>
+      typedData.primaryType === "Permit" ? ops.signPermit(typedData) : ops.sign(),
+  } as unknown as ExecutePaymasterDepositInput["walletClient"];
+  return { bundler, events, ops, walletClient };
 }
 
 function run(overrides: Partial<ExecutePaymasterDepositInput> = {}, chain: Chain = {}) {
-  const { events, ops } = operations();
+  const { bundler, events, ops, walletClient } = operations();
   const settle = vi.mocked(awaitSquidDepositSettlement).mockResolvedValue({
     depositedAmount: 9_000_000_000_000_000_000n,
     destinationTransactionHash: BUNDLE_HASH,
@@ -159,9 +176,10 @@ function run(overrides: Partial<ExecutePaymasterDepositInput> = {}, chain: Chain
   const input: ExecutePaymasterDepositInput = {
     assertCurrentContext: () => undefined,
     destinationClient: {} as ExecutePaymasterDepositInput["destinationClient"],
+    account: {} as ExecutePaymasterDepositInput["account"],
+    bundler,
     getCurrentOwner: async () => PAYER,
     onSubmit,
-    operations: ops,
     quote,
     refreshQuote: vi.fn(async () => quote),
     request,
@@ -169,6 +187,7 @@ function run(overrides: Partial<ExecutePaymasterDepositInput> = {}, chain: Chain
     signAuthorization,
     sourceClient: sourceClient(chain),
     squid: { integratorId: "test" },
+    walletClient,
     ...overrides,
   };
   return { events, input, onSubmit, ops, settle, signAuthorization };
@@ -186,10 +205,18 @@ describe("executePaymasterSquidDeposit", () => {
       nonce: 3,
     });
     expect(ops.signPermit).toHaveBeenCalledWith(
-      { chainId: 8453, name: "USD Coin", verifyingContract: USDC, version: "2" },
-      { deadline: 2n ** 256n - 1n, nonce: 0n, owner: PAYER, spender: CIRCLE_PAYMASTER_ADDRESS, value: GAS_BUDGET },
+      expect.objectContaining({
+        domain: { chainId: 8453, name: "USD Coin", verifyingContract: USDC, version: "2" },
+        message: {
+          deadline: 2n ** 256n - 1n,
+          nonce: 0n,
+          owner: PAYER,
+          spender: CIRCLE_PAYMASTER_ADDRESS,
+          value: GAS_BUDGET,
+        },
+      }),
     );
-    expect(vi.mocked(ops.prepare).mock.calls[0]?.[0]).toMatchObject({
+    expect(ops.prepare.mock.calls[0]?.[0]).toMatchObject({
       authorization: expect.objectContaining({ address: SIMPLE_7702_ACCOUNT_ADDRESS }),
       paymasterPostOpGasLimit: 35_000n,
       paymasterVerificationGasLimit: 200_000n,
@@ -206,7 +233,7 @@ describe("executePaymasterSquidDeposit", () => {
     await executePaymasterSquidDeposit(input);
 
     expect(signAuthorization).not.toHaveBeenCalled();
-    expect(vi.mocked(ops.prepare).mock.calls[0]?.[0].authorization).toBeUndefined();
+    expect(ops.prepare.mock.calls[0]?.[0].authorization).toBeUndefined();
   });
 
   // A deposit that needs another review goes back to the form; one that needs time stays reviewed to retry.
@@ -267,8 +294,8 @@ describe("executePaymasterSquidDeposit", () => {
 
   it("fails before the operation is signed when the bundler's estimate does not fit the reserve", async () => {
     const { input, ops } = run();
-    const estimate = vi.mocked(ops.prepare).getMockImplementation();
-    vi.mocked(ops.prepare).mockImplementation(async (operation) => {
+    const estimate = ops.prepare.getMockImplementation();
+    ops.prepare.mockImplementation(async (operation) => {
       if (!estimate) throw new Error("prepare is not mocked");
       return { ...(await estimate(operation)), preVerificationGas: 100_000_000n };
     });
@@ -285,14 +312,14 @@ describe("executePaymasterSquidDeposit", () => {
     const { input, ops } = run({}, { paymasterAllowance: GAS_BUDGET + 1n });
 
     await expect(executePaymasterSquidDeposit(input)).resolves.toMatchObject({ transactionHash: BUNDLE_HASH });
-    expect(vi.mocked(ops.signPermit).mock.calls[0]?.[1].value).toBe(GAS_BUDGET);
+    expect(ops.signPermit.mock.calls[0]?.[0].message.value).toBe(GAS_BUDGET);
     expect(ops.send).toHaveBeenCalledOnce();
   });
 
   it("sends nothing when the account switches during the signing prompt", async () => {
     let owner: Hex = PAYER;
     const { input, ops, onSubmit } = run({ getCurrentOwner: async () => owner });
-    vi.mocked(ops.sign).mockImplementation(async () => {
+    ops.sign.mockImplementation(async () => {
       owner = "0x2222222222222222222222222222222222222222";
       return "0x5167";
     });
@@ -321,7 +348,7 @@ describe("executePaymasterSquidDeposit", () => {
         quote: expiringIn(60, "quote-1"),
         refreshQuote,
       });
-      vi.mocked(ops.signPermit).mockImplementation(async () => {
+      ops.signPermit.mockImplementation(async () => {
         waitSeconds(40);
         return "0x9e41";
       });
@@ -342,7 +369,7 @@ describe("executePaymasterSquidDeposit", () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       const refreshQuote = vi.fn(async () => expiringIn(120, "quote-2"));
       const { input, ops } = run({ quote: expiringIn(60, "quote-1"), refreshQuote });
-      vi.mocked(ops.sign).mockImplementationOnce(async () => {
+      ops.sign.mockImplementationOnce(async () => {
         waitSeconds(55);
         return "0x5167";
       });
@@ -353,7 +380,7 @@ describe("executePaymasterSquidDeposit", () => {
       expect(ops.signPermit).toHaveBeenCalledOnce();
       expect(ops.sign).toHaveBeenCalledTimes(2);
       expect(ops.send).toHaveBeenCalledOnce();
-      expect(vi.mocked(ops.prepare).mock.calls[1]?.[0].calls).toContainEqual(
+      expect(ops.prepare.mock.calls[1]?.[0].calls).toContainEqual(
         expect.objectContaining({ data: stringToHex("quote-2") }),
       );
     });
@@ -364,7 +391,7 @@ describe("executePaymasterSquidDeposit", () => {
         quote: expiringIn(60, "quote-1"),
         refreshQuote: vi.fn(async () => expiringIn(60, "quote-2")),
       });
-      vi.mocked(ops.sign).mockImplementation(async () => {
+      ops.sign.mockImplementation(async () => {
         waitSeconds(55);
         return "0x5167";
       });
@@ -385,7 +412,7 @@ describe("executePaymasterSquidDeposit", () => {
         quote: expiringIn(60, "quote-1"),
         refreshQuote: vi.fn(async () => ({ ...fresh, transaction: { ...fresh.transaction, value: BRIDGE_FEE + 1n } })),
       });
-      vi.mocked(ops.signPermit).mockImplementation(async () => {
+      ops.signPermit.mockImplementation(async () => {
         waitSeconds(40);
         return "0x9e41";
       });
@@ -398,7 +425,7 @@ describe("executePaymasterSquidDeposit", () => {
 
   it("reports a bundler validation rejection as nothing charged", async () => {
     const { input, ops } = run();
-    vi.mocked(ops.send).mockRejectedValue(new Error("AA33 reverted: paymaster validation failed"));
+    ops.send.mockRejectedValue(new Error("AA33 reverted: paymaster validation failed"));
 
     const failure = await executePaymasterSquidDeposit(input).catch((error: unknown) => error);
 
@@ -412,14 +439,14 @@ describe("executePaymasterSquidDeposit", () => {
 
   it("keeps a lost submission answer unresolved rather than proof of rejection", async () => {
     const { input, ops } = run();
-    vi.mocked(ops.send).mockRejectedValue(new TypeError("fetch failed"));
+    ops.send.mockRejectedValue(new TypeError("fetch failed"));
 
     await expect(executePaymasterSquidDeposit(input)).rejects.toMatchObject({ reason: "timeout" });
   });
 
   it("refuses a bundler that reports a different operation than the one signed", async () => {
     const { input, ops, settle } = run();
-    vi.mocked(ops.send).mockResolvedValue(`0x${"ee".repeat(32)}`);
+    ops.send.mockResolvedValue(`0x${"ee".repeat(32)}`);
 
     await expect(executePaymasterSquidDeposit(input)).rejects.toMatchObject({ reason: "timeout" });
     expect(settle).not.toHaveBeenCalled();

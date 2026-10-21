@@ -15,7 +15,6 @@ import {
   rpcSchema,
   type SignedAuthorization,
   type Transport,
-  type TypedDataDomain,
   type WalletClient,
 } from "viem";
 import {
@@ -42,8 +41,7 @@ import {
   readPaymasterFees,
   SIMPLE_7702_ACCOUNT_ADDRESS,
 } from "./circle-paymaster";
-import { type BatchCall, buildPaymasterDepositCalls, quoteSwapInputCap } from "./paymaster-batch";
-import { FEE_RESERVE_USDC } from "./paymaster-deposit-plan";
+import { buildPaymasterDepositCalls, quoteSwapInputCap } from "./paymaster-batch";
 import {
   awaitSquidDepositSettlement,
   isRouteExpiring,
@@ -63,6 +61,7 @@ import {
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
 } from "./squid-deposit-route";
+import { FEE_RESERVE_USDC } from "./usdc-gas-payer";
 
 /** The reviewed deposit no longer holds and nothing was sent: it must be reviewed again. */
 export class PaymasterReviewError extends Error {
@@ -84,7 +83,6 @@ const MAX_OPERATION_SIGNATURES = 2;
 
 const permitAbi = parseAbi(["function nonces(address owner) view returns (uint256)"]);
 
-type PermitMessage = { owner: Address; spender: Address; value: bigint; nonce: bigint; deadline: bigint };
 type PimlicoGasPriceSchema = {
   Method: "pimlico_getUserOperationGasPrice";
   Parameters: [];
@@ -95,25 +93,6 @@ type PimlicoGasPriceSchema = {
 type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "sender" | "success" | "userOpHash"> & {
   receipt: { transactionHash: Hash };
 };
-
-export interface PaymasterOperationRequest {
-  calls: BatchCall[];
-  authorization?: SignedAuthorization;
-  paymasterData: Hex;
-  paymasterVerificationGasLimit: bigint;
-  paymasterPostOpGasLimit: bigint;
-}
-
-/** What a USDC-gas deposit needs from the payer's 7702 account and the bundler. */
-export interface PaymasterOperations {
-  /** The operation with nonce, call data and gas limits filled in by the bundler's estimate, at its current price. */
-  prepare(request: PaymasterOperationRequest): Promise<UserOperation<"0.8">>;
-  /** Signs Circle's USDC permit, which lets the paymaster take up to `value` for gas. */
-  signPermit(domain: TypedDataDomain, message: PermitMessage): Promise<Hex>;
-  sign(userOperation: UserOperation<"0.8">): Promise<Hex>;
-  send(userOperation: UserOperation<"0.8">): Promise<Hash>;
-  waitForUserOperationReceipt(parameters: { hash: Hash; timeout: number }): Promise<PaymasterOperationReceipt>;
-}
 
 /** Pimlico's Base bundler behind `/api/bundler`, which keeps the key on the server. */
 export function createPaymasterBundler(client: PublicClient<Transport, Chain>) {
@@ -148,43 +127,6 @@ export function toPaymasterAccount(client: PublicClient<Transport, Chain>, payer
   });
 }
 
-/** Binds the payer's 7702 account to the bundler. */
-export function createPaymasterOperations(
-  account: SmartAccount,
-  wallet: WalletClient<Transport, Chain | undefined, Account>,
-  bundler: PaymasterBundler,
-): PaymasterOperations {
-  return {
-    prepare: async ({ authorization, calls, ...paymaster }) => {
-      const { fast } = await bundler.request({ method: "pimlico_getUserOperationGasPrice", params: [] });
-      const { account: _account, ...userOperation } = await bundler.prepareUserOperation({
-        account,
-        authorization,
-        calls,
-        maxFeePerGas: BigInt(fast.maxFeePerGas),
-        maxPriorityFeePerGas: BigInt(fast.maxPriorityFeePerGas),
-        paymaster: CIRCLE_PAYMASTER_ADDRESS,
-        ...paymaster,
-      });
-      return userOperation;
-    },
-    signPermit: (domain, message) =>
-      wallet.signTypedData({ account: wallet.account, domain, message, primaryType: "Permit", types: PERMIT_TYPES }),
-    // Simple7702Account checks a plain ECDSA signature over the EIP-712 operation hash.
-    sign: (userOperation) =>
-      wallet.signTypedData({
-        account: wallet.account,
-        ...getUserOperationTypedData({
-          chainId: CIRCLE_PAYMASTER_CHAIN_ID,
-          entryPointAddress: entryPoint08Address,
-          userOperation,
-        }),
-      }),
-    send: (userOperation) => bundler.sendUserOperation({ ...userOperation, entryPointAddress: entryPoint08Address }),
-    waitForUserOperationReceipt: (parameters) => bundler.waitForUserOperationReceipt(parameters),
-  };
-}
-
 const VALIDATION_REASON = /\bAA[1-5]\d\b[^\n]*/;
 
 // A bundler answers a failed validation with an ERC-4337 AA code: nothing was included and no gas was charged.
@@ -202,7 +144,9 @@ function getValidationRejection(error: unknown): string | undefined {
  * succeeded, so its sender, hash and `success` are checked. Returns the bundle transaction hash.
  */
 export async function awaitPaymasterOperation(
-  bundler: Pick<PaymasterOperations, "waitForUserOperationReceipt">,
+  bundler: {
+    waitForUserOperationReceipt(parameters: { hash: Hash; timeout: number }): Promise<PaymasterOperationReceipt>;
+  },
   hash: Hash,
   payer: Address,
   timeoutMs = OPERATION_RECEIPT_TIMEOUT_MS,
@@ -239,7 +183,14 @@ export interface ExecutePaymasterDepositInput extends PollingOptions {
   /** A fresh executable route for the same request, for when signing outlasts the current one. */
   refreshQuote(): Promise<ExecutableSquidDepositQuote>;
   request: SquidDepositRouteRequest;
-  operations: PaymasterOperations;
+  /** The payer's Simple7702 account, which the operation is built for. */
+  account: SmartAccount;
+  bundler: Pick<
+    PaymasterBundler,
+    "prepareUserOperation" | "request" | "sendUserOperation" | "waitForUserOperationReceipt"
+  >;
+  /** Signs the permit and the operation as typed data. */
+  walletClient: Pick<WalletClient<Transport, Chain | undefined, Account>, "account" | "signTypedData">;
   /** Privy's 7702 signer for the payer's embedded wallet. */
   signAuthorization(request: {
     contractAddress: Address;
@@ -266,13 +217,14 @@ export interface ExecutePaymasterDepositInput extends PollingOptions {
  * the operation is signed, then the deposit is followed to Filecoin Pay like a wallet-sent route.
  */
 export async function executePaymasterSquidDeposit({
+  account,
   assertCurrentContext,
+  bundler,
   destinationClient,
   getCurrentOwner,
   onBroadcast,
   onStage,
   onSubmit,
-  operations,
   quote,
   refreshQuote,
   request,
@@ -280,6 +232,7 @@ export async function executePaymasterSquidDeposit({
   signAuthorization,
   sourceClient,
   squid,
+  walletClient,
   ...polling
 }: ExecutePaymasterDepositInput): Promise<SquidDepositResult> {
   const payer = request.owner;
@@ -335,22 +288,25 @@ export async function executePaymasterSquidDeposit({
           nonce: authorizationNonce,
         })
       : undefined;
-  // Circle's paymaster cannot read block time during validation, so its permits never expire.
-  const permitSignature = await operations.signPermit(
-    {
+  // Lets the paymaster take up to the gas budget. It cannot read block time during validation, so the permit never expires.
+  const permitSignature = await walletClient.signTypedData({
+    account: walletClient.account,
+    domain: {
       chainId: CIRCLE_PAYMASTER_CHAIN_ID,
       name: CIRCLE_PAYMASTER_TOKEN_NAME,
       verifyingContract: token,
       version: CIRCLE_PAYMASTER_TOKEN_VERSION,
     },
-    {
+    message: {
       deadline: maxUint256,
       nonce: permitNonce,
       owner: payer,
       spender: CIRCLE_PAYMASTER_ADDRESS,
       value: gasBudget,
     },
-  );
+    primaryType: "Permit",
+    types: PERMIT_TYPES,
+  });
   let route = quote;
   let userOperation: UserOperation<"0.8"> | undefined;
   for (let signatures = 0; !userOperation; signatures++) {
@@ -367,7 +323,9 @@ export async function executePaymasterSquidDeposit({
       }
       assertCurrentContext();
     }
-    const prepared = await operations.prepare({
+    const { fast } = await bundler.request({ method: "pimlico_getUserOperationGasPrice", params: [] });
+    const { account: _account, ...prepared } = await bundler.prepareUserOperation({
+      account,
       authorization,
       calls: buildPaymasterDepositCalls({
         maxSwapInput,
@@ -376,6 +334,9 @@ export async function executePaymasterSquidDeposit({
         sourceToken: token,
         transaction: route.transaction,
       }),
+      maxFeePerGas: BigInt(fast.maxFeePerGas),
+      maxPriorityFeePerGas: BigInt(fast.maxPriorityFeePerGas),
+      paymaster: CIRCLE_PAYMASTER_ADDRESS,
       paymasterData: encodePacked(["uint8", "address", "uint256", "bytes"], [0, token, gasBudget, permitSignature]),
       ...getPaymasterGasLimits(fees),
     });
@@ -389,7 +350,15 @@ export async function executePaymasterSquidDeposit({
     );
     if (gasMaximum > gasBudget) throw new Error(FEES_ABOVE_RESERVE);
     await assertSigner();
-    const signature = await operations.sign(prepared);
+    // Simple7702Account checks a plain ECDSA signature over the EIP-712 operation hash.
+    const signature = await walletClient.signTypedData({
+      account: walletClient.account,
+      ...getUserOperationTypedData({
+        chainId: CIRCLE_PAYMASTER_CHAIN_ID,
+        entryPointAddress: entryPoint08Address,
+        userOperation: prepared,
+      }),
+    });
     // The signing prompt can see the account switch, or outlast the route, which would revert and still charge gas.
     await assertSigner();
     if (!isRouteExpiring(route, OPERATION_SEND_MARGIN_SECONDS)) userOperation = { ...prepared, signature };
@@ -403,7 +372,7 @@ export async function executePaymasterSquidDeposit({
   onSubmit?.({ fundsBefore, quote: route, userOperationHash });
   let sentHash: Hash;
   try {
-    sentHash = await operations.send(userOperation);
+    sentHash = await bundler.sendUserOperation({ ...userOperation, entryPointAddress: entryPoint08Address });
   } catch (error) {
     const rejection = getValidationRejection(error);
     if (rejection) {
@@ -421,7 +390,7 @@ export async function executePaymasterSquidDeposit({
     throw new SquidDepositError("The bundler reported a different operation than the one signed.", "timeout");
   }
   onStage?.("swap-broadcast");
-  const transactionHash = await awaitPaymasterOperation(operations, userOperationHash, payer);
+  const transactionHash = await awaitPaymasterOperation(bundler, userOperationHash, payer);
   onBroadcast?.({ fundsBefore, quote: route, transactionHash });
 
   return awaitSquidDepositSettlement({

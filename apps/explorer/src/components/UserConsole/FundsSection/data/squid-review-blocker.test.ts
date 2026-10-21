@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getSquidReviewBlocker } from "./squid-review-blocker";
+import { FEE_RESERVE_USDC } from "./usdc-gas-payer";
 
 const ready = {
   amount: "100",
@@ -19,26 +20,50 @@ const ready = {
 };
 
 describe("getSquidReviewBlocker", () => {
+  // An embedded wallet with no ETH, paying 10 USDC.
+  const usdcGasReady = {
+    ...ready,
+    amount: "10",
+    balances: { native: 0n, token: 10_000_000n },
+    parsedAmount: 10_000_000n,
+    requiredNative: null,
+    usdcGas: { payer: "ready", failed: false },
+  } as const;
+  const insufficient = { kind: "funds", message: "Enter more than 0.5 USDC: that much is held for network fees." };
+
   it.each([
-    ["planning", { kind: "waiting", message: "Checking USDC network fees…" }],
-    ["failed", { kind: "failed", message: "USDC network fees could not be estimated." }],
-    ["insufficient", { kind: "funds", message: "Enter more than 0.5 USDC: that much is held for network fees." }],
     [
-      "conflict",
+      "a payer check in flight",
+      { payer: undefined, failed: false },
+      { kind: "waiting", message: "Checking USDC network fees…" },
+    ],
+    [
+      "a failed payer check",
+      { payer: undefined, failed: true },
+      { kind: "failed", message: "USDC network fees could not be estimated." },
+    ],
+    [
+      "a payer delegated elsewhere",
+      { payer: "conflict", failed: false },
       {
         kind: "funds",
         message: "0x1111...1111 is set up with another smart account, so its network fees can't be paid in USDC.",
       },
     ],
-    ["ready", null],
-  ] as const)("lets USDC gas in state %s stand in for the ETH fee checks", (usdcGas, expected) => {
-    expect(
-      getSquidReviewBlocker({ ...ready, balances: { native: 0n, token: 100n }, requiredNative: null, usdcGas }),
-    ).toEqual(expected);
+    ["a ready payer", { payer: "ready", failed: false }, null],
+  ] as const)("lets USDC gas with %s stand in for the ETH fee checks", (_label, usdcGas, expected) => {
+    expect(getSquidReviewBlocker({ ...usdcGasReady, usdcGas })).toEqual(expected);
+  });
+
+  it.each([
+    ["at", FEE_RESERVE_USDC, insufficient],
+    ["just above", FEE_RESERVE_USDC + 1n, null],
+  ] as const)("holds an amount %s the USDC fee reserve to it", (_label, parsedAmount, expected) => {
+    expect(getSquidReviewBlocker({ ...usdcGasReady, parsedAmount })).toEqual(expected);
   });
 
   it("still waits for the quote when USDC gas is ready", () => {
-    expect(getSquidReviewBlocker({ ...ready, quoteReady: false, quoteLoading: true, usdcGas: "ready" })).toEqual({
+    expect(getSquidReviewBlocker({ ...usdcGasReady, quoteReady: false, quoteLoading: true })).toEqual({
       kind: "waiting",
       message: "Getting a quote…",
     });
