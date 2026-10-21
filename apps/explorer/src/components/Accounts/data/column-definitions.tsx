@@ -19,7 +19,6 @@ export const columns = [
           monospace={true}
           label='Account address'
           truncate={true}
-          truncateLength={8}
         />
       );
     },

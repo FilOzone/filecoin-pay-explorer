@@ -1,12 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { getChain } from "@/constants/chains";
 import { getServiceProfile, type ServiceProfile } from "@/constants/service-metadata";
 import type { Network } from "@/types";
 import { useServiceMetadata } from "./useServiceMetadata";
 
 /**
- * Resolves operator addresses to the profile the console shows for them, over
- * one batched contract read.
+ * Resolves operator addresses to the profile the console shows for them, from
+ * one cached metadata read per address.
  *
  * Owns the three things every caller would otherwise repeat: reading from the
  * chain backing the displayed network rather than the wallet's, keying the
@@ -20,7 +19,7 @@ export function useServiceProfiles(
   const addressKey = operatorAddresses.join(",").toLowerCase();
   const addresses = useMemo(() => addressKey.split(",").filter(Boolean), [addressKey]);
 
-  const { metadata } = useServiceMetadata(addresses, getChain(network).id);
+  const { metadata } = useServiceMetadata(addresses, network);
 
   return useCallback(
     (operatorAddress: string) => getServiceProfile(operatorAddress, metadata.get(operatorAddress.toLowerCase())),

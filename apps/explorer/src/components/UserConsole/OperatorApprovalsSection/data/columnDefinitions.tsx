@@ -24,7 +24,6 @@ export const createColumns = (onIncrease: (approval: OperatorApproval) => void) 
           monospace={true}
           label='Service address'
           truncate={true}
-          truncateLength={10}
         />
       );
     },
