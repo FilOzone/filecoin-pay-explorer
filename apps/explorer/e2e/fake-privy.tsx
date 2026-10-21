@@ -2,7 +2,7 @@
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Hex, numberToHex, verifyMessage } from "viem";
+import { type Hex, numberToHex, type SignedAuthorization, verifyMessage } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
@@ -18,6 +18,15 @@ function sentTransactions(): SentTransaction[] {
   const w = window as typeof window & { __fakePrivyTransactions?: SentTransaction[] };
   w.__fakePrivyTransactions ??= [];
   return w.__fakePrivyTransactions;
+}
+
+type AuthorizationRequest = { contractAddress: Hex; chainId?: number; nonce?: number };
+
+// Every 7702 authorization the embedded wallet signed, readable from Playwright as `window.__fakePrivyAuthorizations`.
+function signedAuthorizations(): SignedAuthorization[] {
+  const w = window as typeof window & { __fakePrivyAuthorizations?: SignedAuthorization[] };
+  w.__fakePrivyAuthorizations ??= [];
+  return w.__fakePrivyAuthorizations;
 }
 
 type PendingSend = { tx: Record<string, unknown>; resolve: (hash: Hex) => void; reject: (error: unknown) => void };
@@ -111,8 +120,10 @@ function createProvider(
   };
 }
 
+// Its address is readable from Playwright as `window.__fakePrivyEmbeddedAccount` once the user has logged in.
 function createEmbeddedWallet(): Wallet {
   const account = privateKeyToAccount(generatePrivateKey());
+  (window as typeof window & { __fakePrivyEmbeddedAccount?: Hex }).__fakePrivyEmbeddedAccount = account.address;
   const wallet = createProvider(() => [account]);
   return {
     address: account.address,
@@ -124,6 +135,13 @@ function createEmbeddedWallet(): Wallet {
     meta: { id: "io.privy.wallet", name: "Privy Wallet", icon: undefined },
     getEthereumProvider: async () => wallet.provider,
     switchChain: wallet.switchChain,
+    // Real Privy fills a missing chain or nonce from the network; the fake asks the caller for both.
+    signAuthorization: async ({ contractAddress, chainId, nonce }) => {
+      if (chainId === undefined || nonce === undefined) throw new Error("fake Privy needs chainId and nonce");
+      const authorization = await account.signAuthorization({ contractAddress, chainId, nonce });
+      signedAuthorizations().push(authorization);
+      return authorization;
+    },
   };
 }
 
@@ -196,6 +214,8 @@ type Wallet = {
   getEthereumProvider: () => Promise<ReturnType<typeof createProvider>["provider"]>;
   switchChain: (id: number) => Promise<void>;
   disconnect?: () => void;
+  // Only the embedded wallet signs EIP-7702 authorizations, as with real Privy.
+  signAuthorization?: (request: AuthorizationRequest) => Promise<SignedAuthorization>;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
 type LoginComplete = (event: { user: User; isNewUser: boolean; loginAccount: { type: string } }) => void;
@@ -570,4 +590,17 @@ export function useLoginWithSiwe() {
 export function useFiatOnramp() {
   const { fund } = useFakePrivy();
   return { fund: (options: { destination: { address: string } }) => fund(options.destination.address) };
+}
+// Signs without a prompt, as Privy does for its embedded wallet.
+export function useSign7702Authorization() {
+  const { wallets } = useFakePrivy();
+  return {
+    signAuthorization: async (request: AuthorizationRequest, options: { address: string }) => {
+      const wallet = wallets.find(
+        (candidate) => candidate.signAuthorization && candidate.address.toLowerCase() === options.address.toLowerCase(),
+      );
+      if (!wallet?.signAuthorization) throw new Error("No embedded wallet can sign this 7702 authorization.");
+      return wallet.signAuthorization(request);
+    },
+  };
 }
