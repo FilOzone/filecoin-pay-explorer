@@ -54,7 +54,7 @@ export function getSquidReviewBlocker({
   if (balances.token < parsedAmount) {
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${sourceSymbol}.` };
   }
-  switch (usdcGas?.status) {
+  switch (usdcGas) {
     case "failed":
       return { kind: "failed", message: "USDC network fees could not be estimated." };
     case "planning":

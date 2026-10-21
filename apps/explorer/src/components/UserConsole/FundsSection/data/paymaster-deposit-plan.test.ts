@@ -17,13 +17,11 @@ describe("planPaymasterDeposit", () => {
     ["an undelegated account", undefined],
     ["an account already delegated to ours", OUR_DELEGATION],
   ])("accepts %s", async (_label, code) => {
-    await expect(planPaymasterDeposit(client({ code }), PAYER)).resolves.toEqual({ kind: "ready" });
+    await expect(planPaymasterDeposit(client({ code }), PAYER)).resolves.toBe("ready");
   });
 
   it("refuses an account delegated to another contract", async () => {
-    await expect(planPaymasterDeposit(client({ code: OTHER_DELEGATION }), PAYER)).resolves.toEqual({
-      kind: "conflicting-delegation",
-    });
+    await expect(planPaymasterDeposit(client({ code: OTHER_DELEGATION }), PAYER)).resolves.toBe("conflict");
   });
 
   it("fails while Circle's surcharge is above its cap", async () => {
@@ -34,15 +32,13 @@ describe("planPaymasterDeposit", () => {
 });
 
 describe("getUsdcGasStatus", () => {
-  const ready = { kind: "ready" } as const;
-
   it.each([
-    ["an amount at the reserve", FEE_RESERVE_USDC, ready, false, { status: "insufficient" }],
-    ["an amount above the reserve", FEE_RESERVE_USDC + 1n, ready, false, { status: "ready" }],
-    ["a failed check", 10_000_000n, undefined, true, { status: "failed" }],
-    ["a check in flight", 10_000_000n, undefined, false, { status: "planning" }],
-    ["a foreign delegation", 10_000_000n, { kind: "conflicting-delegation" } as const, false, { status: "conflict" }],
+    ["an amount at the reserve", FEE_RESERVE_USDC, "ready", false, "insufficient"],
+    ["an amount above the reserve", FEE_RESERVE_USDC + 1n, "ready", false, "ready"],
+    ["a failed check", 10_000_000n, undefined, true, "failed"],
+    ["a check in flight", 10_000_000n, undefined, false, "planning"],
+    ["a foreign delegation", 10_000_000n, "conflict", false, "conflict"],
   ] as const)("reports %s", (_label, budget, plan, failed, expected) => {
-    expect(getUsdcGasStatus(budget, plan, failed)).toEqual(expected);
+    expect(getUsdcGasStatus(budget, plan, failed)).toBe(expected);
   });
 });

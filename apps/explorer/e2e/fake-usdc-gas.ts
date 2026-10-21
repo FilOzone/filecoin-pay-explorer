@@ -44,10 +44,10 @@ const OTHER_DELEGATE = "0x1111111111111111111111111111111111111111";
 const BUNDLER = "0x4337000c2828f5260d8921fd25829f606b9e8680";
 const ADDITIONAL_GAS_CHARGE = 35_000n;
 /** USDC base units for 1 ETH, for both the paymaster's oracle and the pool. */
-export const FAKE_ETH_PRICE = 2_500_000_000n;
+const FAKE_ETH_PRICE = 2_500_000_000n;
 const GAS_PRICE = 1_000_000n;
 /** The USDC the paymaster keeps for each included operation, as its UserOperationSponsored event reports. */
-export const FAKE_CHARGED_USDC = 21_500n;
+const FAKE_CHARGED_USDC = 21_500n;
 
 const hashOf = (userOperation: UserOperation<"0.8">) =>
   getUserOperationHash({
@@ -76,10 +76,10 @@ const permitAbi = parseAbi([
  * What the bundler does with the next operation sent: include it (`included`), include it with the batch reverted
  * (`reverted`), refuse it at validation (`rejected`), or accept it and never report a receipt (`unresolved`).
  */
-export type FakeOperationOutcome = "included" | "reverted" | "rejected" | "unresolved";
-export type FakeDelegation = "none" | "ours" | "conflict";
+type FakeOperationOutcome = "included" | "reverted" | "rejected" | "unresolved";
+type FakeDelegation = "none" | "ours" | "conflict";
 
-export interface SubmittedOperation {
+interface SubmittedOperation {
   hash: Hex;
   userOperation: UserOperation<"0.8">;
   outcome: Exclude<FakeOperationOutcome, "rejected">;

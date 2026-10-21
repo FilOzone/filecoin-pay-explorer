@@ -596,23 +596,6 @@ export async function requestSquidDepositRoute(
   return parseSquidDepositRoute(payload.route, { ...request, slippage }, options.quoteOnly, now);
 }
 
-/** A quote-only route, re-quoted with the FIL top-up its first quote can afford when the top-up is wanted. */
-export async function quoteSquidDeposit(
-  request: SquidDepositRouteRequest,
-  client: SquidClient,
-  { withFilGasTopUp }: { withFilGasTopUp: boolean },
-): Promise<SquidDepositQuote> {
-  const quote = await requestSquidDepositRoute(request, client, { quoteOnly: true });
-  if (!withFilGasTopUp) return quote;
-  const filGasTopUp = planFilGasTopUp(quote, client.now ?? Date.now);
-  if (!filGasTopUp) {
-    throw new Error(
-      `Squid could not safely add ${formatEther(FIL_GAS_TOP_UP_AMOUNT)} FIL for this amount. Increase the amount or turn off the FIL option.`,
-    );
-  }
-  return requestSquidDepositRoute({ ...request, filGasTopUp }, client, { quoteOnly: true });
-}
-
 type UnknownRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is UnknownRecord {

@@ -86,7 +86,6 @@ const permitAbi = parseAbi([
   "function nonces(address owner) view returns (uint256)",
 ]);
 
-type GasPrice = { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint };
 type PermitMessage = { owner: Address; spender: Address; value: bigint; nonce: bigint; deadline: bigint };
 type PimlicoGasPriceSchema = {
   Method: "pimlico_getUserOperationGasPrice";
@@ -115,7 +114,7 @@ export interface PaymasterOperations {
   signPermit(domain: TypedDataDomain, message: PermitMessage): Promise<Hex>;
   sign(userOperation: UserOperation<"0.8">): Promise<Hex>;
   send(userOperation: UserOperation<"0.8">): Promise<Hash>;
-  waitForReceipt(hash: Hash, timeoutMs: number): Promise<PaymasterOperationReceipt>;
+  waitForUserOperationReceipt(parameters: { hash: Hash; timeout: number }): Promise<PaymasterOperationReceipt>;
 }
 
 /** Pimlico's Base bundler behind `/api/bundler`, which keeps the key on the server. */
@@ -129,12 +128,6 @@ export function createPaymasterBundler(client: PublicClient<Transport, Chain>) {
 }
 
 type PaymasterBundler = ReturnType<typeof createPaymasterBundler>;
-
-/** The fee per gas the bundler currently requires to include an operation promptly. */
-export async function readUserOperationGasPrice(bundler: PaymasterBundler): Promise<GasPrice> {
-  const { fast } = await bundler.request({ method: "pimlico_getUserOperationGasPrice", params: [] });
-  return { maxFeePerGas: BigInt(fast.maxFeePerGas), maxPriorityFeePerGas: BigInt(fast.maxPriorityFeePerGas) };
-}
 
 /**
  * The payer's Simple7702 account, used to build operations. Its owner never signs: the wallet signs the operation
@@ -165,13 +158,15 @@ export function createPaymasterOperations(
 ): PaymasterOperations {
   return {
     prepare: async ({ authorization, calls, ...paymaster }) => {
+      const { fast } = await bundler.request({ method: "pimlico_getUserOperationGasPrice", params: [] });
       const { account: _account, ...userOperation } = await bundler.prepareUserOperation({
         account,
         authorization,
         calls,
+        maxFeePerGas: BigInt(fast.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(fast.maxPriorityFeePerGas),
         paymaster: CIRCLE_PAYMASTER_ADDRESS,
         ...paymaster,
-        ...(await readUserOperationGasPrice(bundler)),
       });
       return userOperation;
     },
@@ -188,17 +183,9 @@ export function createPaymasterOperations(
         }),
       }),
     send: (userOperation) => bundler.sendUserOperation({ ...userOperation, entryPointAddress: entryPoint08Address }),
-    waitForReceipt: (hash, timeout) => bundler.waitForUserOperationReceipt({ hash, timeout }),
+    waitForUserOperationReceipt: (parameters) => bundler.waitForUserOperationReceipt(parameters),
   };
 }
-
-const hashUserOperation = (userOperation: UserOperation<"0.8">) =>
-  getUserOperationHash({
-    chainId: CIRCLE_PAYMASTER_CHAIN_ID,
-    entryPointAddress: entryPoint08Address,
-    entryPointVersion: "0.8",
-    userOperation,
-  });
 
 const VALIDATION_REASON = /\bAA[1-5]\d\b[^\n]*/;
 
@@ -230,14 +217,14 @@ function getChargedUsdc(receipt: PaymasterOperationReceipt): bigint | undefined 
  * succeeded, so its sender, hash and `success` are checked. Returns the bundle transaction hash.
  */
 export async function awaitPaymasterOperation(
-  operations: Pick<PaymasterOperations, "waitForReceipt">,
+  bundler: Pick<PaymasterOperations, "waitForUserOperationReceipt">,
   hash: Hash,
   payer: Address,
   timeoutMs = OPERATION_RECEIPT_TIMEOUT_MS,
 ): Promise<Hash> {
   let receipt: PaymasterOperationReceipt;
   try {
-    receipt = await operations.waitForReceipt(hash, timeoutMs);
+    receipt = await bundler.waitForUserOperationReceipt({ hash, timeout: timeoutMs });
   } catch (error) {
     throw new SquidDepositError(
       error instanceof WaitForUserOperationReceiptTimeoutError
@@ -419,7 +406,12 @@ export async function executePaymasterSquidDeposit({
   const userOperation = { ...prepared, signature: await operations.sign(prepared) };
   // The signing prompt can outlast the route or see the account switch; a stale route would revert and still charge gas.
   await assertSigner();
-  const userOperationHash = hashUserOperation(userOperation);
+  const userOperationHash = getUserOperationHash({
+    chainId: CIRCLE_PAYMASTER_CHAIN_ID,
+    entryPointAddress: entryPoint08Address,
+    entryPointVersion: "0.8",
+    userOperation,
+  });
   onSubmit?.({ fundsBefore, quote, userOperationHash });
   let sentHash: Hash;
   try {

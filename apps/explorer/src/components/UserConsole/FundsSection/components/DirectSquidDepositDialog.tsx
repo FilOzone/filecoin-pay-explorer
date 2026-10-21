@@ -67,7 +67,7 @@ import {
   isNativeToken,
   listTransactionLabels,
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
-  quoteSquidDeposit,
+  planFilGasTopUp,
   requestSquidDepositRoute,
   type SquidClient,
   type SquidDepositExchangeRate,
@@ -104,7 +104,6 @@ import { useUsdcGasDeposit } from "../hooks/useUsdcGasDeposit";
 import { PayingAccountField } from "./PayingAccountField";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
 import { SquidDepositProgress } from "./SquidDepositProgress";
-import { UsdcGasReviewDetails } from "./UsdcGasReviewDetails";
 
 const DEFAULT_SOURCE_CHAIN = 8453;
 const FIL_GAS_TOP_UP_LABEL = `${formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL`;
@@ -390,7 +389,15 @@ export function DirectSquidDepositDialog({
         sourceChainId,
         sourceToken: sourceToken.token,
       };
-      return quoteSquidDeposit(request, squid, { withFilGasTopUp: isFilGasTopUpEnabled });
+      const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
+      if (!isFilGasTopUpEnabled) return quote;
+      const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
+      if (!filGasTopUp) {
+        throw new Error(
+          `Squid could not safely add ${FIL_GAS_TOP_UP_LABEL} for this amount. Increase the amount or turn off the FIL option.`,
+        );
+      }
+      return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
     },
     queryKey: [
       "direct-squid-deposit-quote",
@@ -878,6 +885,35 @@ export function DirectSquidDepositDialog({
           saved = savePendingSquidDeposit(window.localStorage, next);
           setPending(saved);
         };
+        const marker = (fundsBefore: bigint, routeQuote: SquidDepositQuote, startedAt: number) => ({
+          fundsBefore,
+          minimumDestinationAmount: routeQuote.minimumDestinationAmount,
+          owner: snapshot.owner,
+          quoteId: routeQuote.quoteId,
+          recipient: snapshot.recipient,
+          sourceAmount: request.sourceAmount,
+          sourceChainId: snapshot.sourceChainId,
+          sourceDecimals: reviewed.sourceDecimals,
+          sourceSymbol: reviewed.sourceSymbol,
+          sourceToken: snapshot.sourceToken,
+          startedAt,
+        });
+        const onBroadcast = ({
+          fundsBefore,
+          quote: routeQuote,
+          transactionHash: hash,
+        }: {
+          fundsBefore: bigint;
+          quote: SquidDepositQuote;
+          transactionHash: Hash;
+        }) => {
+          save({
+            ...marker(fundsBefore, routeQuote, saved?.startedAt ?? Date.now()),
+            executionStage: "swap-broadcast",
+            transactionHash: hash,
+          });
+          setTransactionHash(hash);
+        };
         // The payer signs by explicit address, so it must stay connected to the site, not selected in the wallet.
         const getCurrentOwner = async () => {
           const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
@@ -889,14 +925,17 @@ export function DirectSquidDepositDialog({
             assertCurrentContext: () => assertContext(snapshot),
             destinationClient: destinationClient as SquidDepositDestinationClient,
             getCurrentOwner,
-            onBroadcast: setTransactionHash,
-            onSave: save,
+            onBroadcast,
             onStage: setStageWithHash,
+            onSubmit: ({ fundsBefore, quote: routeQuote, userOperationHash }) =>
+              save({
+                ...marker(fundsBefore, routeQuote, Date.now()),
+                executionStage: "swap-requested",
+                userOperationHash,
+              }),
             quote: executable,
             request,
             reviewedQuote: reviewed.quote,
-            sourceDecimals: reviewed.sourceDecimals,
-            sourceSymbol: reviewed.sourceSymbol,
             walletClient,
           });
           await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
@@ -911,39 +950,9 @@ export function DirectSquidDepositDialog({
           getCurrentOwner,
           maxNativeFee: reviewed.maxNativeFee,
           onSwapAttempt: (fundsBefore, routeQuote) => {
-            save({
-              executionStage: "swap-requested",
-              fundsBefore,
-              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
-              owner: snapshot.owner,
-              quoteId: routeQuote.quoteId,
-              recipient: snapshot.recipient,
-              sourceAmount: snapshot.sourceAmount,
-              sourceChainId: snapshot.sourceChainId,
-              sourceDecimals: reviewed.sourceDecimals,
-              sourceSymbol: reviewed.sourceSymbol,
-              sourceToken: snapshot.sourceToken,
-              startedAt: Date.now(),
-            });
+            save({ ...marker(fundsBefore, routeQuote, Date.now()), executionStage: "swap-requested" });
           },
-          onBroadcast: ({ fundsBefore, quote: routeQuote, transactionHash: hash }) => {
-            save({
-              executionStage: "swap-broadcast",
-              fundsBefore,
-              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
-              owner: snapshot.owner,
-              quoteId: routeQuote.quoteId,
-              recipient: snapshot.recipient,
-              sourceAmount: snapshot.sourceAmount,
-              sourceChainId: snapshot.sourceChainId,
-              sourceDecimals: reviewed.sourceDecimals,
-              sourceSymbol: reviewed.sourceSymbol,
-              sourceToken: snapshot.sourceToken,
-              startedAt: saved?.startedAt ?? Date.now(),
-              transactionHash: hash,
-            });
-            setTransactionHash(hash);
-          },
+          onBroadcast,
           onStage: setStageWithHash,
           quote: executable,
           refreshQuote: async () => {
@@ -1121,11 +1130,19 @@ export function DirectSquidDepositDialog({
                 )}
               </div>
               {reviewed.usdcGas ? (
-                <UsdcGasReviewDetails
-                  depositAmount={reviewed.quote.sourceAmount}
-                  sourceDecimals={reviewed.sourceDecimals}
-                  sourceSymbol={reviewed.sourceSymbol}
-                />
+                <>
+                  <p>
+                    <span className='text-muted-foreground'>Deposit:</span>{" "}
+                    {formatUnits(reviewed.quote.sourceAmount, reviewed.sourceDecimals)} {reviewed.sourceSymbol}
+                  </p>
+                  <p>
+                    <span className='text-muted-foreground'>Held for network fees:</span>{" "}
+                    {formatUnits(FEE_RESERVE_USDC, reviewed.sourceDecimals)} {reviewed.sourceSymbol}
+                    <span className='mt-1 block text-xs text-muted-foreground'>
+                      What is not used stays in your wallet balance.
+                    </span>
+                  </p>
+                </>
               ) : (
                 <>
                   <p>
@@ -1392,7 +1409,7 @@ export function DirectSquidDepositDialog({
                   sourceDecimals: sourceToken.decimals,
                   sourceSymbol: sourceToken.symbol,
                 };
-                if (usdcGas.status?.status === "ready") {
+                if (usdcGas.status === "ready") {
                   setReviewed({ ...review, quote, usdcGas: true });
                   return;
                 }

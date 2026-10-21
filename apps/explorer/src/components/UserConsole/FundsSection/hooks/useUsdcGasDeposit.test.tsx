@@ -46,10 +46,10 @@ afterEach(() => {
 
 describe("useUsdcGasDeposit", () => {
   it("pays Base USDC deposits from an embedded wallet in USDC gas, whatever ETH it holds", async () => {
-    vi.mocked(planPaymasterDeposit).mockResolvedValue({ kind: "ready" });
+    vi.mocked(planPaymasterDeposit).mockResolvedValue("ready");
     const { result } = renderUsdcGas();
 
-    await waitFor(() => expect(result.current.status).toEqual({ status: "ready" }));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.isEligible).toBe(true);
   });
 
@@ -67,14 +67,14 @@ describe("useUsdcGasDeposit", () => {
 
   it("drops the check so Review waits for a fresh one", async () => {
     vi.mocked(planPaymasterDeposit)
-      .mockResolvedValueOnce({ kind: "ready" })
+      .mockResolvedValueOnce("ready")
       .mockReturnValue(new Promise(() => {}));
     const { result, rerender } = renderUsdcGas();
-    await waitFor(() => expect(result.current.status).toEqual({ status: "ready" }));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
     rerender({ active: false });
     act(() => result.current.reviewAgain());
     rerender({ active: true });
 
-    await waitFor(() => expect(result.current.status).toEqual({ status: "planning" }));
+    await waitFor(() => expect(result.current.status).toBe("planning"));
   });
 });

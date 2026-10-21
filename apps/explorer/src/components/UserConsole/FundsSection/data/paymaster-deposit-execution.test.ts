@@ -128,7 +128,7 @@ function operations(overrides: Partial<PaymasterOperations> = {}) {
       events.push("send");
       return hashOf(userOperation);
     }),
-    waitForReceipt: vi.fn(async (hash) => ({
+    waitForUserOperationReceipt: vi.fn(async ({ hash }) => ({
       logs: [],
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
@@ -329,7 +329,7 @@ describe("executePaymasterSquidDeposit", () => {
 describe("awaitPaymasterOperation", () => {
   const hash = `0x${"aa".repeat(32)}` as Hash;
   const receiptOps = (overrides: { logs?: Log<bigint, number, false>[]; sender?: Hex; success?: boolean } = {}) => ({
-    waitForReceipt: vi.fn(async () => ({
+    waitForUserOperationReceipt: vi.fn(async () => ({
       logs: [],
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
@@ -384,7 +384,7 @@ describe("awaitPaymasterOperation", () => {
 
   it("reports an operation not yet included as unresolved", async () => {
     const ops = {
-      waitForReceipt: vi.fn(async () => {
+      waitForUserOperationReceipt: vi.fn(async () => {
         throw new WaitForUserOperationReceiptTimeoutError({ hash });
       }),
     };
