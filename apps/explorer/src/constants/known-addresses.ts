@@ -1,5 +1,5 @@
 // Use lowercase, not checksummed addresses
-export const knownAddresses: Record<string, string> = {
+const knownAddresses: Record<string, string> = {
   "0x3c1ae7a70a2b51458fcb7927fd77aae408a1b857": "Storacha",
   "0x3e4e5f067cfda2f16aade21912b8324c3d9624f8": "Tippy",
   "0xd19d84c77bbb901971e460830e310933a210dbaa": "PinMe",
@@ -18,4 +18,26 @@ export const knownAddresses: Record<string, string> = {
   "0x4f9e434c5842d16f4f9ed92213ba4eb3a6ffc383": "FIL One Delivery Validator",
   // Payer: FIL One's operating wallet (payer on FIL One Storage rails).
   "0x5b27dbc6efefbb5ba8106fb19433048d60d6878f": "FIL One",
+};
+
+const normalizeName = (name: string) => name.trim().toLowerCase();
+const knownNames = new Set(Object.values(knownAddresses).map(normalizeName));
+
+export type ResolvedAddressName =
+  | { name: string; source: "known" | "onchain" }
+  // The contract copies a curated label: show none of its text, not even its description.
+  | { name?: undefined; source: "rejected" };
+
+/**
+ * The one place that names an address. A curated name wins over the
+ * contract's own (untrusted) onchain name, and an onchain name that copies a
+ * curated label is rejected as impersonation. No `name` means callers choose
+ * their own fallback.
+ */
+export const resolveAddressName = (address: string, onchainName?: string): ResolvedAddressName | undefined => {
+  const known = knownAddresses[address.toLowerCase()];
+  if (known) return { name: known, source: "known" };
+  if (!onchainName) return undefined;
+  if (knownNames.has(normalizeName(onchainName))) return { source: "rejected" };
+  return { name: onchainName, source: "onchain" };
 };

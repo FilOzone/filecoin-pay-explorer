@@ -29,7 +29,6 @@ export const columns = [
           monospace={true}
           label='Account address'
           truncate={true}
-          truncateLength={8}
         />
       );
     },
@@ -45,7 +44,6 @@ export const columns = [
           monospace={true}
           label='Account address'
           truncate={true}
-          truncateLength={8}
         />
       );
     },
@@ -60,8 +58,8 @@ export const columns = [
           // to={`/operator/${operator.address}`}
           monospace={true}
           label='Service address'
+          serviceMetadata
           truncate={true}
-          truncateLength={8}
         />
       );
     },

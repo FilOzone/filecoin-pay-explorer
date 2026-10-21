@@ -1,18 +1,22 @@
 import { ArrowRight, Waypoints } from "lucide-react";
 import Link from "next/link";
 import { CopyableText } from "@/components/shared";
+import OnchainNameMarker from "@/components/shared/OnchainNameMarker";
 import type { ServiceProfile } from "@/constants/service-metadata";
 import type { AccountService } from "@/hooks/useAccountServices";
 
 export const ServiceCard = ({ service, profile }: { service: AccountService; profile: ServiceProfile }) => {
   const { address } = service.operator;
-  const { name, description } = profile;
+  const { name, nameSource, description } = profile;
 
   return (
     <div className='flex flex-col gap-6 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between'>
       <div className='flex min-w-0 flex-col gap-6'>
         <div className='flex flex-col gap-2'>
-          <h4 className='text-xl font-medium'>{name}</h4>
+          <h4 className='text-xl font-medium'>
+            {name}
+            {nameSource === "onchain" ? <OnchainNameMarker className='ml-1.5 align-middle' /> : null}
+          </h4>
           {description ? <p className='max-w-2xl text-sm text-muted-foreground'>{description}</p> : null}
         </div>
 
@@ -21,7 +25,6 @@ export const ServiceCard = ({ service, profile }: { service: AccountService; pro
             value={address}
             label='Operator address'
             truncate
-            truncateLength={6}
             lookupName={false}
             className='text-sm font-normal'
           />

@@ -2,7 +2,7 @@ import { Card } from "@filecoin-pay/ui/components/card";
 import { AlertCircle } from "lucide-react";
 import { type CSSProperties, Fragment, memo, useMemo } from "react";
 import { Bar, BarChart, type BarShapeProps, CartesianGrid, Rectangle, Tooltip, XAxis, YAxis } from "recharts";
-import { knownAddresses } from "@/constants/known-addresses";
+import { resolveAddressName } from "@/constants/known-addresses";
 import { formatAddress } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import type { SpendSeriesRow } from "../types";
@@ -17,7 +17,7 @@ import type { SpendSeriesRow } from "../types";
 /**
  * A service's name where the app knows one, its truncated address otherwise.
  */
-const operatorLabel = (address: string): string => knownAddresses[address] ?? formatAddress(address);
+const operatorLabel = (address: string): string => resolveAddressName(address)?.name ?? formatAddress(address);
 
 type SpendSeriesProps = {
   rows: SpendSeriesRow[];
