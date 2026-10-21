@@ -20,16 +20,19 @@ const ready = {
 };
 
 describe("getSquidReviewBlocker", () => {
-  // An embedded wallet with no ETH, paying 10 USDC.
+  // An embedded wallet with no ETH and 10 USDC, depositing 9.5 of it.
   const usdcGasReady = {
     ...ready,
-    amount: "10",
+    amount: "9.5",
     balances: { native: 0n, token: 10_000_000n },
-    parsedAmount: 10_000_000n,
+    parsedAmount: 9_500_000n,
     requiredNative: null,
     usdcGas: { payer: "ready", failed: false },
   } as const;
-  const insufficient = { kind: "funds", message: "Enter more than 0.5 USDC: that much is held for network fees." };
+  const shortOfReserve = {
+    kind: "funds",
+    message: "0x1111...1111 needs up to 0.5 USDC on top of the deposit for network fees.",
+  };
 
   it.each([
     [
@@ -56,9 +59,9 @@ describe("getSquidReviewBlocker", () => {
   });
 
   it.each([
-    ["at", FEE_RESERVE_USDC, insufficient],
-    ["just above", FEE_RESERVE_USDC + 1n, null],
-  ] as const)("holds an amount %s the USDC fee reserve to it", (_label, parsedAmount, expected) => {
+    ["covers the deposit and the reserve", 10_000_000n - FEE_RESERVE_USDC, null],
+    ["covers the deposit but not the reserve", 10_000_000n - FEE_RESERVE_USDC + 1n, shortOfReserve],
+  ] as const)("holds the USDC fee reserve on top when the balance %s", (_label, parsedAmount, expected) => {
     expect(getSquidReviewBlocker({ ...usdcGasReady, parsedAmount })).toEqual(expected);
   });
 

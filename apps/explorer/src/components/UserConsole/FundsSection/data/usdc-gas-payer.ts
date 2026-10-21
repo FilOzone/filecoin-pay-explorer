@@ -2,7 +2,7 @@ import type { Address, PublicClient } from "viem";
 import { getDelegationState, readPaymasterFees } from "./circle-paymaster";
 
 /**
- * USDC held out of a USDC-gas deposit for Base gas and the bridge-fee swap; what is not used stays in the wallet.
+ * USDC held on top of a USDC-gas deposit for Base gas and the bridge-fee swap; what is not used stays in the wallet.
  * ponytail: provisional until staging measures real Base to Filecoin routes, with and without the FIL top-up.
  */
 export const FEE_RESERVE_USDC = 500_000n;

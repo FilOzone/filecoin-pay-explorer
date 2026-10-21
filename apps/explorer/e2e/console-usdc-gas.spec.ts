@@ -113,8 +113,9 @@ test("a zero-ETH email account deposits card USDC with network fees paid in USDC
   const { fake, squid } = await reviewDeposit(page);
   await squid.getByRole("button", { name: "Review" }).click();
 
-  await expect(page.getByText("Deposit: 9.5 USDC")).toBeVisible();
-  await expect(page.getByText("Held for network fees: 0.5 USDC")).toBeVisible();
+  // The whole amount is deposited; the fee reserve is held on top of it.
+  await expect(page.getByText("Spend: 10 USDC")).toBeVisible();
+  await expect(page.getByText("Network fees: up to 0.5 USDC")).toBeVisible();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
@@ -134,11 +135,33 @@ test("a zero-ETH email account deposits card USDC with network fees paid in USDC
     `approve ${SQUID_ROUTER}`,
     `approve ${PAYMASTER}`,
   ]);
-  expect(batch[3]).toEqual({ to: USDC, approve: [SQUID_ROUTER, 9_500_000n] });
+  expect(batch[3]).toEqual({ to: USDC, approve: [SQUID_ROUTER, 10_000_000n] });
   expect(batch[4]).toEqual({ to: SQUID_ROUTER, value: BRIDGE_FEE });
   expect(batch[5]).toEqual({ to: USDC, approve: [SQUID_ROUTER, 0n] });
   expect(batch[6]).toEqual({ to: USDC, approve: [PAYMASTER, 0n] });
   expect(fake.delegation).toBe("ours");
+});
+
+test("an amount that leaves too little for the fee reserve offers the most that can be deposited", async ({ page }) => {
+  const { fake, squid } = await reviewDeposit(page);
+  await expect(squid.getByText(/up to 0\.5 USDC more is held from your balance/)).toBeVisible();
+  // The payer holds 100 USDC.
+  await squid.getByLabel(/^Amount/).fill("99.8");
+
+  await expect(
+    squid.getByText("needs up to 0.5 USDC on top of the deposit for network fees.", { exact: false }),
+  ).toBeVisible();
+  await expect(squid.getByRole("button", { name: "Review" })).toBeDisabled();
+  await squid.getByRole("button", { name: "Deposit 99.5 USDC instead" }).click();
+  await expect(squid.getByLabel(/^Amount/)).toHaveValue("99.5");
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 99.5 USDC for USDFC + FIL" }).click();
+
+  await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
+  expect(describeBatch(fake.operations[0].userOperation.callData)[3]).toEqual({
+    to: USDC,
+    approve: [SQUID_ROUTER, 99_500_000n],
+  });
 });
 
 test("a returning account reuses its delegation without a new authorization", async ({ page }) => {
@@ -155,7 +178,7 @@ test("an email account that holds ETH still pays network fees in USDC", async ({
   const { fake, squid } = await reviewDeposit(page, { payerEth: 10n ** 18n });
   await squid.getByRole("button", { name: "Review" }).click();
 
-  await expect(page.getByText("Held for network fees: 0.5 USDC")).toBeVisible();
+  await expect(page.getByText("Network fees: up to 0.5 USDC")).toBeVisible();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(await sentTransactions(page)).toEqual([]);

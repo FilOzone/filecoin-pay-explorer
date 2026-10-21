@@ -176,7 +176,7 @@ export async function awaitPaymasterOperation(
 }
 
 export interface ExecutePaymasterDepositInput extends PollingOptions {
-  /** The quote the user reviewed, for the amount set aside minus `FEE_RESERVE_USDC`. */
+  /** The quote the user reviewed; `FEE_RESERVE_USDC` is held on top of its amount. */
   reviewedQuote: SquidDepositQuote;
   /** The executable route, checked here against the reviewed quote. */
   quote: ExecutableSquidDepositQuote;

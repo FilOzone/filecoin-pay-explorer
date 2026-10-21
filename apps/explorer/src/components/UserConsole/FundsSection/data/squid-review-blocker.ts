@@ -55,18 +55,19 @@ export function getSquidReviewBlocker({
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${sourceSymbol}.` };
   }
   if (usdcGas) {
-    if (parsedAmount <= FEE_RESERVE_USDC) {
-      return {
-        kind: "funds",
-        message: `Enter more than ${formatUnits(FEE_RESERVE_USDC, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} ${sourceSymbol}: that much is held for network fees.`,
-      };
-    }
     if (usdcGas.failed) return { kind: "failed", message: "USDC network fees could not be estimated." };
     if (!usdcGas.payer) return { kind: "waiting", message: "Checking USDC network fees…" };
     if (usdcGas.payer === "conflict") {
       return {
         kind: "funds",
         message: `${payerLabel} is set up with another smart account, so its network fees can't be paid in ${sourceSymbol}.`,
+      };
+    }
+    if (balances.token < parsedAmount + FEE_RESERVE_USDC) {
+      const reserve = `${formatUnits(FEE_RESERVE_USDC, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} ${sourceSymbol}`;
+      return {
+        kind: "funds",
+        message: `${payerLabel} needs up to ${reserve} on top of the deposit for network fees.`,
       };
     }
   }
