@@ -87,8 +87,6 @@ async function reviewDeposit(
 
   const squid = await openSquidDialog(page);
   await squid.getByLabel(/^Amount/).fill("10");
-  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
-  await squid.getByRole("checkbox").click();
   return { fake, payer, squid };
 }
 
@@ -117,7 +115,7 @@ test("a zero-ETH email account deposits card USDC with network fees paid in USDC
 
   await expect(page.getByText("Deposit: 9.5 USDC")).toBeVisible();
   await expect(page.getByText("Held for network fees: 0.5 USDC")).toBeVisible();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(await sentTransactions(page)).toEqual([]);
@@ -146,7 +144,7 @@ test("a zero-ETH email account deposits card USDC with network fees paid in USDC
 test("a returning account reuses its delegation without a new authorization", async ({ page }) => {
   const { fake, squid } = await reviewDeposit(page, { delegation: "ours" });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(await signedAuthorizations(page)).toEqual([]);
@@ -158,7 +156,7 @@ test("an email account that holds ETH still pays network fees in USDC", async ({
   await squid.getByRole("button", { name: "Review" }).click();
 
   await expect(page.getByText("Held for network fees: 0.5 USDC")).toBeVisible();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(await sentTransactions(page)).toEqual([]);
   expect(fake.operations).toHaveLength(1);
@@ -179,7 +177,7 @@ test("a reverted operation says gas was charged in USDC, keeps the delegation, a
 }) => {
   const { fake, squid } = await reviewDeposit(page, { outcome: "reverted" });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(
     page.getByText(
@@ -193,7 +191,7 @@ test("a reverted operation says gas was charged in USDC, keeps the delegation, a
   await expect(squid.getByRole("region", { name: "Pending Squid deposit" })).toBeHidden();
   fake.outcome = "included";
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(2);
 });
@@ -205,7 +203,7 @@ test("network fees above the reserve stop before signing, and a retry goes throu
   await squid.getByRole("button", { name: "Review" }).click();
   // Far more L1 data than the reserve covers.
   fake.preVerificationGas = 50_000_000n;
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText("Network fees are above the reserve. Try again later.")).toBeVisible({
     timeout: 30_000,
@@ -216,7 +214,7 @@ test("network fees above the reserve stop before signing, and a retry goes throu
   expect(fake.operations).toEqual([]);
 
   fake.preVerificationGas = 60_000n;
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
 });
@@ -226,7 +224,7 @@ test("a route that drops below the reviewed minimum returns USDC gas to review, 
     executableRoute: (n) => (n === 1 ? { minimumShortfall: 10n ** 17n } : {}),
   });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(
     squid.getByText("The minimum USDFC received fell below the reviewed amount. Review the deposit again."),
@@ -235,7 +233,7 @@ test("a route that drops below the reviewed minimum returns USDC gas to review, 
   await expect(page.getByText(/enough native token/)).toBeHidden();
 
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
 });
@@ -250,7 +248,7 @@ test("a route close to expiry is replaced before the operation is signed, then d
     },
   });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(executableRoutes).toBe(2);
@@ -260,7 +258,7 @@ test("a route close to expiry is replaced before the operation is signed, then d
 test("a route that keeps expiring returns to review rather than retrying the same payment", async ({ page }) => {
   const { fake, squid } = await reviewDeposit(page, { executableRoute: () => ({ expiresInSeconds: 5 }) });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(
     squid.getByText("The Squid route kept expiring before the deposit could be sent. Review the deposit again."),
@@ -284,7 +282,7 @@ test("a USDC-gas plan that cannot be made says why and can be retried", async ({
 test("a deposit the bundler refuses says nothing was charged and can be paid again", async ({ page }) => {
   const { fake, squid } = await reviewDeposit(page, { outcome: "rejected" });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
 
   await expect(page.getByText(/The bundler refused the deposit, so nothing was charged/)).toBeVisible({
     timeout: 30_000,
@@ -293,7 +291,7 @@ test("a deposit the bundler refuses says nothing was charged and can be paid aga
   await expect(squid.getByRole("region", { name: "Pending Squid deposit" })).toBeHidden();
   fake.outcome = "included";
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
 });
@@ -303,7 +301,7 @@ test("an operation not yet included blocks another spend until Check again finds
   await page.clock.install();
   const { fake, squid } = await reviewDeposit(page, { outcome: "unresolved" });
   await squid.getByRole("button", { name: "Review" }).click();
-  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC + FIL" }).click();
   await expect.poll(() => fake.operations.length).toBe(1);
   // Sent, not signing: the operation is waiting for Base to include it.
   await expect(squid.getByText("Waiting for the source network to confirm…")).toBeVisible();
