@@ -2,19 +2,12 @@ import type { Page, Route } from "@playwright/test";
 import {
   concat,
   decodeFunctionData,
-  encodeAbiParameters,
   encodeFunctionResult,
-  erc20Abi,
   type Hex,
-  hexToBigInt,
   multicall3Abi,
   numberToHex,
-  pad,
   parseAbi,
   recoverAddress,
-  size,
-  slice,
-  toEventSelector,
   toFunctionSelector,
 } from "viem";
 import {
@@ -46,8 +39,6 @@ const ADDITIONAL_GAS_CHARGE = 35_000n;
 /** USDC base units for 1 ETH, for both the paymaster's oracle and the pool. */
 const FAKE_ETH_PRICE = 2_500_000_000n;
 const GAS_PRICE = 1_000_000n;
-/** The USDC the paymaster keeps for each included operation, as its UserOperationSponsored event reports. */
-const FAKE_CHARGED_USDC = 21_500n;
 
 const hashOf = (userOperation: UserOperation<"0.8">) =>
   getUserOperationHash({
@@ -66,11 +57,7 @@ const quoterAbi = parseAbi([
   "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
   "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
-const permitAbi = parseAbi([
-  "function name() view returns (string)",
-  "function version() view returns (string)",
-  "function nonces(address owner) view returns (uint256)",
-]);
+const permitAbi = parseAbi(["function nonces(address owner) view returns (uint256)"]);
 
 /**
  * What the bundler does with the next operation sent: include it (`included`), include it with the batch reverted
@@ -96,11 +83,6 @@ export interface FakeUsdcGas {
   feeSpreadBips: bigint;
   /** What the bundler estimates for pre-verification gas; raise it to push an operation past its reviewed cap. */
   preVerificationGas: bigint;
-  /**
-   * The payer's USDC allowance to the paymaster. An included operation resets it to 0; a reverted one never reaches
-   * that reset, so what its permit allowed beyond the charge stays.
-   */
-  paymasterAllowance: bigint;
   /** Operations the bundler accepted, in order. */
   operations: SubmittedOperation[];
   /**
@@ -123,7 +105,6 @@ export async function installFakeUsdcGas(
     delegation: "none",
     outcome: "included",
     feeSpreadBips: 0n,
-    paymasterAllowance: 0n,
     preVerificationGas: 60_000n,
     ...initial,
     operations: [],
@@ -161,19 +142,6 @@ export async function installFakeUsdcGas(
     }
     if (to === BASE_USDC && data.startsWith(toFunctionSelector("nonces(address)"))) {
       return encodeFunctionResult({ abi: permitAbi, functionName: "nonces", result: spentNonces() });
-    }
-    // Base USDC's EIP-712 domain, which the paymaster permit is signed over.
-    if (to === BASE_USDC && data.startsWith(toFunctionSelector("name()"))) {
-      return encodeFunctionResult({ abi: permitAbi, functionName: "name", result: "USD Coin" });
-    }
-    if (to === BASE_USDC && data.startsWith(toFunctionSelector("version()"))) {
-      return encodeFunctionResult({ abi: permitAbi, functionName: "version", result: "2" });
-    }
-    if (to === BASE_USDC && data.startsWith(toFunctionSelector("allowance(address,address)"))) {
-      const { args, functionName } = decodeFunctionData({ abi: erc20Abi, data });
-      // The Squid router's allowance belongs to the fakes installed before this one.
-      if (functionName !== "allowance" || !isPayer(args[0]) || args[1].toLowerCase() !== PAYMASTER) return undefined;
-      return encodeFunctionResult({ abi: erc20Abi, functionName, result: fake.paymasterAllowance });
     }
     return undefined;
   };
@@ -269,26 +237,6 @@ export async function installFakeUsdcGas(
     return isPayer(signer) ? undefined : "AA24 signature error";
   };
 
-  // Circle's paymaster reports what it kept after refunding the rest of the prefund.
-  const sponsoredLog = (op: SubmittedOperation) => ({
-    address: PAYMASTER,
-    topics: [
-      toEventSelector("UserOperationSponsored(address,address,bytes32,uint256,uint256,uint256)"),
-      pad(BASE_USDC),
-      pad(op.userOperation.sender),
-    ],
-    data: encodeAbiParameters(
-      [{ type: "bytes32" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
-      [op.hash, FAKE_ETH_PRICE, FAKE_CHARGED_USDC, 0n],
-    ),
-    blockNumber: "0x1",
-    blockHash: op.bundleHash,
-    transactionHash: op.bundleHash,
-    transactionIndex: "0x0",
-    logIndex: "0x0",
-    removed: false,
-  });
-
   const receiptOf = (op: SubmittedOperation) => ({
     userOpHash: op.hash,
     entryPoint: ENTRY_POINT,
@@ -299,7 +247,7 @@ export async function installFakeUsdcGas(
     actualGasUsed: numberToHex(400_000n),
     success: op.outcome === "included",
     reason: op.outcome === "reverted" ? "0x" : undefined,
-    logs: [sponsoredLog(op)],
+    logs: [],
     receipt: bundleReceipt(op),
   });
 
@@ -337,12 +285,6 @@ export async function installFakeUsdcGas(
         const bundleHash = concat(["0xbb", hash.slice(4) as Hex]);
         fake.operations.push({ hash, userOperation, outcome, bundleHash });
         if (outcome !== "unresolved" && userOperation.authorization) fake.delegation = "ours";
-        if (outcome === "included") fake.paymasterAllowance = 0n;
-        // Circle's paymaster data: mode (1 byte), token (20), permit amount (32), permit signature.
-        const { paymasterData } = userOperation;
-        if (outcome === "reverted" && paymasterData && size(paymasterData) >= 53) {
-          fake.paymasterAllowance = hexToBigInt(slice(paymasterData, 21, 53)) - FAKE_CHARGED_USDC;
-        }
         return { result: hash };
       }
       case "eth_getUserOperationReceipt": {

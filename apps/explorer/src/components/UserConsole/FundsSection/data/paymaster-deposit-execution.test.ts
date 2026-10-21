@@ -1,5 +1,5 @@
 import { NATIVE_TOKEN_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { encodeAbiParameters, type Hash, type Hex, type Log, pad, stringToHex, toEventSelector } from "viem";
+import { type Hash, type Hex, stringToHex } from "viem";
 import {
   entryPoint08Address,
   getUserOperationHash,
@@ -81,9 +81,7 @@ function sourceClient({ balance = 10_000_000n, code, paymasterAllowance = 0n, sw
       const results: Record<string, unknown> = {
         allowance: paymasterAllowance,
         balanceOf: balance,
-        name: "USD Coin",
         nonces: 0n,
-        version: "2",
       };
       return results[functionName];
     }),
@@ -130,7 +128,6 @@ function operations(overrides: Partial<PaymasterOperations> = {}) {
       return hashOf(userOperation);
     }),
     waitForUserOperationReceipt: vi.fn(async ({ hash }) => ({
-      logs: [],
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
       success: true,
@@ -222,13 +219,6 @@ describe("executePaymasterSquidDeposit", () => {
       PaymasterReviewError,
     ],
     [
-      "an earlier paymaster allowance exceeds what the reserve leaves for gas",
-      { paymasterAllowance: GAS_BUDGET + 1n },
-      {},
-      "Network fees are above the reserve. Try again later.",
-      Error,
-    ],
-    [
       "the route's bridge fee rose above its cap",
       {},
       { quote: { ...quote, transaction: { ...quote.transaction, value: 450_000_000_000_001n } } },
@@ -245,6 +235,13 @@ describe("executePaymasterSquidDeposit", () => {
     [
       "the bridge-fee swap alone uses up the reserve",
       { swapInput: 495_050n },
+      {},
+      "Network fees are above the reserve. Try again later.",
+      Error,
+    ],
+    [
+      "the bridge-fee swap leaves nothing for gas",
+      { swapInput: 495_049n },
       {},
       "Network fees are above the reserve. Try again later.",
       Error,
@@ -284,10 +281,11 @@ describe("executePaymasterSquidDeposit", () => {
   });
 
   it("retries after a reverted operation left its unused permit allowance behind", async () => {
-    // Far above this operation's ~5,941-unit gas maximum, but within what the reserve leaves for gas.
-    const { input, ops } = run({}, { paymasterAllowance: 350_000n });
+    // The new permit overwrites the leftover, so even one above the gas budget does not block the retry.
+    const { input, ops } = run({}, { paymasterAllowance: GAS_BUDGET + 1n });
 
     await expect(executePaymasterSquidDeposit(input)).resolves.toMatchObject({ transactionHash: BUNDLE_HASH });
+    expect(vi.mocked(ops.signPermit).mock.calls[0]?.[1].value).toBe(GAS_BUDGET);
     expect(ops.send).toHaveBeenCalledOnce();
   });
 
@@ -430,9 +428,8 @@ describe("executePaymasterSquidDeposit", () => {
 
 describe("awaitPaymasterOperation", () => {
   const hash = `0x${"aa".repeat(32)}` as Hash;
-  const receiptOps = (overrides: { logs?: Log<bigint, number, false>[]; sender?: Hex; success?: boolean } = {}) => ({
+  const receiptOps = (overrides: { sender?: Hex; success?: boolean } = {}) => ({
     waitForUserOperationReceipt: vi.fn(async () => ({
-      logs: [],
       receipt: { transactionHash: BUNDLE_HASH },
       sender: PAYER,
       success: true,
@@ -443,31 +440,6 @@ describe("awaitPaymasterOperation", () => {
 
   it("returns the bundle hash of a successful operation", async () => {
     await expect(awaitPaymasterOperation(receiptOps(), hash, PAYER)).resolves.toBe(BUNDLE_HASH);
-  });
-
-  it("names the USDC Circle's paymaster kept when its event is in the receipt", async () => {
-    const sponsored: Log<bigint, number, false> = {
-      address: CIRCLE_PAYMASTER_ADDRESS,
-      blockHash: BUNDLE_HASH,
-      blockNumber: 1n,
-      data: encodeAbiParameters(
-        [{ type: "bytes32" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" }],
-        [hash, 2_500_000_000n, 21_500n, 0n],
-      ),
-      logIndex: 0,
-      removed: false,
-      topics: [
-        toEventSelector("UserOperationSponsored(address,address,bytes32,uint256,uint256,uint256)"),
-        pad(USDC),
-        pad(PAYER),
-      ],
-      transactionHash: BUNDLE_HASH,
-      transactionIndex: 0,
-    };
-
-    await expect(
-      awaitPaymasterOperation(receiptOps({ logs: [sponsored], success: false }), hash, PAYER),
-    ).rejects.toThrow("Network fees of 0.0215 USDC were still charged");
   });
 
   it("treats a failed operation inside a successful bundle as reverted, with gas charged", async () => {

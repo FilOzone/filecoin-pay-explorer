@@ -2,7 +2,7 @@
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Hex, numberToHex, type SignedAuthorization, verifyMessage } from "viem";
+import { type Hex, keccak256, numberToHex, type SignedAuthorization, stringToHex, verifyMessage } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
@@ -121,8 +121,9 @@ function createProvider(
 }
 
 // Its address is readable from Playwright as `window.__fakePrivyEmbeddedAccount` once the user has logged in.
-function createEmbeddedWallet(): Wallet {
-  const account = privateKeyToAccount(generatePrivateKey());
+// Like Privy's, an email keeps its embedded wallet, so a reload and a new login find the same account.
+function createEmbeddedWallet(email: string): Wallet {
+  const account = privateKeyToAccount(keccak256(stringToHex(email)));
   (window as typeof window & { __fakePrivyEmbeddedAccount?: Hex }).__fakePrivyEmbeddedAccount = account.address;
   const wallet = createProvider(() => [account]);
   return {
@@ -472,7 +473,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     for (const listener of onLogin) listener({ user: newUser, isNewUser: true, loginAccount: emailAccount });
     // createOnLogin: "users-without-wallets" provisions the embedded wallet after the user exists.
     setTimeout(() => {
-      const wallet = createEmbeddedWallet();
+      const wallet = createEmbeddedWallet(email);
       const walletAccount = { type: "wallet", address: wallet.address, walletClientType: "privy" };
       setUser({ ...newUser, wallet: walletAccount, linkedAccounts: [emailAccount, walletAccount] });
       setWallets([wallet]);

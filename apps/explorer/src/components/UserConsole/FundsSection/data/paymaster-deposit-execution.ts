@@ -6,14 +6,12 @@ import {
   type Chain,
   encodePacked,
   erc20Abi,
-  formatUnits,
   type Hash,
   type Hex,
   http,
   maxUint256,
   type PublicClient,
   parseAbi,
-  parseEventLogs,
   rpcSchema,
   type SignedAuthorization,
   type Transport,
@@ -36,8 +34,8 @@ import { PERMIT_TYPES } from "@/utils/permit";
 import {
   CIRCLE_PAYMASTER_ADDRESS,
   CIRCLE_PAYMASTER_CHAIN_ID,
-  CIRCLE_PAYMASTER_TOKEN_DECIMALS,
-  circlePaymasterAbi,
+  CIRCLE_PAYMASTER_TOKEN_NAME,
+  CIRCLE_PAYMASTER_TOKEN_VERSION,
   getDelegationState,
   getPaymasterGasLimits,
   getPaymasterGasMaximum,
@@ -84,11 +82,7 @@ const OPERATION_SEND_MARGIN_SECONDS = 10;
 // Each expired route costs the payer another signing prompt; past this, the deposit goes back to review.
 const MAX_OPERATION_SIGNATURES = 2;
 
-const permitAbi = parseAbi([
-  "function name() view returns (string)",
-  "function version() view returns (string)",
-  "function nonces(address owner) view returns (uint256)",
-]);
+const permitAbi = parseAbi(["function nonces(address owner) view returns (uint256)"]);
 
 type PermitMessage = { owner: Address; spender: Address; value: bigint; nonce: bigint; deadline: bigint };
 type PimlicoGasPriceSchema = {
@@ -98,7 +92,7 @@ type PimlicoGasPriceSchema = {
 };
 
 // The parts of an operation receipt the deposit checks.
-type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "logs" | "sender" | "success" | "userOpHash"> & {
+type PaymasterOperationReceipt = Pick<UserOperationReceipt<"0.8">, "sender" | "success" | "userOpHash"> & {
   receipt: { transactionHash: Hash };
 };
 
@@ -203,19 +197,6 @@ function getValidationRejection(error: unknown): string | undefined {
   return cause instanceof Error ? cause.message.match(VALIDATION_REASON)?.[0].trim() : undefined;
 }
 
-// The USDC Circle's paymaster kept for this operation, from the event it emits after refunding the rest.
-function getChargedUsdc(receipt: PaymasterOperationReceipt): bigint | undefined {
-  return parseEventLogs({
-    abi: circlePaymasterAbi,
-    eventName: "UserOperationSponsored",
-    logs: receipt.logs,
-  }).find(
-    (log) =>
-      log.address.toLowerCase() === CIRCLE_PAYMASTER_ADDRESS.toLowerCase() &&
-      log.args.userOpHash === receipt.userOpHash,
-  )?.args.actualTokenNeeded;
-}
-
 /**
  * Waits for the operation's own receipt. A successful bundle does not prove the operation inside it
  * succeeded, so its sender, hash and `success` are checked. Returns the bundle transaction hash.
@@ -241,13 +222,8 @@ export async function awaitPaymasterOperation(
     throw new SquidDepositError("The bundler reported a different operation than the one signed.", "timeout");
   }
   if (!receipt.success) {
-    const charged = getChargedUsdc(receipt);
-    const fees =
-      charged === undefined
-        ? "Network fees were"
-        : `Network fees of ${formatUnits(charged, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} USDC were`;
     throw new SquidDepositError(
-      `The deposit reverted on Base, so no USDC went to Squid and it is still in this account. ${fees} still charged, and this account keeps its USDC-gas setup for the next try.`,
+      "The deposit reverted on Base, so no USDC went to Squid and it is still in this account. Network fees were still charged, and this account keeps its USDC-gas setup for the next try.",
       "reverted",
       receipt.receipt.transactionHash,
     );
@@ -329,32 +305,13 @@ export async function executePaymasterSquidDeposit({
 
   const nativeFee = quote.transaction.value;
   assertWithinReview(quote);
-  const [
-    fundsBefore,
-    code,
-    fees,
-    balance,
-    paymasterAllowance,
-    permitNonce,
-    authorizationNonce,
-    permitName,
-    permitVersion,
-    maxSwapInput,
-  ] = await Promise.all([
+  const [fundsBefore, code, fees, balance, permitNonce, authorizationNonce, maxSwapInput] = await Promise.all([
     readFilecoinPayFunds(destinationClient, request),
     sourceClient.getCode({ address: payer }),
     readPaymasterFees(sourceClient),
     sourceClient.readContract({ abi: erc20Abi, address: token, functionName: "balanceOf", args: [payer] }),
-    sourceClient.readContract({
-      abi: erc20Abi,
-      address: token,
-      functionName: "allowance",
-      args: [payer, CIRCLE_PAYMASTER_ADDRESS],
-    }),
     sourceClient.readContract({ abi: permitAbi, address: token, functionName: "nonces", args: [payer] }),
     sourceClient.getTransactionCount({ address: payer }),
-    sourceClient.readContract({ abi: permitAbi, address: token, functionName: "name" }),
-    sourceClient.readContract({ abi: permitAbi, address: token, functionName: "version" }),
     quoteSwapInputCap(sourceClient, token, nativeFee),
   ]);
   const delegation = getDelegationState(code);
@@ -364,9 +321,7 @@ export async function executePaymasterSquidDeposit({
     );
   }
   const gasBudget = FEE_RESERVE_USDC - maxSwapInput;
-  // The paymaster falls back to an existing allowance when its permit fails, so that allowance counts against the
-  // reserve too. A reverted batch never reaches its allowance reset, so its leftover stays below the last budget.
-  if (gasBudget <= 0n || paymasterAllowance > gasBudget) throw new Error(FEES_ABOVE_RESERVE);
+  if (gasBudget <= 0n) throw new Error(FEES_ABOVE_RESERVE);
   if (balance < request.sourceAmount + FEE_RESERVE_USDC) {
     throw new PaymasterReviewError("The USDC balance no longer covers the deposit and the fee reserve.");
   }
@@ -382,7 +337,12 @@ export async function executePaymasterSquidDeposit({
       : undefined;
   // Circle's paymaster cannot read block time during validation, so its permits never expire.
   const permitSignature = await operations.signPermit(
-    { chainId: CIRCLE_PAYMASTER_CHAIN_ID, name: permitName, verifyingContract: token, version: permitVersion },
+    {
+      chainId: CIRCLE_PAYMASTER_CHAIN_ID,
+      name: CIRCLE_PAYMASTER_TOKEN_NAME,
+      verifyingContract: token,
+      version: CIRCLE_PAYMASTER_TOKEN_VERSION,
+    },
     {
       deadline: maxUint256,
       nonce: permitNonce,

@@ -41,7 +41,7 @@ function renderUsdcGas(initialProps: Props = { active: true }) {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("useUsdcGasDeposit", () => {

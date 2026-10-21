@@ -756,6 +756,8 @@ export function DirectSquidDepositDialog({
     setError(null);
     try {
       await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, async () => {
+        // The bundler may still include the operation, so its marker must not be dismissable while this waits.
+        if (!pendingHash) setStageWithHash("swap-broadcast");
         const transactionHash =
           pendingHash ??
           (await usdcGas.waitForOperation(pending, (next) =>

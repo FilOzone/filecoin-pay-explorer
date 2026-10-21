@@ -57,6 +57,15 @@ async function stubAccountBackgroundRequests(page: Page): Promise<void> {
   );
 }
 
+const EMAIL = "usdc-gas@fake-privy.test";
+
+async function openSquidDialog(page: Page) {
+  await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
+  await page.getByRole("menuitem", { name: "Add funds" }).click();
+  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  return page.getByRole("dialog", { name: "Pay with another token" });
+}
+
 async function reviewDeposit(
   page: Page,
   {
@@ -68,7 +77,7 @@ async function reviewDeposit(
 ) {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "usdc-gas@fake-privy.test" });
+  await loginWithTestAccount(page, { email: EMAIL });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const payer = await page.evaluate(
     () => (window as unknown as { __fakePrivyEmbeddedAccount: Hex }).__fakePrivyEmbeddedAccount,
@@ -76,10 +85,7 @@ async function reviewDeposit(
   const fake = await installFakeUsdcGas(page, payer, initial);
   await installFakeSquid(page, payer, { alsoRead: fake.read, executableRoute, nativeFee: BRIDGE_FEE, payerEth });
 
-  await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
-  await page.getByRole("button", { name: "Swap to USDFC" }).click();
-  const squid = page.getByRole("dialog", { name: "Pay with another token" });
+  const squid = await openSquidDialog(page);
   await squid.getByLabel(/^Amount/).fill("10");
   // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
   await squid.getByRole("checkbox").click();
@@ -177,7 +183,7 @@ test("a reverted operation says gas was charged in USDC, keeps the delegation, a
 
   await expect(
     page.getByText(
-      /reverted on Base, so no USDC went to Squid and it is still in this account\. Network fees of 0\.0215 USDC were still charged/,
+      /reverted on Base, so no USDC went to Squid and it is still in this account\. Network fees were still charged/,
     ),
   ).toBeVisible({
     timeout: 30_000,
@@ -185,8 +191,6 @@ test("a reverted operation says gas was charged in USDC, keeps the delegation, a
   expect(fake.delegation).toBe("ours");
   // Nothing is left to follow up: no pending deposit blocks the form.
   await expect(squid.getByRole("region", { name: "Pending Squid deposit" })).toBeHidden();
-  // The revert left its unused permit allowance with the paymaster; the retry still fits the reserve.
-  expect(fake.paymasterAllowance).toBeGreaterThan(0n);
   fake.outcome = "included";
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
@@ -277,6 +281,23 @@ test("a USDC-gas plan that cannot be made says why and can be retried", async ({
   await expect(squid.getByRole("button", { name: "Review" })).toBeEnabled();
 });
 
+test("a deposit the bundler refuses says nothing was charged and can be paid again", async ({ page }) => {
+  const { fake, squid } = await reviewDeposit(page, { outcome: "rejected" });
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(page.getByText(/The bundler refused the deposit, so nothing was charged/)).toBeVisible({
+    timeout: 30_000,
+  });
+  // Nothing is left to follow up, so the form is back to review the same deposit.
+  await expect(squid.getByRole("region", { name: "Pending Squid deposit" })).toBeHidden();
+  fake.outcome = "included";
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+  await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toHaveLength(1);
+});
+
 test("an operation not yet included blocks another spend until Check again finds it", async ({ page }) => {
   // The clock jumps past the inclusion wait rather than tracking its exact length.
   await page.clock.install();
@@ -292,8 +313,18 @@ test("an operation not yet included blocks another spend until Check again finds
   await expect(squid.getByText("waiting to be included on Base", { exact: false })).toBeVisible();
   await expect(squid.getByRole("button", { name: "Review" })).toBeHidden();
 
+  // The marker outlives the page: a reload and a new login find the operation again.
+  await page.reload();
+  await loginWithTestAccount(page, { email: EMAIL });
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  const reopened = await openSquidDialog(page);
+  await expect(reopened.getByText("waiting to be included on Base", { exact: false })).toBeVisible();
+  await reopened.getByRole("button", { name: "Check again" }).click();
+  // While the bundler may still include it, the marker cannot be dismissed.
+  await expect(reopened.getByText("Waiting for the source network to confirm…")).toBeVisible();
+  await expect(reopened.getByRole("button", { name: "Dismiss" })).toBeHidden();
+
   fake.operations[0].outcome = "included";
-  await squid.getByRole("button", { name: "Check again" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
 });
