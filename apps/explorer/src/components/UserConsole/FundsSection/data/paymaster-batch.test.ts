@@ -75,6 +75,7 @@ describe("buildPaymasterDepositCalls", () => {
       { to: usdc, functionName: "approve", args: [BASE_SWAP_ROUTER_ADDRESS, 0n], value: 0n },
       { to: usdc, functionName: "approve", args: [squidSpender, 9_000_000n], value: 0n },
       { to: squidRouter, data: routeData, value: nativeFee },
+      { to: usdc, functionName: "approve", args: [squidSpender, 0n], value: 0n },
       { to: usdc, functionName: "approve", args: [CIRCLE_PAYMASTER_ADDRESS, 0n], value: 0n },
     ]);
   });
@@ -91,6 +92,7 @@ describe("buildPaymasterDepositCalls", () => {
     expect(calls.map(describeCall)).toEqual([
       { to: usdc, functionName: "approve", args: [squidRouter, 9_000_000n], value: 0n },
       { to: squidRouter, data: routeData, value: 0n },
+      { to: usdc, functionName: "approve", args: [squidRouter, 0n], value: 0n },
       { to: usdc, functionName: "approve", args: [CIRCLE_PAYMASTER_ADDRESS, 0n], value: 0n },
     ]);
   });

@@ -76,9 +76,11 @@ export function buildPaymasterDepositCalls({
     data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [spender, amount] }),
     value: 0n,
   });
+  const squidSpender = transaction.approvalSpender ?? transaction.target;
   const routeCalls = [
-    approve(transaction.approvalSpender ?? transaction.target, sourceAmount),
+    approve(squidSpender, sourceAmount),
     { to: transaction.target, data: transaction.data, value: transaction.value },
+    approve(squidSpender, 0n),
     // The paymaster refunds by transfer rather than pulling, so the permit's leftover allowance would linger.
     approve(CIRCLE_PAYMASTER_ADDRESS, 0n),
   ];
