@@ -28,6 +28,7 @@ type ExecuteInput = Pick<
   | "onStage"
   | "onSubmit"
   | "quote"
+  | "refreshQuote"
   | "request"
   | "reviewedQuote"
 > & { walletClient: Parameters<typeof createPaymasterOperations>[1] };

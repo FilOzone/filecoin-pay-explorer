@@ -878,8 +878,12 @@ export function DirectSquidDepositDialog({
           chain: sourceChain,
           transport: custom(provider),
         });
-        const executable = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
-        if (!isExecutableQuote(executable)) throw new Error("Squid did not return an executable route");
+        const requestExecutable = async () => {
+          const route = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
+          if (!isExecutableQuote(route)) throw new Error("Squid did not return an executable route");
+          return route;
+        };
+        const executable = await requestExecutable();
         let saved: PendingSquidDeposit | null = null;
         const save = (next: PendingSquidDeposit) => {
           saved = savePendingSquidDeposit(window.localStorage, next);
@@ -934,6 +938,7 @@ export function DirectSquidDepositDialog({
                 userOperationHash,
               }),
             quote: executable,
+            refreshQuote: requestExecutable,
             request,
             reviewedQuote: reviewed.quote,
             walletClient,
@@ -956,8 +961,7 @@ export function DirectSquidDepositDialog({
           onStage: setStageWithHash,
           quote: executable,
           refreshQuote: async () => {
-            const fresh = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
-            if (!isExecutableQuote(fresh)) throw new Error("Squid did not return an executable route");
+            const fresh = await requestExecutable();
             assertExecutableQuoteWithinReview(fresh, reviewedCaps);
             return fresh;
           },
@@ -1372,6 +1376,11 @@ export function DirectSquidDepositDialog({
           {error ? (
             <p className='break-words text-destructive' role='alert'>
               {error}
+            </p>
+          ) : null}
+          {error && reviewed && !pending && !stage ? (
+            <p className='text-sm text-muted-foreground'>
+              No deposit is pending. Pay again to retry, or go back to get a new quote.
             </p>
           ) : null}
         </div>

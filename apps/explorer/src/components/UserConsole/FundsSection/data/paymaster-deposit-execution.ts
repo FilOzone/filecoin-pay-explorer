@@ -64,10 +64,9 @@ import {
   type SquidClient,
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
-  SquidQuoteChangedError,
 } from "./squid-deposit-route";
 
-/** The reviewed deposit no longer holds and nothing was signed into an operation: it must be reviewed again. */
+/** The reviewed deposit no longer holds and nothing was sent: it must be reviewed again. */
 export class PaymasterReviewError extends Error {
   constructor(message: string) {
     super(message);
@@ -79,6 +78,11 @@ const FEES_ABOVE_RESERVE = "Network fees are above the reserve. Try again later.
 
 // Waiting for inclusion before the deposit is reported unresolved; Base includes a bundle in seconds.
 const OPERATION_RECEIPT_TIMEOUT_MS = 120_000;
+// A signed operation is sent only with this much of its route left: Base includes it within a few blocks, and a route
+// that expires first reverts the batch and still charges gas.
+const OPERATION_SEND_MARGIN_SECONDS = 10;
+// Each expired route costs the payer another signing prompt; past this, the deposit goes back to review.
+const MAX_OPERATION_SIGNATURES = 2;
 
 const permitAbi = parseAbi([
   "function name() view returns (string)",
@@ -228,7 +232,7 @@ export async function awaitPaymasterOperation(
   } catch (error) {
     throw new SquidDepositError(
       error instanceof WaitForUserOperationReceiptTimeoutError
-        ? "The deposit has not been included on Base yet, so whether network fees were charged is not known. Your USDC stays in this account unless it is included. Check again before starting another deposit."
+        ? "The deposit has not been included on Base yet, so whether network fees were charged is not known. Your USDC stays in this account unless it is included. Check again in a minute; if it is still not included after a few minutes, dismiss it and check this account's USDC before starting another deposit."
         : "The bundler could not be reached to confirm this deposit, so whether network fees were charged is not known. Check again before starting another deposit.",
       "timeout",
     );
@@ -256,6 +260,8 @@ export interface ExecutePaymasterDepositInput extends PollingOptions {
   reviewedQuote: SquidDepositQuote;
   /** The executable route, checked here against the reviewed quote. */
   quote: ExecutableSquidDepositQuote;
+  /** A fresh executable route for the same request, for when signing outlasts the current one. */
+  refreshQuote(): Promise<ExecutableSquidDepositQuote>;
   request: SquidDepositRouteRequest;
   operations: PaymasterOperations;
   /** Privy's 7702 signer for the payer's embedded wallet. */
@@ -292,6 +298,7 @@ export async function executePaymasterSquidDeposit({
   onSubmit,
   operations,
   quote,
+  refreshQuote,
   request,
   reviewedQuote,
   signAuthorization,
@@ -305,20 +312,23 @@ export async function executePaymasterSquidDeposit({
     throw new Error("USDC gas is only available on Base");
   }
   const assertSigner = async () => {
-    if (isRouteExpiring(quote, ROUTE_EXPIRY_MARGIN_SECONDS))
-      throw new Error("The Squid route expired. Refresh the quote.");
     assertCurrentContext();
     const owner = await getCurrentOwner();
     assertCurrentContext();
     if (owner?.toLowerCase() !== payer.toLowerCase()) throw new Error("Wallet account changed before signing");
   };
+  const reviewedCaps = captureReviewedSquidDepositCaps(reviewedQuote, token);
+  // Any route outside the review needs a new quote, and nothing has been sent yet, so the deposit goes back to review.
+  const assertWithinReview = (route: ExecutableSquidDepositQuote) => {
+    try {
+      assertExecutableQuoteWithinReview(route, reviewedCaps);
+    } catch (error) {
+      throw error instanceof Error ? new PaymasterReviewError(error.message) : error;
+    }
+  };
 
   const nativeFee = quote.transaction.value;
-  try {
-    assertExecutableQuoteWithinReview(quote, captureReviewedSquidDepositCaps(reviewedQuote, token));
-  } catch (error) {
-    throw error instanceof SquidQuoteChangedError ? new PaymasterReviewError(error.message) : error;
-  }
+  assertWithinReview(quote);
   const [
     fundsBefore,
     code,
@@ -349,7 +359,9 @@ export async function executePaymasterSquidDeposit({
   ]);
   const delegation = getDelegationState(code);
   if (delegation === "conflict") {
-    throw new Error("This account delegates to another smart account, so it cannot pay network fees in USDC.");
+    throw new PaymasterReviewError(
+      "This account delegates to another smart account, so it cannot pay network fees in USDC.",
+    );
   }
   const gasBudget = FEE_RESERVE_USDC - maxSwapInput;
   // The paymaster falls back to an existing allowance when its permit fails, so that allowance counts against the
@@ -358,14 +370,6 @@ export async function executePaymasterSquidDeposit({
   if (balance < request.sourceAmount + FEE_RESERVE_USDC) {
     throw new PaymasterReviewError("The USDC balance no longer covers the deposit and the fee reserve.");
   }
-  const calls = buildPaymasterDepositCalls({
-    maxSwapInput,
-    payer,
-    sourceAmount: request.sourceAmount,
-    sourceToken: token,
-    transaction: quote.transaction,
-  });
-
   onStage?.("swap-requested");
   await assertSigner();
   const authorization =
@@ -387,32 +391,56 @@ export async function executePaymasterSquidDeposit({
       value: gasBudget,
     },
   );
-  const prepared = await operations.prepare({
-    authorization,
-    calls,
-    paymasterData: encodePacked(["uint8", "address", "uint256", "bytes"], [0, token, gasBudget, permitSignature]),
-    ...getPaymasterGasLimits(fees),
-  });
-  const gasMaximum = getPaymasterGasMaximum(
-    {
-      ...prepared,
-      paymasterVerificationGasLimit: prepared.paymasterVerificationGasLimit ?? 0n,
-      paymasterPostOpGasLimit: prepared.paymasterPostOpGasLimit ?? 0n,
-    },
-    fees,
-  );
-  if (gasMaximum > gasBudget) throw new Error(FEES_ABOVE_RESERVE);
-  await assertSigner();
-  const userOperation = { ...prepared, signature: await operations.sign(prepared) };
-  // The signing prompt can outlast the route or see the account switch; a stale route would revert and still charge gas.
-  await assertSigner();
+  let route = quote;
+  let userOperation: UserOperation<"0.8"> | undefined;
+  for (let signatures = 0; !userOperation; signatures++) {
+    if (signatures === MAX_OPERATION_SIGNATURES) {
+      throw new PaymasterReviewError("The Squid route kept expiring before the deposit could be sent.");
+    }
+    // The prompts so far can outlast the route. The authorization and permit do not depend on it, so a fresh route
+    // keeps them, as long as its bridge fee still fits the swap they were sized for.
+    if (isRouteExpiring(route, ROUTE_EXPIRY_MARGIN_SECONDS)) {
+      route = await refreshQuote();
+      assertWithinReview(route);
+      if (route.transaction.value > nativeFee) {
+        throw new PaymasterReviewError("Squid's bridge fee rose while the deposit was being signed.");
+      }
+      assertCurrentContext();
+    }
+    const prepared = await operations.prepare({
+      authorization,
+      calls: buildPaymasterDepositCalls({
+        maxSwapInput,
+        payer,
+        sourceAmount: request.sourceAmount,
+        sourceToken: token,
+        transaction: route.transaction,
+      }),
+      paymasterData: encodePacked(["uint8", "address", "uint256", "bytes"], [0, token, gasBudget, permitSignature]),
+      ...getPaymasterGasLimits(fees),
+    });
+    const gasMaximum = getPaymasterGasMaximum(
+      {
+        ...prepared,
+        paymasterVerificationGasLimit: prepared.paymasterVerificationGasLimit ?? 0n,
+        paymasterPostOpGasLimit: prepared.paymasterPostOpGasLimit ?? 0n,
+      },
+      fees,
+    );
+    if (gasMaximum > gasBudget) throw new Error(FEES_ABOVE_RESERVE);
+    await assertSigner();
+    const signature = await operations.sign(prepared);
+    // The signing prompt can see the account switch, or outlast the route, which would revert and still charge gas.
+    await assertSigner();
+    if (!isRouteExpiring(route, OPERATION_SEND_MARGIN_SECONDS)) userOperation = { ...prepared, signature };
+  }
   const userOperationHash = getUserOperationHash({
     chainId: CIRCLE_PAYMASTER_CHAIN_ID,
     entryPointAddress: entryPoint08Address,
     entryPointVersion: "0.8",
     userOperation,
   });
-  onSubmit?.({ fundsBefore, quote, userOperationHash });
+  onSubmit?.({ fundsBefore, quote: route, userOperationHash });
   let sentHash: Hash;
   try {
     sentHash = await operations.send(userOperation);
@@ -434,15 +462,15 @@ export async function executePaymasterSquidDeposit({
   }
   onStage?.("swap-broadcast");
   const transactionHash = await awaitPaymasterOperation(operations, userOperationHash, payer);
-  onBroadcast?.({ fundsBefore, quote, transactionHash });
+  onBroadcast?.({ fundsBefore, quote: route, transactionHash });
 
   return awaitSquidDepositSettlement({
     ...polling,
     destinationClient,
     fundsBefore,
-    minimumDestinationAmount: quote.minimumDestinationAmount,
+    minimumDestinationAmount: route.minimumDestinationAmount,
     onStage,
-    quoteId: quote.quoteId,
+    quoteId: route.quoteId,
     sourceChainId: request.sourceChainId,
     sourceClient,
     squid,

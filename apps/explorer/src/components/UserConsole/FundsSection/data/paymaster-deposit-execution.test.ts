@@ -1,5 +1,5 @@
 import { NATIVE_TOKEN_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { encodeAbiParameters, type Hash, type Hex, type Log, pad, toEventSelector } from "viem";
+import { encodeAbiParameters, type Hash, type Hex, type Log, pad, stringToHex, toEventSelector } from "viem";
 import {
   entryPoint08Address,
   getUserOperationHash,
@@ -14,6 +14,7 @@ import {
   executePaymasterSquidDeposit,
   type PaymasterOperationRequest,
   type PaymasterOperations,
+  PaymasterReviewError,
 } from "./paymaster-deposit-execution";
 import { awaitSquidDepositSettlement, SquidDepositError } from "./squid-deposit-execution";
 import type { ExecutableSquidDepositQuote, SquidDepositRouteRequest } from "./squid-deposit-route";
@@ -165,6 +166,7 @@ function run(overrides: Partial<ExecutePaymasterDepositInput> = {}, chain: Chain
     onSubmit,
     operations: ops,
     quote,
+    refreshQuote: vi.fn(async () => quote),
     request,
     reviewedQuote: quote,
     signAuthorization,
@@ -210,42 +212,57 @@ describe("executePaymasterSquidDeposit", () => {
     expect(vi.mocked(ops.prepare).mock.calls[0]?.[0].authorization).toBeUndefined();
   });
 
+  // A deposit that needs another review goes back to the form; one that needs time stays reviewed to retry.
   it.each([
     [
       "another delegate is installed",
       { code: "0xef01001111111111111111111111111111111111111111" as Hex },
       {},
       "another smart account",
+      PaymasterReviewError,
     ],
     [
       "an earlier paymaster allowance exceeds what the reserve leaves for gas",
       { paymasterAllowance: GAS_BUDGET + 1n },
       {},
       "Network fees are above the reserve. Try again later.",
+      Error,
     ],
     [
       "the route's bridge fee rose above its cap",
       {},
       { quote: { ...quote, transaction: { ...quote.transaction, value: 450_000_000_000_001n } } },
       "native route payment exceeded the reviewed maximum",
+      PaymasterReviewError,
     ],
     [
       "the route's minimum received fell below the reviewed amount",
       {},
       { quote: { ...quote, minimumDestinationAmount: quote.minimumDestinationAmount - 1n } },
       "minimum USDFC received fell below",
+      PaymasterReviewError,
     ],
     [
       "the bridge-fee swap alone uses up the reserve",
       { swapInput: 495_050n },
       {},
       "Network fees are above the reserve. Try again later.",
+      Error,
     ],
-    ["the balance no longer covers the deposit and the reserve", { balance: 9_499_999n }, {}, "no longer covers"],
-  ] as const)("fails before signing when %s", async (_label, chain, overrides, message) => {
+    [
+      "the balance no longer covers the deposit and the reserve",
+      { balance: 9_499_999n },
+      {},
+      "no longer covers",
+      PaymasterReviewError,
+    ],
+  ] as const)("fails before signing when %s", async (_label, chain, overrides, message, kind) => {
     const { input, ops, signAuthorization } = run(overrides, chain);
 
-    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow(message);
+    const failure = await executePaymasterSquidDeposit(input).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(kind);
+    expect(failure).toHaveProperty("message", expect.stringContaining(message));
+    if (kind === Error) expect(failure).not.toBeInstanceOf(PaymasterReviewError);
     expect(signAuthorization).not.toHaveBeenCalled();
     expect(ops.signPermit).not.toHaveBeenCalled();
     expect(ops.send).not.toHaveBeenCalled();
@@ -274,26 +291,111 @@ describe("executePaymasterSquidDeposit", () => {
     expect(ops.send).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    ["the route expires during the signing prompt", "The Squid route expired. Refresh the quote."],
-    ["the account switches during the signing prompt", "Wallet account changed before signing"],
-  ])("sends nothing when %s", async (label, message) => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    const expiresAt = Math.floor(Date.now() / 1000) + 60;
+  it("sends nothing when the account switches during the signing prompt", async () => {
     let owner: Hex = PAYER;
-    const { input, ops, onSubmit } = run({
-      getCurrentOwner: async () => owner,
-      quote: { ...quote, transaction: { ...quote.transaction, expiresAt } },
-    });
+    const { input, ops, onSubmit } = run({ getCurrentOwner: async () => owner });
     vi.mocked(ops.sign).mockImplementation(async () => {
-      if (label.includes("expires")) vi.setSystemTime(Date.now() + 40_000);
-      else owner = "0x2222222222222222222222222222222222222222";
+      owner = "0x2222222222222222222222222222222222222222";
       return "0x5167";
     });
 
-    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow(message);
+    await expect(executePaymasterSquidDeposit(input)).rejects.toThrow("Wallet account changed before signing");
     expect(onSubmit).not.toHaveBeenCalled();
     expect(ops.send).not.toHaveBeenCalled();
+  });
+
+  describe("a route that expires while the payer signs", () => {
+    const expiringIn = (seconds: number, quoteId: string): ExecutableSquidDepositQuote => ({
+      ...quote,
+      quoteId,
+      transaction: {
+        ...quote.transaction,
+        data: stringToHex(quoteId),
+        expiresAt: Math.floor(Date.now() / 1000) + seconds,
+      },
+    });
+    const waitSeconds = (seconds: number) => vi.setSystemTime(Date.now() + seconds * 1000);
+
+    it("is replaced before the operation is built, keeping the authorization and permit", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const refreshQuote = vi.fn(async () => expiringIn(120, "quote-2"));
+      const { input, ops, onSubmit, settle, signAuthorization } = run({
+        quote: expiringIn(60, "quote-1"),
+        refreshQuote,
+      });
+      vi.mocked(ops.signPermit).mockImplementation(async () => {
+        waitSeconds(40);
+        return "0x9e41";
+      });
+
+      await executePaymasterSquidDeposit(input);
+
+      expect(refreshQuote).toHaveBeenCalledOnce();
+      expect(signAuthorization).toHaveBeenCalledOnce();
+      expect(ops.signPermit).toHaveBeenCalledOnce();
+      expect(ops.sign).toHaveBeenCalledOnce();
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ quote: expect.objectContaining({ quoteId: "quote-2" }) }),
+      );
+      expect(settle).toHaveBeenCalledWith(expect.objectContaining({ quoteId: "quote-2" }));
+    });
+
+    it("is replaced and signed again when it runs out during the operation prompt", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const refreshQuote = vi.fn(async () => expiringIn(120, "quote-2"));
+      const { input, ops } = run({ quote: expiringIn(60, "quote-1"), refreshQuote });
+      vi.mocked(ops.sign).mockImplementationOnce(async () => {
+        waitSeconds(55);
+        return "0x5167";
+      });
+
+      await executePaymasterSquidDeposit(input);
+
+      expect(refreshQuote).toHaveBeenCalledOnce();
+      expect(ops.signPermit).toHaveBeenCalledOnce();
+      expect(ops.sign).toHaveBeenCalledTimes(2);
+      expect(ops.send).toHaveBeenCalledOnce();
+      expect(vi.mocked(ops.prepare).mock.calls[1]?.[0].calls).toContainEqual(
+        expect.objectContaining({ data: stringToHex("quote-2") }),
+      );
+    });
+
+    it("goes back to review when it keeps running out", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const { input, ops, onSubmit } = run({
+        quote: expiringIn(60, "quote-1"),
+        refreshQuote: vi.fn(async () => expiringIn(60, "quote-2")),
+      });
+      vi.mocked(ops.sign).mockImplementation(async () => {
+        waitSeconds(55);
+        return "0x5167";
+      });
+
+      const failure = await executePaymasterSquidDeposit(input).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(PaymasterReviewError);
+      expect(failure).toHaveProperty("message", "The Squid route kept expiring before the deposit could be sent.");
+      expect(ops.sign).toHaveBeenCalledTimes(2);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(ops.send).not.toHaveBeenCalled();
+    });
+
+    it("goes back to review when the replacement's bridge fee no longer fits the signed permit", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const fresh = expiringIn(120, "quote-2");
+      const { input, ops } = run({
+        quote: expiringIn(60, "quote-1"),
+        refreshQuote: vi.fn(async () => ({ ...fresh, transaction: { ...fresh.transaction, value: BRIDGE_FEE + 1n } })),
+      });
+      vi.mocked(ops.signPermit).mockImplementation(async () => {
+        waitSeconds(40);
+        return "0x9e41";
+      });
+
+      await expect(executePaymasterSquidDeposit(input)).rejects.toBeInstanceOf(PaymasterReviewError);
+      expect(ops.sign).not.toHaveBeenCalled();
+      expect(ops.send).not.toHaveBeenCalled();
+    });
   });
 
   it("reports a bundler validation rejection as nothing charged", async () => {

@@ -206,6 +206,9 @@ test("network fees above the reserve stop before signing, and a retry goes throu
   await expect(page.getByText("Network fees are above the reserve. Try again later.")).toBeVisible({
     timeout: 30_000,
   });
+  await expect(
+    page.getByText("No deposit is pending. Pay again to retry, or go back to get a new quote."),
+  ).toBeVisible();
   expect(fake.operations).toEqual([]);
 
   fake.preVerificationGas = 60_000n;
@@ -231,6 +234,35 @@ test("a route that drops below the reviewed minimum returns USDC gas to review, 
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
   await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
   expect(fake.operations).toHaveLength(1);
+});
+
+test("a route close to expiry is replaced before the operation is signed, then deposits", async ({ page }) => {
+  let executableRoutes = 0;
+  const { fake, squid } = await reviewDeposit(page, {
+    executableRoute: (n) => {
+      executableRoutes = n;
+      // Inside the margin the signing prompts need, though not yet expired.
+      return n === 1 ? { expiresInSeconds: 20 } : {};
+    },
+  });
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(page.getByText(/^Deposited [\d.]+ USDFC into Filecoin Pay$/)).toBeVisible({ timeout: 30_000 });
+  expect(executableRoutes).toBe(2);
+  expect(fake.operations).toHaveLength(1);
+});
+
+test("a route that keeps expiring returns to review rather than retrying the same payment", async ({ page }) => {
+  const { fake, squid } = await reviewDeposit(page, { executableRoute: () => ({ expiresInSeconds: 5 }) });
+  await squid.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
+
+  await expect(
+    squid.getByText("The Squid route kept expiring before the deposit could be sent. Review the deposit again."),
+  ).toBeVisible({ timeout: 30_000 });
+  expect(fake.operations).toEqual([]);
+  await expect(squid.getByRole("button", { name: "Review" })).toBeEnabled();
 });
 
 test("a USDC-gas plan that cannot be made says why and can be retried", async ({ page }) => {
