@@ -7,7 +7,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { erc20, filecoinPay } from "@filoz/synapse-core/abis";
+import { erc20, filecoinPay, fwss, pdp } from "@filoz/synapse-core/abis";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const abisDir = join(here, "..", "abis");
@@ -15,6 +15,8 @@ const abisDir = join(here, "..", "abis");
 const targets = [
   { file: "Payments-abi.json", abi: filecoinPay },
   { file: "erc20-abi.json", abi: erc20 },
+  { file: "FilecoinWarmStorageService-abi.json", abi: fwss },
+  { file: "PDPVerifier-abi.json", abi: pdp },
 ];
 
 await mkdir(abisDir, { recursive: true });
