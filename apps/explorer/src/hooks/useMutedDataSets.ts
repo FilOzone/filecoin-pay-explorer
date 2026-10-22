@@ -2,14 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 
 const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 
-type DataSetMute = { dataSetId: string; mutedUntil: number };
+type DataSetMute = { dataSetId: string };
 
 function isDataSetMute(value: unknown): value is DataSetMute {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).dataSetId === "string" &&
-    typeof (value as Record<string, unknown>).mutedUntil === "number"
+    typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).dataSetId === "string"
   );
 }
 
@@ -32,12 +29,15 @@ async function fetchMutedDataSets(walletAddress: string, signal: AbortSignal): P
   return data.mutes;
 }
 
+// Module-level so the Set is rebuilt only when the mutes change, not on every render.
+const toIdSet = (mutes: DataSetMute[]) => new Set(mutes.map((mute) => mute.dataSetId));
+
 /** The dataset ids whose mute is still in effect, as a lookup set. The API leaves out expired mutes. */
 export function useMutedDataSets(walletAddress: string | undefined) {
   return useQuery({
     queryKey: ["muted-datasets", walletAddress],
     queryFn: ({ signal }) => fetchMutedDataSets(walletAddress as string, signal),
-    select: (mutes) => new Set(mutes.map((mute) => mute.dataSetId)),
+    select: toIdSet,
     enabled: !!walletAddress && !!API_URL,
     staleTime: 30_000,
     retry: false,

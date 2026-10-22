@@ -11,8 +11,7 @@ interface ExpiryPickerProps {
   onCustomDateChange: (customDate: string) => void;
   customDateLabel: string;
   /** `YYYY-MM-DD` bounds for the custom date. */
-  customDateRange?: { min: string; max: string };
-  disabled?: boolean;
+  customDateRange: { min: string; max: string };
 }
 
 /** A preset duration, or "Custom date…" with a date input. */
@@ -25,17 +24,10 @@ export function ExpiryPicker({
   onCustomDateChange,
   customDateLabel,
   customDateRange,
-  disabled,
 }: ExpiryPickerProps) {
   return (
     <>
-      <select
-        id={id}
-        disabled={disabled}
-        className={FIELD_CLASS}
-        value={presetIndex}
-        onChange={(e) => onPresetIndexChange(e.target.value)}
-      >
+      <select id={id} className={FIELD_CLASS} value={presetIndex} onChange={(e) => onPresetIndexChange(e.target.value)}>
         {presets.map((preset, i) => (
           <option key={preset.label} value={String(i)}>
             {preset.label}
@@ -46,11 +38,10 @@ export function ExpiryPicker({
       {presetIndex === "custom" ? (
         <input
           type='date'
-          disabled={disabled}
           aria-label={customDateLabel}
           className={FIELD_CLASS}
-          min={customDateRange?.min}
-          max={customDateRange?.max}
+          min={customDateRange.min}
+          max={customDateRange.max}
           value={customDate}
           onChange={(e) => onCustomDateChange(e.target.value)}
         />

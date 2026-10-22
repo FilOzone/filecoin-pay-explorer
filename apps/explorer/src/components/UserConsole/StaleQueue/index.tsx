@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useBlockNumber } from "wagmi";
 import { ListPagination } from "@/components/shared/ListPagination";
 import { getChain } from "@/constants/chains";
@@ -6,6 +6,7 @@ import { useMutedDataSets } from "@/hooks/useMutedDataSets";
 import { useStaleDataSets } from "@/hooks/useStaleDataSets";
 import type { Network } from "@/types";
 import { isNotificationsEligibleNetwork } from "@/utils/network";
+import { monthlyDataSetSpend } from "../DatasetsSection/data/monthlySpend";
 import { StaleQueueErrorState, StaleQueueLayout, StaleQueueRow } from "./components";
 import { rankStaleDataSets } from "./data/staleness";
 
@@ -30,7 +31,28 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
 
   const staleDataSets = useStaleDataSets(accountId, { networkOverride: network });
   const mutedDataSets = useMutedDataSets(canMute ? accountId : undefined);
-  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
+
+  const staleList = staleDataSets.data?.dataSets;
+  const mutedIds = mutedDataSets.data;
+  const unmuted = useMemo(
+    () => (staleList ?? []).filter((dataSet) => !mutedIds?.has(dataSet.dataSetId.toString())),
+    [staleList, mutedIds],
+  );
+  // Spend that can't be estimated without the epoch (a terminated rail) is the only reason to watch blocks.
+  const needsEpoch = useMemo(
+    () => unmuted.some((dataSet) => monthlyDataSetSpend(dataSet, undefined) === undefined),
+    [unmuted],
+  );
+  const { data: currentEpoch } = useBlockNumber({
+    chainId: getChain(network).id,
+    watch: needsEpoch,
+    query: { enabled: needsEpoch },
+  });
+  // Up to 10,000 rows, so rank only when the list or epoch changes; days inactive refresh with them.
+  const ranked = useMemo(
+    () => rankStaleDataSets(unmuted, currentEpoch, BigInt(Math.floor(Date.now() / 1000))),
+    [unmuted, currentEpoch],
+  );
 
   // Waiting for mutes too keeps muted rows from flashing in.
   if (staleDataSets.isLoading || mutedDataSets.isLoading) {
@@ -47,11 +69,6 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
 
   // Without the mutes, already-kept rows can't be told apart, so Keep would let them be kept again.
   const mutesFailed = mutedDataSets.isError;
-  const unmuted = (staleDataSets.data?.dataSets ?? []).filter(
-    (dataSet) => !mutedDataSets.data?.has(dataSet.dataSetId.toString()),
-  );
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-  const ranked = rankStaleDataSets(unmuted, currentEpoch, nowSeconds);
 
   if (ranked.length === 0) {
     return null;
