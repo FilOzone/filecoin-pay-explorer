@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
 
-const observed = vi.hoisted(() => ({ accountId: "", page: 0 }));
+const observed = vi.hoisted(() => ({ accountId: "", page: 0, blockWatch: undefined as boolean | undefined }));
 
 const mockUseAccountDataSets = vi.hoisted(() => vi.fn());
 
@@ -14,7 +14,10 @@ vi.mock("@/hooks/useAccountDataSets", () => ({
   },
 }));
 vi.mock("wagmi", () => ({
-  useBlockNumber: () => ({ data: undefined }),
+  useBlockNumber: ({ watch }: { watch: boolean }) => {
+    observed.blockWatch = watch;
+    return { data: undefined };
+  },
 }));
 vi.mock("./components", () => ({
   DatasetsEmptyState: () => <div>No datasets</div>,
@@ -61,6 +64,25 @@ describe("DatasetsSection", () => {
     });
 
     expect(render()).toContain("Datasets table");
+  });
+
+  it("watches blocks only while a terminated rail needs the current epoch", () => {
+    const withPdpState = (state: string) => ({
+      data: {
+        dataSets: [{ id: "0x1", dataSetId: 1n, pdpRail: { paymentRate: "10", state, endEpoch: "500" } }],
+        hasMore: false,
+      },
+      isLoading: false,
+      isError: false,
+    });
+
+    mockUseAccountDataSets.mockReturnValue(withPdpState("ACTIVE"));
+    render();
+    expect(observed.blockWatch).toBe(false);
+
+    mockUseAccountDataSets.mockReturnValue(withPdpState("TERMINATED"));
+    render();
+    expect(observed.blockWatch).toBe(true);
   });
 
   it("reads the connected payer's datasets", () => {

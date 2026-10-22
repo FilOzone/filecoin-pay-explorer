@@ -1,5 +1,6 @@
 import type { DataSet, Rail } from "@filecoin-pay/types";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
+import { epochsApplicable } from "../../SpendChart/utils/accrueSpend";
 
 type SpendRail = Pick<Rail, "paymentRate" | "state" | "endEpoch">;
 
@@ -8,10 +9,12 @@ function chargingEpochsInMonth(rail: SpendRail, currentEpoch: bigint | undefined
   if (rail.state === "FINALIZED") return 0n;
   if (rail.state !== "TERMINATED") return TIME_CONSTANTS.EPOCHS_PER_MONTH;
   if (currentEpoch === undefined) return undefined;
-
-  const remaining = BigInt(rail.endEpoch) - currentEpoch;
-  if (remaining <= 0n) return 0n;
-  return remaining < TIME_CONSTANTS.EPOCHS_PER_MONTH ? remaining : TIME_CONSTANTS.EPOCHS_PER_MONTH;
+  return epochsApplicable(
+    currentEpoch,
+    BigInt(rail.endEpoch),
+    currentEpoch,
+    currentEpoch + TIME_CONSTANTS.EPOCHS_PER_MONTH,
+  );
 }
 
 function monthlyRailSpend(rail: SpendRail | null | undefined, currentEpoch: bigint | undefined): bigint | undefined {

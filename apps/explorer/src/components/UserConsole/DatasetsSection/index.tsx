@@ -1,13 +1,6 @@
-import type { DataSet } from "@filecoin-pay/types";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@filecoin-pay/ui/components/pagination";
 import { useState } from "react";
 import { useBlockNumber } from "wagmi";
+import { ListPagination } from "@/components/shared/ListPagination";
 import { getChain } from "@/constants/chains";
 import { useAccountDataSets } from "@/hooks/useAccountDataSets";
 import type { Network } from "@/types";
@@ -18,38 +11,7 @@ import {
   DatasetsSectionLayout,
   DatasetsTable,
 } from "./components";
-
-const stepClass = (isDisabled: boolean) => (isDisabled ? "pointer-events-none opacity-50" : "cursor-pointer");
-
-/**
- * No total count is fetched for this list, so pagination can only step:
- * disable Previous on the first page, disable Next once no extra row came back.
- */
-function DatasetsPagination({
-  page,
-  hasMore,
-  onPageChange,
-}: {
-  page: number;
-  hasMore: boolean;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <Pagination>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious onClick={() => onPageChange(Math.max(1, page - 1))} className={stepClass(page === 1)} />
-        </PaginationItem>
-        <PaginationItem>
-          <PaginationNext onClick={() => onPageChange(page + 1)} className={stepClass(!hasMore)} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  );
-}
-
-/** Stable identity so the table memo survives a render with no data yet. */
-const NO_DATA_SETS: DataSet[] = [];
+import { monthlyDataSetSpend } from "./data/monthlySpend";
 
 interface DatasetsSectionProps {
   /** The connected payer. Every dataset listed here has this account as its payer. */
@@ -66,7 +28,14 @@ export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, net
 
   const { data, isLoading, isError } = useAccountDataSets(accountId, page, { networkOverride: network });
 
-  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
+  const dataSets = data?.dataSets ?? [];
+  // Spend that can't be estimated without the epoch (a terminated rail) is the only reason to watch blocks.
+  const needsEpoch = dataSets.some((dataSet) => monthlyDataSetSpend(dataSet, undefined) === undefined);
+  const { data: currentEpoch } = useBlockNumber({
+    chainId: getChain(network).id,
+    watch: needsEpoch,
+    query: { enabled: needsEpoch },
+  });
 
   function renderResults() {
     if (isLoading) {
@@ -77,8 +46,6 @@ export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, net
       return <DatasetsErrorState />;
     }
 
-    const dataSets = data?.dataSets ?? NO_DATA_SETS;
-
     if (dataSets.length === 0) {
       return <DatasetsEmptyState />;
     }
@@ -87,7 +54,7 @@ export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, net
       <>
         <DatasetsTable data={dataSets} network={network} currentEpoch={currentEpoch} />
         {page > 1 || data?.hasMore ? (
-          <DatasetsPagination page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />
+          <ListPagination kind='stepped' page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />
         ) : null}
       </>
     );

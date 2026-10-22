@@ -3,20 +3,13 @@ import { GET_ACCOUNT_DATA_SETS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { useGraphQLQuery } from "./useGraphQLQuery";
 
-/**
- * A payer's Warm Storage datasets. Every dataset the subgraph indexes belongs
- * to the single Warm Storage deployment on the network, so this reads by payer
- * alone; the console only calls it once the route's operator has already been
- * confirmed to be Warm Storage.
- */
-
-export const ACCOUNT_DATA_SETS_PAGE_SIZE = 10;
+const ACCOUNT_DATA_SETS_PAGE_SIZE = 10;
 
 interface AccountDataSetsResponse {
   dataSets: DataSet[];
 }
 
-export type AccountDataSetsPage = {
+type AccountDataSetsPage = {
   dataSets: DataSet[];
   /** A row beyond this page came back, so the next page has at least one. */
   hasMore: boolean;
@@ -26,7 +19,13 @@ interface AccountDataSetsOptions {
   networkOverride?: Network;
 }
 
-export const useAccountDataSets = (accountId: string, page: number = 1, options?: AccountDataSetsOptions) =>
+/**
+ * A payer's Warm Storage datasets. Every dataset the subgraph indexes belongs
+ * to the single Warm Storage deployment on the network, so this reads by payer
+ * alone; the console only calls it once the route's operator has already been
+ * confirmed to be Warm Storage.
+ */
+export const useAccountDataSets = (accountId: string, page: number, options?: AccountDataSetsOptions) =>
   useGraphQLQuery<AccountDataSetsResponse, AccountDataSetsPage>({
     queryKey: ["account", accountId, "dataSets", page],
     query: GET_ACCOUNT_DATA_SETS,

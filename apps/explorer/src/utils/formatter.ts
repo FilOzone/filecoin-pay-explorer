@@ -59,16 +59,11 @@ export function formatTokenCeiling(
   symbol: string = "",
   decimals: number = 2,
 ): string {
-  const precision = 10n ** BigInt(decimals);
-  const divisor = 10n ** BigInt(tokenDecimals);
-  const scaled = value * precision;
-  const ceiling = scaled / divisor + (scaled > 0n && scaled % divisor !== 0n ? 1n : 0n);
-  const negative = ceiling < 0n;
-  const magnitude = negative ? -ceiling : ceiling;
-  const whole = magnitude / precision;
-  const fraction = decimals === 0 ? "" : `.${(magnitude % precision).toString().padStart(decimals, "0")}`;
-  const amount = `${whole}${fraction}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
-  return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
+  const step = 10n ** BigInt(Math.max(0, Number(tokenDecimals) - decimals));
+  const remainder = value % step;
+  // Truncating toward zero already ceils a negative value.
+  const ceiled = value > 0n && remainder !== 0n ? value - remainder + step : value;
+  return formatTokenTruncated(ceiled, tokenDecimals, symbol, decimals);
 }
 
 export const formatFIL = (attoFil: string | bigint) => {
@@ -119,11 +114,11 @@ const BYTE_UNITS = [
   { unit: "KiB", size: SIZE_CONSTANTS.KiB },
 ] as const;
 
-export function formatBytes(bytes: bigint, decimals: number = 2): string {
+export function formatBytes(bytes: bigint): string {
   if (bytes <= 0n) return "0 B";
   const match = BYTE_UNITS.find(({ size }) => bytes >= size);
   if (!match) return `${bytes} B`;
-  return `${(Number(bytes) / Number(match.size)).toFixed(decimals)} ${match.unit}`;
+  return `${(Number(bytes) / Number(match.size)).toFixed(2)} ${match.unit}`;
 }
 
 export const isUnlimitedValue = (value: number | string | bigint): boolean => {
