@@ -324,11 +324,16 @@ describe("POST /mute-dataset", () => {
     }
   });
 
-  it("returns 422 when mutedUntil is in the past or more than a year away", async () => {
-    for (const mutedUntil of [inDays(-1), inDays(400)]) {
+  it("returns 422 when mutedUntil is in the past or past the 367-day cap", async () => {
+    for (const mutedUntil of [inDays(-1), inDays(368)]) {
       const res = await post("/mute-dataset", { message: "m", signature: "s", dataSetId: "1", mutedUntil });
       expect(res.status).toBe(422);
     }
+  });
+
+  it("accepts a mutedUntil exactly at the 367-day cap", async () => {
+    const res = await post("/mute-dataset", await signedMute("1", inDays(367)));
+    expect(res.status).toBe(200);
   });
 
   it("returns 429 when its own rate limit is exceeded", async () => {
