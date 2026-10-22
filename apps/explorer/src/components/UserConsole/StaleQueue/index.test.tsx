@@ -57,8 +57,8 @@ const loaded = (dataSets: unknown[], reachedPageLimit = false) => ({
   isError: false,
 });
 
-const render = (network: Network = "mainnet") =>
-  renderToStaticMarkup(<StaleQueue accountId={ACCOUNT} network={network} />);
+const render = (network: Network = "mainnet", isFilecoinChain = true) =>
+  renderToStaticMarkup(<StaleQueue accountId={ACCOUNT} network={network} isFilecoinChain={isFilecoinChain} />);
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_NOTIFICATIONS_API_URL", "https://notifications.test");
@@ -165,6 +165,16 @@ describe("StaleQueue", () => {
     mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")]));
 
     const markup = render("calibration");
+    expect(mockUseMutedDataSets).toHaveBeenLastCalledWith(undefined);
+    expect(markup).toContain("Row 0xa");
+    expect(markup).not.toContain("with Keep");
+  });
+
+  // During a Squid top-up the console shows mainnet but the wallet signs on its source chain, which the API rejects.
+  it("skips mutes and Keep while the wallet is off a Filecoin chain", () => {
+    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")]));
+
+    const markup = render("mainnet", false);
     expect(mockUseMutedDataSets).toHaveBeenLastCalledWith(undefined);
     expect(markup).toContain("Row 0xa");
     expect(markup).not.toContain("with Keep");

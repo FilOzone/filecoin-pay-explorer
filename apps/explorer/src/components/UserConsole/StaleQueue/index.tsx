@@ -16,6 +16,8 @@ interface StaleQueueProps {
   /** The connected payer. Every dataset ranked here has this account as its payer. */
   accountId: string;
   network: Network;
+  /** The wallet is on a Filecoin chain, so a mute's SIWE message carries the chain the API verifies against. */
+  isFilecoinChain: boolean;
 }
 
 /**
@@ -23,11 +25,14 @@ interface StaleQueueProps {
  * days inactive, with Keep (snooze) and a stubbed Terminate. Hidden while
  * loading and when nothing is stale.
  */
-export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) => {
+export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFilecoinChain }) => {
   const [page, setPage] = useState(1);
 
   // The notifications API serves a single network, so mutes only exist there.
-  const canMute = isNotificationsEligibleNetwork(network) && Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
+  const canMute =
+    isFilecoinChain &&
+    isNotificationsEligibleNetwork(network) &&
+    Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
 
   const staleDataSets = useStaleDataSets(accountId, { networkOverride: network });
   const mutedDataSets = useMutedDataSets(canMute ? accountId : undefined);
