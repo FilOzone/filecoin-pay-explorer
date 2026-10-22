@@ -134,7 +134,7 @@ describe("StaleQueue", () => {
   it("says when the list stopped at the load limit", () => {
     mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")], true));
 
-    expect(render()).toContain("Only 10,000 of them are ranked here.");
+    expect(render()).toContain("Only the first 10,000 by dataset ID");
   });
 
   it("skips mutes and Keep off the notifications network", () => {
