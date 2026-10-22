@@ -18,7 +18,9 @@ async function callMuteDataset(body: MuteRequest & { message: string; signature:
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     if (res.status === 429) throw new Error("Too many requests. Please wait a moment and try again.");
-    if (res.status === 400 && data?.error) throw new Error(data.error);
+    // Only mutedUntil can fail validation for a request built here, and it fails when the device clock is off.
+    if (res.status === 422)
+      throw new Error("This date was rejected. Check that your device clock is correct and try again.");
     if (res.status === 401) throw new Error("Signature verification failed. Please try again.");
     throw new Error(data?.error ?? data?.message ?? "Failed to mute this dataset. Please try again.");
   }
