@@ -1,9 +1,6 @@
 import type { DataSet } from "@filecoin-pay/types";
 import { monthlyDataSetSpend } from "../../DatasetsSection/data/monthlySpend";
 
-/** A dataset with no write for this many days shows up in the triage queue. */
-export const STALE_AFTER_DAYS = 30;
-
 const SECONDS_PER_DAY = 86_400n;
 
 export type RankedDataSet = {

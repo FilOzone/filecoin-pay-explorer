@@ -9,9 +9,9 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { useState } from "react";
-import { ExpiryPicker } from "@/components/shared/ExpiryPicker";
 import { formatDateTime } from "@/utils/formatter";
 import { resolveSnoozeUntil, SNOOZE_PRESETS, snoozeDateRange } from "../data/snooze";
+import { ExpiryPicker } from "./ExpiryPicker";
 
 interface SnoozeDialogProps {
   dataSetId: string;
@@ -53,7 +53,7 @@ export function SnoozeDialog({ dataSetId, onCancel, onConfirm }: SnoozeDialogPro
           <p className='text-xs text-muted-foreground'>
             {mutedUntil === null
               ? "Pick a date within the next year."
-              : `Alerts resume after ${formatDateTime(Number(mutedUntil) * 1000)}.`}
+              : `Alerts resume after ${formatDateTime(mutedUntil * 1000)}.`}
           </p>
         </div>
 
@@ -64,7 +64,7 @@ export function SnoozeDialog({ dataSetId, onCancel, onConfirm }: SnoozeDialogPro
           <Button
             variant='primary'
             disabled={mutedUntil === null}
-            onClick={() => mutedUntil !== null && onConfirm(Number(mutedUntil))}
+            onClick={() => mutedUntil !== null && onConfirm(mutedUntil)}
             className='flex-1'
           >
             Keep

@@ -1,11 +1,13 @@
 import type { DataSet } from "@filecoin-pay/types";
 import { useQuery } from "@tanstack/react-query";
-import { STALE_AFTER_DAYS } from "@/components/UserConsole/StaleQueue/data/staleness";
 import { GET_STALE_DATA_SETS } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { useGraphQLClient } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
+
+/** A dataset with no write for this many days shows up in the triage queue. */
+const STALE_AFTER_DAYS = 30;
 
 /** Up to 10,000 stale datasets. Past that, the queue says the list is incomplete. */
 const STALE_MAX_PAGES = 10;
@@ -40,5 +42,7 @@ export const useStaleDataSets = (accountId: string, options?: StaleDataSetsOptio
       return { dataSets: items, reachedPageLimit };
     },
     enabled: !!accountId,
+    // Up to 11 sequential 1,000-row reads, and the 30-day cutoff barely moves, so skip refetching on every focus.
+    staleTime: 10 * 60_000,
   });
 };

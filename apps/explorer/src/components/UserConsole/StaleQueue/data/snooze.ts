@@ -26,15 +26,15 @@ export function snoozeDateRange(nowMs: number): { min: string; max: string } {
 }
 
 /** When the snooze ends (unix seconds), or null when the choice is missing, past, or over a year away. */
-export function resolveSnoozeUntil(presetIndex: string, customDate: string, nowMs: number): bigint | null {
+export function resolveSnoozeUntil(presetIndex: string, customDate: string, nowMs: number): number | null {
   const nowSec = Math.floor(nowMs / 1000);
   if (presetIndex === "custom") {
     // `YYYY-MM-DD` strings compare in date order.
     if (!customDate || customDate > snoozeDateRange(nowMs).max) return null;
     // End of the picked day in local time.
     const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
-    return ts > nowSec ? BigInt(ts) : null;
+    return ts > nowSec ? ts : null;
   }
   const preset = SNOOZE_PRESETS[Number(presetIndex)];
-  return preset ? BigInt(nowSec + preset.seconds) : null;
+  return preset ? nowSec + preset.seconds : null;
 }
