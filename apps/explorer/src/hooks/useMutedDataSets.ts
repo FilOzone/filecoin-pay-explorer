@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-
-const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
+import { getNotificationsApi, NOTIFICATIONS_API_URL } from "@/services/notifications";
 
 type DataSetMute = { dataSetId: string };
 
@@ -19,16 +18,6 @@ function isMutedDataSetsResponse(value: unknown): value is { mutes: DataSetMute[
   );
 }
 
-async function fetchMutedDataSets(walletAddress: string, signal: AbortSignal): Promise<DataSetMute[]> {
-  const res = await fetch(`${API_URL}/muted-datasets?wallet=${walletAddress.toLowerCase()}`, {
-    signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
-  });
-  if (!res.ok) throw new Error("Failed to fetch muted datasets");
-  const data: unknown = await res.json();
-  if (!isMutedDataSetsResponse(data)) throw new Error("Unexpected response from notifications API");
-  return data.mutes;
-}
-
 // Module-level so the Set is rebuilt only when the mutes change, not on every render.
 const toIdSet = (mutes: DataSetMute[]) => new Set(mutes.map((mute) => mute.dataSetId));
 
@@ -36,9 +25,18 @@ const toIdSet = (mutes: DataSetMute[]) => new Set(mutes.map((mute) => mute.dataS
 export function useMutedDataSets(walletAddress: string | undefined) {
   return useQuery({
     queryKey: ["muted-datasets", walletAddress],
-    queryFn: ({ signal }) => fetchMutedDataSets(walletAddress as string, signal),
+    queryFn: async ({ signal }) => {
+      const data = await getNotificationsApi(
+        "/muted-datasets",
+        walletAddress as string,
+        isMutedDataSetsResponse,
+        "Failed to fetch muted datasets",
+        signal,
+      );
+      return data.mutes;
+    },
     select: toIdSet,
-    enabled: !!walletAddress && !!API_URL,
+    enabled: !!walletAddress && !!NOTIFICATIONS_API_URL,
     staleTime: 30_000,
     retry: false,
   });
