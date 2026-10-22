@@ -50,7 +50,7 @@ const verifyQuery = z.object({
   token: z.string().min(1),
 });
 
-const statusQuery = z.object({
+const walletQuery = z.object({
   wallet: z
     .string()
     .min(1)
@@ -76,13 +76,6 @@ const muteDatasetBody = siweBody.extend({
     .int()
     .refine((until) => until > Date.now() / 1000, "mutedUntil must be in the future")
     .refine((until) => until <= Date.now() / 1000 + MAX_MUTE_SECONDS, "mutedUntil is too far in the future"),
-});
-
-const mutedDatasetsQuery = z.object({
-  wallet: z
-    .string()
-    .min(1)
-    .transform((s) => s.toLowerCase()),
 });
 
 // --- Types ---
@@ -229,7 +222,7 @@ app.get(
 // Returns { subscribed: boolean }. No email address exposed.
 app.get(
   "/status",
-  zValidator("query", statusQuery, (result, c) => {
+  zValidator("query", walletQuery, (result, c) => {
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
@@ -343,7 +336,7 @@ app.post(
 // datasets it muted, the same sensitivity as /status's subscribed boolean.
 app.get(
   "/muted-datasets",
-  zValidator("query", mutedDatasetsQuery, (result, c) => {
+  zValidator("query", walletQuery, (result, c) => {
     if (!result.success) return c.json({ error: result.error.message ?? "Invalid request body" }, 422);
   }),
   async (c) => {
