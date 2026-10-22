@@ -8,7 +8,7 @@ const { buildNotificationsSiwe, getNotificationsApi, postNotificationsApi } = aw
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
 const respond = (status: number, body: unknown) => {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
