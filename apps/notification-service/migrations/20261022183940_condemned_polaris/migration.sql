@@ -7,4 +7,5 @@ CREATE TABLE `muted_data_sets` (
 	CONSTRAINT "wallet_address_lower" CHECK("wallet_address" = lower("wallet_address"))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `idx_muted_data_sets_wallet_dataset` ON `muted_data_sets` (`wallet_address`,`data_set_id`);
+CREATE UNIQUE INDEX `idx_muted_data_sets_wallet_dataset` ON `muted_data_sets` (`wallet_address`,`data_set_id`);--> statement-breakpoint
+CREATE INDEX `idx_muted_data_sets_wallet_until` ON `muted_data_sets` (`wallet_address`,`muted_until`);

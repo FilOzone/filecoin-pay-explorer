@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "39b25d44-a19c-4c0b-98e1-ecca7a512b49",
+  "id": "561a2147-acd9-437b-b634-602d7f0b7672",
   "prevIds": ["ae003242-9593-40f6-848d-650a367d0014"],
   "ddl": [
     {
@@ -284,6 +284,24 @@
       "where": null,
       "origin": "manual",
       "name": "idx_muted_data_sets_wallet_dataset",
+      "entityType": "indexes",
+      "table": "muted_data_sets"
+    },
+    {
+      "columns": [
+        {
+          "value": "wallet_address",
+          "isExpression": false
+        },
+        {
+          "value": "muted_until",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_muted_data_sets_wallet_until",
       "entityType": "indexes",
       "table": "muted_data_sets"
     },

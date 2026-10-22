@@ -60,6 +60,8 @@ export const mutedDataSets = sqliteTable(
   (table) => [
     check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
     uniqueIndex("idx_muted_data_sets_wallet_dataset").on(table.walletAddress, table.dataSetId),
+    // Expired mutes are kept, so reads of a wallet's active mutes range over muted_until instead of scanning them.
+    index("idx_muted_data_sets_wallet_until").on(table.walletAddress, table.mutedUntil),
   ],
 );
 
