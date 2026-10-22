@@ -72,7 +72,8 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
       ) : null}
       {staleDataSets.data?.reachedPageLimit ? (
         <p className='text-xs text-muted-foreground'>
-          This account has more than 10,000 inactive datasets. Only 10,000 of them are ranked here.
+          This account has more than 10,000 inactive datasets, counting kept ones. Only the first 10,000 by dataset ID
+          are ranked here, so higher-ranked datasets may be missing.
         </p>
       ) : null}
     </StaleQueueLayout>
