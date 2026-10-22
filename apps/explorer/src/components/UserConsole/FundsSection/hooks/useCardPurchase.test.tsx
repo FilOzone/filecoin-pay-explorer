@@ -128,6 +128,7 @@ describe("useCardPurchase", () => {
     await act(async () => latest.buyWithCard());
 
     expect(privy.fund).toHaveBeenCalledWith({
+      defaultAmount: "20",
       destination: { address: ADDRESS, asset: BASE_USDC, chain: "eip155:8453" },
       environment: "production",
       source: {},

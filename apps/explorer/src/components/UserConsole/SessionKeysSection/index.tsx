@@ -12,19 +12,12 @@ import { useSwitchChain } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
-import { dropSearchParams } from "@/hooks/useConsumedSearchParams";
+import { dropSearchParams } from "@/hooks/useLinkSearchParams";
 import { type SessionKeysIdentity, type SessionKeyWithStatus, useSessionKeys } from "@/hooks/useSessionKeys";
 import type { Network } from "@/types";
-import { type AuthorizeParamError, LINK_PARAMS } from "@/utils/authorizeParam";
+import { LINK_PARAMS, type RevokeLinkError } from "@/utils/authorizeParam";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
-import {
-  existingKeyPrefill,
-  hasUniformExpiry,
-  pickRevokeTarget,
-  SCOPE_BY_ID,
-  type ScopeId,
-  scopeStatusWord,
-} from "@/utils/sessionKeys";
+import { hasUniformExpiry, pickRevokeTarget, SCOPE_BY_ID, scopeStatusWord } from "@/utils/sessionKeys";
 import { CreateKeyFlow } from "./CreateKeyFlow";
 import { RevokeDialog } from "./RevokeDialog";
 
@@ -32,15 +25,8 @@ interface SessionKeysSectionProps {
   network: Network;
   /** Undefined while no wallet is connected; the section then shows a prompt instead of the list. */
   account?: Hex;
-  prefillAddress?: Hex | null;
-  prefillScopes?: ScopeId[] | null;
-  prefillNetwork?: Network | null;
-  /** Key name the link suggests; prefilled and editable. */
-  prefillName?: string | null;
-  /** Expiry in days the link suggests; prefilled and editable. */
-  prefillDays?: number | null;
-  /** Set when the link carried an `authorize` or `revoke` value that could not be used. */
-  prefillError?: AuthorizeParamError | null;
+  /** Set when the link carried a `revoke` value that could not be used. */
+  revokeError?: RevokeLinkError | null;
   /** Session key a `?revoke=` link names, from `filecoin-pin logout`. */
   revokeAddress?: Hex | null;
   revokeNetwork?: Network | null;
@@ -91,25 +77,13 @@ const SessionKeysSection = ({ account, ...rest }: SessionKeysSectionProps) => {
   return <ConnectedSessionKeys key={`${rest.network}:${account}`} account={account} {...rest} />;
 };
 
-const PREFILL_ERROR_COPY: Record<AuthorizeParamError, string> = {
+const REVOKE_ERROR_COPY: Record<RevokeLinkError, string> = {
   "bad-checksum": "The address in this link is misspelled, so nothing was changed. Ask for a new link.",
   "not-an-address": "This link does not contain a valid address, so nothing was changed. Ask for a new link.",
   "no-network": "This link does not say which network it is for, so nothing was changed. Ask for a new link.",
-  "no-scopes": "This link does not say which scopes it needs, so nothing was changed. Ask for a new link.",
 };
 
-const ConnectedSessionKeys = ({
-  network,
-  account,
-  prefillAddress,
-  prefillScopes,
-  prefillNetwork,
-  prefillName,
-  prefillDays,
-  prefillError,
-  revokeAddress,
-  revokeNetwork,
-}: ConnectedProps) => {
+const ConnectedSessionKeys = ({ network, account, revokeError, revokeAddress, revokeNetwork }: ConnectedProps) => {
   const { keys, addKey, removeKey, syncFromChain, refetchStatuses, statusReadsPending, markConfirmed, registry } =
     useSessionKeys(network, account);
   const explorerUrl = getChain(network).blockExplorers?.default.url;
@@ -118,14 +92,8 @@ const ConnectedSessionKeys = ({
     ...(explorerUrl ? [{ label: "Registry on Blockscout", href: `${explorerUrl}/address/${registry.address}` }] : []),
     { label: "Source code", href: SOURCE_CODE_URL },
   ];
+  // A link's key is authorized on /console/setup; this form always starts empty.
   const [createOpen, setCreateOpen] = useState(false);
-  // Only the link (on arrival, or from the banner's button) carries its address
-  // and scopes into the dialog; "+ New session key" always opens a plain form.
-  const [createSource, setCreateSource] = useState<"link" | "manual">("manual");
-  const openCreate = (source: "link" | "manual") => {
-    setCreateSource(source);
-    setCreateOpen(true);
-  };
   // The target remembers the identity it was chosen under: a revoke is sent
   // by the connected wallet, so after a wallet or network switch the dialog
   // must not offer a signer the new wallet never authorized.
@@ -152,35 +120,8 @@ const ConnectedSessionKeys = ({
     .slice()
     .sort((a, b) => b.createdAt - a.createdAt);
 
-  // URL request (?authorize=) guards
-  const isSelfAuthRequest = prefillAddress != null && prefillAddress.toLowerCase() === account.toLowerCase();
-  const isNetworkMismatch = prefillAddress != null && prefillNetwork !== network;
   const { switchChain } = useSwitchChain();
   const revokeNetworkMismatch = revokeAddress != null && revokeNetwork !== network;
-  const cliPrefill = prefillAddress != null && !isSelfAuthRequest && !isNetworkMismatch ? prefillAddress : null;
-  // Re-authorizing a key this browser already knows: the dialog becomes an add-scopes flow
-  const existingForPrefill = cliPrefill
-    ? keys.find((k) => k.sessionKeyPublic.toLowerCase() === cliPrefill.toLowerCase())
-    : undefined;
-  const existingKeyForPrefill = existingKeyPrefill(existingForPrefill);
-  // A link for a key this list holds waits for that key's live reads: opening
-  // before they resolve would offer a fresh expiry for a key that may be active.
-  // Reads that came back with a failed entry leave the key unknown too; that gets a retry.
-  const prefillPending = existingForPrefill?.status === "unknown";
-  const prefillUnreadable = prefillPending && !statusReadsPending;
-  const linkPrefill = createSource === "link" && !prefillPending ? cliPrefill : null;
-  // ?authorize= link: open the prefilled dialog once, as soon as it can open.
-  // Closing it leaves the banner to reopen it; it does not open again by itself.
-  const authorizeLinkOpenedRef = useRef(false);
-  useEffect(() => {
-    if (!cliPrefill || prefillPending || authorizeLinkOpenedRef.current) return;
-    authorizeLinkOpenedRef.current = true;
-    // A form the owner opened by hand while the key's status loaded is theirs:
-    // switching it to the link would replace what they entered.
-    if (createOpen) return;
-    setCreateSource("link");
-    setCreateOpen(true);
-  }, [cliPrefill, prefillPending, createOpen]);
 
   /** Resolves true when the chain was read, false when the read failed and was reported. */
   const handleSync = useCallback(async (): Promise<boolean> => {
@@ -261,63 +202,9 @@ const ConnectedSessionKeys = ({
 
   return (
     <div className='flex flex-col gap-4'>
-      {cliPrefill && (
-        <Notice tone='info' className='p-4 flex items-start justify-between gap-4 flex-wrap'>
-          <div>
-            <p className='font-semibold'>
-              A link is requesting authorization for <span className='font-mono break-all'>{cliPrefill}</span>
-            </p>
-            <p className='text-xs mt-1'>
-              This page can't verify who sent this link — review before you authorize.
-              {prefillScopes && prefillScopes.length > 0 && (
-                <>
-                  {" "}
-                  Requested scopes: <b>{prefillScopes.map((id) => SCOPE_BY_ID[id].label).join(", ")}</b>.
-                </>
-              )}
-            </p>
-            <p className='text-sm mt-2'>
-              You are authorizing as <span className='font-mono break-all font-semibold'>{account}</span>. If that is
-              not the wallet you mean, switch wallets before you continue.
-            </p>
-          </div>
-          {prefillUnreadable ? (
-            <Button variant='primary' size='compact' onClick={() => refetchStatuses()}>
-              Could not read this key's status. Retry
-            </Button>
-          ) : (
-            <Button variant='primary' size='compact' disabled={prefillPending} onClick={() => openCreate("link")}>
-              {prefillPending ? "Checking key status…" : "Review & authorize"}
-            </Button>
-          )}
-        </Notice>
-      )}
-      {prefillError && (
-        <div
-          role='alert'
-          className='rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800 p-4 text-sm text-amber-900 dark:text-amber-200'
-        >
-          <p className='font-semibold'>This link could not be used</p>
-          <p className='text-xs mt-1'>{PREFILL_ERROR_COPY[prefillError]}</p>
-        </div>
-      )}
-      {isSelfAuthRequest && (
-        <Notice tone='warn' className='p-4'>
-          <p className='font-semibold'>Authorization request ignored: it names your connected wallet address.</p>
-          <p className='text-xs mt-1'>A session key must be a separate keypair, retry with a new address.</p>
-        </Notice>
-      )}
-      {isNetworkMismatch && !isSelfAuthRequest && (
-        <Notice tone='warn' className='p-4'>
-          <p className='font-semibold'>
-            This authorization request is for <span className='capitalize'>{prefillNetwork}</span>, but your wallet is
-            connected to <span className='capitalize'>{network}</span>.
-          </p>
-          <p className='text-xs mt-1'>
-            Nothing was added — approving it here would grant the scopes on{" "}
-            <span className='capitalize'>{network}</span> instead. Switch your wallet to{" "}
-            <span className='capitalize'>{prefillNetwork}</span> to review the request.
-          </p>
+      {revokeError && (
+        <Notice tone='warn' role='alert' title='This link could not be used' className='p-4'>
+          <p className='text-xs mt-1'>{REVOKE_ERROR_COPY[revokeError]}</p>
         </Notice>
       )}
       {revokeNetworkMismatch && (
@@ -366,7 +253,7 @@ const ConnectedSessionKeys = ({
         </div>
         <div className='flex gap-2 shrink-0 flex-wrap'>
           {syncButton}
-          <Button variant='primary' size='compact' onClick={() => openCreate("manual")}>
+          <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
             + New session key
           </Button>
         </div>
@@ -391,7 +278,7 @@ const ConnectedSessionKeys = ({
           description='Create one to let an app or agent upload to your datasets without holding your wallet key.'
         >
           <div className='flex gap-2 justify-center'>
-            <Button variant='primary' size='compact' onClick={() => openCreate("manual")}>
+            <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
               + New session key
             </Button>
             {syncButton}
@@ -552,27 +439,13 @@ const ConnectedSessionKeys = ({
 
       <CreateKeyFlow
         open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          // Closing the link's form dismisses the link: a reload must not open it again.
-          // A wallet or network switch remounts this section instead, so the link survives that.
-          if (!open && createSource === "link") dropSearchParams(LINK_PARAMS);
-        }}
+        onOpenChange={setCreateOpen}
         network={network}
         account={account}
         registry={registry}
         explorerUrl={explorerUrl}
-        prefillAddress={linkPrefill}
-        prefillScopes={linkPrefill ? prefillScopes : null}
-        prefillName={linkPrefill ? prefillName : null}
-        prefillDays={linkPrefill ? prefillDays : null}
-        existingKey={linkPrefill ? existingKeyForPrefill : null}
         onCreated={addKey}
-        onConfirmed={(signer) => {
-          markConfirmed(signer);
-          // Done: a reload must not reopen the form for a key that is now authorized.
-          if (cliPrefill && signer.toLowerCase() === cliPrefill.toLowerCase()) dropSearchParams(LINK_PARAMS);
-        }}
+        onConfirmed={markConfirmed}
         onFailed={removeKey}
       />
       <RevokeDialog

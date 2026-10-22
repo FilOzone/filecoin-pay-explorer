@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { getAddress } from "viem";
 import { describe, it } from "vitest";
 import {
-  parseAuthorizeLink,
   parseAuthorizeParam,
   parseNetworkParam,
   parseRevokeLink,
@@ -144,92 +143,9 @@ describe("parseNetworkParam", () => {
   });
 });
 
-describe("parseAuthorizeLink", () => {
-  it("refuses a link with no usable scopes", () => {
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams(`authorize=${LOWERCASE}&network=calibration`)), {
-      error: "no-scopes",
-    });
-    assert.deepEqual(
-      parseAuthorizeLink(new URLSearchParams(`authorize=${LOWERCASE}&scopes=nope&network=calibration`)),
-      { error: "no-scopes" },
-    );
-  });
-
-  it("reports a link that names scopes or a network but no address", () => {
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("scopes=addPieces")), { error: "not-an-address" });
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("network=calibration")), { error: "not-an-address" });
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("authorize=&scopes=addPieces")), {
-      error: "not-an-address",
-    });
-    assert.equal(parseAuthorizeLink(new URLSearchParams("foo=bar")), null);
-  });
-
-  const link = (query: string) => parseAuthorizeLink(new URLSearchParams(query));
-
-  it("returns every validated field for a complete link", () => {
-    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration`), {
-      address: CHECKSUMMED,
-      scopes: ["addPieces"],
-      network: "calibration",
-      name: null,
-      days: null,
-    });
-  });
-
-  it("carries a suggested name, cleaned like any other key name", () => {
-    const named = (name: string) =>
-      link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=${encodeURIComponent(name)}`);
-    assert.equal((named("  filecoin-cli  ") as { name: string | null }).name, "filecoin-cli");
-    assert.equal((named("ci\u202Evne.yek") as { name: string | null }).name, "civne.yek");
-    assert.equal((named("x".repeat(80)) as { name: string | null }).name, "x".repeat(64));
-  });
-
-  it("carries suggested days, and treats unusable days as none, never as a broken link", () => {
-    const withDays = (days: string) =>
-      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
-        .days;
-    assert.deepEqual(["7", "365", "0", "1.5", "soon", "-3"].map(withDays), [7, 365, null, null, null, null]);
-  });
-
-  it("caps the days a link may suggest, however many it asks for", () => {
-    const withDays = (days: string) =>
-      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&days=${days}`) as { days: number | null })
-        .days;
-    assert.deepEqual(["366", "3650", "999999999999"].map(withDays), [365, 365, 365]);
-  });
-
-  it("treats a blank or unusable name as none, never as a broken link", () => {
-    assert.equal(
-      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=`) as { name: null }).name,
-      null,
-    );
-    assert.equal(
-      (link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration&name=%E2%80%AE`) as { name: null }).name,
-      null,
-    );
-  });
-
-  it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {
-    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces`), { error: "no-network" });
-    assert.deepEqual(link(`authorize=${LOWERCASE}&network=calibraiton`), { error: "no-network" });
-  });
-
-  it("reports the address error first, and nothing when there is no request", () => {
-    assert.deepEqual(link("authorize=0xnope&network=mainnet"), { error: "not-an-address" });
-    assert.equal(link("deposit=2"), null);
-  });
-});
-
-describe("a link that is only a revoke request", () => {
-  const revokeOnly = new URLSearchParams(`revoke=${LOWERCASE}&network=calibration`);
-
-  it("is not read as a pairing request", () => {
-    assert.equal(parseAuthorizeLink(revokeOnly), null);
-  });
-
-  it("wins over an authorize in the same link, since it only removes authority", () => {
+describe("a link that carries both a revoke and an authorize", () => {
+  it("is read as the revoke, since it only removes authority", () => {
     const both = new URLSearchParams(`authorize=${LOWERCASE}&scopes=createDataSet&revoke=${LOWERCASE}&network=mainnet`);
-    assert.equal(parseAuthorizeLink(both), null);
     assert.deepEqual(parseRevokeLink(both), { address: CHECKSUMMED, network: "mainnet" });
   });
 });

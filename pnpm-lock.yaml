@@ -290,6 +290,9 @@ importers:
       '@filecoin-pay/configs':
         specifier: workspace:*
         version: link:../configs
+      '@filoz/synapse-core':
+        specifier: ^0.9.0
+        version: 0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       assemblyscript:
         specifier: 0.19.23
         version: 0.19.23
@@ -13536,6 +13539,20 @@ snapshots:
       sync-multihash-sha2: 1.0.0
       viem: 2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5)
       zod: 4.6.5
+    transitivePeerDependencies:
+      - typescript
+
+  '@filoz/synapse-core@0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      dnum: 2.17.0
+      iso-web: 3.1.2
+      multiformats: 14.0.5
+      ox: 0.14.29(typescript@6.0.3)(zod@4.4.3)
+      p-locate: 7.0.0
+      p-some: 7.0.0
+      sync-multihash-sha2: 1.0.0
+      viem: 2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      zod: 4.4.3
     transitivePeerDependencies:
       - typescript
 
