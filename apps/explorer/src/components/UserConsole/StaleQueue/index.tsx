@@ -45,6 +45,8 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
     );
   }
 
+  // Without the mutes, already-kept rows can't be told apart, so Keep would let them be kept again.
+  const mutesFailed = mutedDataSets.isError;
   const unmuted = (staleDataSets.data?.dataSets ?? []).filter(
     (dataSet) => !mutedDataSets.data?.has(dataSet.dataSetId.toString()),
   );
@@ -62,9 +64,14 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network }) =>
 
   return (
     <StaleQueueLayout>
+      {mutesFailed ? (
+        <p role='alert' className='text-sm text-destructive'>
+          Couldn't load the datasets you kept, so some below may already be kept. Keep is unavailable until they load.
+        </p>
+      ) : null}
       <ul className='flex flex-col divide-y'>
         {pageRows.map((entry) => (
-          <StaleQueueRow key={entry.dataSet.id} {...entry} accountId={accountId} canMute={canMute} />
+          <StaleQueueRow key={entry.dataSet.id} {...entry} accountId={accountId} canMute={canMute && !mutesFailed} />
         ))}
       </ul>
       {pageCount > 1 ? (

@@ -91,6 +91,16 @@ describe("StaleQueue", () => {
     expect(render()).toContain("Failed to load inactive datasets");
   });
 
+  it("shows the mutes error and hides Keep when the mutes request fails", () => {
+    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")]));
+    mockUseMutedDataSets.mockReturnValue({ data: undefined, isLoading: false, isError: true });
+
+    const markup = render();
+    expect(markup).toContain("Couldn&#x27;t load the datasets you kept");
+    expect(markup).toContain("Row 0xa");
+    expect(markup).not.toContain("with Keep");
+  });
+
   it("renders rows highest spend first", () => {
     mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1", "1"), staleDataSet("0xb", "2", "20")]));
 
