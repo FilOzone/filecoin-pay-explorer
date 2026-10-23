@@ -21,7 +21,7 @@ export interface Chain extends SynapseChain {
   contracts: SynapseChain["contracts"] & {
     payments: SynapseChain["contracts"]["filecoinPay"];
     /** Mainnet only. The direct Squid deposit's FIL top-up swaps USDFC to WFIL through this pool. */
-    sushi?: { router: Address; wfil: Address; wfilUsdfcPoolFee: number };
+    sushi?: { router: Address; quoter: Address; wfil: Address; wfilUsdfcPoolFee: number };
   };
   /** Testnet faucets; mainnet has none. */
   faucets?: FaucetProvider[];
@@ -60,6 +60,7 @@ export const mainnet = {
     payments: synapseMainnet.contracts.filecoinPay,
     sushi: {
       router: "0x0389879e0156033202C44BF784ac18fC02edeE4f",
+      quoter: "0x3b9E156E93146B10551840701337B1C5356B1A98",
       wfil: "0x60E1773636CF5E4A227d9AC24F20fEca034ee25A",
       wfilUsdfcPoolFee: 500,
     },

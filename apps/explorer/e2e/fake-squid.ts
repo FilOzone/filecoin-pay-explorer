@@ -12,6 +12,7 @@ import {
   parseAbi,
   toFunctionSelector,
 } from "viem";
+import { quoterAbi } from "./fake-usdc-gas";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data?: Hex; hash: Hex };
@@ -28,7 +29,7 @@ const GET_L1_FEE = toFunctionSelector("getL1Fee(bytes)");
 const SQUID_API_HOST = "v2.api.squidrouter.com";
 const NATIVE_TOKEN = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SQUID_ROUTER = "0xce16f69375520ab01377ce7b88f5ba8c48f8d666";
-const WFIL = "0x60e1773636cf5e4a227d9ac24f20feca034ee25a";
+const SUSHI_QUOTER = "0x3b9e156e93146b10551840701337b1c5356b1a98";
 const DESTINATION_HASH = `0x${"de".repeat(32)}` as const;
 // viem only multicalls at blocks after Multicall3 was deployed on Base.
 const BASE_BLOCK = 30_000_000n;
@@ -209,6 +210,15 @@ export async function installFakeSquid(
     if (call.method === "eth_getTransactionReceipt" && call.params[0] === DESTINATION_HASH) return depositReceipt();
     if (call.method !== "eth_call") return undefined;
     const { to, data } = call.params[0] as { to: string; data: Hex };
+    // The FIL top-up's price: 1 WFIL buys 5 USDFC.
+    if (to.toLowerCase() === SUSHI_QUOTER) {
+      const { args } = decodeFunctionData({ abi: quoterAbi, data });
+      return encodeFunctionResult({
+        abi: quoterAbi,
+        functionName: "quoteExactOutputSingle",
+        result: [args[0].amount * 5n, 0n, 0, 0n],
+      });
+    }
     if (to.toLowerCase() !== MULTICALL3) return readPayments(to, data);
     const { functionName, args } = decodeFunctionData({ abi: multicall3Abi, data });
     if (functionName !== "aggregate3") return undefined;
@@ -263,18 +273,7 @@ export async function installFakeSquid(
             estimate: {
               toAmount,
               toAmountMin: (BigInt(toAmount) - minimumShortfall).toString(),
-              actions: [
-                // The Filecoin leg the FIL top-up is priced from: 1 WFIL buys 5 USDFC.
-                {
-                  type: "swap",
-                  toChain: "314",
-                  fromToken: { address: WFIL },
-                  toToken: { address: usdfc },
-                  fromAmount: (10n ** 18n).toString(),
-                  toAmount: (5n * 10n ** 18n).toString(),
-                },
-                { type: "custom", toChain: "314", provider: "Filecoin Pay" },
-              ],
+              actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
               feeCosts:
                 nativeFee === 0n
                   ? []
