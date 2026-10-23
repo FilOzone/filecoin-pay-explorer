@@ -12,6 +12,7 @@ import {
   parseAbi,
   toFunctionSelector,
 } from "viem";
+import { quoterAbi } from "./fake-usdc-gas";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data?: Hex; hash: Hex };
@@ -28,7 +29,6 @@ const GET_L1_FEE = toFunctionSelector("getL1Fee(bytes)");
 const SQUID_API_HOST = "v2.api.squidrouter.com";
 const NATIVE_TOKEN = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SQUID_ROUTER = "0xce16f69375520ab01377ce7b88f5ba8c48f8d666";
-const AXL_USDC = "0xeb466342c4d449bc9f53a865d5cb90586f405215";
 const SUSHI_QUOTER = "0x3b9e156e93146b10551840701337b1c5356b1a98";
 const DESTINATION_HASH = `0x${"de".repeat(32)}` as const;
 // viem only multicalls at blocks after Multicall3 was deployed on Base.
@@ -40,10 +40,6 @@ const GAS_PRICE = 1_000_000n;
 const paymentsAbi = parseAbi([
   "function accounts(address token, address owner) view returns (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt)",
   "event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)",
-]);
-const quoterAbi = parseAbi([
-  "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
-  "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
 
 /**
@@ -277,18 +273,7 @@ export async function installFakeSquid(
             estimate: {
               toAmount,
               toAmountMin: (BigInt(toAmount) - minimumShortfall).toString(),
-              actions: [
-                // Squid's direct axlUSDC→USDFC leg, with no WFIL swap to price the FIL top-up from.
-                {
-                  type: "swap",
-                  toChain: "314",
-                  fromToken: { address: AXL_USDC },
-                  toToken: { address: usdfc },
-                  fromAmount: params.fromAmount,
-                  toAmount,
-                },
-                { type: "custom", toChain: "314", provider: "Filecoin Pay" },
-              ],
+              actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
               feeCosts:
                 nativeFee === 0n
                   ? []

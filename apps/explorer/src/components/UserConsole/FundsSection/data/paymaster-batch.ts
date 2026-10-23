@@ -1,6 +1,6 @@
 import { type Address, encodeFunctionData, erc20Abi, type Hex, type PublicClient, parseAbi } from "viem";
 import { CIRCLE_PAYMASTER_ADDRESS } from "./circle-paymaster";
-import { ceilDiv, type SquidDepositTransaction } from "./squid-deposit-route";
+import { ceilDiv, quoterV2Abi, type SquidDepositTransaction } from "./squid-deposit-route";
 
 /** Uniswap v3 SwapRouter02 on Base: swaps and unwraps in one multicall, with plain ERC-20 approvals. */
 export const BASE_SWAP_ROUTER_ADDRESS: Address = "0x2626664c2603336E57B271c5C0b26F421741e481";
@@ -18,11 +18,6 @@ export const swapRouter02Abi = parseAbi([
   "function exactOutputSingle(ExactOutputSingleParams params) payable returns (uint256 amountIn)",
   "function unwrapWETH9(uint256 amountMinimum, address recipient) payable",
   "function multicall(bytes[] data) payable returns (bytes[] results)",
-]);
-
-const quoterV2Abi = parseAbi([
-  "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
-  "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
 
 /** Most `sourceToken` the swap may spend to buy exactly `nativeFee` wei: the quoted input plus slippage. */

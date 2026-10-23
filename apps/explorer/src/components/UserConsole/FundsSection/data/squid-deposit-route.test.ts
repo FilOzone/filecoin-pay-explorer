@@ -7,7 +7,6 @@ import {
   captureReviewedSquidDepositCaps,
   estimateDepositNetworkFeeMaximum,
   FIL_GAS_TOP_UP_AMOUNT,
-  type FilGasTopUpPriceClient,
   getDepositExchangeRate,
   getDepositRequiredNativeBalance,
   getDepositTransactionKinds,
@@ -17,6 +16,7 @@ import {
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
   parseSquidDepositRoute,
   planFilGasTopUp,
+  quoterV2Abi,
   readSourceFeesPerGas,
   requestSquidDepositRoute,
   type SquidDepositFeeClient,
@@ -24,7 +24,6 @@ import {
   SUSHI_V3_QUOTER_ADDRESS,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
   squidDepositAbi,
-  sushiQuoterAbi,
   sushiSwapRouterAbi,
   WFIL_ADDRESS,
   WFIL_USDFC_POOL_FEE,
@@ -204,12 +203,12 @@ describe("buildDepositPostHook", () => {
 describe("planFilGasTopUp", () => {
   it("prices 0.05 FIL from the Sushi WFIL/USDFC pool with headroom", async () => {
     const simulateContract = vi.fn().mockResolvedValue({ result: [100_000_000_000_000_000n, 0n, 0, 0n] });
-    const client = { simulateContract } as unknown as FilGasTopUpPriceClient;
+    const client = { simulateContract } as unknown as Parameters<typeof planFilGasTopUp>[0];
 
     await expect(planFilGasTopUp(client, USDFC, now)).resolves.toEqual(topUp);
     expect(simulateContract).toHaveBeenCalledWith({
       address: SUSHI_V3_QUOTER_ADDRESS,
-      abi: sushiQuoterAbi,
+      abi: quoterV2Abi,
       functionName: "quoteExactOutputSingle",
       args: [
         {
@@ -563,25 +562,10 @@ describe("parseSquidDepositRoute", () => {
     expect(isExecutableQuote(quote)).toBe(false);
   });
 
-  it("reports the USDFC left after a FIL top-up on a route with no WFIL leg", () => {
+  it("reports the USDFC left after a FIL top-up", () => {
     const topUpRequest = { ...request, filGasTopUp: topUp };
     const quote = parseSquidDepositRoute(
-      fakeRoute({
-        params: { postHook: buildDepositPostHook(request, topUp) },
-        estimate: {
-          actions: [
-            {
-              type: "swap",
-              toChain: "314",
-              fromAmount: "100000000",
-              toAmount: "93000000000000000000",
-              fromToken: { address: "0xEB466342C4d449BC9f53A865D5Cb90586f405215" },
-              toToken: { address: USDFC },
-            },
-            { type: "custom", fromChain: "314", toChain: "314", provider: "Filecoin Pay" },
-          ],
-        },
-      }),
+      fakeRoute({ params: { postHook: buildDepositPostHook(request, topUp) } }),
       topUpRequest,
       true,
       now,
@@ -592,12 +576,14 @@ describe("parseSquidDepositRoute", () => {
     expect(quote.filGasTopUp).toEqual(topUp);
   });
 
-  it("rejects a FIL top-up that consumes the minimum destination amount", () => {
-    const consumingTopUp = { ...topUp, spendUsdfc: 92_000_000_000_000_000_000n };
+  it("rejects a route whose destination amount cannot cover the FIL top-up", () => {
     expect(() =>
       parseSquidDepositRoute(
-        fakeRoute({ params: { postHook: buildDepositPostHook(request, consumingTopUp) } }),
-        { ...request, filGasTopUp: consumingTopUp },
+        fakeRoute({
+          params: { postHook: buildDepositPostHook(request, topUp) },
+          estimate: { toAmount: "100000000000000000" },
+        }),
+        { ...request, filGasTopUp: topUp },
         true,
         now,
       ),

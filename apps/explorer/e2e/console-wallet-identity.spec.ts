@@ -129,7 +129,7 @@ test("a Squid deposit paid from another account of the extension credits the con
     `${payer.slice(0, 6)}...${payer.slice(-4)}`,
   );
   await squid.getByLabel(/^Amount/).fill("10");
-  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  // Keep the run to the plain deposit.
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
@@ -237,7 +237,7 @@ test("a Squid deposit paid from an extension without Filecoin closes the dialog"
     `${payer.slice(0, 6)}...${payer.slice(-4)} · Rabby`,
   );
   await squid.getByLabel(/^Amount/).fill("10");
-  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  // Keep the run to the plain deposit.
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
