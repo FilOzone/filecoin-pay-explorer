@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.2.2...v1.3.0) (2026-10-23)
+
+
+### Features
+
+* **subgraph:** index fwss datasets ([#482](https://github.com/FilOzone/filecoin-pay-explorer/issues/482)) ([e8307fa](https://github.com/FilOzone/filecoin-pay-explorer/commit/e8307fa47033c75cbc3812bd8ab0c36031747f6a))
+
 ## [1.2.2](https://github.com/FilOzone/filecoin-pay-explorer/compare/v1.2.1...v1.2.2) (2026-09-15)
 
 
