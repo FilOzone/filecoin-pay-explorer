@@ -625,6 +625,52 @@ export const GET_ACCOUNT_OPERATOR_RAILS = gql`
   }
 `;
 
+const DATA_SET_ROW_FIELDS = `
+  fragment DataSetRowFields on DataSet {
+    id
+    dataSetId
+    provider
+    totalSize
+    lastWriteAt
+    pdpRail {
+      paymentRate
+      state
+      endEpoch
+      token {
+        id
+        symbol
+        decimals
+      }
+    }
+    cacheMissRail {
+      paymentRate
+      state
+      endEpoch
+    }
+    cdnRail {
+      paymentRate
+      state
+      endEpoch
+    }
+  }
+`;
+
+/** A payer's Warm Storage datasets that still exist on chain, oldest last-write first by default. */
+export const GET_ACCOUNT_DATA_SETS = gql`
+  ${DATA_SET_ROW_FIELDS}
+  query GetAccountDataSets($payer: Bytes!, $first: Int!, $skip: Int!) {
+    dataSets(
+      where: { payer: $payer, status_not: DELETED }
+      first: $first
+      skip: $skip
+      orderBy: lastWriteAt
+      orderDirection: asc
+    ) {
+      ...DataSetRowFields
+    }
+  }
+`;
+
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard {
     tokens(orderBy: symbol, orderDirection: desc) {

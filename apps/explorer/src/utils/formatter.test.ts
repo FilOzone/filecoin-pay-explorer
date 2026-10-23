@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFutureTimestamp } from "./formatter";
+import { formatBytes, formatFutureTimestamp, formatTokenCeiling } from "./formatter";
 
 /**
  * Boundary tests for the unit the function picks. The absolute calendar day a
@@ -97,5 +97,40 @@ describe("formatFutureTimestamp", () => {
     const twoHoursFromNow = BigInt(Math.floor(Date.now() / 1000)) + 2n * HOUR;
 
     expect(formatFutureTimestamp(twoHoursFromNow)).toMatch(/^1h 59m$|^2h 0m$/);
+  });
+});
+
+describe("formatBytes", () => {
+  const KiB = 1024n;
+  const MiB = 1024n * KiB;
+  const GiB = 1024n * MiB;
+  const TiB = 1024n * GiB;
+
+  it("shows zero and negative sizes as 0 B", () => {
+    expect(formatBytes(0n)).toBe("0 B");
+    expect(formatBytes(-1n)).toBe("0 B");
+  });
+
+  it("stays in the unit below one full unit up", () => {
+    expect(formatBytes(KiB - 1n)).toBe("1023 B");
+    expect(formatBytes(MiB - 1n)).toBe("1024.00 KiB");
+  });
+
+  it("switches units at exactly one unit", () => {
+    expect(formatBytes(KiB)).toBe("1.00 KiB");
+    expect(formatBytes(MiB)).toBe("1.00 MiB");
+    expect(formatBytes(GiB)).toBe("1.00 GiB");
+    expect(formatBytes(TiB)).toBe("1.00 TiB");
+  });
+
+  it("picks the largest unit the size clears", () => {
+    expect(formatBytes(2n * TiB + 512n * GiB)).toBe("2.50 TiB");
+  });
+});
+
+describe("formatTokenCeiling", () => {
+  it("ceils without converting the amount to a number", () => {
+    expect(formatTokenCeiling(1_003_010_000_000_000_000n, 18, "USDFC", 4)).toBe("1.0031 USDFC");
+    expect(formatTokenCeiling(1_003_000_000_000_000_000n, 18, "USDFC", 4)).toBe("1.003 USDFC");
   });
 });
