@@ -3,14 +3,7 @@
   "version": "1.3.0",
   "description": "A subgraph to index data from payments actor to serve as data layer for frontend integration",
   "private": false,
-  "files": [
-    "build",
-    "schemas",
-    "config",
-    "templates",
-    "abis",
-    "README.md"
-  ],
+  "files": ["build", "schemas", "config", "templates", "abis", "README.md"],
   "publishConfig": {
     "access": "public"
   },
