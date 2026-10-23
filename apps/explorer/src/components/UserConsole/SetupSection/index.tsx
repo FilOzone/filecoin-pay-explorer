@@ -170,25 +170,15 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
     // An unreadable balance never reads as "none", so this needs no separate readiness check.
     fundsCovered: request.approvalOnly || missing?.kind === "none",
   });
-  // The steps keep one order, whatever the reads say; only what each one offers changes.
+  // The steps keep one order, whatever the reads say; only what each one offers changes. Warm
+  // Storage comes first and the funds right after it, since the approval can carry the deposit.
   const offer = fundsOffer({ missing, walletUsdfc, approval: approval.state });
-  const first = request.sessionKey ? 2 : 1;
 
   return (
     <>
       <ol className='flex flex-col'>
-        {request.sessionKey && (
-          <SessionKeyStep
-            number={1}
-            network={network}
-            account={account}
-            request={request.sessionKey}
-            grant={grant}
-            onGranted={() => void refetchGrant()}
-          />
-        )}
         <WarmStorageStep
-          number={first}
+          number={1}
           network={network}
           account={account}
           approval={approval}
@@ -197,13 +187,23 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
         />
         {!request.approvalOnly && (
           <FundsStep
-            number={first + 1}
+            number={2}
             network={network}
             account={account}
             deposit={request.deposit}
             funds={funds}
             missing={missing}
             offer={offer}
+          />
+        )}
+        {request.sessionKey && (
+          <SessionKeyStep
+            number={request.approvalOnly ? 2 : 3}
+            network={network}
+            account={account}
+            request={request.sessionKey}
+            grant={grant}
+            onGranted={() => void refetchGrant()}
           />
         )}
       </ol>
