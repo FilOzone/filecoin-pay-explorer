@@ -31,7 +31,7 @@ const BELOW_PRECISION = `< 0.${"0".repeat(FRACTION_DIGITS - 1)}1`;
  */
 export const formatTokenAmount = (
   value: bigint | string,
-  tokenDecimals: bigint | number | string,
+  tokenDecimals: bigint | number,
   rounding: AmountRounding = "down",
 ): string => {
   const raw = BigInt(value);
