@@ -23,6 +23,8 @@ await mkdir(abisDir, { recursive: true });
 
 for (const { file, abi } of targets) {
   const outPath = join(abisDir, file);
-  await writeFile(outPath, `${JSON.stringify(abi, null, 2)}\n`);
+  // graph-node's ABI parser rejects events without `anonymous`; viem-style ABIs (e.g. erc20) omit it.
+  const normalized = abi.map((entry) => (entry.type === "event" ? { anonymous: false, ...entry } : entry));
+  await writeFile(outPath, `${JSON.stringify(normalized, null, 2)}\n`);
   console.log(`wrote ${outPath} (${abi.length} entries)`);
 }
