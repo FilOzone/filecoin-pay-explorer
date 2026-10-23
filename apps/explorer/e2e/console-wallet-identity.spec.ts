@@ -443,6 +443,20 @@ test("after a switch, the extension's new account verifies for itself before buy
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
 });
 
+test("an email account's Add funds lists card first", async ({ page }) => {
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await openAddFunds(page);
+
+  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    - button "Buy USDC with card"
+    - button "Swap to USDFC"
+    - button "Deposit token"
+  `);
+});
+
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");

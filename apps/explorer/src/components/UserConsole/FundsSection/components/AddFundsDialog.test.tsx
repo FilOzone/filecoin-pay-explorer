@@ -42,6 +42,17 @@ describe("AddFundsDialog", () => {
     act(() => deposit.props.onClick());
     act(() => swap.props.onClick());
     expect(onSelect.mock.calls).toEqual([["card"], ["deposit"], ["squid"]]);
+
+    act(() =>
+      renderer.update(
+        <AddFundsDialog cardFirst onOpenChange={() => undefined} onSelect={onSelect} open squidAvailable />,
+      ),
+    );
+    expect(renderer.root.findAllByType("button").map((node) => node.props["aria-label"])).toEqual([
+      "Buy USDC with card",
+      "Swap to USDFC",
+      "Deposit token",
+    ]);
   });
 
   it("refuses to close while a card purchase is busy", () => {

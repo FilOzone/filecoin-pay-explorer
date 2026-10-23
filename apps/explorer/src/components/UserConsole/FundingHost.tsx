@@ -1,11 +1,13 @@
 "use client";
 
+import { useWallets } from "@privy-io/react-auth";
 import { useEffect, useRef, useState } from "react";
 import { useConnection } from "wagmi";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
 import { toAccountId } from "@/utils/hexUtils";
+import { isPrivyEmbeddedWallet } from "./console-wallet";
 import { DepositDialog } from "./DepositDialog";
 import { AddFundsDialog, type AddFundsMethod } from "./FundsSection/components";
 import {
@@ -22,6 +24,11 @@ export function FundingHost() {
 
 function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
   const launch = useFundingLaunch();
+  const { wallets } = useWallets();
+  // A new Filecoin Pay wallet holds nothing to swap, so card leads; other wallets swap what they hold.
+  const isCardFirst = wallets.some(
+    (wallet) => wallet.address.toLowerCase() === address.toLowerCase() && isPrivyEmbeddedWallet(wallet),
+  );
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
   const { network, isFilecoinChain: isWalletOnFilecoin, isSquidSourceChain } = useConsoleNetwork();
@@ -95,6 +102,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
     <>
       {isMainnet ? (
         <AddFundsDialog
+          cardFirst={isCardFirst}
           cardLabel={card.label}
           cardStatus={card.statusMessage}
           isBusy={card.isBusy}
