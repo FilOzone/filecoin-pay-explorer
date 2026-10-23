@@ -32,6 +32,13 @@ describe("AddFundsDialog", () => {
     expect(visibleText).toContain("Swap to USDFC");
     expect(visibleText).toContain("Buy USDC with card");
     expect(visibleText).toContain("Already hold USDFC or another token on Filecoin? Deposit it directly.");
+    expect(visibleText).toContain(
+      "Buy USDC on Base, then swap and deposit it into Filecoin Pay. Requires identity verification.",
+    );
+    const methodOrder = renderer.root
+      .findAll((node) => node.type === "button" && typeof node.props["aria-label"] === "string")
+      .map((node) => node.props["aria-label"]);
+    expect(methodOrder).toEqual(["Swap to USDFC", "Buy USDC with card", "Deposit token"]);
 
     act(() => card.props.onClick());
     act(() => deposit.props.onClick());

@@ -87,6 +87,20 @@ test("closing Add funds opened from the wallet menu leaves the console reachable
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
+test("a connected wallet's Add funds leads with swap and never starts the card purchase", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+
+  const addFunds = page.getByRole("dialog", { name: "Add funds" });
+  const methods = addFunds.locator("button[aria-label]");
+  await expect
+    .poll(() => methods.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))))
+    .toEqual(["Swap to USDFC", "Verify wallet to buy USDC with card", "Deposit token"]);
+  await expect(addFunds).toContainText("Requires identity verification.");
+  await expect(page.getByRole("dialog", { name: "signature request" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "buy usdc" })).toBeHidden();
+});
+
 test("closing Deposit tokens after choosing it in Add funds leaves the console reachable", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await openAddFundsFromWalletMenu(page);

@@ -121,41 +121,6 @@ export function AddFundsDialog({
         </DialogHeader>
         <div className='grid gap-3'>
           <MethodCard
-            action={
-              onCardStartOver ? (
-                // `relative` lifts the control above the stretched button, like the Squid link below.
-                <button
-                  className='relative mt-1 text-xs underline underline-offset-2'
-                  disabled={isBusy}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Discard the pending card purchase? USDC that still arrives stays in the wallet on Base.",
-                      )
-                    )
-                      onCardStartOver();
-                  }}
-                  type='button'
-                >
-                  Start over
-                </button>
-              ) : null
-            }
-            description='Buy USDC on Base, then swap and deposit it into Filecoin Pay.'
-            disabled={isBusy || isCardChecking}
-            icon={CreditCard}
-            label={cardLabel}
-            onSelect={() => onSelect("card")}
-            status={cardStatus}
-          />
-          <MethodCard
-            description='Already hold USDFC or another token on Filecoin? Deposit it directly.'
-            disabled={isBusy}
-            icon={Wallet}
-            label='Deposit token'
-            onSelect={() => onSelect("deposit")}
-          />
-          <MethodCard
             description={
               squidAvailable ? (
                 <>
@@ -181,6 +146,41 @@ export function AddFundsDialog({
             label='Swap to USDFC'
             onSelect={() => onSelect("squid")}
             unavailableBadge='Testnet'
+          />
+          <MethodCard
+            action={
+              onCardStartOver ? (
+                // `relative` lifts the control above the stretched button so it stays clickable.
+                <button
+                  className='relative mt-1 text-xs underline underline-offset-2'
+                  disabled={isBusy}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Discard the pending card purchase? USDC that still arrives stays in the wallet on Base.",
+                      )
+                    )
+                      onCardStartOver();
+                  }}
+                  type='button'
+                >
+                  Start over
+                </button>
+              ) : null
+            }
+            description='Buy USDC on Base, then swap and deposit it into Filecoin Pay. Requires identity verification.'
+            disabled={isBusy || isCardChecking}
+            icon={CreditCard}
+            label={cardLabel}
+            onSelect={() => onSelect("card")}
+            status={cardStatus}
+          />
+          <MethodCard
+            description='Already hold USDFC or another token on Filecoin? Deposit it directly.'
+            disabled={isBusy}
+            icon={Wallet}
+            label='Deposit token'
+            onSelect={() => onSelect("deposit")}
           />
         </div>
       </DialogContent>
