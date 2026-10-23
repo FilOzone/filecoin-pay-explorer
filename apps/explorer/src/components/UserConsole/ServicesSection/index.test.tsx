@@ -42,10 +42,10 @@ const buildService = (address: string, overrides: Partial<AccountService> = {}) 
   ({
     id: `${ACCOUNT_ID}${address.slice(2)}`,
     operator: { id: address, address },
-    totalRails: 10n,
-    totalActiveRails: 4n,
-    totalApprovals: 1n,
-    totalActiveApprovals: 1n,
+    totalRails: "10",
+    totalActiveRails: "4",
+    totalApprovals: "1",
+    totalActiveApprovals: "1",
     ...overrides,
   }) as unknown as AccountService;
 

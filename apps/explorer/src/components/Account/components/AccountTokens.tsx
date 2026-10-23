@@ -73,7 +73,7 @@ export const AccountTokens: React.FC<AccountTokensProps> = ({ account }) => {
       {!isLoading && !isError && (!data || data.userTokens.length === 0) && <NotFoundState />}
       {!isLoading && !isError && data && data.userTokens.length > 0 && (
         <div className='flex flex-col gap-4'>
-          <span className='text-sm text-muted-foreground'>{account.totalTokens.toString()} total</span>
+          <span className='text-sm text-muted-foreground'>{account.totalTokens} total</span>
 
           <AccountTokensTable data={data.userTokens} />
 

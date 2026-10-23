@@ -73,7 +73,7 @@ export const AccountApprovals: React.FC<AccountApprovalsProps> = ({ account }) =
       {!isLoading && !isError && (!data || data.operatorApprovals.length === 0) && <NotFoundState />}
       {!isLoading && !isError && data && data.operatorApprovals.length > 0 && (
         <div className='flex flex-col gap-4'>
-          <span className='text-sm text-muted-foreground'>{account.totalApprovals.toString()} total</span>
+          <span className='text-sm text-muted-foreground'>{account.totalApprovals} total</span>
 
           <AccountApprovalsTable data={data.operatorApprovals} />
 

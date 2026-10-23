@@ -8,7 +8,7 @@ import { epochToDate } from "@/utils/formatter";
 type EpochTimeGranularity = "date" | "datetime";
 
 interface EpochTimeProps {
-  epoch: bigint | number;
+  epoch: bigint | number | string;
   currentEpoch: bigint | number;
   epochDuration?: number;
   granularity?: EpochTimeGranularity;
