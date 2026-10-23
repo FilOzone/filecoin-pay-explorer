@@ -15,7 +15,7 @@ import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 const ServicePage = () => {
   const { operator } = useParams<{ operator: string }>();
   const { address } = useConnection();
-  const { network } = useConsoleNetwork();
+  const { network, isFilecoinChain } = useConsoleNetwork();
 
   // Checksums are not enforced: a strict check rejects mixed case whose
   // checksum does not validate, and a wrong address simply finds no service.
@@ -27,7 +27,14 @@ const ServicePage = () => {
     return null;
   }
 
-  return <ServiceDetail network={network} operatorAddress={operator} userAddress={address} />;
+  return (
+    <ServiceDetail
+      network={network}
+      isFilecoinChain={isFilecoinChain}
+      operatorAddress={operator}
+      userAddress={address}
+    />
+  );
 };
 
 export default ServicePage;

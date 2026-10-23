@@ -5,6 +5,7 @@ import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
 import { DatasetsSection } from "../DatasetsSection";
 import { RailsSection } from "../RailsSection";
+import { StaleQueue } from "../StaleQueue";
 import {
   ServiceErrorState,
   ServiceHeader,
@@ -15,6 +16,8 @@ import {
 
 interface ServiceDetailProps {
   network: Network;
+  /** False while a Squid top-up holds the wallet on its source chain. */
+  isFilecoinChain: boolean;
   operatorAddress: string;
   /** The connected wallet, which the console always treats as the payer. */
   userAddress: Address;
@@ -26,7 +29,12 @@ interface ServiceDetailProps {
  * operator the connected account has never transacted with resolves to null and
  * renders as not found.
  */
-export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorAddress, userAddress }) => {
+export const ServiceDetail: React.FC<ServiceDetailProps> = ({
+  network,
+  operatorAddress,
+  userAddress,
+  isFilecoinChain,
+}) => {
   // Indexed ids are lowercase hex. Normalizing here keeps a checksummed URL and a lowercase one on the same React Query cache entries.
   const accountId = userAddress.toLowerCase();
   const operatorId = operatorAddress.toLowerCase();
@@ -74,7 +82,15 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
       />
 
       {isWarmStorage ? (
-        <DatasetsSection key={`${network}:${accountId}`} accountId={accountId} network={network} />
+        <>
+          <DatasetsSection key={`${network}:${accountId}:datasets`} accountId={accountId} network={network} />
+          <StaleQueue
+            key={`${network}:${accountId}:stale`}
+            accountId={accountId}
+            network={network}
+            isFilecoinChain={isFilecoinChain}
+          />
+        </>
       ) : null}
     </div>
   );

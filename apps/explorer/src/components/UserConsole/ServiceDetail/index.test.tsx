@@ -35,6 +35,9 @@ vi.mock("../DatasetsSection", () => ({
     return <div data-account-id={accountId} data-mount={mount} />;
   },
 }));
+vi.mock("../StaleQueue", () => ({
+  StaleQueue: () => null,
+}));
 
 const PAYER = "0x1111111111111111111111111111111111111111";
 const OPERATOR = "0x2222222222222222222222222222222222222222";
@@ -43,7 +46,7 @@ describe("ServiceDetail", () => {
   it("shows not found when the payer has no relationship with the operator", () => {
     mocks.service = null;
     const markup = renderToStaticMarkup(
-      <ServiceDetail network='mainnet' operatorAddress={OPERATOR} userAddress={PAYER} />,
+      <ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />,
     );
 
     expect(markup).toContain("Service not found");
@@ -57,13 +60,27 @@ describe("ServiceDetail", () => {
     let renderer!: ReturnType<typeof create>;
 
     act(() => {
-      renderer = create(<ServiceDetail network='mainnet' operatorAddress={operatorAddress} userAddress={PAYER} />);
+      renderer = create(
+        <ServiceDetail
+          network='mainnet'
+          isFilecoinChain={true}
+          operatorAddress={operatorAddress}
+          userAddress={PAYER}
+        />,
+      );
     });
     expect(renderer.root.findByProps({ "data-account-id": PAYER }).props["data-mount"]).toBe(1);
 
     const nextPayer = "0x3333333333333333333333333333333333333333";
     act(() => {
-      renderer.update(<ServiceDetail network='mainnet' operatorAddress={operatorAddress} userAddress={nextPayer} />);
+      renderer.update(
+        <ServiceDetail
+          network='mainnet'
+          isFilecoinChain={true}
+          operatorAddress={operatorAddress}
+          userAddress={nextPayer}
+        />,
+      );
     });
     expect(renderer.root.findByProps({ "data-account-id": nextPayer }).props["data-mount"]).toBe(2);
   });

@@ -1,7 +1,7 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, gt, ne } from "drizzle-orm";
 import type { DB } from "../shared/db/client";
 import type { VerifiedEmail, WalletSubscription } from "../shared/db/schema";
-import { verifiedEmails, walletSubscriptions } from "../shared/db/schema";
+import { mutedDataSets, verifiedEmails, walletSubscriptions } from "../shared/db/schema";
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -141,4 +141,48 @@ export async function deleteSubscription(db: DB, walletAddress: string): Promise
   if (countRows[0]?.remaining === 0) {
     await db.delete(verifiedEmails).where(eq(verifiedEmails.id, sub.verifiedEmailId));
   }
+}
+
+/**
+ * Mutes a dataset until `mutedUntil`, replacing any earlier mute of it.
+ * Expired mutes are kept: the inactivity alert uses a snooze's end date to
+ * email again once it passes.
+ */
+export async function muteDataSet(
+  db: DB,
+  data: { id: string; walletAddress: string; dataSetId: string; mutedUntil: number },
+): Promise<void> {
+  await db
+    .insert(mutedDataSets)
+    .values({ ...data, createdAt: nowSeconds() })
+    .onConflictDoUpdate({
+      target: [mutedDataSets.walletAddress, mutedDataSets.dataSetId],
+      set: { mutedUntil: data.mutedUntil },
+    });
+}
+
+/** Counts the wallet's mutes still in effect, leaving out `dataSetId`. */
+export async function countActiveMutesExcept(db: DB, walletAddress: string, dataSetId: string): Promise<number> {
+  const rows = await db
+    .select({ total: count() })
+    .from(mutedDataSets)
+    .where(
+      and(
+        eq(mutedDataSets.walletAddress, walletAddress),
+        ne(mutedDataSets.dataSetId, dataSetId),
+        gt(mutedDataSets.mutedUntil, nowSeconds()),
+      ),
+    );
+  return rows[0]?.total ?? 0;
+}
+
+/** The wallet's mutes still in effect. */
+export async function findActiveMutes(
+  db: DB,
+  walletAddress: string,
+): Promise<{ dataSetId: string; mutedUntil: number }[]> {
+  return db
+    .select({ dataSetId: mutedDataSets.dataSetId, mutedUntil: mutedDataSets.mutedUntil })
+    .from(mutedDataSets)
+    .where(and(eq(mutedDataSets.walletAddress, walletAddress), gt(mutedDataSets.mutedUntil, nowSeconds())));
 }
