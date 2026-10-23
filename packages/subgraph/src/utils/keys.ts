@@ -5,6 +5,15 @@ export function getRailEntityId(railId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(railId));
 }
 
+export function getDataSetEntityId(dataSetId: BigInt): Bytes {
+  return Bytes.fromByteArray(Bytes.fromBigInt(dataSetId));
+}
+
+export function getPieceEntityId(dataSetId: BigInt, pieceId: BigInt): Bytes {
+  // Delimited: concatenating variable-length ids makes (1, 513) and (257, 2) collide.
+  return Bytes.fromUTF8(`${dataSetId.toString()}-${pieceId.toString()}`);
+}
+
 export function getUserTokenEntityId(account: Bytes, token: Bytes): Bytes {
   return account.concat(token);
 }

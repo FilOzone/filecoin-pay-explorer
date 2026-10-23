@@ -16,17 +16,12 @@ import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
 import type { Network } from "@/types";
+import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
 import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { getPermitDomainSeparator, getPermitSignature, type PermitSignature } from "@/utils/permit";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { getFilecoinGasBalanceStatus } from "../FundsSection/data/filecoin-gas-balance";
 
-// A service contract reserves upcoming charges from the deposit for its lockup
-// period (30 days for Filecoin Warm Storage Service), so the approval must
-// allow at least that long. Submitted with every approval — 30 days in
-// Filecoin epochs (2,880/day) — instead of asking users to reason about
-// epochs.
-const DEFAULT_MAX_LOCKUP_PERIOD = 86_400n;
 const PERMIT_DEADLINE_SECONDS = 3600;
 
 /** Sentinel for the "Custom … address" entries in both selects. */

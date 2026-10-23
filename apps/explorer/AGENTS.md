@@ -34,6 +34,8 @@ Connected-wallet pages live under `src/app/console/(console)/**`. The shared lay
 
 Do not repeat those providers or access gates inside individual console pages.
 
+CLI links land on `/console/setup`, in the `(setup)` route group: the same shell (`src/app/console/_shell/`, shared by both groups) with `focused` set, which drops the sidebar. Its search params are a contract shared with the CLIs (`src/utils/setupLink.ts`); `src/proxy.ts` redirects the older `/console/session-keys?authorize=` and `/console?deposit=` links there. A `?revoke=` link stays on the session keys page.
+
 `src/app/console/notifications/verify/page.tsx` deliberately sits outside the `(console)` route group. Verification links must work without a connected wallet or console-only providers.
 
 ### API routes
