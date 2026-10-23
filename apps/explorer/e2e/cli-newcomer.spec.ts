@@ -45,9 +45,13 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
 
-    // The CLI's session keys link lands on the setup page, which lists the key before anything opens.
+    // The CLI's session keys link lands on the setup page, which lists the key last, after the approval and funds.
     await expect(page).toHaveURL(/\/console\/setup\?/);
-    await expect(page.getByRole("heading", { name: "Step 1: Authorize a session key" })).toBeVisible();
+    await expect(page.locator("ol > li h2")).toHaveText([
+      "Step 1: Approve Warm Storage",
+      "Step 2: Fund Filecoin Pay",
+      "Step 3: Authorize a session key",
+    ]);
     await page.getByRole("button", { name: "Review and authorize" }).click();
     const dialog = page.getByRole("dialog", { name: "New session key" });
     // The link carries the address lowercase; the dialog shows it checksummed.

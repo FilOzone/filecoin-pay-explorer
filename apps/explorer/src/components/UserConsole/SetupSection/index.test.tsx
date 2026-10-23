@@ -192,17 +192,23 @@ describe("SetupSection", () => {
     expect(switchChain).toHaveBeenCalledWith({ chainId: getChain("calibration").id });
   });
 
-  it("lists the key, the approval and the funds, in that order, for a key link", async () => {
+  it("lists the approval, the funds and the key, in that order, for a key link", async () => {
     await open(KEY_LINK);
 
     expect(stepTitles()).toEqual([
-      "Step 1: Authorize a session key",
-      "Step 2: Approve Warm Storage",
-      "Step 3: Fund Filecoin Pay",
+      "Step 1: Approve Warm Storage",
+      "Step 2: Fund Filecoin Pay",
+      "Step 3: Authorize a session key",
     ]);
-    expect(steps()[0].textContent).toContain(KEY);
-    expect(steps()[0].textContent).toContain("filecoin-cli");
-    expect(steps()[0].textContent).toContain("After 7 days");
+    expect(steps()[2].textContent).toContain(KEY);
+    expect(steps()[2].textContent).toContain("filecoin-cli");
+    expect(steps()[2].textContent).toContain("After 7 days");
+  });
+
+  it("numbers the key right after the approval for an approval-only key link", async () => {
+    await open(`${KEY_LINK}&operator=fwss`);
+
+    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Authorize a session key"]);
   });
 
   it("opens the key dialog with the link's request, and only when asked", async () => {
@@ -242,7 +248,7 @@ describe("SetupSection", () => {
     ];
     await open(KEY_LINK);
 
-    expect(steps()[0].textContent).toContain("Authorized until");
+    expect(steps()[2].textContent).toContain("Authorized until");
     expect(screen.queryByRole("button", { name: "Review and authorize" })).toBeNull();
   });
 
@@ -524,7 +530,7 @@ describe("SetupSection", () => {
   it("names the key's details as the New session key dialog does, marking destructive scopes", async () => {
     await open(KEY_LINK.replace("createDataSet,addPieces", "addPieces,schedulePieceRemovals"));
 
-    const details = within(steps()[0]);
+    const details = within(steps()[2]);
     expect(details.getAllByRole("term").map((term) => term.textContent)).toEqual([
       "Session key",
       "Name",
@@ -541,7 +547,7 @@ describe("SetupSection", () => {
   it("says a one-day key expires after 1 day", async () => {
     await open(KEY_LINK.replace("days=7", "days=1"));
 
-    expect(steps()[0].textContent).toContain("After 1 day, unless you change it");
+    expect(steps()[2].textContent).toContain("After 1 day, unless you change it");
   });
 
   describe("a link asking for unlimited approval", () => {
