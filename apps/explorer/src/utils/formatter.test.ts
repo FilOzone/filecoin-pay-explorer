@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatFutureTimestamp, formatTokenCeiling } from "./formatter";
+import { formatBytes, formatFutureTimestamp } from "./formatter";
 
 /**
  * Boundary tests for the unit the function picks. The absolute calendar day a
@@ -111,9 +111,13 @@ describe("formatBytes", () => {
     expect(formatBytes(-1n)).toBe("0 B");
   });
 
-  it("stays in the unit below one full unit up", () => {
-    expect(formatBytes(KiB - 1n)).toBe("1023 B");
-    expect(formatBytes(MiB - 1n)).toBe("1024.00 KiB");
+  it("shows sizes that don't round up to a KiB in bytes", () => {
+    expect(formatBytes(1000n)).toBe("1000 B");
+  });
+
+  it("moves to the next unit when rounding reaches it", () => {
+    expect(formatBytes(KiB - 1n)).toBe("1.00 KiB");
+    expect(formatBytes(MiB - 1n)).toBe("1.00 MiB");
   });
 
   it("switches units at exactly one unit", () => {
@@ -125,12 +129,5 @@ describe("formatBytes", () => {
 
   it("picks the largest unit the size clears", () => {
     expect(formatBytes(2n * TiB + 512n * GiB)).toBe("2.50 TiB");
-  });
-});
-
-describe("formatTokenCeiling", () => {
-  it("ceils without converting the amount to a number", () => {
-    expect(formatTokenCeiling(1_003_010_000_000_000_000n, 18, "USDFC", 4)).toBe("1.0031 USDFC");
-    expect(formatTokenCeiling(1_003_000_000_000_000_000n, 18, "USDFC", 4)).toBe("1.003 USDFC");
   });
 });

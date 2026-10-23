@@ -19,20 +19,14 @@ interface AccountDataSetsOptions {
   networkOverride?: Network;
 }
 
-/**
- * A payer's Warm Storage datasets. Every dataset the subgraph indexes belongs
- * to the single Warm Storage deployment on the network, so this reads by payer
- * alone; the console only calls it once the route's operator has already been
- * confirmed to be Warm Storage.
- */
+/** A payer's Warm Storage datasets; the subgraph indexes one FWSS deployment, so payer alone scopes it. */
 export const useAccountDataSets = (accountId: string, page: number, options?: AccountDataSetsOptions) =>
   useGraphQLQuery<AccountDataSetsResponse, AccountDataSetsPage>({
     queryKey: ["account", accountId, "dataSets", page],
     query: GET_ACCOUNT_DATA_SETS,
     variables: {
       payer: accountId.toLowerCase(),
-      // One more than a page, so a full page can be told apart from a full page
-      // with nothing after it.
+      // One extra row tells a full last page apart from one with more after it.
       first: ACCOUNT_DATA_SETS_PAGE_SIZE + 1,
       skip: (page - 1) * ACCOUNT_DATA_SETS_PAGE_SIZE,
     },

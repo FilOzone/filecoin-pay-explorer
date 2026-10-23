@@ -642,16 +642,6 @@ const DATA_SET_ROW_FIELDS = `
         decimals
       }
     }
-    cacheMissRail {
-      paymentRate
-      state
-      endEpoch
-    }
-    cdnRail {
-      paymentRate
-      state
-      endEpoch
-    }
   }
 `;
 

@@ -1,34 +1,53 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
-
-const observed = vi.hoisted(() => ({ accountId: "", page: 0, blockWatch: undefined as boolean | undefined }));
 
 const mockUseAccountDataSets = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/useAccountDataSets", () => ({
-  useAccountDataSets: (accountId: string, page: number) => {
-    observed.accountId = accountId;
-    observed.page = page;
-    return mockUseAccountDataSets();
-  },
+  useAccountDataSets: () => mockUseAccountDataSets(),
 }));
 vi.mock("wagmi", () => ({
-  useBlockNumber: ({ watch }: { watch: boolean }) => {
-    observed.blockWatch = watch;
-    return { data: undefined };
-  },
+  useBlockNumber: () => ({ data: undefined }),
 }));
-vi.mock("./components", () => ({
-  DatasetsEmptyState: () => <div>No datasets</div>,
-  DatasetsErrorState: () => <div>Failed to load datasets</div>,
-  DatasetsLoadingState: () => <div>Loading datasets</div>,
-  DatasetsSectionLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DatasetsTable: () => <div>Datasets table</div>,
+// The explorer URL network differs from the console's, so links must follow the prop.
+vi.mock("@/hooks/useNetwork", () => ({
+  default: () => ({ network: "calibration" }),
+}));
+// The barrel pulls in ui-filecoin navigation, which can't resolve next/navigation under vitest.
+vi.mock("@/components/shared", async () => ({
+  CopyableText: (await import("@/components/shared/CopyableText")).default,
+  RailStateBadge: (await import("@/components/shared/RailStateBadge")).RailStateBadge,
+  StyledLink: (await import("@/components/shared/StyledLink")).default,
+}));
+vi.mock("@filecoin-pay/ui/components/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => children,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => children,
+  TooltipContent: () => null,
 }));
 
-const render = () =>
-  renderToStaticMarkup(<DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />);
+afterEach(cleanup);
+
+const PROVIDER = "0x2222222222222222222222222222222222222222";
+
+// Subgraph BigInt fields arrive as decimal strings.
+const wireRow = {
+  id: "0x07",
+  dataSetId: "7",
+  provider: PROVIDER,
+  totalSize: String(2n * 1024n ** 3n),
+  lastWriteAt: "1700000000",
+  pdpRail: {
+    paymentRate: "1000000000000",
+    state: "ACTIVE",
+    endEpoch: "0",
+    token: { id: "0xtoken", symbol: "USDFC", decimals: "18" },
+  },
+};
+
+const renderSection = () =>
+  render(<DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />);
 
 describe("DatasetsSection", () => {
   it("shows the empty state when the payer has no datasets", () => {
@@ -38,63 +57,42 @@ describe("DatasetsSection", () => {
       isError: false,
     });
 
-    const markup = render();
+    renderSection();
 
-    expect(markup).toContain("No datasets");
-    expect(markup).not.toContain("Datasets table");
+    expect(screen.getByText("No datasets")).toBeTruthy();
   });
 
   it("shows the loading state before data arrives", () => {
     mockUseAccountDataSets.mockReturnValue({ data: undefined, isLoading: true, isError: false });
 
-    expect(render()).toContain("Loading datasets");
+    renderSection();
+
+    expect(screen.getByText("Loading datasets...")).toBeTruthy();
   });
 
   it("shows the error state when the query fails", () => {
     mockUseAccountDataSets.mockReturnValue({ data: undefined, isLoading: false, isError: true });
 
-    expect(render()).toContain("Failed to load datasets");
+    renderSection();
+
+    expect(screen.getByText("Failed to load datasets")).toBeTruthy();
   });
 
-  it("renders the table once datasets come back", () => {
+  it("renders a wire-format row with its size, spend, status and links", () => {
     mockUseAccountDataSets.mockReturnValue({
-      data: { dataSets: [{ id: "0x1", dataSetId: 1n }], hasMore: false },
+      data: { dataSets: [wireRow], hasMore: false },
       isLoading: false,
       isError: false,
     });
 
-    expect(render()).toContain("Datasets table");
-  });
+    renderSection();
 
-  it("watches blocks only while a terminated rail needs the current epoch", () => {
-    const withPdpState = (state: string) => ({
-      data: {
-        dataSets: [{ id: "0x1", dataSetId: 1n, pdpRail: { paymentRate: "10", state, endEpoch: "500" } }],
-        hasMore: false,
-      },
-      isLoading: false,
-      isError: false,
-    });
-
-    mockUseAccountDataSets.mockReturnValue(withPdpState("ACTIVE"));
-    render();
-    expect(observed.blockWatch).toBe(false);
-
-    mockUseAccountDataSets.mockReturnValue(withPdpState("TERMINATED"));
-    render();
-    expect(observed.blockWatch).toBe(true);
-  });
-
-  it("reads the connected payer's datasets", () => {
-    mockUseAccountDataSets.mockReturnValue({
-      data: { dataSets: [], hasMore: false },
-      isLoading: false,
-      isError: false,
-    });
-
-    render();
-
-    expect(observed.accountId).toBe("0x1111111111111111111111111111111111111111");
-    expect(observed.page).toBe(1);
+    expect(screen.getByText("2.00 GiB")).toBeTruthy();
+    expect(screen.getByText("0.087 USDFC")).toBeTruthy();
+    expect(screen.getByText("Active")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /PDP Explorer/ }).getAttribute("href")).toBe(
+      "https://pdp.filecoin.cloud/mainnet/dataset/7",
+    );
+    expect(screen.getByTitle(PROVIDER).getAttribute("href")).toBe(`/mainnet/accounts/${PROVIDER}`);
   });
 });

@@ -11,31 +11,20 @@ import {
   DatasetsSectionLayout,
   DatasetsTable,
 } from "./components";
-import { monthlyDataSetSpend } from "./data/monthlySpend";
 
 interface DatasetsSectionProps {
-  /** The connected payer. Every dataset listed here has this account as its payer. */
+  /** The connected payer, which every listed dataset is paid by. */
   accountId: string;
   network: Network;
 }
 
-/**
- * The payer's Warm Storage datasets. The caller only mounts this once the
- * route's operator is confirmed to be the Warm Storage service.
- */
 export const DatasetsSection: React.FC<DatasetsSectionProps> = ({ accountId, network }) => {
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError } = useAccountDataSets(accountId, page, { networkOverride: network });
+  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
 
   const dataSets = data?.dataSets ?? [];
-  // Spend that can't be estimated without the epoch (a terminated rail) is the only reason to watch blocks.
-  const needsEpoch = dataSets.some((dataSet) => monthlyDataSetSpend(dataSet, undefined) === undefined);
-  const { data: currentEpoch } = useBlockNumber({
-    chainId: getChain(network).id,
-    watch: needsEpoch,
-    query: { enabled: needsEpoch },
-  });
 
   function renderResults() {
     if (isLoading) {

@@ -17,22 +17,13 @@ function chargingEpochsInMonth(rail: SpendRail, currentEpoch: bigint | undefined
   );
 }
 
-function monthlyRailSpend(rail: SpendRail | null | undefined, currentEpoch: bigint | undefined): bigint | undefined {
-  if (!rail) return 0n;
-  const chargingEpochs = chargingEpochsInMonth(rail, currentEpoch);
-  if (chargingEpochs === undefined) return undefined;
-  // GraphQL BigInt values arrive as decimal strings.
-  return BigInt(rail.paymentRate) * chargingEpochs;
-}
-
+// Only the storage (PDP) rail carries a rate; FWSS settles the CDN rails by usage.
 export function monthlyDataSetSpend(
-  dataSet: Pick<DataSet, "pdpRail" | "cacheMissRail" | "cdnRail">,
+  { pdpRail }: Pick<DataSet, "pdpRail">,
   currentEpoch: bigint | undefined,
 ): bigint | undefined {
-  const pdpSpend = monthlyRailSpend(dataSet.pdpRail, currentEpoch);
-  const cacheMissSpend = monthlyRailSpend(dataSet.cacheMissRail, currentEpoch);
-  const cdnSpend = monthlyRailSpend(dataSet.cdnRail, currentEpoch);
-
-  if (pdpSpend === undefined || cacheMissSpend === undefined || cdnSpend === undefined) return undefined;
-  return pdpSpend + cacheMissSpend + cdnSpend;
+  const chargingEpochs = chargingEpochsInMonth(pdpRail, currentEpoch);
+  if (chargingEpochs === undefined) return undefined;
+  // GraphQL BigInt values arrive as decimal strings.
+  return BigInt(pdpRail.paymentRate) * chargingEpochs;
 }

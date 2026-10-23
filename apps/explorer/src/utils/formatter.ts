@@ -31,8 +31,9 @@ export function formatToken(
 }
 
 /**
- * Truncates exactly at the displayed precision. Use `formatTokenCeiling` when
- * projected charges must not be understated.
+ * Formats a token amount by truncating to `decimals` fractional digits, computed exactly via
+ * BigInt division. Unlike `formatToken`, this never rounds up through a float `Number()`
+ * conversion, so the display can't show more than the underlying amount actually is.
  */
 export function formatTokenTruncated(
   value: bigint,
@@ -47,23 +48,6 @@ export function formatTokenTruncated(
   const fraction = (absValue % divisor).toString().padStart(Number(tokenDecimals), "0").slice(0, decimals);
   const amount = `${whole}.${fraction.padEnd(decimals, "0")}`.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
   return `${negative ? "-" : ""}${amount} ${symbol}`.trim();
-}
-
-/**
- * Ceils exactly at the displayed precision. Use `formatTokenTruncated` when
- * rounding up would overstate an available amount.
- */
-export function formatTokenCeiling(
-  value: bigint,
-  tokenDecimals: number | bigint,
-  symbol: string = "",
-  decimals: number = 2,
-): string {
-  const step = 10n ** BigInt(Math.max(0, Number(tokenDecimals) - decimals));
-  const remainder = value % step;
-  // Truncating toward zero already ceils a negative value.
-  const ceiled = value > 0n && remainder !== 0n ? value - remainder + step : value;
-  return formatTokenTruncated(ceiled, tokenDecimals, symbol, decimals);
 }
 
 export const formatFIL = (attoFil: string | bigint) => {
@@ -105,7 +89,7 @@ export const formatFIL = (attoFil: string | bigint) => {
   return "0 FIL";
 };
 
-/** Largest unit first, so the first one the size clears is the one it's shown in. */
+/** Largest unit first, so the first one the rounded size clears is the one it's shown in. */
 const BYTE_UNITS = [
   { unit: "PiB", size: SIZE_CONSTANTS.PiB },
   { unit: "TiB", size: SIZE_CONSTANTS.TiB },
@@ -116,9 +100,11 @@ const BYTE_UNITS = [
 
 export function formatBytes(bytes: bigint): string {
   if (bytes <= 0n) return "0 B";
-  const match = BYTE_UNITS.find(({ size }) => bytes >= size);
-  if (!match) return `${bytes} B`;
-  return `${(Number(bytes) / Number(match.size)).toFixed(2)} ${match.unit}`;
+  for (const { unit, size } of BYTE_UNITS) {
+    const value = (Number(bytes) / Number(size)).toFixed(2);
+    if (Number(value) >= 1) return `${value} ${unit}`;
+  }
+  return `${bytes} B`;
 }
 
 export const isUnlimitedValue = (value: number | string | bigint): boolean => {

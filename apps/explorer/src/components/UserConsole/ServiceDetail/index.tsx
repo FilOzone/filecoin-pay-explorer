@@ -54,8 +54,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
   }
 
   const profile = profileFor(operatorId);
-  // Only one deployment of Warm Storage exists per network, so its FWSS contract
-  // address is what "the operator is Warm Storage" means for this route.
+  // Each network has one Warm Storage deployment, so its FWSS address identifies the operator.
   const isWarmStorage = operatorId === getChain(network).contracts.fwss.address.toLowerCase();
 
   return (

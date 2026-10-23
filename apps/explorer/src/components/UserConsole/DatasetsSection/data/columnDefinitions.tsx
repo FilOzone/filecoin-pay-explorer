@@ -3,9 +3,10 @@ import type { DataSet } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
-import { CopyableText, StyledLink } from "@/components/shared";
+import { CopyableText, RailStateBadge, StyledLink } from "@/components/shared";
 import type { Network } from "@/types";
-import { formatBytes, formatDate, formatTokenCeiling } from "@/utils/formatter";
+import { formatBytes, formatDate } from "@/utils/formatter";
+import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import { monthlyDataSetSpend } from "./monthlySpend";
 
 const columnHelper = createColumnHelper<DataSet>();
@@ -50,6 +51,11 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.display({
+    id: "status",
+    header: "Status",
+    cell: (info) => <RailStateBadge state={info.row.original.pdpRail.state} />,
+  }),
+  columnHelper.display({
     id: "monthlySpend",
     header: () => (
       <div className='flex items-center justify-end gap-1.5'>
@@ -59,7 +65,7 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
             <Info className='h-3.5 w-3.5 text-muted-foreground' />
           </TooltipTrigger>
           <TooltipContent side='top' className='max-w-xs'>
-            Projected cost over the next 30 days at each rail's current rate, not a historical total.
+            Projected storage cost over the next 30 days at the current storage rate, not a historical total.
           </TooltipContent>
         </Tooltip>
       </div>
@@ -70,7 +76,9 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
       const monthlySpend = monthlyDataSetSpend(dataSet, currentEpoch);
       return (
         <div className='text-right font-medium text-sm tabular-nums'>
-          {monthlySpend === undefined ? "—" : formatTokenCeiling(monthlySpend, token.decimals, token.symbol, 4)}
+          {monthlySpend === undefined
+            ? "—"
+            : `${formatTokenAmount(monthlySpend, token.decimals, "up")} ${token.symbol}`}
         </div>
       );
     },
