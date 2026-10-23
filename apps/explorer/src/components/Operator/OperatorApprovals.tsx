@@ -88,7 +88,7 @@ export const OperatorApprovals: React.FC<OperatorApprovalsProps> = ({ operator }
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-2xl font-semibold'>Authorized Clients</h2>
-        <span className='text-sm text-muted-foreground'>{operator.totalApprovals.toString()} total</span>
+        <span className='text-sm text-muted-foreground'>{operator.totalApprovals} total</span>
       </div>
 
       <Card>

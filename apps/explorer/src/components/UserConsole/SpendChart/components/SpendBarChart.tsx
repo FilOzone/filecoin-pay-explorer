@@ -21,7 +21,7 @@ const operatorLabel = (address: string): string => knownAddresses[address] ?? fo
 
 type SpendSeriesProps = {
   rows: SpendSeriesRow[];
-  tokenDecimals: bigint | number | string;
+  tokenDecimals: bigint | number;
   tokenSymbol: string;
 };
 
@@ -83,12 +83,12 @@ const makeSpendBarShape = ({ patternId, fillClass }: (typeof SERIES)[keyof typeo
 const StreamingBarShape = makeSpendBarShape(SERIES.streaming);
 const OneTimeBarShape = makeSpendBarShape(SERIES.oneTime);
 
-const toChartUnits = (amount: bigint, tokenDecimals: bigint | number | string): number =>
+const toChartUnits = (amount: bigint, tokenDecimals: bigint | number): number =>
   Number(amount) / 10 ** Number(tokenDecimals);
 
 type SpendTooltipProps = {
   datum: SpendChartDatum;
-  tokenDecimals: bigint | number | string;
+  tokenDecimals: bigint | number;
   tokenSymbol: string;
 };
 
