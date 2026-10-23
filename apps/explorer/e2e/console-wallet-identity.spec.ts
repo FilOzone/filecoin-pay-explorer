@@ -87,6 +87,17 @@ test("closing Add funds opened from the wallet menu leaves the console reachable
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
+test("a connected wallet's Add funds lists swap first and deposit last", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+
+  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    - button "Swap to USDFC"
+    - button "Verify wallet to buy USDC with card"
+    - button "Deposit token"
+  `);
+});
+
 test("closing Deposit tokens after choosing it in Add funds leaves the console reachable", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await openAddFundsFromWalletMenu(page);
@@ -430,6 +441,20 @@ test("after a switch, the extension's new account verifies for itself before buy
   const [start, end] = newAccount.split("...");
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
+});
+
+test("an email account's Add funds lists card first", async ({ page }) => {
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await openAddFunds(page);
+
+  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    - button "Buy USDC with card"
+    - button "Swap to USDFC"
+    - button "Deposit token"
+  `);
 });
 
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {
