@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getSquidReviewBlocker } from "./squid-review-blocker";
+import { FEE_RESERVE_USDC } from "./usdc-gas-payer";
 
 const ready = {
   amount: "100",
@@ -19,6 +20,58 @@ const ready = {
 };
 
 describe("getSquidReviewBlocker", () => {
+  // An embedded wallet with no ETH and 10 USDC, depositing 9.5 of it.
+  const usdcGasReady = {
+    ...ready,
+    amount: "9.5",
+    balances: { native: 0n, token: 10_000_000n },
+    parsedAmount: 9_500_000n,
+    requiredNative: null,
+    usdcGas: { payer: "ready", failed: false },
+  } as const;
+  const shortOfReserve = {
+    kind: "funds",
+    message: "0x1111...1111 needs up to 0.5 USDC on top of the deposit for network fees.",
+  };
+
+  it.each([
+    [
+      "a payer check in flight",
+      { payer: undefined, failed: false },
+      { kind: "waiting", message: "Checking USDC network fees…" },
+    ],
+    [
+      "a failed payer check",
+      { payer: undefined, failed: true },
+      { kind: "failed", message: "USDC network fees could not be estimated." },
+    ],
+    [
+      "a payer delegated elsewhere",
+      { payer: "conflict", failed: false },
+      {
+        kind: "funds",
+        message: "0x1111...1111 is set up with another smart account, so its network fees can't be paid in USDC.",
+      },
+    ],
+    ["a ready payer", { payer: "ready", failed: false }, null],
+  ] as const)("lets USDC gas with %s stand in for the ETH fee checks", (_label, usdcGas, expected) => {
+    expect(getSquidReviewBlocker({ ...usdcGasReady, usdcGas })).toEqual(expected);
+  });
+
+  it.each([
+    ["covers the deposit and the reserve", 10_000_000n - FEE_RESERVE_USDC, null],
+    ["covers the deposit but not the reserve", 10_000_000n - FEE_RESERVE_USDC + 1n, shortOfReserve],
+  ] as const)("holds the USDC fee reserve on top when the balance %s", (_label, parsedAmount, expected) => {
+    expect(getSquidReviewBlocker({ ...usdcGasReady, parsedAmount })).toEqual(expected);
+  });
+
+  it("still waits for the quote when USDC gas is ready", () => {
+    expect(getSquidReviewBlocker({ ...usdcGasReady, quoteReady: false, quoteLoading: true })).toEqual({
+      kind: "waiting",
+      message: "Getting a quote…",
+    });
+  });
+
   it("allows Review once every requirement is met", () => {
     expect(getSquidReviewBlocker(ready)).toBeNull();
   });

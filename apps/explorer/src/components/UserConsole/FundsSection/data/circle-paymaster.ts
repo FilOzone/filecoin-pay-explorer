@@ -5,6 +5,10 @@ import { base } from "viem/chains";
 export const CIRCLE_PAYMASTER_ADDRESS: Address = "0x0578cFB241215b77442a541325d6A4E6dFE700Ec";
 /** The paymaster's only accepted token: native USDC on Base. */
 export const CIRCLE_PAYMASTER_TOKEN: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export const CIRCLE_PAYMASTER_TOKEN_DECIMALS = 6;
+/** The token's EIP-712 domain, which its permits are signed against. */
+export const CIRCLE_PAYMASTER_TOKEN_NAME = "USD Coin";
+export const CIRCLE_PAYMASTER_TOKEN_VERSION = "2";
 export const CIRCLE_PAYMASTER_CHAIN_ID = base.id;
 /** Circle's quickstart value; covers the permit call and the USDC pull during validation. */
 const PAYMASTER_VERIFICATION_GAS_LIMIT = 200_000n;
@@ -60,7 +64,7 @@ export async function readPaymasterFees(client: Pick<PublicClient, "multicall">)
   });
   const fees = { additionalGasCharge: BigInt(additionalGasCharge), feeSpreadBips: BigInt(feeSpread), nativeTokenPrice };
   if (fees.feeSpreadBips > MAX_PAYMASTER_FEE_SPREAD_BIPS) {
-    throw new Error("Circle's USDC gas surcharge is above 10%. Pay network fees in ETH instead.");
+    throw new Error("Circle's USDC gas surcharge is above 10%. Try again later.");
   }
   return fees;
 }
