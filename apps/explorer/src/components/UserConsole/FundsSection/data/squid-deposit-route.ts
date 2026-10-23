@@ -43,7 +43,7 @@ const FIL_GAS_TOP_UP_SPEND_HEADROOM_PERCENT = 25n;
 const FIL_GAS_TOP_UP_MAX_SHARE_PERCENT = 10n;
 const FIL_GAS_TOP_UP_DEADLINE_SECONDS = 7n * 24n * 60n * 60n;
 
-const ceilDiv = (numerator: bigint, denominator: bigint) => (numerator + denominator - 1n) / denominator;
+export const ceilDiv = (numerator: bigint, denominator: bigint) => (numerator + denominator - 1n) / denominator;
 /**
  * Fees can move between the quote the user reviews and the route Squid builds
  * at confirm, and base fee can climb several blocks between review and the

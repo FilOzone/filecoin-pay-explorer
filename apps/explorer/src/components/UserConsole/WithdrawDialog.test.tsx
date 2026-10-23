@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WithdrawDialog } from "./WithdrawDialog";
 
 const mocks = vi.hoisted(() => ({
@@ -44,21 +46,10 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
 }));
 vi.mock("wagmi", () => ({
   useConnection: () => ({ address: "0x1111111111111111111111111111111111111111" }),
-  usePublicClient: () => ({}),
   useReadContract: () => ({ data: mocks.accountInfo, isLoading: false, isRefetching: false }),
-  useWalletClient: () => ({ data: {} }),
 }));
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
-}));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    synapse: {},
-    constants: {
-      chain: { id: 314, blockExplorers: { default: { url: "https://example.com" } } },
-      contracts: { payments: { address: "0x2222222222222222222222222222222222222222", abi: [] } },
-    },
-  }),
 }));
 
 const userToken = {
@@ -69,7 +60,7 @@ const userToken = {
 function renderDialog(onOpenChange = vi.fn()) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<WithdrawDialog onOpenChange={onOpenChange} open userToken={userToken} />);
+    renderer = create(<WithdrawDialog network='mainnet' onOpenChange={onOpenChange} open userToken={userToken} />);
   });
   const withdraw = () =>
     renderer.root.findAllByType("button").find((button) => button.children.join("") === "Withdraw");
@@ -84,6 +75,7 @@ describe("WithdrawDialog", () => {
     mocks.execute.mockReset();
     mocks.isExecuting = false;
   });
+  afterEach(cleanup);
 
   it("renders with an empty amount and enables withdrawal only for a valid amount within funds", () => {
     const { type, withdraw, text } = renderDialog();
@@ -151,5 +143,13 @@ describe("WithdrawDialog", () => {
     type("1");
     await act(async () => withdraw()?.props.onClick());
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it.each(["1e5", "0", "-1"])("tells the user to correct the amount %s", (value) => {
+    render(<WithdrawDialog network='mainnet' onOpenChange={vi.fn()} open userToken={userToken} />);
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value } });
+
+    expect(screen.getByText("Enter a plain number greater than 0, like 1.5.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Withdraw" })).toHaveProperty("disabled", true);
   });
 });

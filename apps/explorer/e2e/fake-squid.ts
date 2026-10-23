@@ -28,6 +28,7 @@ const GET_L1_FEE = toFunctionSelector("getL1Fee(bytes)");
 const SQUID_API_HOST = "v2.api.squidrouter.com";
 const NATIVE_TOKEN = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SQUID_ROUTER = "0xce16f69375520ab01377ce7b88f5ba8c48f8d666";
+const WFIL = "0x60e1773636cf5e4a227d9ac24f20feca034ee25a";
 const DESTINATION_HASH = `0x${"de".repeat(32)}` as const;
 // viem only multicalls at blocks after Multicall3 was deployed on Base.
 const BASE_BLOCK = 30_000_000n;
@@ -49,9 +50,19 @@ const paymentsAbi = parseAbi([
 export async function installFakeSquid(
   page: Page,
   payer: Hex,
+  // The bridge fee is the route's native `value`, as Axelar's fee is on a real route.
   {
     executableRoute = () => ({}),
-  }: { executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number } } = {},
+    payerEth = PAYER_ETH,
+    nativeFee = 0n,
+    alsoRead,
+  }: {
+    executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number };
+    payerEth?: bigint;
+    nativeFee?: bigint;
+    /** Another fake's reads, so a batched multicall mixing both is still answered. */
+    alsoRead?: (target: string, data: Hex) => Hex | undefined;
+  } = {},
 ): Promise<SquidRouteRequest[]> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet } = await import("@filoz/synapse-sdk");
@@ -90,10 +101,12 @@ export async function installFakeSquid(
   };
 
   const readBase = (txs: SentTransaction[], target: string, data: Hex): Hex | undefined => {
+    const other = alsoRead?.(target, data);
+    if (other !== undefined) return other;
     if (target.toLowerCase() === BASE_USDC) return readUsdc(txs, data);
     if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
       const [owner] = decodeAbiParameters([{ type: "address" }], `0x${data.slice(10)}`);
-      return encodeAbiParameters([{ type: "uint256" }], [isPayer(owner) ? PAYER_ETH : 0n]);
+      return encodeAbiParameters([{ type: "uint256" }], [isPayer(owner) ? payerEth : 0n]);
     }
     // OP Stack chains add an L1 data fee to each transaction.
     if (target.toLowerCase() === GAS_PRICE_ORACLE && data.startsWith(GET_L1_FEE)) {
@@ -109,7 +122,7 @@ export async function installFakeSquid(
       case "eth_blockNumber":
         return numberToHex(BASE_BLOCK + BigInt((await sent()).length));
       case "eth_getBalance":
-        return numberToHex(isPayer(call.params[0] as string) ? PAYER_ETH : 0n);
+        return numberToHex(isPayer(call.params[0] as string) ? payerEth : 0n);
       case "eth_gasPrice":
       case "eth_maxPriorityFeePerGas":
         return numberToHex(GAS_PRICE);
@@ -250,8 +263,28 @@ export async function installFakeSquid(
             estimate: {
               toAmount,
               toAmountMin: (BigInt(toAmount) - minimumShortfall).toString(),
-              actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
-              feeCosts: [],
+              actions: [
+                // The Filecoin leg the FIL top-up is priced from: 1 WFIL buys 5 USDFC.
+                {
+                  type: "swap",
+                  toChain: "314",
+                  fromToken: { address: WFIL },
+                  toToken: { address: usdfc },
+                  fromAmount: (10n ** 18n).toString(),
+                  toAmount: (5n * 10n ** 18n).toString(),
+                },
+                { type: "custom", toChain: "314", provider: "Filecoin Pay" },
+              ],
+              feeCosts:
+                nativeFee === 0n
+                  ? []
+                  : [
+                      {
+                        name: "Gas receiver fee",
+                        amount: nativeFee.toString(),
+                        token: { address: NATIVE_TOKEN, chainId: String(BASE_CHAIN_ID), symbol: "ETH", decimals: 18 },
+                      },
+                    ],
               // Squid prices the route's source gas; the review budgets the route from it.
               gasCosts: [
                 {
@@ -265,7 +298,7 @@ export async function installFakeSquid(
             transactionRequest: {
               target: SQUID_ROUTER,
               data: "0x12345678",
-              value: "0",
+              value: nativeFee.toString(),
               gasLimit: "500000",
               ...(expiresInSeconds === undefined
                 ? {}

@@ -17,6 +17,16 @@ export interface PermitSignature {
   deadline: bigint;
 }
 
+export const PERMIT_TYPES = {
+  Permit: [
+    { name: "owner", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
 export function getPermitDomain(tokenAddress: Hex, tokenName: string, chainId: number) {
   return {
     name: tokenName,
@@ -103,16 +113,6 @@ export async function getPermitSignature(
 
   const domain = getPermitDomain(tokenAddress, tokenNameFetched, chainId);
 
-  const types = {
-    Permit: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-      { name: "value", type: "uint256" },
-      { name: "nonce", type: "uint256" },
-      { name: "deadline", type: "uint256" },
-    ],
-  } as const;
-
   const message = {
     owner: ownerAddress,
     spender: spenderAddress,
@@ -124,7 +124,7 @@ export async function getPermitSignature(
   const signature = await walletClient.signTypedData({
     account: ownerAddress,
     domain,
-    types,
+    types: PERMIT_TYPES,
     primaryType: "Permit",
     message,
   });

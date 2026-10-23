@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { getAddress } from "viem";
 import { describe, it } from "vitest";
 import {
-  parseAuthorizeLink,
   parseAuthorizeParam,
   parseNetworkParam,
   parseRevokeLink,
@@ -95,17 +94,22 @@ describe("parseScopesParam", () => {
 });
 
 describe("presetScopeStates", () => {
-  it("checks requested non-destructive scopes", () => {
-    const states = presetScopeStates(["createDataSet", "addPieces"]);
-    assert.equal(states.createDataSet, "checked");
-    assert.equal(states.addPieces, "checked");
+  it("checks every requested scope, destructive ones included", () => {
+    assert.deepEqual(presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]), {
+      createDataSet: "locked-off",
+      addPieces: "checked",
+      schedulePieceRemovals: "checked",
+      terminateService: "checked",
+    });
   });
 
-  it("leaves requested destructive scopes unchecked but marked as requested", () => {
-    const states = presetScopeStates(["addPieces", "terminateService", "schedulePieceRemovals"]);
-    assert.equal(states.terminateService, "requested-unchecked");
-    assert.equal(states.schedulePieceRemovals, "requested-unchecked");
-    assert.equal(states.addPieces, "checked");
+  it("offers a renewed key's destructive scope the link did not request, unticked", () => {
+    assert.deepEqual(presetScopeStates(["addPieces"], ["createDataSet", "terminateService"]), {
+      createDataSet: "checked",
+      addPieces: "checked",
+      schedulePieceRemovals: "locked-off",
+      terminateService: "unchecked",
+    });
   });
 
   it("locks off scopes the request did not name", () => {
@@ -139,57 +143,9 @@ describe("parseNetworkParam", () => {
   });
 });
 
-describe("parseAuthorizeLink", () => {
-  it("refuses a link with no usable scopes", () => {
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams(`authorize=${LOWERCASE}&network=calibration`)), {
-      error: "no-scopes",
-    });
-    assert.deepEqual(
-      parseAuthorizeLink(new URLSearchParams(`authorize=${LOWERCASE}&scopes=nope&network=calibration`)),
-      { error: "no-scopes" },
-    );
-  });
-
-  it("reports a link that names scopes or a network but no address", () => {
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("scopes=addPieces")), { error: "not-an-address" });
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("network=calibration")), { error: "not-an-address" });
-    assert.deepEqual(parseAuthorizeLink(new URLSearchParams("authorize=&scopes=addPieces")), {
-      error: "not-an-address",
-    });
-    assert.equal(parseAuthorizeLink(new URLSearchParams("foo=bar")), null);
-  });
-
-  const link = (query: string) => parseAuthorizeLink(new URLSearchParams(query));
-
-  it("returns every validated field for a complete link", () => {
-    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces&network=calibration`), {
-      address: CHECKSUMMED,
-      scopes: ["addPieces"],
-      network: "calibration",
-    });
-  });
-
-  it("refuses a link whose network is missing or misspelled, so the wallet's chain can never stand in", () => {
-    assert.deepEqual(link(`authorize=${LOWERCASE}&scopes=addPieces`), { error: "no-network" });
-    assert.deepEqual(link(`authorize=${LOWERCASE}&network=calibraiton`), { error: "no-network" });
-  });
-
-  it("reports the address error first, and nothing when there is no request", () => {
-    assert.deepEqual(link("authorize=0xnope&network=mainnet"), { error: "not-an-address" });
-    assert.equal(link("deposit=2"), null);
-  });
-});
-
-describe("a link that is only a revoke request", () => {
-  const revokeOnly = new URLSearchParams(`revoke=${LOWERCASE}&network=calibration`);
-
-  it("is not read as a pairing request", () => {
-    assert.equal(parseAuthorizeLink(revokeOnly), null);
-  });
-
-  it("wins over an authorize in the same link, since it only removes authority", () => {
+describe("a link that carries both a revoke and an authorize", () => {
+  it("is read as the revoke, since it only removes authority", () => {
     const both = new URLSearchParams(`authorize=${LOWERCASE}&scopes=createDataSet&revoke=${LOWERCASE}&network=mainnet`);
-    assert.equal(parseAuthorizeLink(both), null);
     assert.deepEqual(parseRevokeLink(both), { address: CHECKSUMMED, network: "mainnet" });
   });
 });
