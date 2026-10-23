@@ -1,5 +1,5 @@
 import { formatAddress } from "@/utils/formatter";
-import { knownAddresses } from "./known-addresses";
+import { resolveAddressName } from "./known-addresses";
 
 /**
  * Local service copy for the console, kept only for Filecoin Warm Storage.
@@ -9,7 +9,7 @@ import { knownAddresses } from "./known-addresses";
  * because the console also shows its published prices, which that interface
  * does not expose. Prices are hand-maintained and are not read from chain.
  *
- * Service names are not duplicated here — they come from `knownAddresses`,
+ * Service names are not duplicated here — they come from `resolveAddressName`,
  * which is what the rest of the explorer already renders for these addresses.
  */
 
@@ -24,6 +24,8 @@ export type ServicePrice = {
 export type ServiceProfile = {
   /** The known service name, or the truncated operator address when unknown. */
   name: string;
+  /** "onchain" marks a self-reported contract name; undefined for the address fallback. */
+  nameSource?: "known" | "onchain";
   description?: string;
   homepageUrl?: string;
   pricing?: ServicePrice[];
@@ -65,11 +67,15 @@ export type OnchainServiceMetadata = {
 export function getServiceProfile(operatorAddress: string, onchain?: OnchainServiceMetadata): ServiceProfile {
   const key = operatorAddress.toLowerCase();
   const local = serviceMetadata[key];
+  const resolved = resolveAddressName(key, onchain?.name);
+  const rejected = resolved?.source === "rejected";
+  const contract = rejected ? undefined : onchain;
 
   return {
-    name: knownAddresses[key] ?? onchain?.name ?? formatAddress(operatorAddress),
-    description: onchain?.description ?? local?.description,
-    homepageUrl: onchain?.homepage ?? local?.homepageUrl,
+    name: resolved?.name ?? formatAddress(operatorAddress),
+    nameSource: rejected ? undefined : resolved?.source,
+    description: contract?.description ?? local?.description,
+    homepageUrl: contract?.homepage ?? local?.homepageUrl,
     pricing: local?.pricing,
   };
 }

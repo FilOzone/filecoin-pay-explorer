@@ -62,7 +62,6 @@ export const columns = [
             monospace={true}
             label='Account address'
             truncate={true}
-            truncateLength={8}
           />
         );
       },
@@ -70,7 +69,7 @@ export const columns = [
   ),
   columnHelper.accessor("operator.address", {
     header: "Operator",
-    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' />,
+    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' serviceMetadata />,
   }),
   columnHelper.accessor("state", {
     header: "Status",

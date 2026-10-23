@@ -2,7 +2,7 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Account, Address } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { ArrowsSplitIcon, CoinsIcon, UserCheckIcon } from "@phosphor-icons/react";
-import { knownAddresses } from "@/constants/known-addresses";
+import { resolveAddressName } from "@/constants/known-addresses";
 import { formatCompactNumber } from "@/utils/formatter";
 import { CopyableText, MetricItem } from "../../shared";
 
@@ -15,7 +15,7 @@ const AccountOverviewLayout: React.FC<AccountOverviewLayoutProps> = ({ children,
   <PageSection backgroundVariant='light'>
     <div className='flex flex-col gap-6 -mt-15'>
       <div className='flex items-center justify-between'>
-        <h3 className='text-2xl font-medium'>{knownAddresses[address.toLowerCase()] ?? address}</h3>
+        <h3 className='text-2xl font-medium'>{resolveAddressName(address)?.name ?? address}</h3>
       </div>
       {children}
     </div>

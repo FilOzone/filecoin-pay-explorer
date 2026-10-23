@@ -115,7 +115,6 @@ export const OperatorApprovals: React.FC<OperatorApprovalsProps> = ({ operator }
                     monospace={true}
                     label='Account address'
                     truncate={true}
-                    truncateLength={8}
                   />
                 </TableCell>
                 <TableCell className='font-medium'>{approval.token.symbol}</TableCell>

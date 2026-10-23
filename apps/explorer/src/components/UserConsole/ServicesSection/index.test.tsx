@@ -77,6 +77,16 @@ describe("ServicesSection", () => {
     expect(markup).toContain("0x9999...9999");
   });
 
+  it("marks a self-reported onchain name but not a curated one", () => {
+    servicesQuery.data = { pages: [{ services: [buildService(WARM_STORAGE), buildService(UNKNOWN_OPERATOR)] }] };
+    onchain.map = new Map([[UNKNOWN_OPERATOR, { name: "Somebody's Storage" }]]);
+
+    const markup = render();
+
+    expect(markup).toContain("Somebody&#x27;s Storage");
+    expect(markup.match(/aria-label="Self-reported on-chain name"/g)).toHaveLength(1);
+  });
+
   it("queries the connected payer's account", () => {
     render();
 
