@@ -7,6 +7,7 @@ import {
   captureReviewedSquidDepositCaps,
   estimateDepositNetworkFeeMaximum,
   FIL_GAS_TOP_UP_AMOUNT,
+  type FilGasTopUpPriceClient,
   getDepositExchangeRate,
   getDepositRequiredNativeBalance,
   getDepositTransactionKinds,
@@ -20,8 +21,10 @@ import {
   requestSquidDepositRoute,
   type SquidDepositFeeClient,
   SquidQuoteChangedError,
+  SUSHI_V3_QUOTER_ADDRESS,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
   squidDepositAbi,
+  sushiQuoterAbi,
   sushiSwapRouterAbi,
   WFIL_ADDRESS,
   WFIL_USDFC_POOL_FEE,
@@ -199,22 +202,25 @@ describe("buildDepositPostHook", () => {
 });
 
 describe("planFilGasTopUp", () => {
-  const filecoinSwap = { wfil: 1_000_000_000_000_000_000n, usdfc: 2_000_000_000_000_000_000n };
+  it("prices 0.05 FIL from the Sushi WFIL/USDFC pool with headroom", async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ result: [100_000_000_000_000_000n, 0n, 0, 0n] });
+    const client = { simulateContract } as unknown as FilGasTopUpPriceClient;
 
-  it("prices enough USDFC to guarantee 0.05 FIL with headroom", () => {
-    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 19n }, now)).toEqual(topUp);
-    expect(FIL_GAS_TOP_UP_AMOUNT).toBe(50_000_000_000_000_000n);
-  });
-
-  it("fails closed when the swap cannot be priced or would exceed a tenth of the deposit", () => {
-    expect(planFilGasTopUp({ minimumDestinationAmount: 10n ** 19n }, now)).toBeUndefined();
-    expect(
-      planFilGasTopUp({ filecoinSwap: { wfil: 0n, usdfc: 1n }, minimumDestinationAmount: 10n ** 19n }, now),
-    ).toBeUndefined();
-    expect(
-      planFilGasTopUp({ filecoinSwap: { wfil: 1n, usdfc: 0n }, minimumDestinationAmount: 10n ** 19n }, now),
-    ).toBeUndefined();
-    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 18n }, now)).toBeUndefined();
+    await expect(planFilGasTopUp(client, USDFC, now)).resolves.toEqual(topUp);
+    expect(simulateContract).toHaveBeenCalledWith({
+      address: SUSHI_V3_QUOTER_ADDRESS,
+      abi: sushiQuoterAbi,
+      functionName: "quoteExactOutputSingle",
+      args: [
+        {
+          tokenIn: USDFC,
+          tokenOut: WFIL_ADDRESS,
+          amount: FIL_GAS_TOP_UP_AMOUNT,
+          fee: WFIL_USDFC_POOL_FEE,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    });
   });
 });
 
@@ -557,7 +563,7 @@ describe("parseSquidDepositRoute", () => {
     expect(isExecutableQuote(quote)).toBe(false);
   });
 
-  it("prices the Filecoin swap leg and reports the USDFC left after a FIL top-up", () => {
+  it("reports the USDFC left after a FIL top-up on a route with no WFIL leg", () => {
     const topUpRequest = { ...request, filGasTopUp: topUp };
     const quote = parseSquidDepositRoute(
       fakeRoute({
@@ -567,9 +573,9 @@ describe("parseSquidDepositRoute", () => {
             {
               type: "swap",
               toChain: "314",
-              fromAmount: "1000000000000000000",
-              toAmount: "2000000000000000000",
-              fromToken: { address: WFIL_ADDRESS },
+              fromAmount: "100000000",
+              toAmount: "93000000000000000000",
+              fromToken: { address: "0xEB466342C4d449BC9f53A865D5Cb90586f405215" },
               toToken: { address: USDFC },
             },
             { type: "custom", fromChain: "314", toChain: "314", provider: "Filecoin Pay" },
@@ -581,7 +587,6 @@ describe("parseSquidDepositRoute", () => {
       now,
     );
 
-    expect(quote.filecoinSwap).toEqual({ wfil: 10n ** 18n, usdfc: 2n * 10n ** 18n });
     expect(quote.destinationAmount).toBe(93_000_000_000_000_000_000n - topUp.spendUsdfc);
     expect(quote.minimumDestinationAmount).toBe(92_000_000_000_000_000_000n - topUp.spendUsdfc);
     expect(quote.filGasTopUp).toEqual(topUp);
@@ -610,7 +615,7 @@ describe("parseSquidDepositRoute", () => {
         true,
         now,
       ),
-    ).toThrow("FIL top-up exceeds safety limit");
+    ).toThrow("Adding 0.05 FIL would use more than a tenth of the USDFC this amount buys.");
   });
 
   it("parses an executable route against the trusted router", () => {
