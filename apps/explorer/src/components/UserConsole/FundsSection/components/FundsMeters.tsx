@@ -13,7 +13,7 @@ type FundsMetersProps = {
   funds: bigint;
   /** `simulatedLockupCurrent` — lockup rolled forward to `currentTimestamp`. */
   lockedAmount: bigint;
-  tokenDecimals: bigint | number;
+  tokenDecimals: bigint | number | string;
   tokenSymbol: string;
   fundedUntilTimestamp: bigint;
   currentTimestamp: bigint;
