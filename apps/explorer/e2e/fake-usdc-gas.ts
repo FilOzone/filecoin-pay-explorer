@@ -53,7 +53,7 @@ const paymasterAbi = parseAbi([
   "function feeSpread() view returns (uint32)",
   "function fetchPrice() view returns (uint256)",
 ]);
-const quoterAbi = parseAbi([
+export const quoterAbi = parseAbi([
   "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
   "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);

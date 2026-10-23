@@ -55,9 +55,6 @@ export const NETWORK_FEE_REVIEW_HEADROOM_BPS = 15_000n;
 const BPS = 10_000n;
 export const applyNetworkFeeReviewHeadroom = (fee: bigint) => ceilDiv(fee * NETWORK_FEE_REVIEW_HEADROOM_BPS, BPS);
 const nowSeconds = (now: () => number) => BigInt(Math.floor(now() / 1000));
-/** The top-up may not eat more than a tenth of what the deposit is guaranteed to receive. */
-const exceedsTopUpShare = (spendUsdfc: bigint, minimumDestinationAmount: bigint) =>
-  spendUsdfc * 100n > minimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT;
 
 export const squidDepositAbi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
@@ -73,7 +70,7 @@ export const sushiSwapRouterAbi = parseAbi([
   "function multicall(bytes[] data) payable returns (bytes[] results)",
 ]);
 
-export const sushiQuoterAbi = parseAbi([
+export const quoterV2Abi = parseAbi([
   "struct QuoteExactOutputSingleParams { address tokenIn; address tokenOut; uint256 amount; uint24 fee; uint160 sqrtPriceLimitX96; }",
   "function quoteExactOutputSingle(QuoteExactOutputSingleParams params) returns (uint256 amountIn, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)",
 ]);
@@ -90,8 +87,6 @@ export interface FilGasTopUp {
   minimumFil: bigint;
   deadline: bigint;
 }
-
-export type FilGasTopUpPriceClient = Pick<PublicClient, "simulateContract">;
 
 export interface SquidDepositRouteRequest extends SquidDepositTarget {
   /** Wallet that pays the source token and signs on the source network. */
@@ -209,7 +204,7 @@ function buildFilGasTopUpCalls({ usdfc, recipient }: SquidDepositTarget, topUp: 
 
 /** Prices the top-up from the pool its swap trades in, whatever path Squid takes to USDFC. */
 export async function planFilGasTopUp(
-  client: FilGasTopUpPriceClient,
+  client: Pick<PublicClient, "simulateContract">,
   usdfc: Address,
   now: () => number,
 ): Promise<FilGasTopUp> {
@@ -217,7 +212,7 @@ export async function planFilGasTopUp(
     result: [usdfcAtQuote],
   } = await client.simulateContract({
     address: SUSHI_V3_QUOTER_ADDRESS,
-    abi: sushiQuoterAbi,
+    abi: quoterV2Abi,
     functionName: "quoteExactOutputSingle",
     args: [
       {
@@ -716,16 +711,15 @@ export function parseSquidDepositRoute(
   const rawDestinationAmount = parsePositiveAmount(estimate.toAmount, "destination amount");
   const rawMinimumDestinationAmount = parsePositiveAmount(estimate.toAmountMin, "minimum destination amount");
   const topUpSpend = request.filGasTopUp?.spendUsdfc ?? 0n;
-  const destinationAmount = rawDestinationAmount - topUpSpend;
-  const minimumDestinationAmount = rawMinimumDestinationAmount - topUpSpend;
-  if (destinationAmount <= 0n || minimumDestinationAmount <= 0n) {
-    throw new Error("Invalid Squid route: FIL top-up exceeds destination amount");
-  }
-  if (exceedsTopUpShare(topUpSpend, rawMinimumDestinationAmount)) {
+  // The top-up may not eat more than a tenth of what the deposit is guaranteed to receive.
+  if (topUpSpend * 100n > rawMinimumDestinationAmount * FIL_GAS_TOP_UP_MAX_SHARE_PERCENT) {
     throw new Error(
       `Adding ${formatEther(FIL_GAS_TOP_UP_AMOUNT)} FIL would use more than a tenth of the USDFC this amount buys. Increase the amount or turn off the FIL option.`,
     );
   }
+  const destinationAmount = rawDestinationAmount - topUpSpend;
+  const minimumDestinationAmount = rawMinimumDestinationAmount - topUpSpend;
+  if (destinationAmount <= 0n) throw new Error("Invalid Squid route: FIL top-up exceeds destination amount");
 
   const quote: SquidDepositQuote = {
     quoteId: route.quoteId,
