@@ -4,8 +4,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { useState } from "react";
 import { InlineTextLoader } from "@/components/shared";
 import { useMuteDataSet } from "@/hooks/useMuteDataSet";
-import { formatTokenCeiling } from "@/utils/formatter";
 import { isUserRejection } from "@/utils/wallet-errors";
+import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import type { RankedDataSet } from "../data/staleness";
 import { SnoozeDialog } from "./SnoozeDialog";
 
@@ -20,7 +20,7 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute 
   const dataSetId = dataSet.dataSetId.toString();
   const { token } = dataSet.pdpRail;
   const monthlySpendLabel =
-    monthlySpend === undefined ? "—" : formatTokenCeiling(monthlySpend, token.decimals, token.symbol, 4);
+    monthlySpend === undefined ? "—" : `${formatTokenAmount(monthlySpend, token.decimals, "up")} ${token.symbol}`;
 
   const showError = muteDataSet.isError && !isUserRejection(muteDataSet.error);
 
