@@ -3,16 +3,16 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
 import { paginate } from "@filoz/synapse-core";
 import { getPdpDataSets } from "@filoz/synapse-core/warm-storage";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import type { Hex } from "viem";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
+import { isUserRejectedRequest, walletErrorMessage } from "@/components/UserConsole/FundsSection/data/squid-execution";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatDateTime } from "@/utils/formatter";
-import { chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
+import { chooseGroupKey, type GroupKeyChoice, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { type KeyAgreementRequest, verifyKeyAgreementKey } from "@/utils/setupLink";
 import { SetupStep, type StepTone } from "./SetupStep";
@@ -23,13 +23,17 @@ export const GROUP_KEY_WARNING =
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
  * filecoin-pin. Reads every data set the owner pays for, a page at a time, and
- * keeps only those that record a group key.
+ * keeps only those that record a group key. Read once per visit: the scan is
+ * O(data sets), and the group key shown must be the one signed for.
  */
 function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
   const client = usePublicClient({ chainId: getChain(network).id });
   return useQuery({
     queryKey: ["group-key-choice", network, owner.toLowerCase()],
     enabled: enabled && !!client,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       if (!client) throw new Error("No client for this network");
       const tagged: GroupKeyDataSet[] = [];
@@ -42,6 +46,14 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
     },
   });
 }
+
+/** What the step shows when signing fails: a declined prompt gets its own copy, anything else viem's short message. */
+export function signingErrorMessage(error: unknown): string {
+  if (isUserRejectedRequest(error)) return "You declined the signature. No Grant was made.";
+  return walletErrorMessage(error, "Something went wrong. Try again.");
+}
+
+type Chosen = Exclude<GroupKeyChoice, { error: string }>;
 
 const Detail = ({ term, children }: { term: string; children: React.ReactNode }) => (
   <div className='grid gap-1 py-2.5 sm:grid-cols-[7rem_1fr] sm:gap-4'>
@@ -89,16 +101,9 @@ export const GroupKeyStep = ({
   });
   const choice = useGroupKeyChoice(network, account, bound.data === true);
   const chosen = choice.data && !("error" in choice.data) ? choice.data : null;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [grant, setGrant] = useState<string | null>(null);
-
-  const issue = async () => {
-    if (!wallet || !chosen || expires === null) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const text = await issueGroupKeyGrant(
+  const issue = useMutation({
+    mutationFn: ({ wallet, chosen, expires }: { wallet: WalletClient; chosen: Chosen; expires: bigint }) =>
+      issueGroupKeyGrant(
         {
           // Privy resolves a request while its dialog is still animating closed; the next one
           // must wait for it, or it lands under the old screen and crashes it. See waitForPrivyModalToClose.
@@ -116,15 +121,11 @@ export const GroupKeyStep = ({
           pubkey: keyAgreement.pubkey,
           expires,
         },
-      );
-      setGrant(text);
-      onIssued();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+      ),
+    onSuccess: () => onIssued(),
+  });
+  const grant = issue.data ?? null;
+  const busy = issue.isPending;
 
   const status = ((): { tone: StepTone; label: string } => {
     if (grant) return { tone: "done", label: "Grant ready" };
@@ -136,6 +137,15 @@ export const GroupKeyStep = ({
     return { tone: "todo", label: "Not given" };
   })();
   const ready = bound.data === true && chosen !== null && expires !== null && !!wallet && !busy;
+  const buttonLabel = (() => {
+    if (busy) return "Waiting for your wallet…";
+    // useWalletClient resolves after a connect or chain switch; until then nothing can sign.
+    if (!wallet) return "Connecting to your wallet…";
+    return "Sign and create Grant";
+  })();
+  const start = () => {
+    if (wallet && chosen && expires !== null) issue.mutate({ wallet, chosen, expires });
+  };
 
   return (
     <SetupStep
@@ -198,9 +208,9 @@ export const GroupKeyStep = ({
           </Button>
         </Notice>
       )}
-      {error && (
+      {issue.error && (
         <Notice tone='error' role='alert' title='No Grant was made' className='mt-4'>
-          <p className='mt-1 text-xs break-words'>{error}</p>
+          <p className='mt-1 text-xs break-words'>{signingErrorMessage(issue.error)}</p>
         </Notice>
       )}
 
@@ -238,8 +248,8 @@ export const GroupKeyStep = ({
               </p>
             )}
             <div className='mt-4'>
-              <Button variant='primary' size='compact' disabled={!ready} onClick={() => void issue()}>
-                {busy ? "Waiting for your wallet…" : "Sign and create Grant"}
+              <Button variant='primary' size='compact' disabled={!ready} onClick={start}>
+                {buttonLabel}
               </Button>
             </div>
           </>

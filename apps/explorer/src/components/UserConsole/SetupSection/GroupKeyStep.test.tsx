@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /** The group key step: when it can sign, what it warns, and the Grant it shows. */
 import { publicKeyOf } from "@filoz/keysmith";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { BaseError, UserRejectedRequestError } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { keyAgreementMessage } from "@/utils/setupLink";
@@ -20,21 +21,29 @@ const state = vi.hoisted(() => ({
   dataSets: [] as { dataSetId: bigint; live: boolean; metadata: Record<string, string> }[],
   /** Each wallet request, and each wait for Privy's dialog, in the order they happen. */
   events: [] as string[],
+  /** How many data set pages were read. */
+  reads: 0,
+  walletReady: true,
 }));
 
 vi.mock("wagmi", () => ({
   usePublicClient: () => ({}),
   useWalletClient: () => ({
-    data: {
-      signTypedData: async (args: { primaryType: string }) => {
-        state.events.push(`sign ${args.primaryType}`);
-        return "0xsig";
-      },
-    },
+    data: !state.walletReady
+      ? undefined
+      : {
+          signTypedData: async (args: { primaryType: string }) => {
+            state.events.push(`sign ${args.primaryType}`);
+            return "0xsig";
+          },
+        },
   }),
 }));
 vi.mock("@filoz/synapse-core/warm-storage", () => ({
-  getPdpDataSets: async () => ({ items: state.dataSets }),
+  getPdpDataSets: async () => {
+    state.reads += 1;
+    return { items: state.dataSets };
+  },
 }));
 vi.mock("@/utils/privy-modal", () => ({
   waitForPrivyModalToClose: async () => {
@@ -54,8 +63,11 @@ const GRANT = "fgr1_o2EBYmtzWBAC-_9";
 
 const onIssued = vi.fn();
 
-async function renderStep({ expires = EXPIRES as bigint | null, pubkeysig = PUBKEYSIG } = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+async function renderStep({
+  expires = EXPIRES as bigint | null,
+  pubkeysig = PUBKEYSIG,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+} = {}) {
   await act(async () => {
     render(
       <QueryClientProvider client={client}>
@@ -80,6 +92,8 @@ describe("GroupKeyStep", () => {
   beforeEach(() => {
     state.dataSets = [];
     state.events = [];
+    state.reads = 0;
+    state.walletReady = true;
     onIssued.mockReset();
     issue.mockReset().mockImplementation(async (wallet: { signTypedData: (args: object) => Promise<string> }) => {
       for (const primaryType of ["KeyspaceKey", "KeyspaceKey", "ReadGrant"]) {
@@ -137,6 +151,78 @@ describe("GroupKeyStep", () => {
 
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("reads the data sets once: refocusing or reconnecting does not change the group key shown", async () => {
+    await renderStep();
+    await waitFor(() => expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy());
+    expect(state.reads).toBe(1);
+
+    state.dataSets = [
+      { dataSetId: 1n, live: true, metadata: { "foc/ks": `0x${"ab".repeat(16)}`, "foc/kc": "v1.ab", "foc/enc": "1" } },
+    ];
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(state.reads).toBe(1);
+    expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy();
+    focusManager.setFocused(undefined);
+  });
+
+  it("keeps the group key it read when the step mounts again", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await renderStep({ client });
+    await waitFor(() => expect(state.reads).toBe(1));
+    cleanup();
+
+    await renderStep({ client });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(state.reads).toBe(1);
+  });
+
+  it("says it is connecting to the wallet, and cannot sign, until the wallet client is ready", async () => {
+    state.walletReady = false;
+    await renderStep();
+    await waitFor(() => expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy());
+
+    const button = screen.getByRole("button", { name: "Connecting to your wallet…" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+
+  it("says a declined signature plainly, and a retry can still make the Grant", async () => {
+    issue.mockRejectedValueOnce(
+      new BaseError("Signing failed", { cause: new UserRejectedRequestError(new Error("no")) }),
+    );
+    await renderStep();
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toBe(
+        "No Grant was madeYou declined the signature. No Grant was made.",
+      ),
+    );
+    expect(onIssued).not.toHaveBeenCalled();
+
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect((screen.getByLabelText("Grant") as HTMLTextAreaElement).value).toBe(GRANT));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(onIssued).toHaveBeenCalledOnce();
+  });
+
+  it("shows viem's short message for other failures, not its full text", async () => {
+    issue.mockRejectedValueOnce(new BaseError("The wallet could not sign"));
+    await renderStep();
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toBe("No Grant was madeThe wallet could not sign"),
+    );
   });
 
   it("waits for Privy's dialog before each signature, then shows the Grant to paste in place of the warning", async () => {
