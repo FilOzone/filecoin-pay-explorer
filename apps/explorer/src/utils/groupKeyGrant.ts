@@ -48,27 +48,32 @@ export type GroupKeyChoice =
   /** The default id is on chain, but its data sets are not a valid group: signing for it would grow a broken one. */
   | { error: "default-group-key-invalid"; groupKeyId: Hex; dataSetIds: bigint[] };
 
+/** A group key id as Keysmith and the default rule write it: 16 bytes, lowercase hex. */
+const CANONICAL_GROUP_KEY_ID = /^0x[0-9a-f]{32}$/;
+
 /**
- * "Oldest wins": group the data sets by `foc/ks`, skip any group whose data sets
- * disagree on `foc/kc` or are not all `foc/enc` "1", and take the group holding
- * the lowest data set id. With none left, the owner's default group key.
+ * "Oldest wins": skip data sets whose `foc/ks` is not a canonical id, group the
+ * rest by it, skip any group whose data sets disagree on `foc/kc` or are not all
+ * `foc/enc` "1", and take the group holding the lowest data set id. With none
+ * left, the owner's default group key. Ids are never case-folded: a reused id
+ * must match the data sets that record it exactly.
  */
 export function chooseGroupKey(owner: Address, dataSets: readonly GroupKeyDataSet[]): GroupKeyChoice {
-  const groups = Map.groupBy(dataSets, (dataSet) => dataSet.metadata[KEYSPACE_ID_KEY]);
+  const canonical = dataSets.filter((dataSet) => CANONICAL_GROUP_KEY_ID.test(dataSet.metadata[KEYSPACE_ID_KEY] ?? ""));
+  const groups = Map.groupBy(canonical, (dataSet) => dataSet.metadata[KEYSPACE_ID_KEY] as Hex);
   let best: { groupKeyId: Hex; commitment: string; oldest: bigint } | undefined;
   for (const [groupKeyId, members] of groups) {
-    if (groupKeyId === undefined) continue;
     const commitment = members[0]?.metadata[COMMITMENT_KEY];
     const agreed = members.every((dataSet) => dataSet.metadata[COMMITMENT_KEY] === commitment);
     const versioned = members.every((dataSet) => dataSet.metadata[ENCRYPTION_VERSION_KEY] === ENCRYPTION_VERSION);
     if (commitment === undefined || !agreed || !versioned) continue;
     const oldest = members.reduce((min, { dataSetId }) => (dataSetId < min ? dataSetId : min), members[0].dataSetId);
-    if (!best || oldest < best.oldest) best = { groupKeyId: groupKeyId as Hex, commitment, oldest };
+    if (!best || oldest < best.oldest) best = { groupKeyId, commitment, oldest };
   }
   if (best) return { groupKeyId: best.groupKeyId, commitment: best.commitment };
 
   const groupKeyId = defaultGroupKeyId(owner);
-  const invalid = dataSets.filter((dataSet) => dataSet.metadata[KEYSPACE_ID_KEY]?.toLowerCase() === groupKeyId);
+  const invalid = canonical.filter((dataSet) => dataSet.metadata[KEYSPACE_ID_KEY] === groupKeyId);
   if (invalid.length > 0) {
     return { error: "default-group-key-invalid", groupKeyId, dataSetIds: invalid.map(({ dataSetId }) => dataSetId) };
   }

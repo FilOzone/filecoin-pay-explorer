@@ -75,12 +75,31 @@ describe("chooseGroupKey", () => {
   });
 
   it("refuses the default group key when it is on chain but invalid", () => {
-    const dataSets = [dataSet(4n, DEFAULT_ID.toUpperCase().replace("0X", "0x"), "v1.aa", "2")];
+    const dataSets = [dataSet(4n, DEFAULT_ID, "v1.aa", "2")];
     assert.deepEqual(chooseGroupKey(OWNER.address, dataSets), {
       error: "default-group-key-invalid",
       groupKeyId: DEFAULT_ID,
       dataSetIds: [4n],
     });
+  });
+
+  it("skips a mixed-case lookalike of the default id rather than calling the default invalid", () => {
+    const dataSets = [dataSet(4n, DEFAULT_ID.toUpperCase().replace("0X", "0x"), "v1.aa", "2")];
+    assert.deepEqual(chooseGroupKey(OWNER.address, dataSets), { groupKeyId: DEFAULT_ID, commitment: null });
+  });
+
+  it("skips data sets whose foc/ks is not a canonical lowercase id, without merging case variants", () => {
+    const upper = A.toUpperCase().replace("0X", "0x");
+    // Oldest, valid on its own, and the same id as A ignoring case: still skipped, and not merged into A.
+    const dataSets = [dataSet(1n, upper, "v1.ff"), dataSet(2n, A, "v1.aa"), dataSet(3n, B, "v1.bb")];
+    assert.deepEqual(chooseGroupKey(OWNER.address, dataSets), { groupKeyId: A, commitment: "v1.aa" });
+    for (const ks of [A.slice(0, -2), `0x${"zz".repeat(16)}`, A.slice(2), `${A}00`, ""]) {
+      assert.deepEqual(
+        chooseGroupKey(OWNER.address, [dataSet(1n, ks, "v1.ff"), dataSet(2n, B, "v1.bb")]),
+        { groupKeyId: B, commitment: "v1.bb" },
+        ks,
+      );
+    }
   });
 });
 
