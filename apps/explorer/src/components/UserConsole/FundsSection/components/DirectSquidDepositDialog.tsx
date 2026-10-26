@@ -387,14 +387,9 @@ export function DirectSquidDepositDialog({
         sourceChainId,
         sourceToken: sourceToken.token,
       };
-      const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
-      if (!isFilGasTopUpEnabled) return quote;
-      const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
-      if (!filGasTopUp) {
-        throw new Error(
-          `Squid could not safely add ${FIL_GAS_TOP_UP_LABEL} for this amount. Increase the amount or turn off the FIL option.`,
-        );
-      }
+      if (!isFilGasTopUpEnabled) return requestSquidDepositRoute(request, squid, { quoteOnly: true });
+      if (!destinationClient) throw new Error("Filecoin network is unavailable");
+      const filGasTopUp = await planFilGasTopUp(destinationClient, request.usdfc, squid.now ?? Date.now);
       return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
     },
     queryKey: [
