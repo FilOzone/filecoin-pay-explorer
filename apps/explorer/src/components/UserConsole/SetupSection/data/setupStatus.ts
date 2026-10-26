@@ -4,10 +4,10 @@ import {
   SUGGESTED_TOPUP_DISPLAY_DECIMALS,
   USDFC_DECIMALS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
-import { isUserRejectedRequest, walletErrorMessage } from "@/components/UserConsole/FundsSection/data/squid-execution";
 import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
 import type { GroupKeyChoice } from "@/utils/groupKeyGrant";
 import { type ExpiryRead, isScopeActive, type ScopeId } from "@/utils/sessionKeys";
+import { isUserRejectedRequest, walletErrorMessage } from "@/utils/walletErrors";
 
 /** How often the setup page rereads what it shows, so work done in another tab or by the tool appears. */
 export const SETUP_POLL_MS = 15_000;

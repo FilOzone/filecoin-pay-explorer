@@ -279,7 +279,7 @@ export const GroupKeyStep = ({
               <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>
               <span className='mt-0.5 block text-xs text-muted-foreground'>
                 {groupKey.commitment
-                  ? "The one your encrypted uploads use."
+                  ? "Tags your encrypted data sets. The session key gets access to every data set under this key."
                   : "New: none of your data sets uses a group key yet."}
               </span>
             </>

@@ -1,6 +1,7 @@
 import { type ConnectedWallet, useSign7702Authorization } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { walletErrorMessage } from "@/utils/walletErrors";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { CIRCLE_PAYMASTER_CHAIN_ID, CIRCLE_PAYMASTER_TOKEN } from "../data/circle-paymaster";
 import {
@@ -12,7 +13,6 @@ import {
 } from "../data/paymaster-deposit-execution";
 import type { SquidClient, SquidDepositRouteRequest } from "../data/squid-deposit-route";
 import type { PendingSquidDeposit } from "../data/squid-deposit-tracker";
-import { walletErrorMessage } from "../data/squid-execution";
 import { checkUsdcGasPayer } from "../data/usdc-gas-payer";
 
 // "Check again" asks the bundler once more rather than waiting out a full inclusion window.
