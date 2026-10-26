@@ -47,6 +47,9 @@ importers:
       '@filoz/synapse-sdk':
         specifier: ^0.41.0
         version: 0.41.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
+      '@noble/curves':
+        specifier: 2.4.0
+        version: 2.4.0
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

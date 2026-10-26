@@ -9,6 +9,7 @@
  * `/console/session-keys?authorize=` and `/console?deposit=` are redirected
  * here by {@link legacySetupPath}.
  */
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { type Hex, verifyMessage } from "viem";
 import type { Network } from "@/types";
 import {
@@ -191,15 +192,15 @@ export function legacySetupPath(pathname: string, params: URLSearchParams): stri
   return isPairing || isFunding ? `${SETUP_PATH}?${params.toString()}` : null;
 }
 
-const SECP256K1_P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
-
-/** An uncompressed secp256k1 point in lowercase hex: `0x04‖x‖y`, with y² = x³ + 7 over the field. */
+/** An uncompressed secp256k1 point in lowercase hex: `0x04‖x‖y`, with x and y canonical and on the curve. */
 function isKeyAgreementKey(value: string): boolean {
   if (!/^0x04[0-9a-f]{128}$/.test(value)) return false;
-  const x = BigInt(`0x${value.slice(4, 68)}`);
-  const y = BigInt(`0x${value.slice(68)}`);
-  if (x >= SECP256K1_P || y >= SECP256K1_P) return false;
-  return (y * y - x * x * x - 7n) % SECP256K1_P === 0n;
+  try {
+    secp256k1.Point.fromHex(value.slice(2));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** What the session key signs over its key-agreement key. Shared with the CLIs. */
