@@ -1,7 +1,9 @@
 import type { Address } from "viem";
+import { getChain } from "@/constants/chains";
 import { useAccountService } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
+import { DatasetsSection } from "../DatasetsSection";
 import { RailsSection } from "../RailsSection";
 import {
   ServiceErrorState,
@@ -52,6 +54,8 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
   }
 
   const profile = profileFor(operatorId);
+  // Each network has one Warm Storage deployment, so its FWSS address identifies the operator.
+  const isWarmStorage = operatorId === getChain(network).contracts.fwss.address.toLowerCase();
 
   return (
     <div className='flex flex-col gap-10'>
@@ -67,6 +71,10 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({ network, operatorA
         totalRails={BigInt(service.totalRails)}
         userAddress={userAddress}
       />
+
+      {isWarmStorage ? (
+        <DatasetsSection key={`${network}:${accountId}`} accountId={accountId} network={network} />
+      ) : null}
     </div>
   );
 };
