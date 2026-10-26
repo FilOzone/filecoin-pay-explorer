@@ -8,13 +8,13 @@ import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
-import { isUserRejectedRequest, walletErrorMessage } from "@/components/UserConsole/FundsSection/data/squid-execution";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatDateTime } from "@/utils/formatter";
-import { chooseGroupKey, type GroupKeyChoice, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
+import { chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { type KeyAgreementRequest, verifyKeyAgreementKey } from "@/utils/setupLink";
+import { type ChosenGroupKey, type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
 import { SetupStep, type StepTone } from "./SetupStep";
 
 export const GROUP_KEY_WARNING =
@@ -47,13 +47,129 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
   });
 }
 
-/** What the step shows when signing fails: a declined prompt gets its own copy, anything else viem's short message. */
-export function signingErrorMessage(error: unknown): string {
-  if (isUserRejectedRequest(error)) return "You declined the signature. No Grant was made.";
-  return walletErrorMessage(error, "Something went wrong. Try again.");
-}
+const GROUP_KEY_STATUS: Record<GroupKeyPhase["phase"], { tone: StepTone; label: string }> = {
+  issued: { tone: "done", label: "Grant ready" },
+  "unsigned-pubkey": { tone: "problem", label: "Key not signed by the session key" },
+  "checking-pubkey": { tone: "waiting", label: "Checking the session key" },
+  "waiting-for-key": { tone: "todo", label: "Waiting for the session key" },
+  "read-failed": { tone: "problem", label: "Could not read your data sets" },
+  "inconsistent-default": { tone: "problem", label: "Could not choose a group key" },
+  choosing: { tone: "waiting", label: "Finding your group key" },
+  "connecting-wallet": { tone: "waiting", label: "Connecting to your wallet" },
+  signing: { tone: "waiting", label: "Waiting for your wallet" },
+  "sign-failed": { tone: "problem", label: "No Grant was made" },
+  ready: { tone: "todo", label: "Not given" },
+};
 
-type Chosen = Exclude<GroupKeyChoice, { error: string }>;
+const SIGN = "Sign and create Grant";
+
+/** The sign button in each phase; null where the step offers no signing at all. */
+const SIGN_ACTION: Record<GroupKeyPhase["phase"], { label: string; enabled: boolean } | null> = {
+  issued: null,
+  "unsigned-pubkey": null,
+  "checking-pubkey": { label: SIGN, enabled: false },
+  "waiting-for-key": { label: SIGN, enabled: false },
+  "read-failed": { label: SIGN, enabled: false },
+  "inconsistent-default": { label: SIGN, enabled: false },
+  choosing: { label: SIGN, enabled: false },
+  // useWalletClient resolves after a connect or chain switch; until then nothing can sign.
+  "connecting-wallet": { label: "Connecting to your wallet…", enabled: false },
+  signing: { label: "Waiting for your wallet…", enabled: false },
+  "sign-failed": { label: SIGN, enabled: true },
+  ready: { label: SIGN, enabled: true },
+};
+
+/** The one notice a phase shows, if any. */
+const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryRead: () => void }) => {
+  switch (phase.phase) {
+    case "unsigned-pubkey":
+      return (
+        <Notice tone='error' role='alert' title='The session key did not sign this encryption key' className='mt-4'>
+          <p className='mt-1 text-xs'>
+            The Grant could go to someone other than the session key above, so this page will not make it. Run the
+            command again for a new link.
+          </p>
+        </Notice>
+      );
+    case "waiting-for-key":
+      return (
+        <p className='mt-4 text-sm text-muted-foreground'>
+          Authorize the session key first: the Grant's fetching ends when its authorization does.
+        </p>
+      );
+    case "read-failed":
+      return (
+        <Notice tone='error' role='alert' title='Could not read your data sets' className='mt-4'>
+          <Button variant='ghost' size='compact' className='mt-2' onClick={onRetryRead}>
+            Retry
+          </Button>
+        </Notice>
+      );
+    case "inconsistent-default":
+      return (
+        <Notice tone='error' role='alert' title='Your default group key is in an inconsistent state' className='mt-4'>
+          <p className='mt-1 text-xs'>
+            Data sets {phase.dataSetIds.join(", ")} use group key {phase.groupKeyId} but disagree on its commitment or
+            encryption version, so this page will not sign for it.
+          </p>
+        </Notice>
+      );
+    case "sign-failed":
+      return (
+        <Notice tone='error' role='alert' title='No Grant was made' className='mt-4'>
+          <p className='mt-1 text-xs break-words'>{phase.message}</p>
+        </Notice>
+      );
+    case "issued":
+    case "checking-pubkey":
+    case "choosing":
+    case "connecting-wallet":
+    case "signing":
+    case "ready":
+      return null;
+    default:
+      return phase satisfies never;
+  }
+};
+
+const GrantOutput = ({ grant }: { grant: string }) => (
+  <div className='mt-4 flex flex-col gap-2'>
+    <label htmlFor='group-key-grant' className='text-sm font-medium'>
+      Grant
+    </label>
+    <div className='flex items-start gap-2'>
+      <textarea
+        id='group-key-grant'
+        readOnly
+        rows={4}
+        value={grant}
+        className='min-w-0 flex-1 resize-none rounded-lg border bg-muted/40 p-3 font-mono text-xs break-all'
+      />
+      <CopyButton value={grant} tooltipText='Copy Grant' successMessage='Grant copied' />
+    </div>
+    <p className='text-sm text-muted-foreground'>
+      Paste it at the login prompt, or run{" "}
+      <code className='font-mono text-xs text-foreground'>filecoin-pin login --grant &lt;grant&gt;</code>. It is safe to
+      paste into a terminal or chat: only this session key can open it. It is not stored in this browser or sent
+      anywhere.
+    </p>
+  </div>
+);
+
+/** The warning and the sign button; nothing where the phase offers no signing. */
+const SignArea = ({ action, onSign }: { action: { label: string; enabled: boolean } | null; onSign: () => void }) =>
+  action === null ? null : (
+    <>
+      <Notice tone='warn' title='Before you sign' className='mt-4'>
+        <p className='mt-1'>{GROUP_KEY_WARNING}</p>
+      </Notice>
+      <div className='mt-4'>
+        <Button variant='primary' size='compact' disabled={!action.enabled} onClick={onSign}>
+          {action.label}
+        </Button>
+      </div>
+    </>
+  );
 
 const Detail = ({ term, children }: { term: string; children: React.ReactNode }) => (
   <div className='grid gap-1 py-2.5 sm:grid-cols-[7rem_1fr] sm:gap-4'>
@@ -100,9 +216,8 @@ export const GroupKeyStep = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const choice = useGroupKeyChoice(network, account, bound.data === true);
-  const chosen = choice.data && !("error" in choice.data) ? choice.data : null;
   const issue = useMutation({
-    mutationFn: ({ wallet, chosen, expires }: { wallet: WalletClient; chosen: Chosen; expires: bigint }) =>
+    mutationFn: ({ wallet, chosen, expires }: { wallet: WalletClient; chosen: ChosenGroupKey; expires: bigint }) =>
       issueGroupKeyGrant(
         {
           // Privy resolves a request while its dialog is still animating closed; the next one
@@ -124,27 +239,19 @@ export const GroupKeyStep = ({
       ),
     onSuccess: () => onIssued(),
   });
-  const grant = issue.data ?? null;
-  const busy = issue.isPending;
-
-  const status = ((): { tone: StepTone; label: string } => {
-    if (grant) return { tone: "done", label: "Grant ready" };
-    if (bound.data === false) return { tone: "problem", label: "Key not signed by the session key" };
-    if (choice.isError || (choice.data && "error" in choice.data))
-      return { tone: "problem", label: "Could not choose a group key" };
-    if (expires === null) return { tone: "todo", label: "Waiting for the session key" };
-    if (!chosen) return { tone: "waiting", label: "Finding your group key" };
-    return { tone: "todo", label: "Not given" };
-  })();
-  const ready = bound.data === true && chosen !== null && expires !== null && !!wallet && !busy;
-  const buttonLabel = (() => {
-    if (busy) return "Waiting for your wallet…";
-    // useWalletClient resolves after a connect or chain switch; until then nothing can sign.
-    if (!wallet) return "Connecting to your wallet…";
-    return "Sign and create Grant";
-  })();
-  const start = () => {
-    if (wallet && chosen && expires !== null) issue.mutate({ wallet, chosen, expires });
+  const phase = groupKeyPhase({
+    signatureValid: bound.data,
+    expires,
+    choice: choice.data,
+    choiceFailed: choice.isError,
+    walletReady: !!wallet,
+    issuing: issue.isPending,
+    issueError: issue.error,
+    grant: issue.data,
+  });
+  const groupKey = "groupKey" in phase ? phase.groupKey : null;
+  const sign = () => {
+    if (wallet && groupKey && expires !== null) issue.mutate({ wallet, chosen: groupKey, expires });
   };
 
   return (
@@ -152,7 +259,7 @@ export const GroupKeyStep = ({
       number={number}
       title='Give this key access to encrypted uploads'
       description='Lets the tool encrypt and decrypt your files with the session key, without your wallet. Your wallet signs two or three messages here; none of them is a transaction.'
-      status={status}
+      status={GROUP_KEY_STATUS[phase.phase]}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
         <Detail term='Session key'>
@@ -165,11 +272,11 @@ export const GroupKeyStep = ({
           </span>
         </Detail>
         <Detail term='Group key'>
-          {chosen ? (
+          {groupKey ? (
             <>
-              <span className='font-mono text-xs break-all'>{chosen.groupKeyId}</span>
+              <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>
               <span className='mt-0.5 block text-xs text-muted-foreground'>
-                {chosen.commitment
+                {groupKey.commitment
                   ? "The one your encrypted uploads use."
                   : "New: none of your data sets uses a group key yet."}
               </span>
@@ -185,75 +292,11 @@ export const GroupKeyStep = ({
         </Detail>
       </dl>
 
-      {bound.data === false && (
-        <Notice tone='error' role='alert' title='The session key did not sign this encryption key' className='mt-4'>
-          <p className='mt-1 text-xs'>
-            The Grant could go to someone other than the session key above, so this page will not make it. Run the
-            command again for a new link.
-          </p>
-        </Notice>
-      )}
-      {choice.data && "error" in choice.data && (
-        <Notice tone='error' role='alert' title='Your default group key is in an inconsistent state' className='mt-4'>
-          <p className='mt-1 text-xs'>
-            Data sets {choice.data.dataSetIds.join(", ")} use group key {choice.data.groupKeyId} but disagree on its
-            commitment or encryption version, so this page will not sign for it.
-          </p>
-        </Notice>
-      )}
-      {choice.isError && (
-        <Notice tone='error' role='alert' title='Could not read your data sets' className='mt-4'>
-          <Button variant='ghost' size='compact' className='mt-2' onClick={() => void choice.refetch()}>
-            Retry
-          </Button>
-        </Notice>
-      )}
-      {issue.error && (
-        <Notice tone='error' role='alert' title='No Grant was made' className='mt-4'>
-          <p className='mt-1 text-xs break-words'>{signingErrorMessage(issue.error)}</p>
-        </Notice>
-      )}
-
-      {grant ? (
-        <div className='mt-4 flex flex-col gap-2'>
-          <label htmlFor='group-key-grant' className='text-sm font-medium'>
-            Grant
-          </label>
-          <div className='flex items-start gap-2'>
-            <textarea
-              id='group-key-grant'
-              readOnly
-              rows={4}
-              value={grant}
-              className='min-w-0 flex-1 resize-none rounded-lg border bg-muted/40 p-3 font-mono text-xs break-all'
-            />
-            <CopyButton value={grant} tooltipText='Copy Grant' successMessage='Grant copied' />
-          </div>
-          <p className='text-sm text-muted-foreground'>
-            Paste it at the login prompt, or run{" "}
-            <code className='font-mono text-xs text-foreground'>filecoin-pin login --grant &lt;grant&gt;</code>. It is
-            safe to paste into a terminal or chat: only this session key can open it. It is not stored in this browser
-            or sent anywhere.
-          </p>
-        </div>
+      <GroupKeyNotice phase={phase} onRetryRead={() => void choice.refetch()} />
+      {phase.phase === "issued" ? (
+        <GrantOutput grant={phase.grant} />
       ) : (
-        bound.data !== false && (
-          <>
-            <Notice tone='warn' title='Before you sign' className='mt-4'>
-              <p className='mt-1'>{GROUP_KEY_WARNING}</p>
-            </Notice>
-            {expires === null && (
-              <p className='mt-4 text-sm text-muted-foreground'>
-                Authorize the session key first: the Grant's fetching ends when its authorization does.
-              </p>
-            )}
-            <div className='mt-4'>
-              <Button variant='primary' size='compact' disabled={!ready} onClick={start}>
-                {buttonLabel}
-              </Button>
-            </div>
-          </>
-        )
+        <SignArea action={SIGN_ACTION[phase.phase]} onSign={sign} />
       )}
     </SetupStep>
   );

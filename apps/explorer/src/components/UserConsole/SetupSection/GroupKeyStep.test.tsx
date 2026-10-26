@@ -23,6 +23,8 @@ const state = vi.hoisted(() => ({
   events: [] as string[],
   /** How many data set pages were read. */
   reads: 0,
+  /** Reads left to fail before the scan works. */
+  failReads: 0,
   walletReady: true,
 }));
 
@@ -42,6 +44,10 @@ vi.mock("wagmi", () => ({
 vi.mock("@filoz/synapse-core/warm-storage", () => ({
   getPdpDataSets: async () => {
     state.reads += 1;
+    if (state.failReads > 0) {
+      state.failReads -= 1;
+      throw new Error("rpc down");
+    }
     return { items: state.dataSets };
   },
 }));
@@ -93,6 +99,7 @@ describe("GroupKeyStep", () => {
     state.dataSets = [];
     state.events = [];
     state.reads = 0;
+    state.failReads = 0;
     state.walletReady = true;
     onIssued.mockReset();
     issue.mockReset().mockImplementation(async (wallet: { signTypedData: (args: object) => Promise<string> }) => {
@@ -137,6 +144,36 @@ describe("GroupKeyStep", () => {
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Data sets 3 use group key"));
     expect(signButton()?.disabled).toBe(true);
+  });
+
+  it("shows one notice when the data sets cannot be read, and Retry recovers", async () => {
+    state.failReads = 1;
+    await renderStep();
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("alert").map((a) => a.textContent)).toEqual(["Could not read your data setsRetry"]),
+    );
+    expect(signButton()?.disabled).toBe(true);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry" })));
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    expect(screen.queryAllByRole("alert")).toEqual([]);
+  });
+
+  it("shows only the inconsistent-default notice when the wallet is not connected either", async () => {
+    state.walletReady = false;
+    state.dataSets = [
+      {
+        dataSetId: 3n,
+        live: true,
+        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
+      },
+    ];
+    await renderStep();
+
+    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(1));
+    expect(screen.getByRole("alert").textContent).toContain("Your default group key is in an inconsistent state");
+    expect(signButton()?.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Connecting to your wallet…" })).toBeNull();
   });
 
   it("ignores data sets that are no longer live", async () => {

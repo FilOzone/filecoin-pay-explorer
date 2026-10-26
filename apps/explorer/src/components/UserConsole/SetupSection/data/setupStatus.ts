@@ -1,10 +1,12 @@
-import { formatUnits, maxUint256, parseUnits } from "viem";
+import { formatUnits, type Hex, maxUint256, parseUnits } from "viem";
 import {
   roundUpUnits,
   SUGGESTED_TOPUP_DISPLAY_DECIMALS,
   USDFC_DECIMALS,
 } from "@/components/UserConsole/FundsSection/data/funding-runway";
+import { isUserRejectedRequest, walletErrorMessage } from "@/components/UserConsole/FundsSection/data/squid-execution";
 import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
+import type { GroupKeyChoice } from "@/utils/groupKeyGrant";
 import { type ExpiryRead, isScopeActive, type ScopeId } from "@/utils/sessionKeys";
 
 /** How often the setup page rereads what it shows, so work done in another tab or by the tool appears. */
@@ -252,4 +254,69 @@ export function isSetupComplete({
   fundsCovered: boolean;
 }): boolean {
   return (!keyRequested || grant.state === "authorized") && approved && fundsCovered;
+}
+
+/** The group key a Grant would carry, once one is chosen. */
+export type ChosenGroupKey = Exclude<GroupKeyChoice, { error: string }>;
+
+/** Where the group key step stands: one value per render, so it shows one status and one notice. */
+export type GroupKeyPhase =
+  | { phase: "issued"; grant: string; groupKey: ChosenGroupKey | null }
+  /** `pubkeysig` does not recover to the session key: nothing may be signed for this link. */
+  | { phase: "unsigned-pubkey" }
+  | { phase: "checking-pubkey" }
+  /** The session key is not authorized yet, and the Grant's claim ends with that authorization. */
+  | { phase: "waiting-for-key"; groupKey: ChosenGroupKey | null }
+  | { phase: "read-failed" }
+  /** The default group key id is on chain, but its data sets are not a valid group. */
+  | { phase: "inconsistent-default"; groupKeyId: Hex; dataSetIds: bigint[] }
+  | { phase: "choosing" }
+  | { phase: "connecting-wallet"; groupKey: ChosenGroupKey }
+  | { phase: "signing"; groupKey: ChosenGroupKey }
+  | { phase: "sign-failed"; groupKey: ChosenGroupKey; declined: boolean; message: string }
+  | { phase: "ready"; groupKey: ChosenGroupKey };
+
+export interface GroupKeyReads {
+  /** Whether `pubkeysig` recovers to the session key; undefined while it is checked. */
+  signatureValid: boolean | undefined;
+  /** The session key's authorization expiry, unix seconds; null until it is authorized. */
+  expires: bigint | null;
+  /** The group key choice; undefined until the data set scan settles. */
+  choice: GroupKeyChoice | undefined;
+  choiceFailed: boolean;
+  walletReady: boolean;
+  /** The signing mutation: pending, its error (null when none), and the Grant it made. */
+  issuing: boolean;
+  issueError: unknown;
+  grant: string | undefined;
+}
+
+/** What a failed signing shows: a declined prompt gets its own copy, anything else viem's short message. */
+export function signingFailure(error: unknown): { declined: boolean; message: string } {
+  if (isUserRejectedRequest(error))
+    return { declined: true, message: "You declined the signature. No Grant was made." };
+  return { declined: false, message: walletErrorMessage(error, "Something went wrong. Try again.") };
+}
+
+/**
+ * The group key step's phase from its raw reads. Precedence, first match wins:
+ * issued > unsigned-pubkey > checking-pubkey > waiting-for-key > read-failed >
+ * inconsistent-default > choosing > connecting-wallet > signing > sign-failed > ready.
+ * A made Grant outlives every later read; a bad signature blocks everything else.
+ */
+export function groupKeyPhase(reads: GroupKeyReads): GroupKeyPhase {
+  const groupKey = reads.choice && !("error" in reads.choice) ? reads.choice : null;
+  if (reads.grant !== undefined) return { phase: "issued", grant: reads.grant, groupKey };
+  if (reads.signatureValid === false) return { phase: "unsigned-pubkey" };
+  if (reads.signatureValid === undefined) return { phase: "checking-pubkey" };
+  if (reads.expires === null) return { phase: "waiting-for-key", groupKey };
+  if (reads.choiceFailed) return { phase: "read-failed" };
+  if (reads.choice && "error" in reads.choice) {
+    return { phase: "inconsistent-default", groupKeyId: reads.choice.groupKeyId, dataSetIds: reads.choice.dataSetIds };
+  }
+  if (!groupKey) return { phase: "choosing" };
+  if (!reads.walletReady) return { phase: "connecting-wallet", groupKey };
+  if (reads.issuing) return { phase: "signing", groupKey };
+  if (reads.issueError != null) return { phase: "sign-failed", groupKey, ...signingFailure(reads.issueError) };
+  return { phase: "ready", groupKey };
 }
