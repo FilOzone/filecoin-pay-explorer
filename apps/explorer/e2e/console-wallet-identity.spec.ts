@@ -33,7 +33,7 @@ test("logging in with a different identity after logout reaches the console, not
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Continue with a Filecoin Pay wallet" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up a Filecoin Pay wallet with email" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "second@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -46,7 +46,7 @@ test("logging out and back in with the same identity reconnects without getting 
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Continue with a Filecoin Pay wallet" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set up a Filecoin Pay wallet with email" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
