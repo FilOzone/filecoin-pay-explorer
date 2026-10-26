@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { publicKeyOf } from "@filoz/keysmith";
 import { getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { describe, it } from "vitest";
-import { legacySetupPath, parseSetupLink } from "./setupLink";
+import { keyAgreementMessage, legacySetupPath, parseSetupLink, verifyKeyAgreementKey } from "./setupLink";
 
 const LOWERCASE = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 const CHECKSUMMED = getAddress(LOWERCASE);
@@ -14,6 +16,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link(""), {
       network: null,
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -22,6 +25,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("foo=bar"), {
       network: null,
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -33,6 +37,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("network=mainnet"), {
       network: "mainnet",
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -44,6 +49,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(keyLink(), {
       network: "calibration",
       sessionKey: { address: CHECKSUMMED, scopes: ["addPieces"], name: null, days: null },
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -55,6 +61,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link(`signer=${LOWERCASE}&scopes=addPieces&network=mainnet`), {
       network: "mainnet",
       sessionKey: { address: CHECKSUMMED, scopes: ["addPieces"], name: null, days: null },
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -66,6 +73,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("deposit=2&operator=fwss&network=calibration"), {
       network: "calibration",
       sessionKey: null,
+      keyAgreement: null,
       deposit: "2",
       balance: null,
       approvalOnly: false,
@@ -74,6 +82,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("operator=FWSS&network=mainnet"), {
       network: "mainnet",
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: true,
@@ -85,6 +94,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(keyLink("&deposit=1.5"), {
       network: "calibration",
       sessionKey: { address: CHECKSUMMED, scopes: ["addPieces"], name: null, days: null },
+      keyAgreement: null,
       deposit: "1.5",
       balance: null,
       approvalOnly: false,
@@ -164,6 +174,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("operator=fwss&network=mainnet&approval=unlimited"), {
       network: "mainnet",
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: true,
@@ -172,6 +183,7 @@ describe("parseSetupLink", () => {
     assert.deepEqual(link("approval=Unlimited&network=calibration"), {
       network: "calibration",
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: true,
@@ -209,6 +221,65 @@ describe("parseSetupLink", () => {
       const query = `authorize=${encodeURIComponent(input)}&scopes=${encodeURIComponent(input)}&deposit=${encodeURIComponent(input)}`;
       assert.doesNotThrow(() => link(query), input);
     }
+  });
+});
+
+// Anvil #1, a test key: the session key whose key-agreement key the links carry.
+const SESSION = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+const PUBKEY = publicKeyOf("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+const PUBKEYSIG = await SESSION.signMessage({ message: keyAgreementMessage(PUBKEY) });
+const sessionLink = (extra: string) =>
+  link(`authorize=${SESSION.address}&scopes=addPieces&network=calibration${extra}`);
+
+describe("parseSetupLink: pubkey and pubkeysig", () => {
+  it("reads a session key's key-agreement key and its signature, in lowercase", () => {
+    const result = sessionLink(`&pubkey=${PUBKEY.toUpperCase().replace("0X", "0x")}&pubkeysig=${PUBKEYSIG}`);
+    assert.ok(!("error" in result));
+    assert.deepEqual(result.keyAgreement, { pubkey: PUBKEY.toLowerCase(), pubkeysig: PUBKEYSIG.toLowerCase() });
+    assert.equal(result.sessionKey?.address, SESSION.address);
+  });
+
+  it("refuses a pubkey or pubkeysig without a session key to give the Grant to", () => {
+    assert.deepEqual(link(`network=calibration&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}`), {
+      error: "pubkey-without-key",
+    });
+    assert.deepEqual(link(`network=calibration&pubkeysig=${PUBKEYSIG}`), { error: "pubkey-without-key" });
+  });
+
+  it("refuses a pubkey that is not an uncompressed secp256k1 point", () => {
+    const offCurve = `0x04${"0".repeat(63)}1${"0".repeat(63)}1`;
+    // (1, y) is on the curve; x + p names the same field element but is not a canonical encoding.
+    const beyondField =
+      "0x04fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc304218f20ae6c646b363db68605822fb14264ca8d2587fdd6fbc750d587e76a7ee";
+    const compressed = `0x02${PUBKEY.slice(4, 68)}`;
+    for (const pubkey of ["", "junk", compressed, PUBKEY.slice(0, -2), `${PUBKEY}00`, offCurve, beyondField]) {
+      assert.deepEqual(sessionLink(`&pubkey=${pubkey}&pubkeysig=${PUBKEYSIG}`), { error: "bad-pubkey" }, pubkey);
+    }
+    // A key with pubkeysig alone names no key at all.
+    assert.deepEqual(sessionLink(`&pubkeysig=${PUBKEYSIG}`), { error: "bad-pubkey" });
+  });
+
+  it("refuses a pubkey whose signature is missing or malformed", () => {
+    for (const extra of ["", "&pubkeysig=", "&pubkeysig=junk", `&pubkeysig=${PUBKEYSIG.slice(0, -2)}`]) {
+      assert.deepEqual(sessionLink(`&pubkey=${PUBKEY}${extra}`), { error: "bad-pubkeysig" }, extra);
+    }
+  });
+});
+
+describe("verifyKeyAgreementKey", () => {
+  it("accepts the session key's own signature over its key-agreement key", async () => {
+    assert.equal(await verifyKeyAgreementKey(SESSION.address, { pubkey: PUBKEY, pubkeysig: PUBKEYSIG }), true);
+  });
+
+  it("refuses a signature by another key", async () => {
+    const other = privateKeyToAccount("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a");
+    const pubkeysig = await other.signMessage({ message: keyAgreementMessage(PUBKEY) });
+    assert.equal(await verifyKeyAgreementKey(SESSION.address, { pubkey: PUBKEY, pubkeysig }), false);
+  });
+
+  it("refuses a key-agreement key other than the one signed", async () => {
+    const tampered = publicKeyOf("0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a");
+    assert.equal(await verifyKeyAgreementKey(SESSION.address, { pubkey: tampered, pubkeysig: PUBKEYSIG }), false);
   });
 });
 

@@ -31,6 +31,9 @@ const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
   "bad-balance": "The balance it asks for cannot be read.",
   "bad-operator": "It names a service this page does not set up.",
   "bad-approval": "It asks for a kind of Warm Storage approval this page does not know.",
+  "pubkey-without-key": "It asks for access to encrypted uploads but names no session key to give it to.",
+  "bad-pubkey": "The session key's encryption key in it cannot be read.",
+  "bad-pubkeysig": "The session key's signature over its encryption key is missing or cannot be read.",
 };
 
 const NetworkName = ({ network }: { network: Network }) => <span className='capitalize'>{network}</span>;

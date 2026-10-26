@@ -3,12 +3,13 @@
  * wallet. Every value is untrusted URL input and parsing never throws. The
  * parameter names are a contract shared with the CLIs:
  *
- * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
+ * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=][&pubkey=<0x04…>&pubkeysig=<0x…>]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
  *
  * `signer` is read as `authorize`, as the `fil` CLI names it. Older links to
  * `/console/session-keys?authorize=` and `/console?deposit=` are redirected
  * here by {@link legacySetupPath}.
  */
+import { type Hex, verifyMessage } from "viem";
 import type { Network } from "@/types";
 import {
   type AuthorizeParamError,
@@ -23,7 +24,15 @@ import { normalizeKeyName, type ScopeId } from "./sessionKeys";
 export const SETUP_PATH = "/console/setup";
 
 /** Why a setup link was refused. Any one of them refuses the whole request. */
-export type SetupLinkError = AuthorizeParamError | "bad-deposit" | "bad-balance" | "bad-operator" | "bad-approval";
+export type SetupLinkError =
+  | AuthorizeParamError
+  | "bad-deposit"
+  | "bad-balance"
+  | "bad-operator"
+  | "bad-approval"
+  | "pubkey-without-key"
+  | "bad-pubkey"
+  | "bad-pubkeysig";
 
 export interface SessionKeyRequest {
   address: `0x${string}`;
@@ -34,11 +43,26 @@ export interface SessionKeyRequest {
   days: number | null;
 }
 
+/**
+ * The session key's Keysmith key-agreement key, which a group key Grant is
+ * wrapped to. It does not hash to the key's address, so the session key signs
+ * it; the page checks that signature ({@link verifyKeyAgreementKey}) before
+ * asking the wallet for anything.
+ */
+export interface KeyAgreementRequest {
+  /** Uncompressed secp256k1 point, lowercase: `0x04` and 128 hex digits. */
+  pubkey: Hex;
+  /** The session key's EIP-191 signature over {@link keyAgreementMessage}, lowercase. */
+  pubkeysig: Hex;
+}
+
 export interface SetupRequest {
   /** The network the request is for; null only for a bare link, which sets up the wallet's own network. */
   network: Network | null;
   /** The session key to authorize; null when the link asks for none. */
   sessionKey: SessionKeyRequest | null;
+  /** Asks for a group key Grant to the session key; null when the link names no `pubkey`. */
+  keyAgreement: KeyAgreementRequest | null;
   /** Decimal USDFC amount to add on top of what Filecoin Pay holds, e.g. "2"; null when the link names none. */
   deposit: string | null;
   /**
@@ -69,6 +93,8 @@ const REQUEST_PARAMS = [
   "balance",
   "operator",
   "approval",
+  "pubkey",
+  "pubkeysig",
 ] as const;
 
 /**
@@ -82,6 +108,7 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
     return {
       network: null,
       sessionKey: null,
+      keyAgreement: null,
       deposit: null,
       balance: null,
       approvalOnly: false,
@@ -129,9 +156,21 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
   const approval = params.get("approval");
   if (approval !== null && approval.trim().toLowerCase() !== "unlimited") return { error: "bad-approval" };
 
+  let keyAgreement: KeyAgreementRequest | null = null;
+  if (params.has("pubkey") || params.has("pubkeysig")) {
+    // The Grant goes to the session key the link authorizes; there is nothing to give it to otherwise.
+    if (!sessionKey) return { error: "pubkey-without-key" };
+    const pubkey = params.get("pubkey")?.trim().toLowerCase() ?? "";
+    if (!isKeyAgreementKey(pubkey)) return { error: "bad-pubkey" };
+    const pubkeysig = params.get("pubkeysig")?.trim().toLowerCase() ?? "";
+    if (!/^0x[0-9a-f]{130}$/.test(pubkeysig)) return { error: "bad-pubkeysig" };
+    keyAgreement = { pubkey: pubkey as Hex, pubkeysig: pubkeysig as Hex };
+  }
+
   return {
     network,
     sessionKey,
+    keyAgreement,
     deposit,
     balance,
     approvalOnly: deposit === null && balance === null && (params.has("operator") || approval !== null),
@@ -150,4 +189,23 @@ export function legacySetupPath(pathname: string, params: URLSearchParams): stri
     pathname === "/console/session-keys" && !params.has("revoke") && (params.has("authorize") || params.has("scopes"));
   const isFunding = pathname === "/console" && (params.has("deposit") || params.has("operator"));
   return isPairing || isFunding ? `${SETUP_PATH}?${params.toString()}` : null;
+}
+
+const SECP256K1_P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
+
+/** An uncompressed secp256k1 point in lowercase hex: `0x04‖x‖y`, with y² = x³ + 7 over the field. */
+function isKeyAgreementKey(value: string): boolean {
+  if (!/^0x04[0-9a-f]{128}$/.test(value)) return false;
+  const x = BigInt(`0x${value.slice(4, 68)}`);
+  const y = BigInt(`0x${value.slice(68)}`);
+  if (x >= SECP256K1_P || y >= SECP256K1_P) return false;
+  return (y * y - x * x * x - 7n) % SECP256K1_P === 0n;
+}
+
+/** What the session key signs over its key-agreement key. Shared with the CLIs. */
+export const keyAgreementMessage = (pubkey: Hex) => `Keysmith key agreement key: ${pubkey.toLowerCase()}`;
+
+/** Whether the session key at `address` signed `pubkey` as its key-agreement key. Never throws. */
+export function verifyKeyAgreementKey(address: Hex, { pubkey, pubkeysig }: KeyAgreementRequest): Promise<boolean> {
+  return verifyMessage({ address, message: keyAgreementMessage(pubkey), signature: pubkeysig }).catch(() => false);
 }
