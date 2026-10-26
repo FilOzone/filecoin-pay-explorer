@@ -413,8 +413,10 @@ describe("groupKeyPhase", () => {
     assert.equal(groupKeyPhase({ ...ready, expires: null, choice: undefined }).phase, "waiting-for-key");
     // A read error outranks a stale choice; an invalid default outranks the wallet.
     assert.equal(groupKeyPhase({ ...ready, choiceFailed: true }).phase, "read-failed");
+    assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, choiceFailed: true }).phase, "read-failed");
     assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, walletReady: false }).phase, "inconsistent-default");
     assert.equal(groupKeyPhase({ ...ready, choice: undefined, walletReady: false }).phase, "choosing");
+    assert.equal(groupKeyPhase({ ...ready, choice: undefined, issuing: true }).phase, "choosing");
     // A signature in flight outlasts a wallet client that drops out; Retry needs a wallet.
     assert.equal(groupKeyPhase({ ...ready, issuing: true, walletReady: false }).phase, "signing");
     assert.equal(groupKeyPhase({ ...ready, issueError: declined, walletReady: false }).phase, "connecting-wallet");

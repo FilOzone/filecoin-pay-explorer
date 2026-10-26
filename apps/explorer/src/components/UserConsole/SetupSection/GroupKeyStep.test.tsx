@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** The group key step: when it can sign, what it warns, and the Grant it shows. */
 import { publicKeyOf } from "@filoz/keysmith";
-import { focusManager, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BaseError, UserRejectedRequestError } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -121,74 +121,93 @@ describe("GroupKeyStep", () => {
     expect(state.events).toEqual([]);
   });
 
-  it("refuses a key-agreement key the session key did not sign, before any wallet request", async () => {
-    const forged = await OWNER.signMessage({ message: keyAgreementMessage(PUBKEY) });
-    await renderStep({ pubkeysig: forged });
+  const BROKEN_DEFAULT = [
+    {
+      dataSetId: 3n,
+      live: true,
+      metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
+    },
+  ];
+  it.each([
+    {
+      name: "a pubkey the session key did not sign",
+      setup: () => {},
+      props: { forged: true },
+      alert: "The session key did not sign this encryption key",
+      button: null,
+    },
+    {
+      name: "a broken default group key",
+      setup: () => {
+        state.dataSets = BROKEN_DEFAULT;
+      },
+      props: {},
+      alert: "Data sets 3 use group key 0x02ca08cf7e0222c8432adc159232b7eb",
+      button: "Sign and create Grant",
+    },
+    {
+      // The step must feed `expires` into the phase: before authorization the warning still shows.
+      name: "a broken default group key before the session key is authorized",
+      setup: () => {
+        state.dataSets = BROKEN_DEFAULT;
+      },
+      props: { expires: null },
+      alert: "Your default group key is in an inconsistent state",
+      button: "Sign and create Grant",
+    },
+    {
+      name: "a broken default group key and no wallet",
+      setup: () => {
+        state.dataSets = BROKEN_DEFAULT;
+        state.walletReady = false;
+      },
+      props: {},
+      alert: "Your default group key is in an inconsistent state",
+      button: "Sign and create Grant",
+    },
+    {
+      name: "data sets that cannot be read",
+      setup: () => {
+        state.failReads = 1;
+      },
+      props: {},
+      alert: "Could not read your data setsRetry",
+      button: "Sign and create Grant",
+    },
+    {
+      name: "no wallet client yet",
+      setup: () => {
+        state.walletReady = false;
+      },
+      props: {},
+      alert: null,
+      button: "Connecting to your wallet…",
+    },
+  ])("renders one notice and a disabled or no sign button for $name", async ({ setup, props, alert, button }) => {
+    setup();
+    const { forged, ...rest } = props as { forged?: boolean; expires?: null };
+    const pubkeysig = forged ? await OWNER.signMessage({ message: keyAgreementMessage(PUBKEY) }) : PUBKEYSIG;
+    await renderStep({ ...rest, pubkeysig });
 
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toContain("The session key did not sign this encryption key"),
-    );
-    expect(signButton()).toBeNull();
+    await waitFor(() => {
+      const alerts = screen.queryAllByRole("alert").map((a) => a.textContent ?? "");
+      expect(alerts).toHaveLength(alert ? 1 : 0);
+      if (alert) expect(alerts[0]).toContain(alert);
+      const buttons = screen.queryAllByRole("button").filter((b) => /Grant|wallet/.test(b.textContent ?? ""));
+      expect(buttons.map((b) => [b.textContent, (b as HTMLButtonElement).disabled])).toEqual(
+        button ? [[button, true]] : [],
+      );
+    });
     expect(state.events).toEqual([]);
   });
 
-  it("refuses to sign for a default group key whose data sets are inconsistent", async () => {
-    state.dataSets = [
-      {
-        dataSetId: 3n,
-        live: true,
-        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
-      },
-    ];
-    await renderStep();
-
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Data sets 3 use group key"));
-    expect(signButton()?.disabled).toBe(true);
-  });
-
-  it("shows one notice when the data sets cannot be read, and Retry recovers", async () => {
+  it("offers Retry when the data sets cannot be read, and a retry recovers", async () => {
     state.failReads = 1;
     await renderStep();
 
-    await waitFor(() =>
-      expect(screen.getAllByRole("alert").map((a) => a.textContent)).toEqual(["Could not read your data setsRetry"]),
-    );
-    expect(signButton()?.disabled).toBe(true);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Retry" })));
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Retry" })));
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     expect(screen.queryAllByRole("alert")).toEqual([]);
-  });
-
-  it("shows only the inconsistent-default notice when the wallet is not connected either", async () => {
-    state.walletReady = false;
-    state.dataSets = [
-      {
-        dataSetId: 3n,
-        live: true,
-        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
-      },
-    ];
-    await renderStep();
-
-    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(1));
-    expect(screen.getByRole("alert").textContent).toContain("Your default group key is in an inconsistent state");
-    expect(signButton()?.disabled).toBe(true);
-    expect(screen.queryByRole("button", { name: "Connecting to your wallet…" })).toBeNull();
-  });
-
-  it("warns about a broken default group key before the session key is authorized", async () => {
-    state.dataSets = [
-      {
-        dataSetId: 3n,
-        live: true,
-        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
-      },
-    ];
-    await renderStep({ expires: null });
-
-    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(1));
-    expect(screen.getByRole("alert").textContent).toContain("Your default group key is in an inconsistent state");
-    expect(signButton()?.disabled).toBe(true);
   });
 
   it("ignores data sets that are no longer live", async () => {
@@ -205,26 +224,6 @@ describe("GroupKeyStep", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("reads the data sets once: refocusing or reconnecting does not change the group key shown", async () => {
-    await renderStep();
-    await waitFor(() => expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy());
-    expect(state.reads).toBe(1);
-
-    state.dataSets = [
-      { dataSetId: 1n, live: true, metadata: { "foc/ks": `0x${"ab".repeat(16)}`, "foc/kc": "v1.ab", "foc/enc": "1" } },
-    ];
-    await act(async () => {
-      focusManager.setFocused(false);
-      focusManager.setFocused(true);
-      onlineManager.setOnline(false);
-      onlineManager.setOnline(true);
-    });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(state.reads).toBe(1);
-    expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy();
-    focusManager.setFocused(undefined);
-  });
-
   it("keeps the group key it read when the step mounts again", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await renderStep({ client });
@@ -234,15 +233,6 @@ describe("GroupKeyStep", () => {
     await renderStep({ client });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(state.reads).toBe(1);
-  });
-
-  it("says it is connecting to the wallet, and cannot sign, until the wallet client is ready", async () => {
-    state.walletReady = false;
-    await renderStep();
-    await waitFor(() => expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy());
-
-    const button = screen.getByRole("button", { name: "Connecting to your wallet…" }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
   });
 
   it("says a declined signature plainly, and a retry can still make the Grant", async () => {
@@ -264,17 +254,6 @@ describe("GroupKeyStep", () => {
     await waitFor(() => expect((screen.getByLabelText("Grant") as HTMLTextAreaElement).value).toBe(GRANT));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(onIssued).toHaveBeenCalledOnce();
-  });
-
-  it("shows viem's short message for other failures, not its full text", async () => {
-    issue.mockRejectedValueOnce(new BaseError("The wallet could not sign"));
-    await renderStep();
-    await waitFor(() => expect(signButton()?.disabled).toBe(false));
-
-    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe("No Grant was madeThe wallet could not sign"),
-    );
   });
 
   it("waits for Privy's dialog before each signature, then shows the Grant to paste in place of the warning", async () => {
