@@ -176,6 +176,21 @@ describe("GroupKeyStep", () => {
     expect(screen.queryByRole("button", { name: "Connecting to your wallet…" })).toBeNull();
   });
 
+  it("warns about a broken default group key before the session key is authorized", async () => {
+    state.dataSets = [
+      {
+        dataSetId: 3n,
+        live: true,
+        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
+      },
+    ];
+    await renderStep({ expires: null });
+
+    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(1));
+    expect(screen.getByRole("alert").textContent).toContain("Your default group key is in an inconsistent state");
+    expect(signButton()?.disabled).toBe(true);
+  });
+
   it("ignores data sets that are no longer live", async () => {
     state.dataSets = [
       {

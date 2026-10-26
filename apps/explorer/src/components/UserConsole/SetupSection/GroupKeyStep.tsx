@@ -23,8 +23,10 @@ export const GROUP_KEY_WARNING =
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
  * filecoin-pin. Reads every data set the owner pays for, a page at a time, and
- * keeps only those that record a group key. Read once per visit: the scan is
- * O(data sets), and the group key shown must be the one signed for.
+ * keeps only those that record a group key. Read once per page load, since the
+ * scan is O(data sets) and the group key shown must be the one signed for: a
+ * remount, or another setup link opened in this tab within the query cache's
+ * lifetime, reuses the result.
  */
 function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
   const client = usePublicClient({ chainId: getChain(network).id });

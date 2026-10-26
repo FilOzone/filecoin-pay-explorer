@@ -422,15 +422,18 @@ describe("groupKeyPhase", () => {
     assert.equal(groupKeyPhase({ ...failing, signatureValid: false }).phase, "unsigned-pubkey");
     assert.equal(groupKeyPhase({ ...failing, signatureValid: undefined }).phase, "checking-pubkey");
     assert.equal(groupKeyPhase({ ...ready, signatureValid: undefined, expires: null }).phase, "checking-pubkey");
-    // Waiting for the authorization comes before choosing and before read errors.
+    // A failed scan or a broken default warns before the authorization is paid for.
+    assert.equal(groupKeyPhase({ ...failing, expires: null }).phase, "read-failed");
+    assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, expires: null }).phase, "inconsistent-default");
+    // A scan still running before authorization is just waiting for the key.
     assert.equal(groupKeyPhase({ ...ready, expires: null, choice: undefined }).phase, "waiting-for-key");
-    assert.equal(groupKeyPhase({ ...failing, expires: null }).phase, "waiting-for-key");
     // A read error outranks a stale choice; an invalid default outranks the wallet.
     assert.equal(groupKeyPhase({ ...ready, choiceFailed: true }).phase, "read-failed");
     assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, walletReady: false }).phase, "inconsistent-default");
     assert.equal(groupKeyPhase({ ...ready, choice: undefined, walletReady: false }).phase, "choosing");
-    // No wallet outranks signing; a retry in flight outranks the last failure.
-    assert.equal(groupKeyPhase({ ...ready, walletReady: false, issuing: true }).phase, "connecting-wallet");
+    // A signature in flight outlasts a wallet client that drops out; Retry needs a wallet.
+    assert.equal(groupKeyPhase({ ...ready, issuing: true, walletReady: false }).phase, "signing");
+    assert.equal(groupKeyPhase({ ...ready, issueError: declined, walletReady: false }).phase, "connecting-wallet");
     assert.equal(groupKeyPhase({ ...ready, issuing: true, issueError: declined }).phase, "signing");
   });
 });

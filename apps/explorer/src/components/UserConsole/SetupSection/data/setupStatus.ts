@@ -300,23 +300,27 @@ export function signingFailure(error: unknown): { declined: boolean; message: st
 
 /**
  * The group key step's phase from its raw reads. Precedence, first match wins:
- * issued > unsigned-pubkey > checking-pubkey > waiting-for-key > read-failed >
- * inconsistent-default > choosing > connecting-wallet > signing > sign-failed > ready.
+ * issued > unsigned-pubkey > checking-pubkey > read-failed > inconsistent-default >
+ * waiting-for-key > choosing > signing > connecting-wallet > sign-failed > ready.
  * A made Grant outlives every later read; a bad signature blocks everything else.
+ * A failed scan or a broken default group key is shown before authorization, so the
+ * owner learns of it before paying for that transaction. A signature in flight
+ * outlasts a wallet client that drops out mid-request, and Retry is never offered
+ * without a wallet.
  */
 export function groupKeyPhase(reads: GroupKeyReads): GroupKeyPhase {
   const groupKey = reads.choice && !("error" in reads.choice) ? reads.choice : null;
   if (reads.grant !== undefined) return { phase: "issued", grant: reads.grant, groupKey };
   if (reads.signatureValid === false) return { phase: "unsigned-pubkey" };
   if (reads.signatureValid === undefined) return { phase: "checking-pubkey" };
-  if (reads.expires === null) return { phase: "waiting-for-key", groupKey };
   if (reads.choiceFailed) return { phase: "read-failed" };
   if (reads.choice && "error" in reads.choice) {
     return { phase: "inconsistent-default", groupKeyId: reads.choice.groupKeyId, dataSetIds: reads.choice.dataSetIds };
   }
+  if (reads.expires === null) return { phase: "waiting-for-key", groupKey };
   if (!groupKey) return { phase: "choosing" };
-  if (!reads.walletReady) return { phase: "connecting-wallet", groupKey };
   if (reads.issuing) return { phase: "signing", groupKey };
+  if (!reads.walletReady) return { phase: "connecting-wallet", groupKey };
   if (reads.issueError != null) return { phase: "sign-failed", groupKey, ...signingFailure(reads.issueError) };
   return { phase: "ready", groupKey };
 }
