@@ -11,11 +11,11 @@ import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatDateTime } from "@/utils/formatter";
-import { chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
+import { type ChosenGroupKey, chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { type KeyAgreementRequest, verifyKeyAgreementKey } from "@/utils/setupLink";
-import { type ChosenGroupKey, type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
-import { SetupStep, type StepTone } from "./SetupStep";
+import { type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
+import { Detail, SetupStep, type StepTone } from "./SetupStep";
 
 export const GROUP_KEY_WARNING =
   "This gives the session key permanent read access to everything in this group key, including future uploads. Expiry and revoking the session key do not take it back.";
@@ -49,36 +49,32 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
   });
 }
 
-const GROUP_KEY_STATUS: Record<GroupKeyPhase["phase"], { tone: StepTone; label: string }> = {
-  issued: { tone: "done", label: "Grant ready" },
-  "unsigned-pubkey": { tone: "problem", label: "Key not signed by the session key" },
-  "checking-pubkey": { tone: "waiting", label: "Checking the session key" },
-  "waiting-for-key": { tone: "todo", label: "Waiting for the session key" },
-  "read-failed": { tone: "problem", label: "Could not read your data sets" },
-  "inconsistent-default": { tone: "problem", label: "Could not choose a group key" },
-  choosing: { tone: "waiting", label: "Finding your group key" },
-  "connecting-wallet": { tone: "waiting", label: "Connecting to your wallet" },
-  signing: { tone: "waiting", label: "Waiting for your wallet" },
-  "sign-failed": { tone: "problem", label: "No Grant was made" },
-  ready: { tone: "todo", label: "Not given" },
-};
-
 const SIGN = "Sign and create Grant";
 
-/** The sign button in each phase; null where the step offers no signing at all. */
-const SIGN_ACTION: Record<GroupKeyPhase["phase"], { label: string; enabled: boolean } | null> = {
-  issued: null,
-  "unsigned-pubkey": null,
-  "checking-pubkey": { label: SIGN, enabled: false },
-  "waiting-for-key": { label: SIGN, enabled: false },
-  "read-failed": { label: SIGN, enabled: false },
-  "inconsistent-default": { label: SIGN, enabled: false },
-  choosing: { label: SIGN, enabled: false },
+/**
+ * Each phase's status, and its sign button: hidden where the step offers no
+ * signing at all, else shown with `button` (default {@link SIGN}) as its label.
+ */
+const GROUP_KEY_STATUS: Record<
+  GroupKeyPhase["phase"],
+  { tone: StepTone; label: string; sign: "hidden" | "disabled" | "enabled"; button?: string }
+> = {
+  issued: { tone: "done", label: "Grant ready", sign: "hidden" },
+  "unsigned-pubkey": { tone: "problem", label: "Key not signed by the session key", sign: "hidden" },
+  "waiting-for-key": { tone: "todo", label: "Waiting for the session key", sign: "disabled" },
+  "read-failed": { tone: "problem", label: "Could not read your data sets", sign: "disabled" },
+  "inconsistent-default": { tone: "problem", label: "Could not choose a group key", sign: "disabled" },
+  choosing: { tone: "waiting", label: "Finding your group key", sign: "disabled" },
   // useWalletClient resolves after a connect or chain switch; until then nothing can sign.
-  "connecting-wallet": { label: "Connecting to your wallet…", enabled: false },
-  signing: { label: "Waiting for your wallet…", enabled: false },
-  "sign-failed": { label: SIGN, enabled: true },
-  ready: { label: SIGN, enabled: true },
+  "connecting-wallet": {
+    tone: "waiting",
+    label: "Connecting to your wallet",
+    sign: "disabled",
+    button: "Connecting to your wallet…",
+  },
+  signing: { tone: "waiting", label: "Waiting for your wallet", sign: "disabled", button: "Waiting for your wallet…" },
+  "sign-failed": { tone: "problem", label: "No Grant was made", sign: "enabled" },
+  ready: { tone: "todo", label: "Not given", sign: "enabled" },
 };
 
 /** The one notice a phase shows, if any. */
@@ -123,7 +119,6 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
         </Notice>
       );
     case "issued":
-    case "checking-pubkey":
     case "choosing":
     case "connecting-wallet":
     case "signing":
@@ -159,26 +154,22 @@ const GrantOutput = ({ grant }: { grant: string }) => (
 );
 
 /** The warning and the sign button; nothing where the phase offers no signing. */
-const SignArea = ({ action, onSign }: { action: { label: string; enabled: boolean } | null; onSign: () => void }) =>
-  action === null ? null : (
+const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: () => void }) => {
+  const { sign, button = SIGN } = GROUP_KEY_STATUS[phase];
+  if (sign === "hidden") return null;
+  return (
     <>
       <Notice tone='warn' title='Before you sign' className='mt-4'>
         <p className='mt-1'>{GROUP_KEY_WARNING}</p>
       </Notice>
       <div className='mt-4'>
-        <Button variant='primary' size='compact' disabled={!action.enabled} onClick={onSign}>
-          {action.label}
+        <Button variant='primary' size='compact' disabled={sign === "disabled"} onClick={onSign}>
+          {button}
         </Button>
       </div>
     </>
   );
-
-const Detail = ({ term, children }: { term: string; children: React.ReactNode }) => (
-  <div className='grid gap-1 py-2.5 sm:grid-cols-[7rem_1fr] sm:gap-4'>
-    <dt className='text-muted-foreground'>{term}</dt>
-    <dd className='min-w-0 text-foreground'>{children}</dd>
-  </div>
-);
+};
 
 interface GroupKeyStepProps {
   number: number;
@@ -251,7 +242,7 @@ export const GroupKeyStep = ({
     issueError: issue.error,
     grant: issue.data,
   });
-  const groupKey = "groupKey" in phase ? phase.groupKey : null;
+  const groupKey = choice.data && !("error" in choice.data) ? choice.data : null;
   const sign = () => {
     if (wallet && groupKey && expires !== null) issue.mutate({ wallet, chosen: groupKey, expires });
   };
@@ -261,7 +252,7 @@ export const GroupKeyStep = ({
       number={number}
       title='Give this key access to encrypted uploads'
       description='Lets the tool encrypt and decrypt your files with the session key, without your wallet. Your wallet signs two or three messages here; none of them is a transaction.'
-      status={GROUP_KEY_STATUS[phase.phase]}
+      status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
         <Detail term='Session key'>
@@ -295,11 +286,7 @@ export const GroupKeyStep = ({
       </dl>
 
       <GroupKeyNotice phase={phase} onRetryRead={() => void choice.refetch()} />
-      {phase.phase === "issued" ? (
-        <GrantOutput grant={phase.grant} />
-      ) : (
-        <SignArea action={SIGN_ACTION[phase.phase]} onSign={sign} />
-      )}
+      {phase.phase === "issued" ? <GrantOutput grant={phase.grant} /> : <SignArea phase={phase.phase} onSign={sign} />}
     </SetupStep>
   );
 };

@@ -80,6 +80,9 @@ export function chooseGroupKey(owner: Address, dataSets: readonly GroupKeyDataSe
   return { groupKeyId, commitment: null };
 }
 
+/** A group key the owner can sign for: the choice when it is not an error. */
+export type ChosenGroupKey = Exclude<GroupKeyChoice, { error: string }>;
+
 export interface GroupKeyGrantInput {
   owner: Address;
   groupKeyId: Hex;
