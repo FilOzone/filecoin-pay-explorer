@@ -227,6 +227,7 @@ export const GroupKeyStep = ({
           chainId,
           bearer: sessionKey,
           pubkey: keyAgreement.pubkey,
+          node: keyAgreement.node,
           expires,
         },
       ),

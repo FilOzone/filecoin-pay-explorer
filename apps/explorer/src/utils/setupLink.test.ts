@@ -233,9 +233,15 @@ const sessionLink = (extra: string) =>
 
 describe("parseSetupLink: pubkey and pubkeysig", () => {
   it("reads a session key's key-agreement key and its signature, in lowercase", () => {
-    const result = sessionLink(`&pubkey=${PUBKEY.toUpperCase().replace("0X", "0x")}&pubkeysig=${PUBKEYSIG}`);
+    const result = sessionLink(
+      `&pubkey=${PUBKEY.toUpperCase().replace("0X", "0x")}&pubkeysig=${PUBKEYSIG}&node=keyspace`,
+    );
     assert.ok(!("error" in result));
-    assert.deepEqual(result.keyAgreement, { pubkey: PUBKEY.toLowerCase(), pubkeysig: PUBKEYSIG.toLowerCase() });
+    assert.deepEqual(result.keyAgreement, {
+      pubkey: PUBKEY.toLowerCase(),
+      pubkeysig: PUBKEYSIG.toLowerCase(),
+      node: "keyspace",
+    });
     assert.equal(result.sessionKey?.address, SESSION.address);
   });
 
@@ -263,6 +269,14 @@ describe("parseSetupLink: pubkey and pubkeysig", () => {
     for (const extra of ["", "&pubkeysig=", "&pubkeysig=junk", `&pubkeysig=${PUBKEYSIG.slice(0, -2)}`]) {
       assert.deepEqual(sessionLink(`&pubkey=${PUBKEY}${extra}`), { error: "bad-pubkeysig" }, extra);
     }
+  });
+
+  it("refuses any node but the whole group key, so a narrower request never gets the whole keyspace", () => {
+    for (const node of ["", "&node=", "&node=scope", "&node=KEYSPACE", "&node=keyspace/a"]) {
+      assert.deepEqual(sessionLink(`&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}${node}`), { error: "bad-node" }, node);
+    }
+    // A node alone still names no key to wrap the Grant to.
+    assert.deepEqual(sessionLink("&node=keyspace"), { error: "bad-pubkey" });
   });
 });
 

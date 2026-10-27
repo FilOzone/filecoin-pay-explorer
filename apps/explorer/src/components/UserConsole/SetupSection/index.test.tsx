@@ -237,7 +237,7 @@ describe("SetupSection", () => {
     cleanup();
 
     const pubkey = PUBKEY_G;
-    const link = `${KEY_LINK}&pubkey=${pubkey}&pubkeysig=0x${"cd".repeat(65)}`;
+    const link = `${KEY_LINK}&pubkey=${pubkey}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
     await open(link);
     expect(stepTitles()).toEqual([
       "Step 1: Authorize a session key",
@@ -249,7 +249,7 @@ describe("SetupSection", () => {
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
       sessionKey: KEY,
       expires: null,
-      keyAgreement: { pubkey, pubkeysig: `0x${"cd".repeat(65)}` },
+      keyAgreement: { pubkey, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace" },
     });
     cleanup();
 
@@ -268,7 +268,7 @@ describe("SetupSection", () => {
       { status: "success", result: FUTURE },
     ];
     state.usdfcFunds = 2n * ONE_USDFC;
-    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY_G}&pubkeysig=0x${"cd".repeat(65)}`);
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY_G}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
     expect(screen.queryByText("✓ Setup complete")).toBeNull();
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));

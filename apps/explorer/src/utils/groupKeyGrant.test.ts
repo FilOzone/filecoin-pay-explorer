@@ -111,6 +111,7 @@ describe("issueGroupKeyGrant", () => {
     chainId: 314159,
     bearer: SESSION.address,
     pubkey: publicKeyOf(SESSION_KEY),
+    node: "keyspace" as const,
     expires: EXPIRES,
   };
   const decode = (text: string) => {

@@ -35,6 +35,7 @@ const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
   "pubkey-without-key": "It asks for access to encrypted uploads but names no session key to give it to.",
   "bad-pubkey": "The session key's encryption key in it cannot be read.",
   "bad-pubkeysig": "The session key's signature over its encryption key is missing or cannot be read.",
+  "bad-node": "It asks for a part of a group key, and this page only gives whole group keys.",
 };
 
 const NetworkName = ({ network }: { network: Network }) => <span className='capitalize'>{network}</span>;

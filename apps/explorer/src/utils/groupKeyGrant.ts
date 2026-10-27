@@ -93,6 +93,8 @@ export interface GroupKeyGrantInput {
   bearer: Address;
   /** The session key's key-agreement key, which the Grant is wrapped to. */
   pubkey: Hex;
+  /** The Keysmith node the Grant opens, as the link asked for it. Only whole group keys for now. */
+  node: "keyspace";
   /** Unix seconds: the session key's authorization expiry. Revoking the key does not end the claim sooner. */
   expires: bigint;
 }
@@ -113,13 +115,13 @@ export async function issueGroupKeyGrant(wallet: TypedDataSigner, input: GroupKe
       ...ref,
       chainId: BigInt(input.chainId),
       kk,
-      node: "keyspace",
+      node: input.node,
       bearer: input.bearer,
       maxDepth: 0,
       expires: Number(input.expires),
     });
     try {
-      const grant = await wrapTo(input.pubkey, nodeKey, grantDescriptor(ref, "keyspace"));
+      const grant = await wrapTo(input.pubkey, nodeKey, grantDescriptor(ref, input.node));
       return GRANT_PREFIX + base64url(encodeDelivery(chain, grant));
     } finally {
       nodeKey.fill(0);

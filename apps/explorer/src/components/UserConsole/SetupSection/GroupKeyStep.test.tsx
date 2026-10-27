@@ -83,7 +83,7 @@ async function renderStep({
             network='calibration'
             account={OWNER.address}
             sessionKey={SESSION.address}
-            keyAgreement={{ pubkey: PUBKEY, pubkeysig }}
+            keyAgreement={{ pubkey: PUBKEY, pubkeysig, node: "keyspace" }}
             expires={expires}
             onIssued={onIssued}
           />
@@ -270,6 +270,7 @@ describe("GroupKeyStep", () => {
       chainId: 314159,
       bearer: SESSION.address,
       pubkey: PUBKEY,
+      node: "keyspace",
       expires: EXPIRES,
     });
     expect(state.events).toEqual(["wait", "sign KeyspaceKey", "wait", "sign KeyspaceKey", "wait", "sign ReadGrant"]);

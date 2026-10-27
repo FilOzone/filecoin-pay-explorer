@@ -33,7 +33,8 @@ export type SetupLinkError =
   | "bad-approval"
   | "pubkey-without-key"
   | "bad-pubkey"
-  | "bad-pubkeysig";
+  | "bad-pubkeysig"
+  | "bad-node";
 
 export interface SessionKeyRequest {
   address: `0x${string}`;
@@ -55,6 +56,8 @@ export interface KeyAgreementRequest {
   pubkey: Hex;
   /** The session key's EIP-191 signature over {@link keyAgreementMessage}, lowercase. */
   pubkeysig: Hex;
+  /** The Keysmith node the Grant opens. This page issues whole group keys only. */
+  node: "keyspace";
 }
 
 export interface SetupRequest {
@@ -96,6 +99,7 @@ const REQUEST_PARAMS = [
   "approval",
   "pubkey",
   "pubkeysig",
+  "node",
 ] as const;
 
 /**
@@ -158,14 +162,17 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
   if (approval !== null && approval.trim().toLowerCase() !== "unlimited") return { error: "bad-approval" };
 
   let keyAgreement: KeyAgreementRequest | null = null;
-  if (params.has("pubkey") || params.has("pubkeysig")) {
+  if (params.has("pubkey") || params.has("pubkeysig") || params.has("node")) {
     // The Grant goes to the session key the link authorizes; there is nothing to give it to otherwise.
     if (!sessionKey) return { error: "pubkey-without-key" };
     const pubkey = params.get("pubkey")?.trim().toLowerCase() ?? "";
     if (!isKeyAgreementKey(pubkey)) return { error: "bad-pubkey" };
     const pubkeysig = params.get("pubkeysig")?.trim().toLowerCase() ?? "";
     if (!/^0x[0-9a-f]{130}$/.test(pubkeysig)) return { error: "bad-pubkeysig" };
-    keyAgreement = { pubkey: pubkey as Hex, pubkeysig: pubkeysig as Hex };
+    // This version issues whole group keys only. Anything else is refused, so a tool asking for
+    // a narrower part of the keyspace never gets the whole group key from an older console.
+    if (params.get("node") !== "keyspace") return { error: "bad-node" };
+    keyAgreement = { pubkey: pubkey as Hex, pubkeysig: pubkeysig as Hex, node: "keyspace" };
   }
 
   return {
@@ -207,6 +214,9 @@ function isKeyAgreementKey(value: string): boolean {
 export const keyAgreementMessage = (pubkey: Hex) => `Keysmith key agreement key: ${pubkey.toLowerCase()}`;
 
 /** Whether the session key at `address` signed `pubkey` as its key-agreement key. Never throws. */
-export function verifyKeyAgreementKey(address: Hex, { pubkey, pubkeysig }: KeyAgreementRequest): Promise<boolean> {
+export function verifyKeyAgreementKey(
+  address: Hex,
+  { pubkey, pubkeysig }: Pick<KeyAgreementRequest, "pubkey" | "pubkeysig">,
+): Promise<boolean> {
   return verifyMessage({ address, message: keyAgreementMessage(pubkey), signature: pubkeysig }).catch(() => false);
 }
