@@ -153,6 +153,30 @@ const GrantOutput = ({ grant }: { grant: string }) => (
   </div>
 );
 
+/** The chosen group key: a new one, or the one the owner's data sets record. */
+const GroupKeyDetail = ({ groupKey }: { groupKey: ChosenGroupKey | null }) => {
+  if (!groupKey) return "Not chosen yet";
+  const id = <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>;
+  if (!groupKey.commitment) {
+    return (
+      <>
+        {id}
+        <span className='mt-0.5 block text-xs text-muted-foreground'>
+          New: none of your data sets uses a group key yet.
+        </span>
+      </>
+    );
+  }
+  return (
+    <>
+      {id}
+      <span className='mt-0.5 block text-xs text-muted-foreground'>
+        Tags your encrypted data sets. The session key gets access to every data set under this key.
+      </span>
+    </>
+  );
+};
+
 /** The warning and the sign button; nothing where the phase offers no signing. */
 const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: () => void }) => {
   const { sign, button = SIGN } = GROUP_KEY_STATUS[phase];
@@ -266,18 +290,7 @@ export const GroupKeyStep = ({
           </span>
         </Detail>
         <Detail term='Group key'>
-          {groupKey ? (
-            <>
-              <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>
-              <span className='mt-0.5 block text-xs text-muted-foreground'>
-                {groupKey.commitment
-                  ? "Tags your encrypted data sets. The session key gets access to every data set under this key."
-                  : "New: none of your data sets uses a group key yet."}
-              </span>
-            </>
-          ) : (
-            "Not chosen yet"
-          )}
+          <GroupKeyDetail groupKey={groupKey} />
         </Detail>
         <Detail term='Fetching ends'>
           {expires === null

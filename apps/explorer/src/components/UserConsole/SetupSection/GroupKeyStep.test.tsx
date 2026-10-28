@@ -217,6 +217,30 @@ describe("GroupKeyStep", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("names the group key it will sign for: none yet, a new one, or the one the data sets record", async () => {
+    const groupKeyRow = () => screen.getByText("Group key").nextElementSibling?.textContent;
+    await renderStep({ pubkeysig: await OWNER.signMessage({ message: keyAgreementMessage(PUBKEY) }) });
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(groupKeyRow()).toBe("Not chosen yet");
+    cleanup();
+
+    await renderStep();
+    await waitFor(() =>
+      expect(groupKeyRow()).toBe("0x02ca08cf7e0222c8432adc159232b7ebNew: none of your data sets uses a group key yet."),
+    );
+    cleanup();
+
+    state.dataSets = [
+      { dataSetId: 5n, live: true, metadata: { "foc/ks": `0x${"11".repeat(16)}`, "foc/kc": "v1.aa", "foc/enc": "1" } },
+    ];
+    await renderStep();
+    await waitFor(() =>
+      expect(groupKeyRow()).toBe(
+        `0x${"11".repeat(16)}Tags your encrypted data sets. The session key gets access to every data set under this key.`,
+      ),
+    );
+  });
+
   it("says a declined signature plainly, and a retry can still make the Grant", async () => {
     issue.mockRejectedValueOnce(
       new BaseError("Signing failed", { cause: new UserRejectedRequestError(new Error("no")) }),
