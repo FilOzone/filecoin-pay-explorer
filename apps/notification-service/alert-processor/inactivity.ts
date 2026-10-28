@@ -2,8 +2,8 @@ import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { formatUnits } from "viem";
 import { z } from "zod";
 
-/** Matches STALE_AFTER_DAYS in the explorer's triage queue (StaleQueue/data/staleness.ts). */
-export const STALE_AFTER_DAYS = 30;
+/** Matches STALE_AFTER_DAYS in the explorer's triage queue (hooks/useStaleDataSets.ts). */
+const STALE_AFTER_DAYS = 30;
 
 const SECONDS_PER_DAY = 86_400;
 /** graph-node's per-request maximum. */
@@ -25,22 +25,23 @@ const STALE_DATA_SETS_QUERY = `
       dataSetId
       lastWriteAt
       pdpRail { paymentRate state endEpoch token { symbol decimals } }
-      cacheMissRail { paymentRate state endEpoch }
-      cdnRail { paymentRate state endEpoch }
     }
   }
 `;
 
 // Subgraph BigInt values arrive as decimal strings.
-const railSchema = z.object({ paymentRate: z.string(), state: z.string(), endEpoch: z.string() });
+const railSchema = z.object({
+  paymentRate: z.string(),
+  state: z.string(),
+  endEpoch: z.string(),
+  token: z.object({ symbol: z.string(), decimals: z.string() }),
+});
 
 const staleDataSetSchema = z.object({
   id: z.string(),
   dataSetId: z.string(),
   lastWriteAt: z.string(),
-  pdpRail: railSchema.extend({ token: z.object({ symbol: z.string(), decimals: z.string() }) }),
-  cacheMissRail: railSchema.nullable(),
-  cdnRail: railSchema.nullable(),
+  pdpRail: railSchema,
 });
 
 const pageSchema = z.object({
@@ -92,9 +93,10 @@ export async function fetchStaleDataSets(subgraphUrl: string, payer: string, now
   return { epoch, dataSets };
 }
 
-// Mirrors the explorer's monthlyDataSetSpend: a terminated rail keeps charging until its end epoch.
-function monthlyRailSpend(rail: Rail | null, epoch: bigint): bigint {
-  if (!rail || rail.state === "FINALIZED") return 0n;
+// Mirrors the explorer's monthlyDataSetSpend: only the PDP rail carries a rate, and a terminated rail
+// keeps charging until its end epoch.
+function monthlyRailSpend(rail: Rail, epoch: bigint): bigint {
+  if (rail.state === "FINALIZED") return 0n;
 
   if (rail.state !== "TERMINATED") return BigInt(rail.paymentRate) * TIME_CONSTANTS.EPOCHS_PER_MONTH;
 
@@ -145,10 +147,7 @@ export function selectDataSetsToEmail(
       dataSetId: dataSet.dataSetId,
       lastWriteAt,
       daysInactive: Math.floor((nowSec - lastWriteAt) / SECONDS_PER_DAY),
-      monthlySpend:
-        monthlyRailSpend(dataSet.pdpRail, stale.epoch) +
-        monthlyRailSpend(dataSet.cacheMissRail, stale.epoch) +
-        monthlyRailSpend(dataSet.cdnRail, stale.epoch),
+      monthlySpend: monthlyRailSpend(dataSet.pdpRail, stale.epoch),
       token: { symbol: dataSet.pdpRail.token.symbol, decimals: Number(dataSet.pdpRail.token.decimals) },
     });
   }

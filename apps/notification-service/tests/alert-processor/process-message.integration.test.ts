@@ -195,8 +195,6 @@ describe("processMessage — inactivity email", () => {
       dataSetId,
       lastWriteAt: String(nowSec() - daysInactive * 86_400),
       pdpRail: { paymentRate: "1", state: "ACTIVE", endEpoch: "0", token: { symbol: "USDFC", decimals: "18" } },
-      cacheMissRail: null,
-      cdnRail: null,
     };
   }
 

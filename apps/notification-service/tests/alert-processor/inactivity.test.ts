@@ -13,16 +13,18 @@ const DAY = 86_400;
 const EPOCH = 1_000_000n;
 const MONTH = TIME_CONSTANTS.EPOCHS_PER_MONTH;
 
-const rail = (paymentRate: string, state = "ACTIVE", endEpoch = "0") => ({ paymentRate, state, endEpoch });
-
-function dataSet(dataSetId: string, daysInactive: number, paymentRate = "1"): StaleDataSet {
+function dataSet(
+  dataSetId: string,
+  daysInactive: number,
+  paymentRate = "1",
+  state = "ACTIVE",
+  endEpoch = "0",
+): StaleDataSet {
   return {
     id: `0x${dataSetId.padStart(4, "0")}`,
     dataSetId,
     lastWriteAt: String(NOW - daysInactive * DAY),
-    pdpRail: { ...rail(paymentRate), token: { symbol: "USDFC", decimals: "18" } },
-    cacheMissRail: null,
-    cdnRail: null,
+    pdpRail: { paymentRate, state, endEpoch, token: { symbol: "USDFC", decimals: "18" } },
   };
 }
 
@@ -76,15 +78,18 @@ describe("selectDataSetsToEmail", () => {
     });
   });
 
-  it("counts a terminated CDN rail only until its end epoch", () => {
-    const withCdn = {
-      ...dataSet("1", 31, "10"),
-      cdnRail: rail("5", "TERMINATED", String(EPOCH + 100n)),
-      cacheMissRail: rail("5", "TERMINATED", String(EPOCH - 1n)),
-    };
+  it("counts a terminated rail only until its end epoch", () => {
+    const selected = selectDataSetsToEmail(
+      stale(
+        dataSet("1", 31, "10", "TERMINATED", String(EPOCH + 100n)),
+        dataSet("2", 31, "10", "TERMINATED", String(EPOCH - 1n)),
+      ),
+      [],
+      [],
+      NOW,
+    );
 
-    const selected = selectDataSetsToEmail(stale(withCdn), [], [], NOW);
-    expect(selected[0]?.monthlySpend).toBe(10n * MONTH + 5n * 100n);
+    expect(selected.map((entry) => entry.monthlySpend)).toEqual([10n * 100n, 0n]);
   });
 });
 

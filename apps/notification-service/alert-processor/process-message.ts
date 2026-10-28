@@ -73,8 +73,10 @@ export async function processMessage(
   const wallet = body.walletAddress.toLowerCase();
   const nowSec = Math.floor(Date.now() / 1000);
 
-  const balance = await processBalanceAlert(env, client, db, wallet, nowSec, log, deps);
-  const inactivity = await processInactivityAlert(env, db, wallet, nowSec, log, deps);
+  const [balance, inactivity] = await Promise.all([
+    processBalanceAlert(env, client, db, wallet, nowSec, log, deps),
+    processInactivityAlert(env, db, wallet, nowSec, log, deps),
+  ]);
   return balance === "retry" || inactivity === "retry" ? "retry" : "ack";
 }
 
@@ -146,25 +148,11 @@ async function processBalanceAlert(
     };
     const { subject, html, text } = await renderAlertEmail(props);
 
-    try {
-      await deps.sendEmail(env, { to: subscriber.email, subject, html, text });
-    } catch (cause) {
-      const code: string = (cause as { code?: string }).code ?? "UNKNOWN";
-      const action = classifyEmailError(code);
-      log.error(
-        createError({
-          message: "Failed to send alert email",
-          why: cause instanceof Error ? cause.message : String(cause),
-          fix:
-            action === "retry"
-              ? "The message will be retried automatically by the queue"
-              : "Check the Cloudflare Email Service dashboard — this error will not resolve on retry",
-          internal: { wallet, tier, code, action },
-          cause: cause instanceof Error ? cause : new Error(String(cause)),
-        }),
-      );
-      return action;
-    }
+    const sendFailure = await sendEmail(env, { to: subscriber.email, subject, html, text }, log, deps, {
+      message: "Failed to send alert email",
+      internal: { wallet, tier },
+    });
+    if (sendFailure) return sendFailure;
 
     // Email is out; record it. A failure here can't un-send, so ack rather than
     // retry (which would re-send). Worst case the next 12h tick re-alerts.
@@ -217,23 +205,24 @@ async function processInactivityAlert(
       return "ack";
     }
 
-    let stale: StaleDataSets;
-    try {
-      stale = await deps.fetchStaleDataSets(env.SUBGRAPH_URL, wallet, nowSec);
-    } catch (cause) {
-      log.error(
-        createError({
-          message: "Failed to read stale datasets from the subgraph",
-          why: cause instanceof Error ? cause.message : String(cause),
-          fix: "Check the SUBGRAPH_URL var and the subgraph's health; the message will be retried",
-          internal: { wallet },
-          cause: cause instanceof Error ? cause : new Error(String(cause)),
-        }),
-      );
-      return "retry";
-    }
+    const [stale, mutes, sent] = await Promise.all([
+      deps.fetchStaleDataSets(env.SUBGRAPH_URL, wallet, nowSec).catch((cause: unknown) => {
+        log.error(
+          createError({
+            message: "Failed to read stale datasets from the subgraph",
+            why: cause instanceof Error ? cause.message : String(cause),
+            fix: "Check the SUBGRAPH_URL var and the subgraph's health; the message will be retried",
+            internal: { wallet },
+            cause: cause instanceof Error ? cause : new Error(String(cause)),
+          }),
+        );
+        return null;
+      }),
+      findDataSetMutes(db, wallet),
+      findInactivityAlerts(db, wallet),
+    ]);
+    if (!stale) return "retry";
 
-    const [mutes, sent] = await Promise.all([findDataSetMutes(db, wallet), findInactivityAlerts(db, wallet)]);
     const dataSets = selectDataSetsToEmail(stale, mutes, sent, nowSec);
     if (dataSets.length === 0) {
       log.set({ inactivity: { outcome: "nothing_new", dataSets: 0 } });
@@ -255,25 +244,11 @@ async function processInactivityAlert(
       queueUrl: `${serviceUrl}#stale`,
     });
 
-    try {
-      await deps.sendEmail(env, { to: subscriber.email, subject, html, text });
-    } catch (cause) {
-      const code: string = (cause as { code?: string }).code ?? "UNKNOWN";
-      const action = classifyEmailError(code);
-      log.error(
-        createError({
-          message: "Failed to send inactivity email",
-          why: cause instanceof Error ? cause.message : String(cause),
-          fix:
-            action === "retry"
-              ? "The message will be retried automatically by the queue"
-              : "Check the Cloudflare Email Service dashboard — this error will not resolve on retry",
-          internal: { wallet, dataSets: dataSets.length, code, action },
-          cause: cause instanceof Error ? cause : new Error(String(cause)),
-        }),
-      );
-      return action;
-    }
+    const sendFailure = await sendEmail(env, { to: subscriber.email, subject, html, text }, log, deps, {
+      message: "Failed to send inactivity email",
+      internal: { wallet, dataSets: dataSets.length },
+    });
+    if (sendFailure) return sendFailure;
 
     log.set({ inactivity: { outcome: "sent", dataSets: dataSets.length } });
 
@@ -296,6 +271,36 @@ async function processInactivityAlert(
   } catch (cause) {
     log.error(cause instanceof Error ? cause : new Error(String(cause)));
     return "retry";
+  }
+}
+
+/** Sends `email`, or logs the failure and returns whether the queue should retry it. */
+async function sendEmail(
+  env: Env,
+  email: OutboundEmail,
+  log: ProcessorLog,
+  deps: ProcessDeps,
+  context: { message: string; internal: Record<string, unknown> },
+): Promise<MessageAction | null> {
+  try {
+    await deps.sendEmail(env, email);
+    return null;
+  } catch (cause) {
+    const code: string = (cause as { code?: string }).code ?? "UNKNOWN";
+    const action = classifyEmailError(code);
+    log.error(
+      createError({
+        message: context.message,
+        why: cause instanceof Error ? cause.message : String(cause),
+        fix:
+          action === "retry"
+            ? "The message will be retried automatically by the queue"
+            : "Check the Cloudflare Email Service dashboard — this error will not resolve on retry",
+        internal: { ...context.internal, code, action },
+        cause: cause instanceof Error ? cause : new Error(String(cause)),
+      }),
+    );
+    return action;
   }
 }
 

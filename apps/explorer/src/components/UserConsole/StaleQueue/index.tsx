@@ -55,12 +55,13 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
   // Waiting for mutes too keeps muted rows from flashing in.
   const isLoading = staleDataSets.isLoading || mutedDataSets.isLoading;
 
-  const linkedIndex = ranked.findIndex((entry) => entry.dataSet.dataSetId.toString() === linkedDataSetId);
-  const linkedPage = linkedIndex === -1 ? 1 : Math.floor(linkedIndex / PAGE_SIZE) + 1;
-  // Keeping the last row of the last page shrinks the page count under `page`.
-  const pageCount = Math.max(1, Math.ceil(ranked.length / PAGE_SIZE));
-  const currentPage = Math.min(page ?? linkedPage, pageCount);
-  const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const linkedIndex = useMemo(
+    () =>
+      linkedDataSetId === null
+        ? -1
+        : ranked.findIndex((entry) => entry.dataSet.dataSetId.toString() === linkedDataSetId),
+    [ranked, linkedDataSetId],
+  );
 
   // The queue renders after its data loads, too late for the browser's own jump to #stale.
   const hasRows = !isLoading && ranked.length > 0;
@@ -68,9 +69,9 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
   useEffect(() => {
     if (!hasRows || hasScrolled.current || window.location.hash !== "#stale") return;
     hasScrolled.current = true;
-    const linkedRow = linkedIndex === -1 ? null : document.getElementById(`stale-dataset-${linkedDataSetId}`);
-    (linkedRow ?? document.getElementById("stale"))?.scrollIntoView({ block: "center" });
-  }, [hasRows, linkedIndex, linkedDataSetId]);
+    const target = document.getElementById(`stale-dataset-${linkedDataSetId}`) ?? document.getElementById("stale");
+    target?.scrollIntoView({ block: "center" });
+  }, [hasRows, linkedDataSetId]);
 
   if (isLoading) {
     return null;
@@ -90,6 +91,12 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
   if (ranked.length === 0) {
     return null;
   }
+
+  // Keeping the last row of the last page shrinks the page count under `page`.
+  const pageCount = Math.ceil(ranked.length / PAGE_SIZE);
+  const linkedPage = linkedIndex === -1 ? 1 : Math.floor(linkedIndex / PAGE_SIZE) + 1;
+  const currentPage = Math.min(page ?? linkedPage, pageCount);
+  const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <StaleQueueLayout>
