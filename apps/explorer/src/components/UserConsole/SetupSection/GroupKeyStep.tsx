@@ -2,7 +2,12 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
 import { paginate } from "@filoz/synapse-core";
-import { getPdpDataSets } from "@filoz/synapse-core/warm-storage";
+import { dataSetLiveCall } from "@filoz/synapse-core/pdp-verifier";
+import {
+  getAllDataSetMetadataCall,
+  getClientDataSetIds,
+  parseAllDataSetMetadata,
+} from "@filoz/synapse-core/warm-storage";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
@@ -22,8 +27,9 @@ export const GROUP_KEY_WARNING =
 
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
- * filecoin-pin. Reads every data set the owner pays for, a page at a time, and
- * keeps only those that record a group key. Read once per page load, since the
+ * filecoin-pin. Reads the liveness and metadata of every data set the owner pays
+ * for, a page at a time (never its provider), and keeps the live ones that record
+ * a group key. Read once per page load, since the
  * scan is O(data sets) and the group key shown must be the one signed for: a
  * remount, or another setup link opened in this tab within the query cache's
  * lifetime, reuses the result.
@@ -38,8 +44,27 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
     refetchOnReconnect: false,
     queryFn: async () => {
       if (!client) throw new Error("No client for this network");
+      // Only what the choice reads: a page of ids, then each one's liveness and metadata in one multicall.
+      const readPage = async ({ cursor }: { cursor: bigint }) => {
+        const { items: ids, nextCursor } = await getClientDataSetIds(client, { address: owner, cursor });
+        if (ids.length === 0) return { items: [], nextCursor };
+        const results = await client.multicall({
+          allowFailure: false,
+          contracts: ids.flatMap((dataSetId) => [
+            dataSetLiveCall({ chain: client.chain, dataSetId }),
+            getAllDataSetMetadataCall({ chain: client.chain, dataSetId }),
+          ]),
+        });
+        // The results alternate by data set: dataSetLive, then getAllDataSetMetadata.
+        const items = ids.map((dataSetId, i) => ({
+          dataSetId,
+          live: results[2 * i] === true,
+          metadata: parseAllDataSetMetadata(results[2 * i + 1] as Parameters<typeof parseAllDataSetMetadata>[0]),
+        }));
+        return { items, nextCursor };
+      };
       const tagged: GroupKeyDataSet[] = [];
-      for await (const dataSet of paginate(({ cursor }) => getPdpDataSets(client, { address: owner, cursor }))) {
+      for await (const dataSet of paginate(readPage)) {
         if (dataSet.live && typeof dataSet.metadata[KEYSPACE_ID_KEY] === "string") {
           tagged.push({ dataSetId: dataSet.dataSetId, metadata: dataSet.metadata });
         }

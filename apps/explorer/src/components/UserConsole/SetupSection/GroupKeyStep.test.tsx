@@ -21,31 +21,54 @@ const state = vi.hoisted(() => ({
   dataSets: [] as { dataSetId: bigint; live: boolean; metadata: Record<string, string> }[],
   /** Each wallet request, and each wait for Privy's dialog, in the order they happen. */
   events: [] as string[],
+  /** The functions each multicall read, in order. */
+  multicalls: [] as string[][],
   /** Reads left to fail before the scan works. */
   failReads: 0,
   walletReady: true,
 }));
 
-vi.mock("wagmi", () => ({
-  usePublicClient: () => ({}),
-  useWalletClient: () => ({
-    data: !state.walletReady
-      ? undefined
-      : {
-          signTypedData: async (args: { primaryType: string }) => {
-            state.events.push(`sign ${args.primaryType}`);
-            return "0xsig";
+vi.mock("wagmi", async () => {
+  const { getChain } = await import("@/constants/chains");
+  return {
+    usePublicClient: () => ({
+      chain: getChain("calibration"),
+      // Answers only what the scan should ask for. Anything else, such as a provider record, fails to decode.
+      multicall: async ({ contracts }: { contracts: { functionName: string; args: [bigint] }[] }) => {
+        state.multicalls.push(contracts.map(({ functionName }) => functionName));
+        return contracts.map(({ functionName, args: [dataSetId] }) => {
+          const dataSet = state.dataSets.find((candidate) => candidate.dataSetId === dataSetId);
+          if (functionName === "dataSetLive") return dataSet?.live;
+          if (functionName === "getAllDataSetMetadata") {
+            return [Object.keys(dataSet?.metadata ?? {}), Object.values(dataSet?.metadata ?? {})];
+          }
+          throw new Error(`Cannot decode ${functionName}`);
+        });
+      },
+    }),
+    useWalletClient: () => ({
+      data: !state.walletReady
+        ? undefined
+        : {
+            signTypedData: async (args: { primaryType: string }) => {
+              state.events.push(`sign ${args.primaryType}`);
+              return "0xsig";
+            },
           },
-        },
-  }),
-}));
-vi.mock("@filoz/synapse-core/warm-storage", () => ({
-  getPdpDataSets: async () => {
+    }),
+  };
+});
+// Two ids a page, so a few data sets span pages.
+vi.mock("@filoz/synapse-core/warm-storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@filoz/synapse-core/warm-storage")>()),
+  getClientDataSetIds: async (_client: unknown, { cursor = 0n }: { cursor?: bigint }) => {
     if (state.failReads > 0) {
       state.failReads -= 1;
       throw new Error("rpc down");
     }
-    return { items: state.dataSets };
+    const ids = state.dataSets.map(({ dataSetId }) => dataSetId);
+    const end = Number(cursor) + 2;
+    return { items: ids.slice(Number(cursor), end), ...(end < ids.length ? { nextCursor: BigInt(end) } : {}) };
   },
 }));
 vi.mock("@/utils/privy-modal", () => ({
@@ -92,6 +115,7 @@ describe("GroupKeyStep", () => {
   beforeEach(() => {
     state.dataSets = [];
     state.events = [];
+    state.multicalls = [];
     state.failReads = 0;
     state.walletReady = true;
     onIssued.mockReset();
@@ -215,6 +239,29 @@ describe("GroupKeyStep", () => {
 
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("reads only each data set's liveness and metadata, one multicall a page, never its provider", async () => {
+    await renderStep();
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    // An owner with no data sets costs no multicall at all.
+    expect(state.multicalls).toEqual([]);
+    cleanup();
+
+    const tagged = (groupKeyId: string) => ({ "foc/ks": groupKeyId, "foc/kc": "v1.aa", "foc/enc": "1" });
+    state.dataSets = [
+      { dataSetId: 4n, live: true, metadata: tagged(`0x${"44".repeat(16)}`) },
+      { dataSetId: 7n, live: true, metadata: {} },
+      { dataSetId: 2n, live: true, metadata: tagged(`0x${"22".repeat(16)}`) },
+    ];
+    await renderStep();
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    expect(state.multicalls).toEqual([
+      ["dataSetLive", "getAllDataSetMetadata", "dataSetLive", "getAllDataSetMetadata"],
+      ["dataSetLive", "getAllDataSetMetadata"],
+    ]);
+    // The oldest group key, found on the second page.
+    expect(screen.getByText(`0x${"22".repeat(16)}`)).toBeTruthy();
   });
 
   it("names the group key it will sign for: none yet, a new one, or the one the data sets record", async () => {
