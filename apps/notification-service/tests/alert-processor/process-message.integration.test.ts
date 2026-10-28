@@ -232,6 +232,28 @@ describe("processMessage — inactivity email", () => {
     expect(d.sendEmail).not.toHaveBeenCalled();
   });
 
+  it("records an email covering more datasets than one insert statement holds", async () => {
+    await subscribe(WALLET, EMAIL);
+    const d = inactivityDeps(...Array.from({ length: 40 }, (_, i) => staleDataSet(String(i + 1), 31)));
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM inactivity_alerts").first<{ n: number }>();
+    expect(row?.n).toBe(40);
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+    expect(d.sendEmail).toHaveBeenCalledOnce();
+  });
+
+  it("retries a failed send without recording it, so the next run emails again", async () => {
+    await subscribe(WALLET, EMAIL);
+    const d = inactivityDeps(staleDataSet("12", 45));
+    d.sendEmail.mockRejectedValueOnce(Object.assign(new Error("mailer down"), { code: "E_DELIVERY_FAILED" }));
+
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("retry");
+    expect(await processMessage(env, CLIENT, db, { walletAddress: WALLET }, noopLog, d)).toBe("ack");
+    expect(d.sendEmail).toHaveBeenCalledTimes(2);
+  });
+
   it("retries when the subgraph read fails, without affecting the balance check", async () => {
     await subscribe(WALLET, EMAIL);
     const d = {

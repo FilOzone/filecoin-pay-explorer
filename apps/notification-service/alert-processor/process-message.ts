@@ -14,7 +14,13 @@ import {
 } from "./account";
 import { buildAlertContent } from "./alert-content";
 import { clearAlertState, getAlertState, recordSent, shouldSend } from "./dedup";
-import { fetchStaleDataSets, formatMonthlySpend, type StaleDataSets, selectDataSetsToEmail } from "./inactivity";
+import {
+  fetchStaleDataSets,
+  formatMonthlySpend,
+  STALE_AFTER_DAYS,
+  type StaleDataSets,
+  selectDataSetsToEmail,
+} from "./inactivity";
 import { findDataSetMutes, findInactivityAlerts, findSubscriberEmail, recordInactivityAlerts } from "./queries";
 
 /** The inactivity email lists this many datasets and counts the rest. */
@@ -28,7 +34,7 @@ export interface ProcessorFields {
   action: string;
   health: { tier: string; runwayDays: number };
   alert: { tier: string; daysRemaining: number; fundedUntilSec: number };
-  inactivity: { outcome: string; dataSets: number };
+  inactivity: { outcome: string; count: number };
 }
 
 /** A rendered alert ready for the email binding. */
@@ -148,7 +154,7 @@ async function processBalanceAlert(
     };
     const { subject, html, text } = await renderAlertEmail(props);
 
-    const sendFailure = await sendEmail(env, { to: subscriber.email, subject, html, text }, log, deps, {
+    const sendFailure = await sendOrClassifyFailure(env, { to: subscriber.email, subject, html, text }, log, deps, {
       message: "Failed to send alert email",
       internal: { wallet, tier },
     });
@@ -201,7 +207,7 @@ async function processInactivityAlert(
   try {
     const subscriber = await findSubscriberEmail(db, wallet);
     if (!subscriber) {
-      log.set({ inactivity: { outcome: "no_subscriber", dataSets: 0 } });
+      log.set({ inactivity: { outcome: "no_subscriber", count: 0 } });
       return "ack";
     }
 
@@ -225,7 +231,7 @@ async function processInactivityAlert(
 
     const dataSets = selectDataSetsToEmail(stale, mutes, sent, nowSec);
     if (dataSets.length === 0) {
-      log.set({ inactivity: { outcome: "nothing_new", dataSets: 0 } });
+      log.set({ inactivity: { outcome: "nothing_new", count: 0 } });
       return "ack";
     }
 
@@ -242,15 +248,16 @@ async function processInactivityAlert(
       })),
       moreCount: dataSets.length - listed.length,
       queueUrl: `${serviceUrl}#stale`,
+      staleAfterDays: STALE_AFTER_DAYS,
     });
 
-    const sendFailure = await sendEmail(env, { to: subscriber.email, subject, html, text }, log, deps, {
+    const sendFailure = await sendOrClassifyFailure(env, { to: subscriber.email, subject, html, text }, log, deps, {
       message: "Failed to send inactivity email",
       internal: { wallet, dataSets: dataSets.length },
     });
     if (sendFailure) return sendFailure;
 
-    log.set({ inactivity: { outcome: "sent", dataSets: dataSets.length } });
+    log.set({ inactivity: { outcome: "sent", count: dataSets.length } });
 
     // Email is out; a failed record can't un-send it, so ack rather than retry.
     try {
@@ -275,7 +282,7 @@ async function processInactivityAlert(
 }
 
 /** Sends `email`, or logs the failure and returns whether the queue should retry it. */
-async function sendEmail(
+async function sendOrClassifyFailure(
   env: Env,
   email: OutboundEmail,
   log: ProcessorLog,

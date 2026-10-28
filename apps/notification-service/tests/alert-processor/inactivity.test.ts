@@ -94,15 +94,22 @@ describe("selectDataSetsToEmail", () => {
 });
 
 describe("formatMonthlySpend", () => {
-  it("formats the token amount with at most four decimals", () => {
-    const inactive = {
+  const format = (monthlySpend: bigint) =>
+    formatMonthlySpend({
       dataSetId: "1",
       lastWriteAt: lastWriteAt(31),
       daysInactive: 31,
-      monthlySpend: 1_234_567_000_000_000_000n,
+      monthlySpend,
       token: { symbol: "USDFC", decimals: 18 },
-    };
-    expect(formatMonthlySpend(inactive)).toBe("1.2346 USDFC");
+    });
+
+  // The same values pin the explorer's formatTokenAmount(..., "up"), which the linked queue row uses.
+  it("shows the amount the way the triage queue does, rounded up", () => {
+    expect(format(0n)).toBe("0 USDFC");
+    expect(format(38_880_000_000_000_000_000n)).toBe("38.880 USDFC");
+    expect(format(38_880_900_000_000_000_000n)).toBe("38.881 USDFC");
+    expect(format(1_500_500_000_000_000_000_000n)).toBe("1,500.500 USDFC");
+    expect(format(1n)).toBe("0.001 USDFC");
   });
 });
 

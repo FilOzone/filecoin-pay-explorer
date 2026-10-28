@@ -1,9 +1,8 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { formatUnits } from "viem";
 import { z } from "zod";
 
 /** Matches STALE_AFTER_DAYS in the explorer's triage queue (hooks/useStaleDataSets.ts). */
-const STALE_AFTER_DAYS = 30;
+export const STALE_AFTER_DAYS = 30;
 
 const SECONDS_PER_DAY = 86_400;
 /** graph-node's per-request maximum. */
@@ -160,8 +159,20 @@ export function selectDataSetsToEmail(
   });
 }
 
-/** e.g. "1.25 USDFC". */
-export function formatMonthlySpend(dataSet: InactiveDataSet): string {
-  const amount = Number(formatUnits(dataSet.monthlySpend, dataSet.token.decimals));
-  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${dataSet.token.symbol}`;
+const FRACTION_DIGITS = 3;
+
+/**
+ * e.g. "1.250 USDFC". Matches the queue row's `formatTokenAmount(..., "up")`: exact bigint math,
+ * rounded up so an amount owed is never understated.
+ */
+export function formatMonthlySpend({ monthlySpend, token }: InactiveDataSet): string {
+  if (monthlySpend === 0n) return `0 ${token.symbol}`;
+  const shift = token.decimals - FRACTION_DIGITS;
+  const scaled =
+    shift > 0
+      ? (monthlySpend + 10n ** BigInt(shift) - 1n) / 10n ** BigInt(shift)
+      : monthlySpend * 10n ** BigInt(-shift);
+  const unit = scaled / 10n ** BigInt(FRACTION_DIGITS);
+  const fraction = scaled % 10n ** BigInt(FRACTION_DIGITS);
+  return `${unit.toLocaleString("en-US")}.${fraction.toString().padStart(FRACTION_DIGITS, "0")} ${token.symbol}`;
 }

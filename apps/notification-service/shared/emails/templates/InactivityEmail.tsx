@@ -7,7 +7,7 @@ import { EmailHeader } from "../common/EmailHeader";
 export interface InactiveDataSetRow {
   dataSetId: string;
   daysInactive: number;
-  monthlySpend: string; // formatted, e.g. "1.25 USDFC"
+  monthlySpend: string; // formatted, e.g. "1.250 USDFC"
   url: string;
 }
 
@@ -19,6 +19,8 @@ export interface InactivityEmailProps {
   /** Newly inactive datasets not listed. */
   moreCount: number;
   queueUrl: string;
+  /** Days without new data before a dataset counts as inactive. */
+  staleAfterDays: number;
   logoUrl?: string;
   logoIconUrl?: string;
 }
@@ -77,21 +79,22 @@ const styles = {
   },
 };
 
-function subject(total: number): string {
+function subject(total: number, staleAfterDays: number): string {
   return total === 1
-    ? "One of your datasets has had no new data for 30 days"
-    : `${total} of your datasets have had no new data for 30 days`;
+    ? `One of your datasets has had no new data for ${staleAfterDays} days`
+    : `${total} of your datasets have had no new data for ${staleAfterDays} days`;
 }
 
 export const previewProps: InactivityEmailProps = {
   name: "Ada Lovelace",
   walletAddress: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
   dataSets: [
-    { dataSetId: "12", daysInactive: 45, monthlySpend: "1.25 USDFC", url: "https://example.com/console" },
-    { dataSetId: "7", daysInactive: 31, monthlySpend: "0.4 USDFC", url: "https://example.com/console" },
+    { dataSetId: "12", daysInactive: 45, monthlySpend: "1.250 USDFC", url: "https://example.com/console" },
+    { dataSetId: "7", daysInactive: 31, monthlySpend: "0.400 USDFC", url: "https://example.com/console" },
   ],
   moreCount: 3,
   queueUrl: "https://example.com/console",
+  staleAfterDays: 30,
   logoUrl: DEFAULT_LOGO_URL,
   logoIconUrl: DEFAULT_LOGO_ICON_URL,
 };
@@ -104,12 +107,13 @@ export const Template = ({
   dataSets,
   moreCount,
   queueUrl,
+  staleAfterDays,
   logoUrl = DEFAULT_LOGO_URL,
   logoIconUrl = DEFAULT_LOGO_ICON_URL,
 }: InactivityEmailProps): JSX.Element => (
   <Html>
     <Head />
-    <Preview>You are still paying to store datasets that have had no new data for 30 days.</Preview>
+    <Preview>{`You are still paying to store datasets that have had no new data for ${staleAfterDays} days.`}</Preview>
     <Body style={sharedStyles.body}>
       <Container style={sharedStyles.container}>
         <EmailHeader logoUrl={logoUrl} />
@@ -120,9 +124,9 @@ export const Template = ({
             Hi <strong>{name}</strong>,
           </Text>
           <Text style={styles.text}>
-            These Warm Storage datasets for wallet {walletAddress} have had no new data for at least 30 days. You are
-            still paying to store them. Review them in your console: choosing Keep on a dataset pauses these emails for
-            it.
+            These Warm Storage datasets for wallet {walletAddress} have had no new data for at least {staleAfterDays}{" "}
+            days. You are still paying to store them. Review them in your console: choosing Keep on a dataset pauses
+            these emails for it.
           </Text>
 
           <Section style={styles.listBlock}>
@@ -165,7 +169,9 @@ export const Template = ({
             Review inactive datasets
           </Button>
 
-          <Text style={styles.note}>You get this email once each time a dataset goes 30 days without new data.</Text>
+          <Text style={styles.note}>
+            You get this email once each time a dataset goes {staleAfterDays} days without new data.
+          </Text>
         </Section>
 
         <EmailFooter logoIconUrl={logoIconUrl} />
@@ -181,5 +187,5 @@ export async function renderInactivityEmail(
     render(<Template {...props} />),
     render(<Template {...props} />, { plainText: true }),
   ]);
-  return { subject: subject(props.dataSets.length + props.moreCount), html, text };
+  return { subject: subject(props.dataSets.length + props.moreCount, props.staleAfterDays), html, text };
 }

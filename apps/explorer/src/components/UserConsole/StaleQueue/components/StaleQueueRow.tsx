@@ -30,6 +30,7 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute,
   return (
     <li
       id={`stale-dataset-${dataSetId}`}
+      aria-current={isLinked ? "true" : undefined}
       className={clsx(
         "flex flex-wrap items-center justify-between gap-3 py-3",
         isLinked && "-mx-3 rounded-md bg-muted px-3",
