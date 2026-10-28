@@ -4,7 +4,7 @@ import { isAddress } from "viem";
 import { useConnection } from "wagmi";
 import { ServiceDetail } from "@/components/UserConsole/ServiceDetail";
 import { ServiceNotFoundState } from "@/components/UserConsole/ServiceDetail/components";
-import { getNetworkFromChainId } from "@/utils/network";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 
 /**
  * The (console) layout gates on a connected wallet, so `address` is set by the
@@ -14,7 +14,8 @@ import { getNetworkFromChainId } from "@/utils/network";
  */
 const ServicePage = () => {
   const { operator } = useParams<{ operator: string }>();
-  const { address, chainId } = useConnection();
+  const { address } = useConnection();
+  const { network } = useConsoleNetwork();
 
   // Checksums are not enforced: a strict check rejects mixed case whose
   // checksum does not validate, and a wrong address simply finds no service.
@@ -26,8 +27,7 @@ const ServicePage = () => {
     return null;
   }
 
-  // The (console) layout admits only Filecoin chains
-  return <ServiceDetail network={getNetworkFromChainId(chainId)} operatorAddress={operator} userAddress={address} />;
+  return <ServiceDetail network={network} operatorAddress={operator} userAddress={address} />;
 };
 
 export default ServicePage;

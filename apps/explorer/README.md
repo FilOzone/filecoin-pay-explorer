@@ -15,13 +15,13 @@ This app requires the following environment variables:
 | `NEXT_PUBLIC_SUBGRAPH_URL_MAINNET`     | Subgraph URL for Filecoin Mainnet (chain 314) | Yes      |
 | `NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION` | Subgraph URL for Calibration testnet (314159) | Yes      |
 | `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`      | Optional Squid integrator ID override          | No       |
-| `NEXT_PUBLIC_PRIVY_APP_ID`             | Public Privy application ID override          | No       |
-| `NEXT_PUBLIC_PRIVY_CLIENT_ID`          | Public Privy web client ID override            | No       |
+| `NEXT_PUBLIC_PRIVY_APP_ID`             | Public Privy application ID override          | Production only |
+| `NEXT_PUBLIC_PRIVY_CLIENT_ID`          | Public Privy web client ID override            | Production only |
 | `NEXT_PUBLIC_PRIVY_ONRAMP_SANDBOX`     | Use Privy's fiat onramp sandbox when `true`   | No       |
 
 Squid route quotes use the public `filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862` integrator ID by default.
 
-The console defaults to the development Privy app shown in `.env.example`. Its dashboard must enable email, Google, and external-wallet login, and allow the exact local or preview origin being tested (including the port). Configure origins on the `dev` app client, because client settings override app-level settings, and do not add a broad `*.vercel.app` origin. PR previews are aliased to `pr-<number>.preview.pay.filecoin.cloud`, which the `https://*.preview.pay.filecoin.cloud` origin covers. Production must override both values with a separately provisioned Privy app (see issue #382); no Privy app secret is used by the browser.
+The console defaults to the development Privy app shown in `.env.example`. Its dashboard must enable email, Google, and external-wallet login, and allow the exact local or preview origin being tested (including the port). Configure origins on the `dev` app client, because client settings override app-level settings, and do not add a broad `*.vercel.app` origin. PR previews are aliased to `pr-<number>.preview.pay.filecoin.cloud`, which the `https://*.preview.pay.filecoin.cloud` origin covers. Production must override both values with a separately provisioned Privy app (see issue #382); a production build (`VERCEL_ENV=production`) missing either one fails with an error naming it instead of using the development app. No Privy app secret is used by the browser.
 
 **Setup:**
 

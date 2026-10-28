@@ -15,22 +15,25 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@filecoin-pay/ui/components/select";
 import { SQUID_ROUTER_ADDRESS } from "@filecoin-project/squid-evm-funding";
-import { useWallets } from "@privy-io/react-auth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ConnectedWallet, useConnectWallet, useWallets } from "@privy-io/react-auth";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { type Address, createWalletClient, custom, formatUnits, getAddress, type Hash, parseUnits } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
 import { getAccount } from "wagmi/actions";
+import { isUserCancelledFlow } from "@/components/shared/CustomConnectButton/state";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { mainnet, SQUID_SOURCE_CHAINS } from "@/constants/chains";
 import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
+import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { FIL_TRANSACTION_FEE_RESERVE, getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
+import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
 import {
   getSourceTokenBalance,
   getSourceTokenBalancesQueryKey,
@@ -71,6 +74,7 @@ import {
   type SquidDepositNetworkFeeBudget,
   type SquidDepositQuote,
   type SquidDepositRouteRequest,
+  SquidQuoteChangedError,
 } from "../data/squid-deposit-route";
 import type { SquidDepositUiStage } from "../data/squid-deposit-stages";
 import {
@@ -91,14 +95,23 @@ import {
   isUserRejectedRequest,
   walletErrorMessage,
 } from "../data/squid-execution";
+import { chooseDefaultPayer, listSquidPayers, readConnectedAccounts, type SquidPayer } from "../data/squid-payers";
 import { paymentTokensQueryOptions } from "../data/squid-payment-tokens";
 import { squidFetch } from "../data/squid-quote";
+import { getSquidReviewBlocker } from "../data/squid-review-blocker";
+import { FEE_RESERVE_USDC } from "../data/usdc-gas-payer";
+import { useUsdcGasDeposit } from "../hooks/useUsdcGasDeposit";
+import { PayingAccountField } from "./PayingAccountField";
 import { type SearchableOption, SearchableSelect } from "./SearchableSelect";
 import { SquidDepositProgress } from "./SquidDepositProgress";
 
 const DEFAULT_SOURCE_CHAIN = 8453;
 const FIL_GAS_TOP_UP_LABEL = `${formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL`;
-const FIL_FUNDED_NOTICE = "This wallet now has FIL for fees. Review the updated quote without a FIL top-up.";
+const FIL_FUNDED_NOTICE = {
+  kind: "fil",
+  title: "FIL top-up removed",
+  description: "This wallet now has FIL for fees. Review the updated quote without a FIL top-up.",
+} as const;
 const DEPOSIT_TARGET = {
   payments: mainnet.contracts.payments.address,
   usdfc: mainnet.contracts.usdfc.address,
@@ -130,30 +143,52 @@ type ReviewedDeposit = {
   sourceDecimals: number;
   sourceSymbol: string;
   transactions: SquidDepositNetworkFeeBudget["transactions"];
+  usdcGas?: undefined;
+};
+
+// Base gas and the bridge fee come out of the USDC reserve, so none of the native-fee fields apply.
+type UsdcGasReviewedDeposit = Pick<
+  ReviewedDeposit,
+  "amount" | "context" | "quote" | "sourceDecimals" | "sourceSymbol"
+> & {
+  usdcGas: true;
 };
 
 /** A verified source balance, such as a card purchase, that pre-fills the form. */
 export type SquidDepositInitialSource = { amount: bigint; chainId: number; decimals: number; token: string };
 
-function describeWalletConfirmations(reviewed: {
-  approvalRequired: boolean;
-  approvalResetRequired: boolean;
-  context: { sourceToken: string };
-}) {
+function describeWalletConfirmations(reviewed: ReviewedDeposit | UsdcGasReviewedDeposit) {
+  if (reviewed.usdcGas) return `a ${reviewed.sourceSymbol} permit for network fees, then the deposit.`;
   if (isNativeToken(reviewed.context.sourceToken)) return "the Squid transaction.";
   if (reviewed.approvalResetRequired) return "an allowance reset, an approval, then the Squid transaction.";
   if (reviewed.approvalRequired) return "an approval, then the Squid transaction.";
   return "the Squid transaction.";
 }
 
+function describePending(pending: PendingSquidDeposit) {
+  if (pending.transactionHash) return "A Squid deposit is still in progress.";
+  if (pending.userOperationHash) {
+    return "A deposit paying network fees in USDC was sent and is waiting to be included on Base.";
+  }
+  return "Your wallet may have submitted this route. Check its activity before trying again.";
+}
+
+function describePayer(payer: SquidPayer<ConnectedWallet>, recipient: string | undefined) {
+  if (payer.address.toLowerCase() === recipient?.toLowerCase()) return "This account";
+  return isPrivyEmbeddedWallet(payer.wallet) ? "Filecoin Pay wallet" : payer.wallet.meta.name;
+}
+
 export function DirectSquidDepositDialog({
   accountId,
   initialSource,
+  onBuyWithCard,
   onOpenChange,
   open,
 }: {
   accountId: string;
   initialSource?: SquidDepositInitialSource;
+  /** Present where card funding is offered; the recovery for an account that cannot pay. */
+  onBuyWithCard?: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
@@ -168,22 +203,24 @@ export function DirectSquidDepositDialog({
   walletsRef.current = wallets;
   const { setTopUpActive } = useTopUpActivity();
   const queryClient = useQueryClient();
+  // Empty until the default payer is picked for this network.
   const [payingAddress, setPayingAddress] = useState("");
+  const isPayerChosenByUser = useRef(false);
   const [sourceChainId, setSourceChainId] = useState(DEFAULT_SOURCE_CHAIN);
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [filBalanceVersion, setFilBalanceVersion] = useState(0);
   const [filChoice, setFilChoice] = useState<{ scope: string; manualEnabled?: boolean } | null>(null);
-  const [reviewed, setReviewed] = useState<ReviewedDeposit | null>(null);
+  const [reviewed, setReviewed] = useState<ReviewedDeposit | UsdcGasReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositUiStage | null>(null);
   // The signature execution is waiting for, so the instruction reads as one of this run's signatures.
   const [signature, setSignature] = useState<SquidDepositSignature | null>(null);
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [pending, setPending] = useState<PendingSquidDeposit | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Why the dialog changed after a confirmation: a fresh gas maximum to accept on the review card,
+  // Why the dialog changed after a confirmation: a fresh gas maximum or quote to accept on the review card,
   // or a FIL top-up dropped from the form because the recipient now holds the fee reserve.
-  const [notice, setNotice] = useState<{ kind: "gas" | "fil"; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: "review" | "fil"; title: string; description: string } | null>(null);
   const isSubmitting = useRef(false);
   const isMounted = useRef(true);
   const initializedSelectionScope = useRef("");
@@ -203,10 +240,21 @@ export function DirectSquidDepositDialog({
   // The prefill is applied once per verified source, so later renders (a pending
   // marker clearing, for instance) cannot overwrite what the user typed since.
   const appliedInitialSource = useRef("");
-  const payingWallet =
-    wallets.find((wallet) => wallet.address.toLowerCase() === payingAddress.toLowerCase()) ??
-    wallets.find((wallet) => wallet.address.toLowerCase() === recipient?.toLowerCase()) ??
-    wallets[0];
+  const appliedInitialAmount = useRef("");
+  const connectedAccountsQuery = useQuery({
+    enabled: open,
+    queryFn: () => readConnectedAccounts(walletsRef.current),
+    queryKey: ["direct-squid-payer-accounts", walletAddressesKey],
+  });
+  const payers = listSquidPayers(wallets, connectedAccountsQuery.data, recipient);
+  // Effects key on the payer addresses, not the wallet objects Privy re-publishes on every chain switch.
+  const payerAddressesKey = payers.map((candidate) => candidate.address.toLowerCase()).join(",");
+  const payersRef = useRef(payers);
+  payersRef.current = payers;
+  // Payers list the console account first, so it pays until the default or the user picks another.
+  const payer =
+    payers.find((candidate) => candidate.address.toLowerCase() === payingAddress.toLowerCase()) ?? payers[0];
+  const payingWallet = payer?.wallet;
   const sourceChain = SQUID_SOURCE_CHAINS.find((chain) => chain.id === sourceChainId);
   const sourceClient = usePublicClient({ chainId: sourceChainId });
   // OP Stack fees include an L1 data charge that gas × price misses; the same client prices the review and the sends.
@@ -227,18 +275,31 @@ export function DirectSquidDepositDialog({
   );
   const tokensQuery = useQuery({ ...paymentTokensQueryOptions(sourceChainId, squid), enabled: open });
   const tokens = tokensQuery.data ?? [];
-  const owner = payingWallet ? getAddress(payingWallet.address) : undefined;
-  const inventoryBalancesQuery = useQuery({
-    enabled: open && !!owner && tokens.length > 0 && !!sourceClient,
-    queryFn: () => {
-      if (!owner || !sourceClient) throw new Error("Source balances are unavailable");
-      return readSourceTokenBalances(sourceClient, owner, tokens);
-    },
-    queryKey: getSourceTokenBalancesQueryKey(owner, sourceChainId, tokens),
-    refetchInterval: 30_000,
-    retry: 1,
+  const owner = payer?.address;
+  const inventoryQueries = useQueries({
+    queries: payers.map((candidate) => ({
+      enabled: open && tokens.length > 0 && !!sourceClient,
+      queryFn: () => {
+        if (!sourceClient) throw new Error("Source balances are unavailable");
+        return readSourceTokenBalances(sourceClient, candidate.address, tokens);
+      },
+      queryKey: getSourceTokenBalancesQueryKey(candidate.address, sourceChainId, tokens),
+      refetchInterval: 30_000,
+      retry: 1,
+    })),
   });
-  const inventoryBalances = inventoryBalancesQuery.isError ? undefined : inventoryBalancesQuery.data;
+  const inventories = Object.fromEntries(
+    payers.map((candidate, index) => {
+      const result = inventoryQueries[index];
+      return [candidate.address.toLowerCase(), result?.isError ? undefined : result?.data];
+    }),
+  );
+  const payerIndex = payer ? payers.indexOf(payer) : -1;
+  const isOwnerInventoryPending = inventoryQueries[payerIndex]?.isPending ?? true;
+  // A default compares every account, so it waits until each one's balances answered or failed.
+  const areInventoriesSettled =
+    tokens.length === 0 ? !tokensQuery.isPending : inventoryQueries.every((result) => !result.isPending);
+  const inventoryBalances = owner ? inventories[owner.toLowerCase()] : undefined;
   const orderedTokens = useMemo(
     () => orderSourceTokensByBalance(tokens, inventoryBalances ?? {}),
     [inventoryBalances, tokens],
@@ -275,16 +336,20 @@ export function DirectSquidDepositDialog({
       return null;
     }
   })();
+  const usdcGas = useUsdcGasDeposit({
+    active: open && stage === null && !reviewed,
+    request: owner && sourceToken ? { owner, sourceChainId, sourceToken: getAddress(sourceToken.token) } : undefined,
+    sourceClient,
+    squid,
+    wallet: payingWallet,
+  });
+  // USDC gas holds its fee reserve on top of the deposit, out of the same balance.
+  const feeReserve = usdcGas.isEligible ? FEE_RESERVE_USDC : 0n;
   const balancesQuery = useQuery({
-    enabled: open && !!payingWallet && !!sourceToken && !!sourceClient,
+    enabled: open && !!owner && !!sourceToken && !!sourceClient,
     queryFn: () => {
-      if (!payingWallet || !sourceToken || !sourceClient) throw new Error("Source balances are unavailable");
-      return readSourceTokenState(
-        sourceClient,
-        getAddress(payingWallet.address),
-        sourceToken.token,
-        SQUID_ROUTER_ADDRESS,
-      );
+      if (!owner || !sourceToken || !sourceClient) throw new Error("Source balances are unavailable");
+      return readSourceTokenState(sourceClient, owner, sourceToken.token, SQUID_ROUTER_ADDRESS);
     },
     queryKey: ["direct-squid-deposit-balances", sourceChainId, sourceToken?.token, owner],
     // Polling stops once a run starts: execution reads the chain itself before each send.
@@ -329,36 +394,31 @@ export function DirectSquidDepositDialog({
       stage === null &&
       !reviewed &&
       !!recipient &&
-      !!payingWallet &&
+      !!owner &&
       !!sourceToken &&
       isFilGasTopUpEnabled !== null &&
       parsedAmount !== null &&
       !balancesQuery.isError &&
-      (balancesQuery.data?.token ?? 0n) >= parsedAmount,
+      (balancesQuery.data?.token ?? 0n) >= parsedAmount + feeReserve,
     queryFn: async () => {
-      if (!recipient || !payingWallet || !sourceToken || parsedAmount === null) throw new Error("Quote unavailable");
+      if (!recipient || !owner || !sourceToken || parsedAmount === null) throw new Error("Quote unavailable");
       const request = {
         ...DEPOSIT_TARGET,
-        owner: getAddress(payingWallet.address),
+        owner,
         recipient,
         sourceAmount: parsedAmount,
         sourceChainId,
         sourceToken: sourceToken.token,
       };
-      const quote = await requestSquidDepositRoute(request, squid, { quoteOnly: true });
-      if (!includeFilGasTopUp) return quote;
-      const filGasTopUp = planFilGasTopUp(quote, squid.now ?? Date.now);
-      if (!filGasTopUp) {
-        throw new Error(
-          `Squid could not safely add ${FIL_GAS_TOP_UP_LABEL} for this amount. Increase the amount or turn off the FIL option.`,
-        );
-      }
+      if (!includeFilGasTopUp) return requestSquidDepositRoute(request, squid, { quoteOnly: true });
+      if (!destinationClient) throw new Error("Filecoin network is unavailable");
+      const filGasTopUp = await planFilGasTopUp(destinationClient, request.usdfc, squid.now ?? Date.now);
       return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
     },
     queryKey: [
       "direct-squid-deposit-quote",
       recipient,
-      payingWallet?.address,
+      owner,
       sourceChainId,
       sourceToken?.token,
       parsedAmount?.toString(),
@@ -374,6 +434,7 @@ export function DirectSquidDepositDialog({
       open &&
       stage === null &&
       !reviewed &&
+      !usdcGas.isEligible &&
       !!quote &&
       !!owner &&
       !!sourceToken &&
@@ -409,7 +470,7 @@ export function DirectSquidDepositDialog({
   latestContext.current = {
     open,
     recipient,
-    owner: payingWallet?.address,
+    owner,
     chainId: sourceChainId,
     token: sourceToken?.token,
     amount: parsedAmount ?? undefined,
@@ -422,9 +483,10 @@ export function DirectSquidDepositDialog({
   useEffect(() => {
     if (!open) {
       appliedInitialSource.current = "";
-      // A wallet picked in an earlier session must not pay for the next one; the
-      // fallback selects the recipient's own wallet again.
+      appliedInitialAmount.current = "";
+      // A wallet picked in an earlier session must not pay for the next one; the next open picks a default again.
       setPayingAddress("");
+      isPayerChosenByUser.current = false;
       return;
     }
     if (
@@ -440,12 +502,60 @@ export function DirectSquidDepositDialog({
     appliedInitialSource.current = sourceKey;
     setSourceChainId(initialSourceChainId);
     setSourceTokenAddress(initialSourceToken);
-    setAmount(formatUnits(initialSourceAmount, initialSourceDecimals));
     initializedSelectionScope.current = "";
   }, [initialSourceAmount, initialSourceChainId, initialSourceDecimals, initialSourceToken, open, pending]);
 
+  // The purchase is filled in once its payer is known: one paying network fees in USDC keeps the reserve back.
   useEffect(() => {
-    if (!open || !owner || pending || tokens.length === 0 || inventoryBalancesQuery.isPending) return;
+    if (
+      !open ||
+      pending ||
+      initialSourceAmount === undefined ||
+      initialSourceDecimals === undefined ||
+      !initialSourceToken ||
+      !owner ||
+      sourceToken?.token.toLowerCase() !== initialSourceToken?.toLowerCase()
+    )
+      return;
+    const sourceKey = `${initialSourceChainId}:${initialSourceToken.toLowerCase()}:${initialSourceAmount}`;
+    if (appliedInitialAmount.current === sourceKey) return;
+    appliedInitialAmount.current = sourceKey;
+    const amount = initialSourceAmount > feeReserve ? initialSourceAmount - feeReserve : initialSourceAmount;
+    setAmount(formatUnits(amount, initialSourceDecimals));
+  }, [
+    feeReserve,
+    initialSourceAmount,
+    initialSourceChainId,
+    initialSourceDecimals,
+    initialSourceToken,
+    open,
+    owner,
+    pending,
+    sourceToken,
+  ]);
+
+  // Picked once per network, after the connected accounts are known and every account's balances answer, so a
+  // refetch never moves the payer.
+  useEffect(() => {
+    if (!open || pending || payingAddress !== "" || payers.length === 0) return;
+    if (connectedAccountsQuery.isPending || !areInventoriesSettled) return;
+    // A card purchase lands in the console account, which payers list first, so that account pays for it.
+    const defaultPayer = initialSourceToken ? payers[0]?.address : chooseDefaultPayer(payers, inventories);
+    if (defaultPayer) setPayingAddress(defaultPayer);
+  }, [
+    areInventoriesSettled,
+    connectedAccountsQuery.isPending,
+    initialSourceToken,
+    inventories,
+    open,
+    payers,
+    payingAddress,
+    pending,
+  ]);
+
+  useEffect(() => {
+    // The token follows the payer's balances, so it waits for the payer default.
+    if (!open || !owner || payingAddress === "" || pending || tokens.length === 0 || isOwnerInventoryPending) return;
     const scope = `${owner}:${sourceChainId}:${getSourceTokenCatalogIdentity(tokens)}`;
     if (initializedSelectionScope.current === scope) return;
     initializedSelectionScope.current = scope;
@@ -455,12 +565,13 @@ export function DirectSquidDepositDialog({
       setSourceTokenAddress(orderedTokens[0]?.token ?? "");
     }
   }, [
-    inventoryBalancesQuery.isPending,
+    isOwnerInventoryPending,
     initialSourceChainId,
     initialSourceToken,
     open,
     orderedTokens,
     owner,
+    payingAddress,
     pending,
     sourceChainId,
     sourceTokenAddress,
@@ -488,7 +599,7 @@ export function DirectSquidDepositDialog({
   useEffect(() => {
     if (stage !== null || isSubmitting.current || !hasRecipientFil || !reviewed?.quote.filGasTopUp) return;
     setReviewed(null);
-    setNotice({ kind: "fil", message: FIL_FUNDED_NOTICE });
+    setNotice(FIL_FUNDED_NOTICE);
   }, [hasRecipientFil, reviewed, stage]);
 
   useEffect(() => {
@@ -512,15 +623,15 @@ export function DirectSquidDepositDialog({
     setTransactionHash(null);
   }, [open]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: wallets is read through a ref; the effect keys on the address set so a chain switch mid-run does not drop the review.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: payers are read through a ref; the effect keys on the address set so a chain switch mid-run does not drop the review.
   useEffect(() => {
     if (!open || !recipient) return;
-    const wallets = walletsRef.current;
+    const payerAddresses = payersRef.current.map((candidate) => candidate.address);
     const refresh = () => {
-      const saved = wallets
-        .map((wallet) => {
+      const saved = payerAddresses
+        .map((address) => {
           try {
-            return loadPendingSquidDeposit(window.localStorage, getAddress(wallet.address));
+            return loadPendingSquidDeposit(window.localStorage, address);
           } catch {
             // Unreadable storage means no marker to resume; the on-chain result stays authoritative.
             return null;
@@ -539,11 +650,11 @@ export function DirectSquidDepositDialog({
     setNotice(null);
     setReviewed(null);
     refresh();
-    const unsubscribes = wallets.map((wallet) => subscribeToPendingSquidDeposit(getAddress(wallet.address), refresh));
+    const unsubscribes = payerAddresses.map((address) => subscribeToPendingSquidDeposit(address, refresh));
     return () => {
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
-  }, [open, recipient, walletAddressesKey]);
+  }, [open, recipient, payerAddressesKey]);
 
   const assertContext = (snapshot: SquidDepositContextSnapshot) =>
     assertSquidDepositContext(latestContext.current, snapshot, getAccount(config).address, isMounted.current);
@@ -557,8 +668,36 @@ export function DirectSquidDepositDialog({
     setPending(null);
   };
 
+  const choosePayer = (address: string) => {
+    isPayerChosenByUser.current = true;
+    setPayingAddress(address);
+    setReviewed(null);
+  };
+
+  // Privy calls every useConnectWallet subscriber, so only act on the connect this dialog started.
+  const isConnectingPayer = useRef(false);
+  const { connectWallet } = useConnectWallet({
+    onSuccess: async ({ wallet }) => {
+      if (!isConnectingPayer.current) return;
+      isConnectingPayer.current = false;
+      // Connecting a wallet that is already known can still add accounts to it, so read them again.
+      await connectedAccountsQuery.refetch();
+      choosePayer(getAddress(wallet.address));
+    },
+    onError: (code) => {
+      isConnectingPayer.current = false;
+      if (!isUserCancelledFlow(code)) toast.error("Unable to connect wallet", { description: code });
+    },
+  });
+  const connectPayerWallet = () => {
+    isConnectingPayer.current = true;
+    connectWallet();
+  };
+
   const restoreFilecoin = async () => {
-    if (!hasSwitchedToSource.current) return true;
+    // Networks are per extension: a payer in another wallet can stay on the source network, since only the
+    // console's own wallet must be back on Filecoin.
+    if (!hasSwitchedToSource.current || getAccount(config).chainId === mainnet.id) return true;
     if (!payingWallet) {
       setError("Reconnect the paying wallet to return to Filecoin mainnet.");
       return false;
@@ -577,6 +716,11 @@ export function DirectSquidDepositDialog({
     }
   };
 
+  const buyWithCard = async () => {
+    if (isSubmitting.current || !(await restoreFilecoin())) return;
+    onBuyWithCard?.();
+  };
+
   const close = async () => {
     if (isSubmitting.current || !(await restoreFilecoin())) return;
     onOpenChange(false);
@@ -591,6 +735,7 @@ export function DirectSquidDepositDialog({
   const finish = async (owner: Address, depositRecipient: Address, depositedAmount: bigint) => {
     clearSaved(owner);
     toast.success(`Deposited ${formatUnits(depositedAmount, 18)} USDFC into Filecoin Pay`);
+    trackDepositConfirmed(mainnet.id, mainnet.contracts.usdfc.address, depositedAmount);
     await invalidateTopUpQueries(queryClient, accountId, depositRecipient);
     // The stage is left in place: the review was already dropped by the chain switch, and a reset
     // here would land in the same render as the parent's close, so the dialog would animate out
@@ -602,8 +747,19 @@ export function DirectSquidDepositDialog({
 
   const fail = async (failure: unknown, owner?: Address) => {
     setStage(null);
+    // Nothing was sent: the form comes back to review a fresh USDC-gas deposit.
+    if (failure instanceof PaymasterReviewError) {
+      setReviewed(null);
+      usdcGas.reviewAgain();
+      setError(`${failure.message} Review the deposit again.`);
+      return;
+    }
     let reportedFailure = failure;
-    if (reportedFailure instanceof SquidDepositBudgetError && reviewed) {
+    if (
+      (reportedFailure instanceof SquidDepositBudgetError || reportedFailure instanceof SquidQuoteChangedError) &&
+      reviewed &&
+      !reviewed.usdcGas
+    ) {
       try {
         await reReview(reportedFailure, reviewed);
         return;
@@ -627,15 +783,17 @@ export function DirectSquidDepositDialog({
   };
 
   const resume = async () => {
-    if (!pending || !recipient || !destinationClient || isSubmitting.current) return;
+    if (!pending || !recipient || !destinationClient || !sourceClient || isSubmitting.current) return;
     isSubmitting.current = true;
     const pendingHash = pending.transactionHash;
-    if (!pendingHash) {
+    if (!pendingHash && !pending.userOperationHash) {
       setError("The wallet may have submitted this route. Check its activity before dismissing and trying again.");
       isSubmitting.current = false;
       return;
     }
-    const walletStillConnected = wallets.some((wallet) => wallet.address.toLowerCase() === pending.owner.toLowerCase());
+    const walletStillConnected = payers.some(
+      (candidate) => candidate.address.toLowerCase() === pending.owner.toLowerCase(),
+    );
     if (!walletStillConnected || recipient.toLowerCase() !== pending.recipient.toLowerCase()) {
       setError("Reconnect the original paying wallet and Filecoin Pay account before resuming.");
       isSubmitting.current = false;
@@ -644,16 +802,27 @@ export function DirectSquidDepositDialog({
     setError(null);
     try {
       await withSquidAcquisitionLock(globalThis.navigator?.locks, pending.owner, async () => {
+        // The bundler may still include the operation, so its marker must not be dismissable while this waits.
+        if (!pendingHash) setStageWithHash("swap-broadcast");
+        const transactionHash =
+          pendingHash ??
+          (await usdcGas.waitForOperation(pending, (next) =>
+            setPending(savePendingSquidDeposit(window.localStorage, next)),
+          ));
         const result = await awaitSquidDepositSettlement({
           destinationClient: destinationClient as SquidDepositDestinationClient,
           fundsBefore: pending.fundsBefore,
           minimumDestinationAmount: pending.minimumDestinationAmount,
+          onReplaced: (hash) => {
+            setPending(savePendingSquidDeposit(window.localStorage, { ...pending, transactionHash: hash }));
+          },
           onStage: setStageWithHash,
           quoteId: pending.quoteId,
           sourceChainId: pending.sourceChainId,
+          sourceClient,
           squid,
           target: { ...DEPOSIT_TARGET, recipient: pending.recipient },
-          transactionHash: pendingHash,
+          transactionHash,
         });
         await finish(pending.owner, pending.recipient, result.depositedAmount);
       });
@@ -665,19 +834,21 @@ export function DirectSquidDepositDialog({
   };
 
   /**
-   * The cap would be breached before a send: nothing past the completed approvals was
-   * broadcast, so price the remaining transactions again and hand the card back for review.
+   * The gas cap would be breached, or Squid's route got worse, before the swap was sent: nothing past the
+   * completed approvals was broadcast, so price the remaining transactions again and hand the card back for review.
    */
-  const reReview = async (breach: SquidDepositBudgetError, current: ReviewedDeposit) => {
-    if (!sourceFeeClient) throw breach;
+  const reReview = async (change: SquidDepositBudgetError | SquidQuoteChangedError, current: ReviewedDeposit) => {
+    if (!sourceFeeClient) throw change;
     const { context } = current;
+    const isGasBreach = change instanceof SquidDepositBudgetError;
+    const quote = isGasBreach ? current.quote : change.quote;
     const balances = (await balancesQuery.refetch()).data;
     if (!balances) throw new Error("Source balances are unavailable. Review the payment again.");
     const budget = await estimateDepositNetworkFeeMaximum({
       allowance: balances.allowance,
       client: sourceFeeClient,
       owner: context.owner,
-      quote: current.quote,
+      quote,
       sourceAmount: context.sourceAmount,
       sourceChainId: context.sourceChainId,
       sourceToken: context.sourceToken,
@@ -685,10 +856,10 @@ export function DirectSquidDepositDialog({
     });
     const isNativeSource = isNativeToken(context.sourceToken);
     // Execution priced the remaining transactions itself; the new maximum must at least cover that.
-    const floor = applyNetworkFeeReviewHeadroom(breach.breach.requiredFee);
+    const floor = isGasBreach ? applyNetworkFeeReviewHeadroom(change.breach.requiredFee) : 0n;
     const maxNativeFee = budget.maximum > floor ? budget.maximum : floor;
     const requiredNative = getDepositRequiredNativeBalance(
-      current.quote,
+      quote,
       context.sourceChainId,
       context.sourceToken,
       maxNativeFee,
@@ -698,12 +869,15 @@ export function DirectSquidDepositDialog({
       approvalRequired: !isNativeSource && balances.allowance !== context.sourceAmount,
       approvalResetRequired: !isNativeSource && balances.allowance > 0n && balances.allowance !== context.sourceAmount,
       maxNativeFee,
+      quote,
       requiredNative,
       transactions: budget.transactions,
     });
+    const transactions = listTransactionLabels(budget.transactions.map(({ kind }) => kind));
     setNotice({
-      kind: "gas",
-      message: `${breach.message} Check the updated maximum and confirm to send the ${listTransactionLabels(budget.transactions.map(({ kind }) => kind))}.`,
+      kind: "review",
+      title: isGasBreach ? "Review the updated gas maximum" : "Review the updated quote",
+      description: `${change.message} Check the updated ${isGasBreach ? "maximum" : "quote"} and confirm to send the ${transactions}.`,
     });
     if (balances.native < requiredNative) {
       setError("The paying wallet does not have enough native token for the updated maximum. Add funds, then confirm.");
@@ -741,7 +915,7 @@ export function DirectSquidDepositDialog({
           }
           setStage(null);
           setReviewed(null);
-          setNotice({ kind: "fil", message: FIL_FUNDED_NOTICE });
+          setNotice(FIL_FUNDED_NOTICE);
           return;
         }
       }
@@ -773,63 +947,90 @@ export function DirectSquidDepositDialog({
           chain: sourceChain,
           transport: custom(provider),
         });
-        const executable = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
-        if (!isExecutableQuote(executable)) throw new Error("Squid did not return an executable route");
-        assertExecutableQuoteWithinReview(executable, reviewedCaps);
+        const requestExecutable = async () => {
+          const route = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
+          if (!isExecutableQuote(route)) throw new Error("Squid did not return an executable route");
+          return route;
+        };
+        const executable = await requestExecutable();
         let saved: PendingSquidDeposit | null = null;
         const save = (next: PendingSquidDeposit) => {
           saved = savePendingSquidDeposit(window.localStorage, next);
           setPending(saved);
         };
+        const marker = (fundsBefore: bigint, routeQuote: SquidDepositQuote, startedAt: number) => ({
+          fundsBefore,
+          minimumDestinationAmount: routeQuote.minimumDestinationAmount,
+          owner: snapshot.owner,
+          quoteId: routeQuote.quoteId,
+          recipient: snapshot.recipient,
+          sourceAmount: request.sourceAmount,
+          sourceChainId: snapshot.sourceChainId,
+          sourceDecimals: reviewed.sourceDecimals,
+          sourceSymbol: reviewed.sourceSymbol,
+          sourceToken: snapshot.sourceToken,
+          startedAt,
+        });
+        const onBroadcast = ({
+          fundsBefore,
+          quote: routeQuote,
+          transactionHash: hash,
+        }: {
+          fundsBefore: bigint;
+          quote: SquidDepositQuote;
+          transactionHash: Hash;
+        }) => {
+          save({
+            ...marker(fundsBefore, routeQuote, saved?.startedAt ?? Date.now()),
+            executionStage: "swap-broadcast",
+            transactionHash: hash,
+          });
+          setTransactionHash(hash);
+        };
+        // The payer signs by explicit address, so it must stay connected to the site, not selected in the wallet.
+        const getCurrentOwner = async () => {
+          const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+          const connected = accounts.find((account) => account.toLowerCase() === snapshot.owner.toLowerCase());
+          return connected ? getAddress(connected) : undefined;
+        };
+        if (reviewed.usdcGas) {
+          const result = await usdcGas.execute({
+            assertCurrentContext: () => assertContext(snapshot),
+            destinationClient: destinationClient as SquidDepositDestinationClient,
+            getCurrentOwner,
+            onBroadcast,
+            onStage: setStageWithHash,
+            onSubmit: ({ fundsBefore, quote: routeQuote, userOperationHash }) =>
+              save({
+                ...marker(fundsBefore, routeQuote, Date.now()),
+                executionStage: "swap-requested",
+                userOperationHash,
+              }),
+            quote: executable,
+            refreshQuote: requestExecutable,
+            request,
+            reviewedQuote: reviewed.quote,
+            walletClient,
+          });
+          await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
+          return;
+        }
+        assertExecutableQuoteWithinReview(executable, reviewedCaps);
         const result = await executeSquidDeposit({
           approvalRequired: reviewed.approvalRequired,
           approvalResetRequired: reviewed.approvalResetRequired,
           assertCurrentContext: () => assertContext(snapshot),
           destinationClient: destinationClient as SquidDepositDestinationClient,
-          getCurrentOwner: async () => {
-            const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
-            return accounts[0] ? getAddress(accounts[0]) : undefined;
-          },
+          getCurrentOwner,
           maxNativeFee: reviewed.maxNativeFee,
           onSwapAttempt: (fundsBefore, routeQuote) => {
-            save({
-              executionStage: "swap-requested",
-              fundsBefore,
-              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
-              owner: snapshot.owner,
-              quoteId: routeQuote.quoteId,
-              recipient: snapshot.recipient,
-              sourceAmount: snapshot.sourceAmount,
-              sourceChainId: snapshot.sourceChainId,
-              sourceDecimals: reviewed.sourceDecimals,
-              sourceSymbol: reviewed.sourceSymbol,
-              sourceToken: snapshot.sourceToken,
-              startedAt: Date.now(),
-            });
+            save({ ...marker(fundsBefore, routeQuote, Date.now()), executionStage: "swap-requested" });
           },
-          onBroadcast: ({ fundsBefore, quote: routeQuote, transactionHash: hash }) => {
-            save({
-              executionStage: "swap-broadcast",
-              fundsBefore,
-              minimumDestinationAmount: routeQuote.minimumDestinationAmount,
-              owner: snapshot.owner,
-              quoteId: routeQuote.quoteId,
-              recipient: snapshot.recipient,
-              sourceAmount: snapshot.sourceAmount,
-              sourceChainId: snapshot.sourceChainId,
-              sourceDecimals: reviewed.sourceDecimals,
-              sourceSymbol: reviewed.sourceSymbol,
-              sourceToken: snapshot.sourceToken,
-              startedAt: saved?.startedAt ?? Date.now(),
-              transactionHash: hash,
-            });
-            setTransactionHash(hash);
-          },
+          onBroadcast,
           onStage: setStageWithHash,
           quote: executable,
           refreshQuote: async () => {
-            const fresh = await requestSquidDepositRoute(request, squid, { quoteOnly: false });
-            if (!isExecutableQuote(fresh)) throw new Error("Squid did not return an executable route");
+            const fresh = await requestExecutable();
             assertExecutableQuoteWithinReview(fresh, reviewedCaps);
             return fresh;
           },
@@ -841,8 +1042,7 @@ export function DirectSquidDepositDialog({
         await finish(snapshot.owner, snapshot.recipient, result.depositedAmount);
       });
     } catch (failure) {
-      const owner = reviewed?.context.owner ?? (payingWallet ? getAddress(payingWallet.address) : undefined);
-      await fail(failure, owner);
+      await fail(failure, reviewed?.context.owner ?? owner);
     } finally {
       isSubmitting.current = false;
     }
@@ -856,16 +1056,49 @@ export function DirectSquidDepositDialog({
     quote && sourceToken && networkFeeMaximum !== null
       ? getDepositRequiredNativeBalance(quote, sourceChainId, sourceToken.token, networkFeeMaximum)
       : null;
-  const canReview =
-    !!quote &&
-    !quoteQuery.isFetching &&
-    !(hasRecipientFil && !!quote.filGasTopUp) &&
+  const reviewBlocker = getSquidReviewBlocker({
+    amount,
+    balances: balancesQuery.isError ? undefined : balancesQuery.data,
+    balancesFailed: balancesQuery.isError,
+    feesFailed: budgetQuery.isError,
+    feesLoading: budgetQuery.isFetching,
+    filBalanceLoading: isFilGasTopUpEnabled === null && recipientFilQuery.isFetching,
+    isNativeSource: isSourceNative,
+    nativeSymbol: sourceChain?.nativeCurrency.symbol ?? "native token",
+    parsedAmount,
+    payerLabel: owner ? formatAddress(owner) : "The paying wallet",
+    quoteFailed: isFilGasTopUpEnabled !== null && !!quoteQuery.error,
+    quoteLoading: quoteQuery.isFetching,
+    // A refetching quote may be stale, and a FIL quote for a recipient that now holds FIL needs replacing.
+    quoteReady: !!quote && !quoteQuery.isFetching && !(hasRecipientFil && !!quote.filGasTopUp),
+    requiredNative,
+    sourceSymbol: sourceToken?.symbol,
+    usdcGas: usdcGas.check,
+  });
+  const canReview = reviewBlocker === null;
+  // The most a USDC-gas payer can deposit while still holding the fee reserve, offered when the amount leaves too little.
+  const usdcGasBalance =
+    usdcGas.check?.payer === "ready" && !balancesQuery.isError ? balancesQuery.data?.token : undefined;
+  const maxUsdcGasDeposit =
+    usdcGasBalance !== undefined &&
+    usdcGasBalance > FEE_RESERVE_USDC &&
     parsedAmount !== null &&
-    !balancesQuery.isError &&
-    !!balancesQuery.data &&
-    balancesQuery.data.token >= parsedAmount &&
-    requiredNative !== null &&
-    balancesQuery.data.native >= requiredNative;
+    parsedAmount + FEE_RESERVE_USDC > usdcGasBalance
+      ? usdcGasBalance - FEE_RESERVE_USDC
+      : null;
+  const payerOptions = payers.map((candidate) => {
+    const balance = sourceToken
+      ? getSourceTokenBalance(inventories[candidate.address.toLowerCase()], sourceToken.token)
+      : undefined;
+    return {
+      address: candidate.address,
+      balance:
+        sourceToken && balance != null
+          ? `${formatUnits(balance, sourceToken.decimals)} ${sourceToken.symbol}`
+          : undefined,
+      label: describePayer(candidate, recipient),
+    };
+  });
   const isBusy = stage !== null;
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
   const reviewedSourceChain = reviewed
@@ -881,7 +1114,8 @@ export function DirectSquidDepositDialog({
       }}
       open={open}
     >
-      <DialogContent className='sm:max-w-[520px]'>
+      {/* The form outgrows a short viewport, and the shared dialog is fixed in place, so this one scrolls. */}
+      <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[520px]'>
         <DialogHeader>
           <DialogTitle>{reviewed ? "Review Squid deposit" : "Pay with another token"}</DialogTitle>
           <DialogDescription>
@@ -906,11 +1140,7 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!stage && pending ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Pending Squid deposit'>
-              <p>
-                {pending.transactionHash
-                  ? "A Squid deposit is still in progress."
-                  : "Your wallet may have submitted this route. Check its activity before trying again."}
-              </p>
+              <p>{describePending(pending)}</p>
               {pending.transactionHash ? (
                 <div className='flex flex-wrap gap-3'>
                   {explorerUrl ? (
@@ -934,8 +1164,13 @@ export function DirectSquidDepositDialog({
                 </div>
               ) : null}
               <div className='flex gap-2'>
-                {pending.transactionHash ? (
-                  <Button disabled={isBusy} onClick={() => void resume()} type='button' variant='primary'>
+                {pending.transactionHash || pending.userOperationHash ? (
+                  <Button
+                    disabled={isBusy || connectedAccountsQuery.isPending}
+                    onClick={() => void resume()}
+                    type='button'
+                    variant='primary'
+                  >
                     Check again
                   </Button>
                 ) : null}
@@ -957,9 +1192,7 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!stage && !pending && reviewed && reviewedSourceChain ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Reviewed Squid deposit'>
-              {notice?.kind === "gas" ? (
-                <Alert title='Review the updated gas maximum' description={notice.message} />
-              ) : null}
+              {notice?.kind === "review" ? <Alert title={notice.title} description={notice.description} /> : null}
               <p>
                 <span className='text-muted-foreground'>Spend:</span> {reviewed.amount} {reviewed.sourceSymbol}
               </p>
@@ -981,19 +1214,31 @@ export function DirectSquidDepositDialog({
                   </ul>
                 )}
               </div>
-              <p>
-                <span className='text-muted-foreground'>Network gas maximum:</span>{" "}
-                {formatUnits(reviewed.maxNativeFee, reviewedSourceChain.nativeCurrency.decimals)}{" "}
-                {reviewedSourceChain.nativeCurrency.symbol}
-                <span className='mt-1 block text-xs text-muted-foreground'>
-                  {`Covers the ${listTransactionLabels(reviewed.transactions.map(({ kind }) => kind))} at current network fees plus ${NETWORK_FEE_HEADROOM_LABEL} headroom.`}
-                </span>
-              </p>
-              <p>
-                <span className='text-muted-foreground'>Maximum native required:</span>{" "}
-                {formatUnits(reviewed.requiredNative, reviewedSourceChain.nativeCurrency.decimals)}{" "}
-                {reviewedSourceChain.nativeCurrency.symbol}
-              </p>
+              {reviewed.usdcGas ? (
+                <p>
+                  <span className='text-muted-foreground'>Network fees:</span> up to{" "}
+                  {formatUnits(FEE_RESERVE_USDC, reviewed.sourceDecimals)} {reviewed.sourceSymbol}
+                  <span className='mt-1 block text-xs text-muted-foreground'>
+                    {`Base gas and Squid's bridge fee, paid from your ${reviewed.sourceSymbol} on top of the deposit. What is not used stays in your wallet.`}
+                  </span>
+                </p>
+              ) : (
+                <>
+                  <p>
+                    <span className='text-muted-foreground'>Network gas maximum:</span>{" "}
+                    {formatUnits(reviewed.maxNativeFee, reviewedSourceChain.nativeCurrency.decimals)}{" "}
+                    {reviewedSourceChain.nativeCurrency.symbol}
+                    <span className='mt-1 block text-xs text-muted-foreground'>
+                      {`Covers the ${listTransactionLabels(reviewed.transactions.map(({ kind }) => kind))} at current network fees plus ${NETWORK_FEE_HEADROOM_LABEL} headroom.`}
+                    </span>
+                  </p>
+                  <p>
+                    <span className='text-muted-foreground'>Maximum native required:</span>{" "}
+                    {formatUnits(reviewed.requiredNative, reviewedSourceChain.nativeCurrency.decimals)}{" "}
+                    {reviewedSourceChain.nativeCurrency.symbol}
+                  </p>
+                </>
+              )}
               <p>
                 <span className='text-muted-foreground'>Receive at least:</span>{" "}
                 {formatUnits(reviewed.quote.minimumDestinationAmount, 18)} USDFC
@@ -1017,30 +1262,15 @@ export function DirectSquidDepositDialog({
             <>
               {/* Gated on the live balance, so the notice cannot sit beside a FIL option that came back. */}
               {notice?.kind === "fil" && hasRecipientFil ? (
-                <Alert title='FIL top-up removed' description={notice.message} />
+                <Alert title={notice.title} description={notice.description} />
               ) : null}
-              <div className='grid gap-1'>
-                <Label htmlFor='direct-squid-wallet'>Paying wallet</Label>
-                <Select
-                  disabled={isBusy}
-                  onValueChange={(value) => {
-                    setPayingAddress(value);
-                    setReviewed(null);
-                  }}
-                  value={payingWallet?.address ?? ""}
-                >
-                  <SelectTrigger id='direct-squid-wallet' className='w-full'>
-                    <SelectValue placeholder='Select a wallet' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wallets.map((wallet) => (
-                      <SelectItem key={wallet.address} value={wallet.address}>
-                        {formatAddress(wallet.address)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <PayingAccountField
+                disabled={isBusy}
+                onConnectWallet={connectPayerWallet}
+                onValueChange={choosePayer}
+                options={payerOptions}
+                value={owner ?? ""}
+              />
               <div className='grid gap-1'>
                 <Label htmlFor='direct-squid-chain'>Source network</Label>
                 <Select
@@ -1049,6 +1279,8 @@ export function DirectSquidDepositDialog({
                     setSourceChainId(Number(value));
                     setSourceTokenAddress("");
                     initializedSelectionScope.current = "";
+                    // Balances differ per network, so the default payer is picked again unless the user chose one.
+                    if (!isPayerChosenByUser.current) setPayingAddress("");
                     setReviewed(null);
                   }}
                   value={String(sourceChainId)}
@@ -1116,6 +1348,11 @@ export function DirectSquidDepositDialog({
                     Balance: {formatUnits(balancesQuery.data.token, sourceToken.decimals)} {sourceToken.symbol}
                   </p>
                 ) : null}
+                {usdcGas.isEligible && sourceToken ? (
+                  <p className='text-xs text-muted-foreground'>
+                    {`Network fees are paid in ${sourceToken.symbol}: up to ${formatUnits(FEE_RESERVE_USDC, sourceToken.decimals)} ${sourceToken.symbol} more is held from your balance, and what is not used stays in your wallet.`}
+                  </p>
+                ) : null}
                 {balancesQuery.isError && sourceToken ? (
                   <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
                     <span>{sourceToken.symbol} balance is unavailable.</span>
@@ -1130,11 +1367,6 @@ export function DirectSquidDepositDialog({
                   </div>
                 ) : null}
               </div>
-              {isFilGasTopUpEnabled === null && recipientFilQuery.isFetching ? (
-                <p className='inline-flex items-center gap-2 text-muted-foreground'>
-                  <Loader2 className='h-4 w-4 animate-spin' /> Checking your FIL balance…
-                </p>
-              ) : null}
               {isFilGasTopUpEnabled !== null && !hasRecipientFil ? (
                 <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
                   <Checkbox
@@ -1166,11 +1398,6 @@ export function DirectSquidDepositDialog({
                   </div>
                 </div>
               ) : null}
-              {isFilGasTopUpEnabled !== null && quoteQuery.isFetching ? (
-                <p className='inline-flex items-center gap-2 text-muted-foreground'>
-                  <Loader2 className='h-4 w-4 animate-spin' /> Fetching a quote…
-                </p>
-              ) : null}
               {quote && rate && sourceToken && !quoteQuery.isFetching ? (
                 <div className='grid gap-1'>
                   <p>
@@ -1185,11 +1412,6 @@ export function DirectSquidDepositDialog({
                   {walletErrorMessage(quoteQuery.error, "Squid could not quote this amount.")}
                 </p>
               ) : null}
-              {quote && budgetQuery.isFetching && !budget ? (
-                <p className='inline-flex items-center gap-2 text-muted-foreground'>
-                  <Loader2 className='h-4 w-4 animate-spin' /> Estimating network fees…
-                </p>
-              ) : null}
               {budgetQuery.isError ? (
                 <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
                   <span className='break-words'>
@@ -1200,20 +1422,52 @@ export function DirectSquidDepositDialog({
                   </Button>
                 </div>
               ) : null}
-              {parsedAmount !== null &&
-              !balancesQuery.isError &&
-              balancesQuery.data &&
-              balancesQuery.data.token < parsedAmount ? (
-                <p className='text-destructive'>The paying wallet does not have enough {sourceToken?.symbol}.</p>
+              {usdcGas.error ? (
+                <div className='flex items-center justify-between gap-2 text-sm text-destructive' role='alert'>
+                  <span className='break-words'>{usdcGas.error}</span>
+                  <Button onClick={usdcGas.retry} size='compact' type='button' variant='tertiary'>
+                    Retry
+                  </Button>
+                </div>
               ) : null}
-              {requiredNative !== null &&
-              !balancesQuery.isError &&
-              balancesQuery.data &&
-              balancesQuery.data.native < requiredNative ? (
-                <p className='text-destructive'>
-                  The paying wallet does not have enough {sourceChain?.nativeCurrency.symbol ?? "native token"} for{" "}
-                  {isSourceNative ? "the payment and gas" : "source-network fees"}.
+              {reviewBlocker?.kind === "missing" || reviewBlocker?.kind === "waiting" ? (
+                <p className='inline-flex items-center gap-2 text-muted-foreground' id='direct-squid-review-blocker'>
+                  {reviewBlocker.kind === "waiting" ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
+                  {reviewBlocker.message}
                 </p>
+              ) : null}
+              {reviewBlocker?.kind === "funds" ? (
+                <section
+                  aria-label='Not enough funds'
+                  className='grid gap-2 rounded-md border border-destructive/40 p-3'
+                  id='direct-squid-review-blocker'
+                >
+                  <p className='text-destructive'>{reviewBlocker.message}</p>
+                  <p className='text-muted-foreground'>
+                    Pick another paying account, add or connect one with enough funds
+                    {onBuyWithCard ? ", or buy USDC with card" : ""}. Nothing has been sent, so you can close this and
+                    come back later.
+                  </p>
+                  {maxUsdcGasDeposit !== null && sourceToken ? (
+                    <div>
+                      <Button
+                        onClick={() => setAmount(formatUnits(maxUsdcGasDeposit, sourceToken.decimals))}
+                        size='compact'
+                        type='button'
+                        variant='tertiary'
+                      >
+                        {`Deposit ${formatUnits(maxUsdcGasDeposit, sourceToken.decimals)} ${sourceToken.symbol} instead`}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {onBuyWithCard ? (
+                    <div>
+                      <Button onClick={() => void buyWithCard()} size='compact' type='button' variant='tertiary'>
+                        Buy USDC with card
+                      </Button>
+                    </div>
+                  ) : null}
+                </section>
               ) : null}
             </>
           ) : null}
@@ -1221,6 +1475,11 @@ export function DirectSquidDepositDialog({
           {error ? (
             <p className='break-words text-destructive' role='alert'>
               {error}
+            </p>
+          ) : null}
+          {error && reviewed && !pending && !stage ? (
+            <p className='text-sm text-muted-foreground'>
+              No deposit is pending. Pay again to retry, or go back to get a new quote.
             </p>
           ) : null}
         </div>
@@ -1240,39 +1499,39 @@ export function DirectSquidDepositDialog({
           </Button>
           {!pending && !reviewed ? (
             <Button
+              aria-describedby={reviewBlocker ? "direct-squid-review-blocker" : undefined}
               disabled={!canReview}
               onClick={() => {
-                if (
-                  !quote ||
-                  !recipient ||
-                  !payingWallet ||
-                  !sourceToken ||
-                  parsedAmount === null ||
-                  !balancesQuery.data ||
-                  !budget ||
-                  requiredNative === null
-                )
+                if (!quote || !recipient || !owner || !sourceToken || parsedAmount === null || !balancesQuery.data)
                   return;
                 setNotice(null);
+                const review = {
+                  amount,
+                  context: {
+                    owner,
+                    recipient,
+                    sourceAmount: parsedAmount,
+                    sourceChainId,
+                    sourceToken: getAddress(sourceToken.token),
+                  },
+                  sourceDecimals: sourceToken.decimals,
+                  sourceSymbol: sourceToken.symbol,
+                };
+                if (usdcGas.check?.payer === "ready") {
+                  setReviewed({ ...review, quote, usdcGas: true });
+                  return;
+                }
+                if (!budget || requiredNative === null) return;
                 setReviewed({
                   approvalRequired: !isSourceNative && balancesQuery.data.allowance !== parsedAmount,
                   approvalResetRequired:
                     !isSourceNative &&
                     balancesQuery.data.allowance > 0n &&
                     balancesQuery.data.allowance !== parsedAmount,
-                  amount,
-                  context: {
-                    owner: getAddress(payingWallet.address),
-                    recipient,
-                    sourceAmount: parsedAmount,
-                    sourceChainId,
-                    sourceToken: getAddress(sourceToken.token),
-                  },
+                  ...review,
                   maxNativeFee: budget.maximum,
                   quote,
                   requiredNative,
-                  sourceDecimals: sourceToken.decimals,
-                  sourceSymbol: sourceToken.symbol,
                   transactions: budget.transactions,
                 });
               }}

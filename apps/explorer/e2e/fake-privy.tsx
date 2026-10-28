@@ -2,11 +2,12 @@
 // Exports only what the app and @privy-io/wagmi import. Real Privy runs via `test:e2e:real`.
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Hex, numberToHex, verifyMessage } from "viem";
+import { type Hex, keccak256, numberToHex, type SignedAuthorization, stringToHex, verifyMessage } from "viem";
 import { generatePrivateKey, type PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 
 // Real Privy's PRIVY_CONFIG.defaultChain is mainnet.
 const DEFAULT_CHAIN_ID = 314;
+const ETHEREUM_CHAIN_ID = 1;
 
 type Listener = (...args: unknown[]) => void;
 
@@ -19,13 +20,23 @@ function sentTransactions(): SentTransaction[] {
   return w.__fakePrivyTransactions;
 }
 
+type AuthorizationRequest = { contractAddress: Hex; chainId?: number; nonce?: number };
+
+// Every 7702 authorization the embedded wallet signed, readable from Playwright as `window.__fakePrivyAuthorizations`.
+function signedAuthorizations(): SignedAuthorization[] {
+  const w = window as typeof window & { __fakePrivyAuthorizations?: SignedAuthorization[] };
+  w.__fakePrivyAuthorizations ??= [];
+  return w.__fakePrivyAuthorizations;
+}
+
 type PendingSend = { tx: Record<string, unknown>; resolve: (hash: Hex) => void; reject: (error: unknown) => void };
 type PendingSignature = {
   sign: () => Promise<Hex>;
   resolve: (signature: Hex) => void;
   reject: (error: unknown) => void;
 };
-type PendingFund = { address: string; reject: (error: unknown) => void };
+type FundResult = { status: "submitted" };
+type PendingFund = { address: string; resolve: (result: FundResult) => void; reject: (error: unknown) => void };
 
 // The provider lives outside React, so a send reaches the dialog in PrivyProvider through a window event.
 function requestSend(tx: Record<string, unknown>): Promise<Hex> {
@@ -41,17 +52,32 @@ function requestSignature(sign: () => Promise<Hex>): Promise<Hex> {
   });
 }
 
-// An extension passes `prompt` to show its popup before each signature; the embedded wallet signs directly.
+// `connectedAccounts` lists what the site may sign with, the wallet's selected account first. An extension passes
+// `prompt` to show its popup before each signature; the embedded wallet signs directly.
+// `hasFilecoin: false` models a wallet without the Filecoin network: it starts elsewhere and refuses to switch to it.
 function createProvider(
-  currentAccount: () => PrivateKeyAccount,
+  connectedAccounts: () => PrivateKeyAccount[],
   prompt: (sign: () => Promise<Hex>) => Promise<Hex> = (sign) => sign(),
+  { hasFilecoin = true }: { hasFilecoin?: boolean } = {},
 ) {
-  let chainId = DEFAULT_CHAIN_ID;
+  // A wallet signs only as an account connected to the site.
+  const connectedAccount = (address: string | undefined) => {
+    const [selected] = connectedAccounts();
+    if (!address) return selected;
+    const account = connectedAccounts().find((candidate) => candidate.address.toLowerCase() === address.toLowerCase());
+    if (!account)
+      throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
+    return account;
+  };
+  let chainId = hasFilecoin ? DEFAULT_CHAIN_ID : ETHEREUM_CHAIN_ID;
   const listeners = new Map<string, Set<Listener>>();
   const emit = (event: string, ...args: unknown[]) => {
     for (const listener of listeners.get(event) ?? []) listener(...args);
   };
   const switchChain = (id: number) => {
+    if (!hasFilecoin && id === DEFAULT_CHAIN_ID) {
+      throw Object.assign(new Error(`Unrecognized chain ID ${numberToHex(id)}.`), { code: 4902 });
+    }
     chainId = id;
     emit("chainChanged", numberToHex(id));
   };
@@ -59,25 +85,24 @@ function createProvider(
     switch (method) {
       case "eth_accounts":
       case "eth_requestAccounts":
-        return [currentAccount().address];
+        return connectedAccounts().map((account) => account.address);
       case "eth_chainId":
         return numberToHex(chainId);
       case "wallet_switchEthereumChain":
         return switchChain(Number((params[0] as { chainId: Hex }).chainId));
       case "personal_sign": {
         const [message, address] = params as [Hex, string | undefined];
-        const account = currentAccount();
-        // A wallet signs only as an account connected to the site, and this fake connects one at a time.
-        if (address && address.toLowerCase() !== account.address.toLowerCase()) {
-          throw Object.assign(new Error("The requested account is not connected to this site."), { code: 4100 });
-        }
+        const account = connectedAccount(address);
         return prompt(() => account.signMessage({ message: { raw: message } }));
       }
       case "eth_signTypedData_v4":
-        return currentAccount().signTypedData(JSON.parse(params[1] as string));
+        return connectedAccount(params[0] as string).signTypedData(JSON.parse(params[1] as string));
       // Goes through the fake Privy transaction dialog; nothing is signed or broadcast.
-      case "eth_sendTransaction":
-        return requestSend(params[0] as Record<string, unknown>);
+      case "eth_sendTransaction": {
+        const tx = params[0] as Record<string, unknown>;
+        connectedAccount(typeof tx.from === "string" ? tx.from : undefined);
+        return requestSend(tx);
+      }
       default:
         throw Object.assign(new Error(`fake Privy wallet does not support ${method}`), { code: 4200 });
     }
@@ -95,9 +120,12 @@ function createProvider(
   };
 }
 
-function createEmbeddedWallet(): Wallet {
-  const account = privateKeyToAccount(generatePrivateKey());
-  const wallet = createProvider(() => account);
+// Its address is readable from Playwright as `window.__fakePrivyEmbeddedAccount` once the user has logged in.
+// Like Privy's, an email keeps its embedded wallet, so a reload and a new login find the same account.
+function createEmbeddedWallet(email: string): Wallet {
+  const account = privateKeyToAccount(keccak256(stringToHex(email)));
+  (window as typeof window & { __fakePrivyEmbeddedAccount?: Hex }).__fakePrivyEmbeddedAccount = account.address;
+  const wallet = createProvider(() => [account]);
   return {
     address: account.address,
     walletClientType: "privy",
@@ -108,15 +136,28 @@ function createEmbeddedWallet(): Wallet {
     meta: { id: "io.privy.wallet", name: "Privy Wallet", icon: undefined },
     getEthereumProvider: async () => wallet.provider,
     switchChain: wallet.switchChain,
+    // Real Privy fills a missing chain or nonce from the network; the fake asks the caller for both.
+    signAuthorization: async ({ contractAddress, chainId, nonce }) => {
+      if (chainId === undefined || nonce === undefined) throw new Error("fake Privy needs chainId and nonce");
+      const authorization = await account.signAuthorization({ contractAddress, chainId, nonce });
+      signedAuthorizations().push(authorization);
+      return authorization;
+    },
   };
 }
 
-// An extension like MetaMask: the site sees one selected account, which a test switches with the
-// "fake-privy:switch-account" window event.
+// An extension like MetaMask: the site sees the selected account, which a test switches with the
+// "fake-privy:switch-account" window event. "fake-privy:connect-other-account" connects the other account too,
+// as MetaMask's account picker does; Privy still reports only the selected one. Both addresses are then readable
+// from Playwright as `window.__fakePrivyExtensionAccounts`, selected first.
 function createExtension(disconnect: () => void) {
   const accounts = [privateKeyToAccount(generatePrivateKey()), privateKeyToAccount(generatePrivateKey())];
   let selected = 0;
-  const wallet = createProvider(() => accounts[selected], requestSignature);
+  let isOtherConnected = false;
+  const wallet = createProvider(
+    () => (isOtherConnected ? [accounts[selected], accounts[1 - selected]] : [accounts[selected]]),
+    requestSignature,
+  );
   const current = (): Wallet => ({
     address: accounts[selected].address,
     walletClientType: "metamask",
@@ -136,7 +177,33 @@ function createExtension(disconnect: () => void) {
   };
   // Like revoking the site's access in MetaMask: the provider reports no accounts.
   const revoke = () => wallet.emit("accountsChanged", []);
-  return { current, revoke, switchAccount };
+  const connectOtherAccount = () => {
+    isOtherConnected = true;
+    (window as typeof window & { __fakePrivyExtensionAccounts?: Hex[] }).__fakePrivyExtensionAccounts = [
+      accounts[selected].address,
+      accounts[1 - selected].address,
+    ];
+  };
+  return { connectOtherAccount, current, revoke, switchAccount };
+}
+
+// A second extension, like Rabby, with one account and no Filecoin network. Its address is readable from
+// Playwright as `window.__fakePrivyRabbyAccount` once "fake-privy:connect-rabby" connects it.
+function createRabby(): Wallet {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const wallet = createProvider(() => [account], requestSignature, { hasFilecoin: false });
+  (window as typeof window & { __fakePrivyRabbyAccount?: Hex }).__fakePrivyRabbyAccount = account.address;
+  return {
+    address: account.address,
+    walletClientType: "rabby",
+    connectorType: "injected",
+    get chainId() {
+      return wallet.chainId();
+    },
+    meta: { id: "io.rabby", name: "Rabby", icon: undefined },
+    getEthereumProvider: async () => wallet.provider,
+    switchChain: wallet.switchChain,
+  };
 }
 
 type Wallet = {
@@ -148,6 +215,8 @@ type Wallet = {
   getEthereumProvider: () => Promise<ReturnType<typeof createProvider>["provider"]>;
   switchChain: (id: number) => Promise<void>;
   disconnect?: () => void;
+  // Only the embedded wallet signs EIP-7702 authorizations, as with real Privy.
+  signAuthorization?: (request: AuthorizationRequest) => Promise<SignedAuthorization>;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
 type LoginComplete = (event: { user: User; isNewUser: boolean; loginAccount: { type: string } }) => void;
@@ -163,7 +232,7 @@ type FakePrivy = {
   connectWallet: () => void;
   onConnect: Set<ConnectSuccess>;
   loginWithWallet: (address: string, walletClientType: string) => void;
-  fund: (address: string) => Promise<never>;
+  fund: (address: string) => Promise<FundResult>;
 };
 
 const FakePrivyContext = createContext<FakePrivy | null>(null);
@@ -285,6 +354,7 @@ function SignatureModal({ pending, onClose }: { pending: PendingSignature; onClo
 }
 
 // Privy's card purchase: it shows where the USDC goes, and closing it rejects with "User exited flow" as Privy does.
+// Done resolves "submitted", as Privy does once the provider's window closes, whether or not anything was paid.
 function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => void }) {
   return (
     <div role='dialog' aria-label='buy usdc' id='privy-dialog'>
@@ -300,6 +370,15 @@ function FundModal({ pending, onClose }: { pending: PendingFund; onClose: () => 
       </button>
       <h3>Buy USDC</h3>
       <p>Destination: {pending.address}</p>
+      <button
+        type='button'
+        onClick={() => {
+          pending.resolve({ status: "submitted" });
+          onClose();
+        }}
+      >
+        Done
+      </button>
     </div>
   );
 }
@@ -362,6 +441,20 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("fake-privy:revoke-extension", onRevoke);
   }, [extension]);
   useEffect(() => {
+    const onConnectOther = () => extension.connectOtherAccount();
+    window.addEventListener("fake-privy:connect-other-account", onConnectOther);
+    return () => window.removeEventListener("fake-privy:connect-other-account", onConnectOther);
+  }, [extension]);
+  useEffect(() => {
+    // Created outside the updater, which StrictMode runs twice.
+    const onConnectRabby = () => {
+      const rabby = createRabby();
+      setWallets((current) => [...current, rabby]);
+    };
+    window.addEventListener("fake-privy:connect-rabby", onConnectRabby);
+    return () => window.removeEventListener("fake-privy:connect-rabby", onConnectRabby);
+  }, []);
+  useEffect(() => {
     // Connects the extension from outside the app's own buttons, as Privy's wallet list or a pay-with flow would.
     const onConnectExtension = () => {
       const wallet = extension.current();
@@ -380,7 +473,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     for (const listener of onLogin) listener({ user: newUser, isNewUser: true, loginAccount: emailAccount });
     // createOnLogin: "users-without-wallets" provisions the embedded wallet after the user exists.
     setTimeout(() => {
-      const wallet = createEmbeddedWallet();
+      const wallet = createEmbeddedWallet(email);
       const walletAccount = { type: "wallet", address: wallet.address, walletClientType: "privy" };
       setUser({ ...newUser, wallet: walletAccount, linkedAccounts: [emailAccount, walletAccount] });
       setWallets([wallet]);
@@ -404,7 +497,7 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
       const walletAccount = { type: "wallet", address, walletClientType };
       setUser({ id: `did:privy:fake-${address}`, wallet: walletAccount, linkedAccounts: [walletAccount] });
     },
-    fund: (address) => new Promise((_resolve, reject) => setPendingFund({ address, reject })),
+    fund: (address) => new Promise((resolve, reject) => setPendingFund({ address, resolve, reject })),
     // Connects without a modal, as if the user picked the extension in Privy's wallet list.
     connectWallet: () => {
       const wallet = extension.current();
@@ -498,4 +591,17 @@ export function useLoginWithSiwe() {
 export function useFiatOnramp() {
   const { fund } = useFakePrivy();
   return { fund: (options: { destination: { address: string } }) => fund(options.destination.address) };
+}
+// Signs without a prompt, as Privy does for its embedded wallet.
+export function useSign7702Authorization() {
+  const { wallets } = useFakePrivy();
+  return {
+    signAuthorization: async (request: AuthorizationRequest, options: { address: string }) => {
+      const wallet = wallets.find(
+        (candidate) => candidate.signAuthorization && candidate.address.toLowerCase() === options.address.toLowerCase(),
+      );
+      if (!wallet?.signAuthorization) throw new Error("No embedded wallet can sign this 7702 authorization.");
+      return wallet.signAuthorization(request);
+    },
+  };
 }

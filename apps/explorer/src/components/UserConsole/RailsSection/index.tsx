@@ -1,13 +1,7 @@
 import type { Rail } from "@filecoin-pay/types";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@filecoin-pay/ui/components/pagination";
 import { useCallback, useMemo, useState } from "react";
+import type { Address } from "viem";
+import { ListPagination } from "@/components/shared/ListPagination";
 import { getChain } from "@/constants/chains";
 import { ACCOUNT_SERVICE_RAILS_PAGE_SIZE, useAccountServiceRails } from "@/hooks/useAccountServices";
 import { useRailSettlements } from "@/hooks/useRailSettlements";
@@ -26,62 +20,14 @@ import { SettleRailProvider } from "./context/SettleRailContext";
 import { parseServiceRailsSearch } from "./rails-filter";
 import type { RailTableRow } from "./types";
 
-/**
- * Rails page two ways, and only the total distinguishes them. The unfiltered
- * list knows how many pages there are, because the pair carries a rail count.
- * A filtered list has no count, so it can only say whether another page came
- * back and must step rather than number.
- */
-type RailsPaginationProps = {
-  page: number;
-  onPageChange: (page: number) => void;
-} & ({ kind: "counted"; totalPages: number } | { kind: "stepped"; hasMore: boolean });
-
-/** How many numbered links to offer before falling back to stepping. */
-const MAX_PAGE_LINKS = 5;
-
-const stepClass = (isDisabled: boolean) => (isDisabled ? "pointer-events-none opacity-50" : "cursor-pointer");
-
-function RailsPagination(props: RailsPaginationProps) {
-  const { page, onPageChange } = props;
-
-  const isFirst = page === 1;
-  const isLast = props.kind === "counted" ? page >= props.totalPages : !props.hasMore;
-  const nextPage = props.kind === "counted" ? Math.min(props.totalPages, page + 1) : page + 1;
-
-  return (
-    <Pagination>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious onClick={() => onPageChange(Math.max(1, page - 1))} className={stepClass(isFirst)} />
-        </PaginationItem>
-
-        {props.kind === "counted"
-          ? Array.from({ length: Math.min(MAX_PAGE_LINKS, props.totalPages) }, (_, index) => index + 1).map(
-              (pageNumber) => (
-                <PaginationItem key={pageNumber}>
-                  <PaginationLink
-                    onClick={() => onPageChange(pageNumber)}
-                    isActive={page === pageNumber}
-                    className='cursor-pointer'
-                  >
-                    {pageNumber}
-                  </PaginationLink>
-                </PaginationItem>
-              ),
-            )
-          : null}
-
-        <PaginationItem>
-          <PaginationNext onClick={() => onPageChange(nextPage)} className={stepClass(isLast)} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  );
-}
-
 /** Stable identity so the table memo survives a render with no data yet. */
 const NO_RAILS: Rail[] = [];
+
+/**
+ * The rail being settled and the epoch read when its dialog opened; null until a rail is first chosen. Closing keeps
+ * the rail so the dialog stays mounted for its leave transition.
+ */
+type SettleSelection = { rail: Rail; currentEpoch: bigint | undefined; open: boolean } | null;
 
 interface RailsSectionProps {
   /** The connected payer. Every rail listed here has this account as its payer. */
@@ -90,7 +36,7 @@ interface RailsSectionProps {
   operatorAddress: string;
   /** `AccountOperator.totalRails` for this pair — not the account-wide count. */
   totalRails: bigint;
-  userAddress: string;
+  userAddress: Address;
 }
 
 export const RailsSection: React.FC<RailsSectionProps> = ({
@@ -102,11 +48,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
 }) => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [settleDialogOpen, setSettleDialogOpen] = useState(false);
-  const [selectedRail, setSelectedRail] = useState<Rail | null>(null);
-  const [currentEpoch, setCurrentEpoch] = useState<bigint>();
+  const [settleSelection, setSettleSelection] = useState<SettleSelection>(null);
 
-  const chain = useMemo(() => getChain(network), [network]);
+  const chain = getChain(network);
 
   const { filter, summary } = useMemo(() => parseServiceRailsSearch(searchQuery), [searchQuery]);
   const isFiltering = Boolean(summary);
@@ -116,19 +60,16 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
   });
   const rails = data?.rails ?? NO_RAILS;
 
-  const { settleRail, isSettling, settlements } = useRailSettlements({
-    account: userAddress as `0x${string}`,
+  const { settleRail, isSettling } = useRailSettlements({
+    account: userAddress,
     contractAddress: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
-    chainName: chain.name,
     explorerUrl: chain.blockExplorers?.default.url,
   });
 
-  const handleSettle = useCallback((rail: Rail, epoch: bigint | undefined) => {
-    setSelectedRail(rail);
-    setCurrentEpoch(epoch);
-    setSettleDialogOpen(true);
+  const handleSettle = useCallback((rail: Rail, currentEpoch: bigint | undefined) => {
+    setSettleSelection({ rail, currentEpoch, open: true });
   }, []);
 
   const handleSearch = (query: string) => {
@@ -140,9 +81,9 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     () =>
       rails.map((rail) => ({
         ...rail,
-        isSettling: settlements.has(rail.railId.toString()),
+        isSettling: isSettling(rail.railId.toString()),
       })),
-    [rails, settlements],
+    [rails, isSettling],
   );
 
   const totalPages = Math.max(1, Math.ceil(Number(totalRails) / ACCOUNT_SERVICE_RAILS_PAGE_SIZE));
@@ -182,14 +123,14 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
         return null;
       }
 
-      return <RailsPagination kind='stepped' page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />;
+      return <ListPagination kind='stepped' page={page} hasMore={Boolean(data?.hasMore)} onPageChange={setPage} />;
     }
 
     if (totalPages <= 1) {
       return null;
     }
 
-    return <RailsPagination kind='counted' page={page} totalPages={totalPages} onPageChange={setPage} />;
+    return <ListPagination kind='counted' page={page} totalPages={totalPages} onPageChange={setPage} />;
   }
 
   return (
@@ -200,14 +141,15 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
         {renderResults()}
       </RailsSectionLayout>
 
-      {selectedRail && (
+      {settleSelection && (
         <SettleRailDialog
-          rail={selectedRail}
+          chainId={chain.id}
+          rail={settleSelection.rail}
           userAddress={userAddress}
-          currentEpoch={currentEpoch}
-          open={settleDialogOpen}
-          onOpenChange={setSettleDialogOpen}
-          isSettling={isSettling(selectedRail.railId.toString())}
+          currentEpoch={settleSelection.currentEpoch}
+          open={settleSelection.open}
+          onOpenChange={(open) => setSettleSelection({ ...settleSelection, open })}
+          isSettling={isSettling(settleSelection.rail.railId.toString())}
           settleRail={settleRail}
         />
       )}

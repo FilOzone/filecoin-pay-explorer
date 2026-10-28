@@ -1,209 +1,145 @@
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
+// @vitest-environment jsdom
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { TransactionReceipt } from "viem";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRailSettlements } from "./useRailSettlements";
 
-const { invalidateAccountQueries, receiptState, toast, waitForTransactionReceipt, writeContractAsync } = vi.hoisted(
-  () => {
-    const receiptState = {
-      data: undefined as TransactionReceipt | undefined,
-      error: undefined as Error | undefined,
-      isSuccess: false,
-      isError: false,
-    };
-    return {
-      invalidateAccountQueries: vi.fn(async () => undefined),
-      receiptState,
-      toast: { dismiss: vi.fn(), error: vi.fn(), loading: vi.fn(), success: vi.fn() },
-      waitForTransactionReceipt: vi.fn(() => receiptState),
-      writeContractAsync: vi.fn(async () => "0x3333333333333333333333333333333333333333333333333333333333333333"),
-    };
-  },
-);
+const ACCOUNT = "0x1111111111111111111111111111111111111111";
+const CONTRACT = "0x2222222222222222222222222222222222222222";
 
-vi.mock("sonner", () => ({ toast }));
-vi.mock("@/utils/query-invalidation", () => ({ invalidateAccountQueries }));
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
+const mocks = vi.hoisted(() => ({
+  toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() },
+  invalidateAccountQueries: vi.fn(async () => undefined),
+  writeContractAsync: vi.fn(),
+  wallet: { address: "0x1111111111111111111111111111111111111111", chainId: 314 },
+  receipts: new Map<string, (receipt: TransactionReceipt) => void>(),
 }));
+
+vi.mock("sonner", () => ({ toast: mocks.toast }));
+vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
+vi.mock("@/utils/query-invalidation", () => ({ invalidateAccountQueries: mocks.invalidateAccountQueries }));
 vi.mock("wagmi", () => ({
-  useWaitForTransactionReceipt: waitForTransactionReceipt,
-  useWriteContract: () => ({ writeContractAsync }),
+  useConfig: () => ({ chains: [{ id: 314, name: "Filecoin - Mainnet" }] }),
+  useWriteContract: () => ({ writeContractAsync: mocks.writeContractAsync, isPending: false }),
+  usePublicClient: () => ({
+    waitForTransactionReceipt: ({ hash }: { hash: string }) =>
+      new Promise<TransactionReceipt>((resolve) => mocks.receipts.set(hash, resolve)),
+  }),
 }));
+vi.mock("wagmi/actions", () => ({ getAccount: () => mocks.wallet }));
 
-beforeEach(() => {
-  receiptState.data = undefined;
-  receiptState.error = undefined;
-  receiptState.isSuccess = false;
-  receiptState.isError = false;
-  invalidateAccountQueries.mockClear();
-  toast.error.mockClear();
-  toast.success.mockClear();
-});
-
-const FAILURE_MESSAGES = {
-  // @wagmi/core 3 throws on a reverted receipt, so a real revert arrives as an error without data.
-  "wagmi-revert": "Execution reverted with reason: rail already settled to epoch.",
-  // A success result carrying a reverted receipt, which the status check guards against.
-  reverted: "Settlement transaction reverted",
-  // A failed receipt poll keeps the earlier data.
-  "rpc-error": "Receipt RPC failed",
-} as const;
-
-async function renderSettlementResult(resultType: "success" | keyof typeof FAILURE_MESSAGES) {
-  const onSettlementSuccess = vi.fn();
-  const onSettlementError = vi.fn();
-  let result: ReturnType<typeof useRailSettlements> | undefined;
-  let renderer!: ReactTestRenderer;
-  function Harness() {
-    result = useRailSettlements({
-      account: "0x1111111111111111111111111111111111111111",
+const mount = () =>
+  renderHook(() =>
+    useRailSettlements({
+      account: ACCOUNT,
       abi: [],
       chainId: 314,
-      contractAddress: "0x2222222222222222222222222222222222222222",
-      onSettlementError,
-      onSettlementSuccess,
-    });
-    return null;
-  }
-  act(() => {
-    renderer = create(<Harness />);
-  });
-  await act(async () => {
-    await result?.settleRail({
-      railId: 1n,
-      untilEpoch: 2n,
-      settlementAmount: 3n,
-      tokenSymbol: "USDFC",
-      tokenDecimals: 18,
-    });
-  });
-  const receipt = {
-    from: "0x1111111111111111111111111111111111111111",
-    status: resultType === "reverted" ? "reverted" : "success",
-  } as unknown as TransactionReceipt;
-  receiptState.data = resultType === "wagmi-revert" ? undefined : receipt;
-  receiptState.isSuccess = resultType === "success" || resultType === "reverted";
-  receiptState.isError = !receiptState.isSuccess;
-  receiptState.error =
-    resultType === "wagmi-revert" || resultType === "rpc-error" ? new Error(FAILURE_MESSAGES[resultType]) : undefined;
-  await act(async () => {
-    renderer.update(<Harness />);
-  });
-  // The settled transaction leaves the queue, so a later render cannot report it again.
-  await act(async () => {
-    renderer.update(<Harness />);
-  });
-
-  expect(result?.settlements.size).toBe(0);
-  expect(waitForTransactionReceipt).toHaveBeenLastCalledWith({
-    chainId: 314,
-    hash: undefined,
-    query: { enabled: false },
-  });
-  return { onSettlementError, onSettlementSuccess, receipt };
-}
-
-it("handles a successful settlement once", async () => {
-  const { onSettlementError, onSettlementSuccess, receipt } = await renderSettlementResult("success");
-  expect(toast.success).toHaveBeenCalledOnce();
-  expect(onSettlementSuccess).toHaveBeenCalledOnce();
-  expect(onSettlementSuccess).toHaveBeenCalledWith("1", receipt);
-  expect(invalidateAccountQueries).toHaveBeenCalledOnce();
-  expect(onSettlementError).not.toHaveBeenCalled();
-  expect(toast.error).not.toHaveBeenCalled();
-});
-
-it.each([
-  "wagmi-revert",
-  "reverted",
-  "rpc-error",
-] as const)("handles a %s settlement failure once", async (resultType) => {
-  const { onSettlementError, onSettlementSuccess } = await renderSettlementResult(resultType);
-  expect(toast.error).toHaveBeenCalledOnce();
-  expect(onSettlementError).toHaveBeenCalledOnce();
-  expect(onSettlementError).toHaveBeenCalledWith(
-    "1",
-    expect.objectContaining({ message: FAILURE_MESSAGES[resultType] }),
+      contractAddress: CONTRACT,
+    }),
   );
-  expect(onSettlementSuccess).not.toHaveBeenCalled();
-  expect(toast.success).not.toHaveBeenCalled();
-  expect(invalidateAccountQueries).not.toHaveBeenCalled();
+
+const params = (railId: bigint) => ({
+  railId,
+  untilEpoch: 2n,
+  settlementAmount: 3n,
+  tokenSymbol: "USDFC",
+  tokenDecimals: 18,
 });
 
-it("pins settlement writes and receipts to the displayed Filecoin chain", async () => {
-  let result: ReturnType<typeof useRailSettlements> | undefined;
+const land = (hash: string, status: "success" | "reverted") =>
+  act(async () =>
+    mocks.receipts.get(hash)?.({ from: ACCOUNT, transactionHash: hash, status } as unknown as TransactionReceipt),
+  );
 
-  function Harness() {
-    result = useRailSettlements({
-      account: "0x1111111111111111111111111111111111111111",
+afterEach(cleanup);
+
+describe("useRailSettlements", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.wallet.chainId = 314;
+    mocks.receipts.clear();
+    mocks.invalidateAccountQueries.mockClear();
+    mocks.toast.success.mockClear();
+    mocks.toast.error.mockClear();
+    // The pending title names the rail, so it doubles as a recognisable toast id.
+    mocks.toast.loading.mockReset().mockImplementation((title: string) => title);
+    mocks.writeContractAsync.mockReset().mockImplementation(async ({ args }) => `0x${args[0]}`);
+  });
+
+  it("writes settleRail on the displayed Filecoin chain for the connected account", async () => {
+    const { result } = mount();
+    await act(() => result.current.settleRail(params(1n)));
+
+    expect(mocks.writeContractAsync).toHaveBeenCalledWith({
+      account: ACCOUNT,
+      address: CONTRACT,
       abi: [],
       chainId: 314,
-      contractAddress: "0x2222222222222222222222222222222222222222",
-    });
-    return null;
-  }
-
-  act(() => {
-    create(<Harness />);
-  });
-
-  expect(waitForTransactionReceipt).toHaveBeenCalledWith({
-    chainId: 314,
-    hash: undefined,
-    query: { enabled: false },
-  });
-
-  await act(async () => {
-    await result?.settleRail({
-      railId: 1n,
-      untilEpoch: 2n,
-      settlementAmount: 3n,
-      tokenSymbol: "USDFC",
-      tokenDecimals: 18,
+      functionName: "settleRail",
+      args: [1n, 2n],
+      value: undefined,
     });
   });
 
-  expect(writeContractAsync).toHaveBeenCalledWith({
-    account: "0x1111111111111111111111111111111111111111",
-    address: "0x2222222222222222222222222222222222222222",
-    abi: [],
-    chainId: 314,
-    functionName: "settleRail",
-    args: [1n, 2n],
-  });
-});
+  it("marks a rail as settling while its wallet signature is pending", async () => {
+    let submit!: (hash: string) => void;
+    mocks.writeContractAsync.mockReturnValue(new Promise((resolve) => (submit = resolve)));
+    const { result } = mount();
 
-it("tells the user to switch networks when the wallet is on another chain", async () => {
-  const mismatch = Object.assign(new Error("The current chain of the wallet (id: 8453) does not match"), {
-    name: "ChainMismatchError",
-  });
-  writeContractAsync.mockRejectedValueOnce(Object.assign(new Error("Contract write failed"), { cause: mismatch }));
-  let result: ReturnType<typeof useRailSettlements> | undefined;
-
-  function Harness() {
-    result = useRailSettlements({
-      account: "0x1111111111111111111111111111111111111111",
-      abi: [],
-      chainId: 314,
-      chainName: "Filecoin Mainnet",
-      contractAddress: "0x2222222222222222222222222222222222222222",
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.settleRail(params(1n));
     });
-    return null;
-  }
+    expect(result.current.isSettling("1")).toBe(true);
 
-  act(() => {
-    create(<Harness />);
+    await act(async () => {
+      submit("0x1");
+      await pending;
+    });
+    expect(result.current.isSettling("1")).toBe(true);
   });
 
-  await act(async () => {
-    await expect(
-      result?.settleRail({ railId: 1n, untilEpoch: 2n, settlementAmount: 3n, tokenSymbol: "USDFC", tokenDecimals: 18 }),
-    ).rejects.toThrow("Contract write failed");
+  // Regression: receipts were watched one at a time, so a second settlement's toast waited on the first's receipt.
+  it("resolves each of two concurrent settlements on its own receipt", async () => {
+    const { result } = mount();
+    await act(() => result.current.settleRail(params(1n)));
+    await act(() => result.current.settleRail(params(2n)));
+
+    await land("0x2", "success");
+    expect(mocks.toast.success).toHaveBeenCalledTimes(1);
+    expect(mocks.toast.success.mock.calls[0][1]).toMatchObject({ id: "Settling Rail #2" });
+    expect([result.current.isSettling("1"), result.current.isSettling("2")]).toEqual([true, false]);
+
+    await land("0x1", "success");
+    expect(mocks.toast.success.mock.calls[1][1]).toMatchObject({ id: "Settling Rail #1" });
+    expect([result.current.isSettling("1"), result.current.isSettling("2")]).toEqual([false, false]);
+    expect(mocks.invalidateAccountQueries).toHaveBeenCalledTimes(2);
   });
 
-  expect(toast.error).toHaveBeenLastCalledWith("Settlement Rejected", {
-    description: "Your wallet is on another network. Switch it to Filecoin Mainnet and try again.",
-    duration: 4000,
+  it("reports a reverted settlement as failed and never as settled", async () => {
+    const { result } = mount();
+    await act(() => result.current.settleRail(params(1n)));
+
+    await land("0x1", "reverted");
+    expect(mocks.toast.success).not.toHaveBeenCalled();
+    expect(mocks.toast.error).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateAccountQueries).not.toHaveBeenCalled();
+    expect(result.current.isSettling("1")).toBe(false);
+  });
+
+  it("tells the user to switch networks when the wallet is on another chain", async () => {
+    mocks.wallet.chainId = 8453;
+    const { result } = mount();
+
+    await act(async () => {
+      await expect(result.current.settleRail(params(1n))).rejects.toThrow();
+    });
+
+    expect(mocks.writeContractAsync).not.toHaveBeenCalled();
+    expect(mocks.toast.error).toHaveBeenLastCalledWith("Transaction Rejected", {
+      description: "Your wallet is on another network. Switch it to Filecoin - Mainnet and try again.",
+      duration: 4000,
+    });
+    expect(result.current.isSettling("1")).toBe(false);
   });
 });

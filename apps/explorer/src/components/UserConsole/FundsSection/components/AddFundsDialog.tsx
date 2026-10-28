@@ -13,9 +13,13 @@ import type { ReactNode } from "react";
 export type AddFundsMethod = "card" | "deposit" | "squid";
 
 type AddFundsDialogProps = {
+  cardFirst?: boolean;
   cardLabel?: string;
   cardStatus?: string | null;
+  /** Privy's sign-in or purchase window is open over the picker. */
   isBusy?: boolean;
+  /** A balance check for a card purchase is running; only the card waits for it. */
+  isCardChecking?: boolean;
   /** Present while a card purchase is still being tracked; discards it after a confirmation. */
   onCardStartOver?: () => void;
   onOpenChange: (open: boolean) => void;
@@ -92,9 +96,11 @@ function MethodCard({
 }
 
 export function AddFundsDialog({
+  cardFirst = false,
   cardLabel = "Buy USDC with card",
   cardStatus,
   isBusy = false,
+  isCardChecking = false,
   onCardStartOver,
   onOpenChange,
   onSelect,
@@ -102,12 +108,42 @@ export function AddFundsDialog({
   squidAvailable,
   squidDisabledReason,
 }: AddFundsDialogProps) {
-  // While the purchase is busy, Escape, an outside click or the close button must not dismiss the
-  // picker, which carries the purchase status and Start over.
+  // While Privy's window is open, Escape, an outside click or the close button must not dismiss the
+  // picker, which shows how the purchase ended and offers Start over.
   const handleOpenChange = (next: boolean) => {
     if (!next && isBusy) return;
     onOpenChange(next);
   };
+  const cardMethod = (
+    <MethodCard
+      action={
+        onCardStartOver ? (
+          // `relative` lifts the control above the stretched button so it stays clickable.
+          <button
+            className='relative mt-1 text-xs underline underline-offset-2'
+            disabled={isBusy}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Discard the pending card purchase? USDC that still arrives stays in the wallet on Base.",
+                )
+              )
+                onCardStartOver();
+            }}
+            type='button'
+          >
+            Start over
+          </button>
+        ) : null
+      }
+      description='Buy USDC on Base, then swap and deposit it into Filecoin Pay. Requires identity verification.'
+      disabled={isBusy || isCardChecking}
+      icon={CreditCard}
+      label={cardLabel}
+      onSelect={() => onSelect("card")}
+      status={cardStatus}
+    />
+  );
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-[520px]'>
@@ -116,41 +152,7 @@ export function AddFundsDialog({
           <DialogDescription>Choose how you want to fund your Filecoin Pay account.</DialogDescription>
         </DialogHeader>
         <div className='grid gap-3'>
-          <MethodCard
-            action={
-              onCardStartOver ? (
-                // `relative` lifts the control above the stretched button, like the Squid link below.
-                <button
-                  className='relative mt-1 text-xs underline underline-offset-2'
-                  disabled={isBusy}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Discard the pending card purchase? USDC that still arrives stays in the wallet on Base.",
-                      )
-                    )
-                      onCardStartOver();
-                  }}
-                  type='button'
-                >
-                  Start over
-                </button>
-              ) : null
-            }
-            description='Buy USDC on Base, then swap and deposit it into Filecoin Pay.'
-            disabled={isBusy}
-            icon={CreditCard}
-            label={cardLabel}
-            onSelect={() => onSelect("card")}
-            status={cardStatus}
-          />
-          <MethodCard
-            description='Already hold USDFC or another token on Filecoin? Deposit it directly.'
-            disabled={isBusy}
-            icon={Wallet}
-            label='Deposit token'
-            onSelect={() => onSelect("deposit")}
-          />
+          {cardFirst ? cardMethod : null}
           <MethodCard
             description={
               squidAvailable ? (
@@ -177,6 +179,14 @@ export function AddFundsDialog({
             label='Swap to USDFC'
             onSelect={() => onSelect("squid")}
             unavailableBadge='Testnet'
+          />
+          {cardFirst ? null : cardMethod}
+          <MethodCard
+            description='Already hold USDFC or another token on Filecoin? Deposit it directly.'
+            disabled={isBusy}
+            icon={Wallet}
+            label='Deposit token'
+            onSelect={() => onSelect("deposit")}
           />
         </div>
       </DialogContent>

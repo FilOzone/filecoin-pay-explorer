@@ -16,9 +16,12 @@ import {
   NETWORK_FEE_REVIEW_HEADROOM_BPS,
   parseSquidDepositRoute,
   planFilGasTopUp,
+  quoterV2Abi,
   readSourceFeesPerGas,
   requestSquidDepositRoute,
   type SquidDepositFeeClient,
+  SquidQuoteChangedError,
+  SUSHI_V3_QUOTER_ADDRESS,
   SUSHI_V3_SWAP_ROUTER_ADDRESS,
   squidDepositAbi,
   sushiSwapRouterAbi,
@@ -198,22 +201,25 @@ describe("buildDepositPostHook", () => {
 });
 
 describe("planFilGasTopUp", () => {
-  const filecoinSwap = { wfil: 1_000_000_000_000_000_000n, usdfc: 2_000_000_000_000_000_000n };
+  it("prices 0.05 FIL from the Sushi WFIL/USDFC pool with headroom", async () => {
+    const simulateContract = vi.fn().mockResolvedValue({ result: [100_000_000_000_000_000n, 0n, 0, 0n] });
+    const client = { simulateContract } as unknown as Parameters<typeof planFilGasTopUp>[0];
 
-  it("prices enough USDFC to guarantee 0.05 FIL with headroom", () => {
-    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 19n }, now)).toEqual(topUp);
-    expect(FIL_GAS_TOP_UP_AMOUNT).toBe(50_000_000_000_000_000n);
-  });
-
-  it("fails closed when the swap cannot be priced or would exceed a tenth of the deposit", () => {
-    expect(planFilGasTopUp({ minimumDestinationAmount: 10n ** 19n }, now)).toBeUndefined();
-    expect(
-      planFilGasTopUp({ filecoinSwap: { wfil: 0n, usdfc: 1n }, minimumDestinationAmount: 10n ** 19n }, now),
-    ).toBeUndefined();
-    expect(
-      planFilGasTopUp({ filecoinSwap: { wfil: 1n, usdfc: 0n }, minimumDestinationAmount: 10n ** 19n }, now),
-    ).toBeUndefined();
-    expect(planFilGasTopUp({ filecoinSwap, minimumDestinationAmount: 10n ** 18n }, now)).toBeUndefined();
+    await expect(planFilGasTopUp(client, USDFC, now)).resolves.toEqual(topUp);
+    expect(simulateContract).toHaveBeenCalledWith({
+      address: SUSHI_V3_QUOTER_ADDRESS,
+      abi: quoterV2Abi,
+      functionName: "quoteExactOutputSingle",
+      args: [
+        {
+          tokenIn: USDFC,
+          tokenOut: WFIL_ADDRESS,
+          amount: FIL_GAS_TOP_UP_AMOUNT,
+          fee: WFIL_USDFC_POOL_FEE,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    });
   });
 });
 
@@ -556,42 +562,28 @@ describe("parseSquidDepositRoute", () => {
     expect(isExecutableQuote(quote)).toBe(false);
   });
 
-  it("prices the Filecoin swap leg and reports the USDFC left after a FIL top-up", () => {
+  it("reports the USDFC left after a FIL top-up", () => {
     const topUpRequest = { ...request, filGasTopUp: topUp };
     const quote = parseSquidDepositRoute(
-      fakeRoute({
-        params: { postHook: buildDepositPostHook(request, topUp) },
-        estimate: {
-          actions: [
-            {
-              type: "swap",
-              toChain: "314",
-              fromAmount: "1000000000000000000",
-              toAmount: "2000000000000000000",
-              fromToken: { address: WFIL_ADDRESS },
-              toToken: { address: USDFC },
-            },
-            { type: "custom", fromChain: "314", toChain: "314", provider: "Filecoin Pay" },
-          ],
-        },
-      }),
+      fakeRoute({ params: { postHook: buildDepositPostHook(request, topUp) } }),
       topUpRequest,
       true,
       now,
     );
 
-    expect(quote.filecoinSwap).toEqual({ wfil: 10n ** 18n, usdfc: 2n * 10n ** 18n });
     expect(quote.destinationAmount).toBe(93_000_000_000_000_000_000n - topUp.spendUsdfc);
     expect(quote.minimumDestinationAmount).toBe(92_000_000_000_000_000_000n - topUp.spendUsdfc);
     expect(quote.filGasTopUp).toEqual(topUp);
   });
 
-  it("rejects a FIL top-up that consumes the minimum destination amount", () => {
-    const consumingTopUp = { ...topUp, spendUsdfc: 92_000_000_000_000_000_000n };
+  it("rejects a route whose destination amount cannot cover the FIL top-up", () => {
     expect(() =>
       parseSquidDepositRoute(
-        fakeRoute({ params: { postHook: buildDepositPostHook(request, consumingTopUp) } }),
-        { ...request, filGasTopUp: consumingTopUp },
+        fakeRoute({
+          params: { postHook: buildDepositPostHook(request, topUp) },
+          estimate: { toAmount: "100000000000000000" },
+        }),
+        { ...request, filGasTopUp: topUp },
         true,
         now,
       ),
@@ -609,7 +601,7 @@ describe("parseSquidDepositRoute", () => {
         true,
         now,
       ),
-    ).toThrow("FIL top-up exceeds safety limit");
+    ).toThrow("Adding 0.05 FIL would use more than a tenth of the USDFC this amount buys.");
   });
 
   it("parses an executable route against the trusted router", () => {
@@ -651,12 +643,14 @@ describe("parseSquidDepositRoute", () => {
         reviewed,
       ),
     ).not.toThrow();
-    expect(() =>
-      assertExecutableQuoteWithinReview(
-        { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
-        reviewed,
-      ),
-    ).toThrow("minimum USDFC");
+    const lowerMinimum = { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n };
+    expect(() => assertExecutableQuoteWithinReview(lowerMinimum, reviewed)).toThrow(
+      expect.objectContaining({
+        name: "SquidQuoteChangedError",
+        message: expect.stringContaining("minimum USDFC"),
+        quote: lowerMinimum,
+      }),
+    );
     expect(() =>
       assertExecutableQuoteWithinReview(
         { ...executable, fees: [{ ...executable.fees[0], amount: feeCap + 1n }] },
@@ -668,7 +662,24 @@ describe("parseSquidDepositRoute", () => {
         { ...executable, transaction: { ...executable.transaction, value: reviewed.maxTransactionValue + 1n } },
         reviewed,
       ),
-    ).toThrow("native route payment");
+    ).toThrow(expect.objectContaining({ name: "Error", message: expect.stringContaining("native route payment") }));
+  });
+
+  it("offers for re-review only a route that passes a review made from it", () => {
+    const reviewed = captureReviewedSquidDepositCaps(parseSquidDepositRoute(fakeRoute(), request, true, now), USDC);
+    const executable = parseSquidDepositRoute(fakeRoute({ quoteOnly: false }), request, false, now);
+    if (!isExecutableQuote(executable)) throw new Error("expected executable quote");
+    const drifted = [
+      { ...executable, minimumDestinationAmount: reviewed.minimumDestinationAmount - 1n },
+      { ...executable, fees: [{ ...executable.fees[0], amount: executable.fees[0].amount * 10n }] },
+      { ...executable, gasCosts: [{ ...executable.gasCosts[0], amount: executable.gasCosts[0].amount * 10n }] },
+    ];
+    for (const route of drifted) {
+      expect(() => assertExecutableQuoteWithinReview(route, reviewed)).toThrow(SquidQuoteChangedError);
+      expect(() =>
+        assertExecutableQuoteWithinReview(route, captureReviewedSquidDepositCaps(route, USDC)),
+      ).not.toThrow();
+    }
   });
 
   it.each([
