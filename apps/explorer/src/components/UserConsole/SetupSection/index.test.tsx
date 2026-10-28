@@ -151,9 +151,8 @@ vi.mock("./GroupKeyStep", () => ({
   },
 }));
 
-// secp256k1's generator point: a well-formed key-agreement key. The page only checks its signature in the step.
-const PUBKEY_G =
-  "0x0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8";
+// A well-formed key-agreement key. The page only checks its signature in the step.
+const PUBKEY = `0x04${"ab".repeat(64)}`;
 const KEY_LINK = `authorize=${KEY.toLowerCase()}&scopes=createDataSet,addPieces&network=mainnet&name=filecoin-cli&days=7`;
 const ONE_USDFC = 10n ** 18n;
 
@@ -228,16 +227,7 @@ describe("SetupSection", () => {
   });
 
   it("adds the group key step after the key, only for a link with a pubkey, waiting for the authorization", async () => {
-    const PUBKEY = `0x04${"ab".repeat(64)}`;
-    const keyAgreementLink = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}`;
-    // Not a point on the curve: the parser refuses it, so the page offers nothing.
-    await open(keyAgreementLink);
-    expect(screen.getByRole("alert").textContent).toContain("The session key's encryption key in it cannot be read.");
-    expect(steps()).toEqual([]);
-    cleanup();
-
-    const pubkey = PUBKEY_G;
-    const link = `${KEY_LINK}&pubkey=${pubkey}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
+    const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
     await open(link);
     expect(stepTitles()).toEqual([
       "Step 1: Authorize a session key",
@@ -249,7 +239,7 @@ describe("SetupSection", () => {
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
       sessionKey: KEY,
       expires: null,
-      keyAgreement: { pubkey, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace" },
+      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace" },
     });
     cleanup();
 
@@ -268,7 +258,7 @@ describe("SetupSection", () => {
       { status: "success", result: FUTURE },
     ];
     state.usdfcFunds = 2n * ONE_USDFC;
-    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY_G}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
     expect(screen.queryByText("✓ Setup complete")).toBeNull();
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));

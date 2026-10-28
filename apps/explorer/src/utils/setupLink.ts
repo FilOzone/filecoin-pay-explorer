@@ -9,7 +9,6 @@
  * `/console/session-keys?authorize=` and `/console?deposit=` are redirected
  * here by {@link legacySetupPath}.
  */
-import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { type Hex, verifyMessage } from "viem";
 import type { Network } from "@/types";
 import {
@@ -166,7 +165,8 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
     // The Grant goes to the session key the link authorizes; there is nothing to give it to otherwise.
     if (!sessionKey) return { error: "pubkey-without-key" };
     const pubkey = params.get("pubkey")?.trim().toLowerCase() ?? "";
-    if (!isKeyAgreementKey(pubkey)) return { error: "bad-pubkey" };
+    // Format only: Keysmith rejects a point off the curve when it wraps the Grant.
+    if (!/^0x04[0-9a-f]{128}$/.test(pubkey)) return { error: "bad-pubkey" };
     const pubkeysig = params.get("pubkeysig")?.trim().toLowerCase() ?? "";
     if (!/^0x[0-9a-f]{130}$/.test(pubkeysig)) return { error: "bad-pubkeysig" };
     // This version issues whole group keys only. Anything else is refused, so a tool asking for
@@ -197,17 +197,6 @@ export function legacySetupPath(pathname: string, params: URLSearchParams): stri
     pathname === "/console/session-keys" && !params.has("revoke") && (params.has("authorize") || params.has("scopes"));
   const isFunding = pathname === "/console" && (params.has("deposit") || params.has("operator"));
   return isPairing || isFunding ? `${SETUP_PATH}?${params.toString()}` : null;
-}
-
-/** An uncompressed secp256k1 point in lowercase hex: `0x04‖x‖y`, with x and y canonical and on the curve. */
-function isKeyAgreementKey(value: string): boolean {
-  if (!/^0x04[0-9a-f]{128}$/.test(value)) return false;
-  try {
-    secp256k1.Point.fromHex(value.slice(2));
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** What the session key signs over its key-agreement key. Shared with the CLIs. */
