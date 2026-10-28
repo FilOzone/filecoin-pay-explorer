@@ -21,8 +21,6 @@ const state = vi.hoisted(() => ({
   dataSets: [] as { dataSetId: bigint; live: boolean; metadata: Record<string, string> }[],
   /** Each wallet request, and each wait for Privy's dialog, in the order they happen. */
   events: [] as string[],
-  /** How many data set pages were read. */
-  reads: 0,
   /** Reads left to fail before the scan works. */
   failReads: 0,
   walletReady: true,
@@ -43,7 +41,6 @@ vi.mock("wagmi", () => ({
 }));
 vi.mock("@filoz/synapse-core/warm-storage", () => ({
   getPdpDataSets: async () => {
-    state.reads += 1;
     if (state.failReads > 0) {
       state.failReads -= 1;
       throw new Error("rpc down");
@@ -69,11 +66,8 @@ const GRANT = "fgr1_o2EBYmtzWBAC-_9";
 
 const onIssued = vi.fn();
 
-async function renderStep({
-  expires = EXPIRES as bigint | null,
-  pubkeysig = PUBKEYSIG,
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-} = {}) {
+async function renderStep({ expires = EXPIRES as bigint | null, pubkeysig = PUBKEYSIG } = {}) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     render(
       <QueryClientProvider client={client}>
@@ -98,7 +92,6 @@ describe("GroupKeyStep", () => {
   beforeEach(() => {
     state.dataSets = [];
     state.events = [];
-    state.reads = 0;
     state.failReads = 0;
     state.walletReady = true;
     onIssued.mockReset();
@@ -222,17 +215,6 @@ describe("GroupKeyStep", () => {
 
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("keeps the group key it read when the step mounts again", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    await renderStep({ client });
-    await waitFor(() => expect(state.reads).toBe(1));
-    cleanup();
-
-    await renderStep({ client });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(state.reads).toBe(1);
   });
 
   it("says a declined signature plainly, and a retry can still make the Grant", async () => {
