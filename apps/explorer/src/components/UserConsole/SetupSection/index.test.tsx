@@ -35,6 +35,7 @@ const dialogs = vi.hoisted(() => ({
   createKey: [] as Record<string, unknown>[],
   addService: [] as Record<string, unknown>[],
   deposit: [] as Record<string, unknown>[],
+  groupKey: [] as Record<string, unknown>[],
 }));
 
 vi.mock("wagmi", async (importOriginal) => ({
@@ -133,6 +134,25 @@ vi.mock("@/components/UserConsole/AddServiceDialog", () => ({
   },
 }));
 
+// The step's own behaviour is in GroupKeyStep.test.tsx; here, only where it sits and what it is given.
+vi.mock("./GroupKeyStep", () => ({
+  GroupKeyStep: (props: { number: number; onIssued: () => void } & Record<string, unknown>) => {
+    dialogs.groupKey.push(props);
+    return (
+      <li>
+        <h2>
+          <span className='sr-only'>Step {props.number}: </span>Give this key access to encrypted uploads
+        </h2>
+        <button type='button' onClick={props.onIssued}>
+          Issue
+        </button>
+      </li>
+    );
+  },
+}));
+
+// A well-formed key-agreement key. The page only checks its signature in the step.
+const PUBKEY = `0x04${"ab".repeat(64)}`;
 const KEY_LINK = `authorize=${KEY.toLowerCase()}&scopes=createDataSet,addPieces&network=mainnet&name=filecoin-cli&days=7`;
 const ONE_USDFC = 10n ** 18n;
 
@@ -168,6 +188,7 @@ describe("SetupSection", () => {
     dialogs.createKey = [];
     dialogs.addService = [];
     dialogs.deposit = [];
+    dialogs.groupKey = [];
     window.sessionStorage.clear();
   });
 
@@ -203,6 +224,45 @@ describe("SetupSection", () => {
     expect(steps()[0].textContent).toContain(KEY);
     expect(steps()[0].textContent).toContain("filecoin-cli");
     expect(steps()[0].textContent).toContain("After 7 days");
+  });
+
+  it("adds the group key step after the key, only for a link with a pubkey, waiting for the authorization", async () => {
+    const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
+    await open(link);
+    expect(stepTitles()).toEqual([
+      "Step 1: Authorize a session key",
+      "Step 2: Give this key access to encrypted uploads",
+      "Step 3: Approve Warm Storage",
+      "Step 4: Fund Filecoin Pay",
+    ]);
+    const before = dialogs.groupKey.at(-1);
+    expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
+      sessionKey: KEY,
+      expires: null,
+      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace" },
+    });
+    cleanup();
+
+    state.grants = [
+      { status: "success", result: FUTURE },
+      { status: "success", result: FUTURE + 10n },
+    ];
+    await open(link);
+    expect(dialogs.groupKey.at(-1)?.expires).toBe(FUTURE);
+  });
+
+  it("is not complete until the group key Grant is made, when the link asks for one", async () => {
+    state.approved = true;
+    state.grants = [
+      { status: "success", result: FUTURE },
+      { status: "success", result: FUTURE },
+    ];
+    state.usdfcFunds = 2n * ONE_USDFC;
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    expect(screen.queryByText("✓ Setup complete")).toBeNull();
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
+    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
   });
 
   it("opens the key dialog with the link's request, and only when asked", async () => {

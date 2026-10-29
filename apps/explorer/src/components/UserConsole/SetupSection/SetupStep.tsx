@@ -61,3 +61,11 @@ export const SetupStep = ({ number, title, description, status, children }: Setu
     </li>
   );
 };
+
+/** One labelled row in a step's details list (`<dl>`). */
+export const Detail = ({ term, children }: { term: string; children: ReactNode }) => (
+  <div className='grid gap-1 py-2.5 sm:grid-cols-[7rem_1fr] sm:gap-4'>
+    <dt className='text-muted-foreground'>{term}</dt>
+    <dd className='min-w-0 text-foreground'>{children}</dd>
+  </div>
+);

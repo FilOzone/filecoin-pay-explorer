@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { maxUint256 } from "viem";
+import { BaseError, maxUint256, UserRejectedRequestError } from "viem";
 import { describe, it } from "vitest";
 import {
   accountBalanceAt,
@@ -7,6 +7,8 @@ import {
   DEPOSIT_BASELINE_TTL_MS,
   depositPrefill,
   fundsOffer,
+  type GroupKeyReads,
+  groupKeyPhase,
   isMaxApproval,
   isSetupComplete,
   keyGrant,
@@ -14,6 +16,7 @@ import {
   readDepositBaseline,
   shortfall,
   shortfallLabel,
+  signingFailure,
   unlimitedApprovalTerms,
   walletCovers,
   writeDepositBaseline,
@@ -339,5 +342,91 @@ describe("readDepositBaseline", () => {
     ]) {
       assert.equal(readDepositBaseline(stored, SAVED), null, String(stored));
     }
+  });
+});
+
+describe("groupKeyPhase", () => {
+  const inconsistent = {
+    error: "default-group-key-invalid" as const,
+    groupKeyId: "0x02ca08cf7e0222c8432adc159232b7eb" as const,
+    dataSetIds: [3n],
+  };
+  /** Everything in place to sign: each case below changes only what it is about. */
+  const ready: GroupKeyReads = {
+    signatureValid: true,
+    expires: 4_102_444_800n,
+    choice: { groupKeyId: "0x02ca08cf7e0222c8432adc159232b7eb", commitment: null },
+    choiceFailed: false,
+    walletReady: true,
+    issuing: false,
+    issueError: null,
+    grant: undefined,
+  };
+  const declined = new BaseError("Signing failed", { cause: new UserRejectedRequestError(new Error("no")) });
+
+  it("is ready once the signature checks out, the key is authorized, a group key is chosen and the wallet is there", () => {
+    assert.deepEqual(groupKeyPhase(ready), { phase: "ready" });
+  });
+
+  it("names each earlier phase from the read it waits on", () => {
+    assert.deepEqual(groupKeyPhase({ ...ready, signatureValid: undefined }), { phase: "choosing" });
+    assert.deepEqual(groupKeyPhase({ ...ready, signatureValid: false }), { phase: "unsigned-pubkey" });
+    assert.deepEqual(groupKeyPhase({ ...ready, expires: null }), { phase: "waiting-for-key" });
+    assert.deepEqual(groupKeyPhase({ ...ready, choice: undefined }), { phase: "choosing" });
+    assert.deepEqual(groupKeyPhase({ ...ready, choice: undefined, choiceFailed: true }), { phase: "read-failed" });
+    assert.deepEqual(groupKeyPhase({ ...ready, choice: inconsistent }), {
+      phase: "inconsistent-default",
+      groupKeyId: inconsistent.groupKeyId,
+      dataSetIds: [3n],
+    });
+    assert.deepEqual(groupKeyPhase({ ...ready, walletReady: false }), { phase: "connecting-wallet" });
+    assert.deepEqual(groupKeyPhase({ ...ready, issuing: true }), { phase: "signing" });
+    assert.deepEqual(groupKeyPhase({ ...ready, issueError: declined }), {
+      phase: "sign-failed",
+      message: "You declined the signature. No Grant was made.",
+    });
+  });
+
+  it("keeps a made Grant whatever the reads say afterwards", () => {
+    const after = {
+      ...ready,
+      grant: "fgr1_x",
+      signatureValid: false,
+      expires: null,
+      choiceFailed: true,
+      walletReady: false,
+      issueError: declined,
+    };
+    assert.deepEqual(groupKeyPhase(after), { phase: "issued", grant: "fgr1_x" });
+  });
+
+  it("follows its precedence where reads overlap", () => {
+    const failing = { ...ready, choice: undefined, choiceFailed: true };
+    // A bad signature blocks everything, read errors included; a pending check reads as choosing.
+    assert.equal(groupKeyPhase({ ...failing, signatureValid: false }).phase, "unsigned-pubkey");
+    assert.equal(groupKeyPhase({ ...failing, signatureValid: undefined }).phase, "choosing");
+    assert.equal(groupKeyPhase({ ...ready, signatureValid: undefined, expires: null }).phase, "choosing");
+    // A failed scan or a broken default warns before the authorization is paid for.
+    assert.equal(groupKeyPhase({ ...failing, expires: null }).phase, "read-failed");
+    assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, expires: null }).phase, "inconsistent-default");
+    // A scan still running before authorization is just waiting for the key.
+    assert.equal(groupKeyPhase({ ...ready, expires: null, choice: undefined }).phase, "waiting-for-key");
+    // A read error outranks a stale choice; an invalid default outranks the wallet.
+    assert.equal(groupKeyPhase({ ...ready, choiceFailed: true }).phase, "read-failed");
+    assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, choiceFailed: true }).phase, "read-failed");
+    assert.equal(groupKeyPhase({ ...ready, choice: inconsistent, walletReady: false }).phase, "inconsistent-default");
+    assert.equal(groupKeyPhase({ ...ready, choice: undefined, walletReady: false }).phase, "choosing");
+    assert.equal(groupKeyPhase({ ...ready, choice: undefined, issuing: true }).phase, "choosing");
+    // A signature in flight outlasts a wallet client that drops out; Retry needs a wallet.
+    assert.equal(groupKeyPhase({ ...ready, issuing: true, walletReady: false }).phase, "signing");
+    assert.equal(groupKeyPhase({ ...ready, issueError: declined, walletReady: false }).phase, "connecting-wallet");
+    assert.equal(groupKeyPhase({ ...ready, issuing: true, issueError: declined }).phase, "signing");
+  });
+});
+
+describe("signingFailure", () => {
+  it("gives a declined prompt its own copy and any other error its short message", () => {
+    assert.equal(signingFailure({ code: 4001 }), "You declined the signature. No Grant was made.");
+    assert.equal(signingFailure(new BaseError("The wallet could not sign")), "The wallet could not sign");
   });
 });

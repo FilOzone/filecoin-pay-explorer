@@ -30,6 +30,7 @@ import { config } from "@/services/wagmi/config";
 import { formatAddress } from "@/utils/formatter";
 import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
+import { isUserRejectedRequest, walletErrorMessage } from "@/utils/walletErrors";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
 import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
@@ -89,12 +90,7 @@ import {
   savePendingSquidDeposit,
   subscribeToPendingSquidDeposit,
 } from "../data/squid-deposit-tracker";
-import {
-  estimateOpStackTotalFee,
-  isOpStackChain,
-  isUserRejectedRequest,
-  walletErrorMessage,
-} from "../data/squid-execution";
+import { estimateOpStackTotalFee, isOpStackChain } from "../data/squid-execution";
 import { chooseDefaultPayer, listSquidPayers, readConnectedAccounts, type SquidPayer } from "../data/squid-payers";
 import { paymentTokensQueryOptions } from "../data/squid-payment-tokens";
 import { squidFetch } from "../data/squid-quote";

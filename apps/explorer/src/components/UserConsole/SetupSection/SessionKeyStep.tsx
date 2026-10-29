@@ -13,7 +13,7 @@ import { formatDateTime } from "@/utils/formatter";
 import { DEFAULT_EXPIRY_DAYS, type ExistingKeyPrefill, existingKeyPrefill, SCOPE_BY_ID } from "@/utils/sessionKeys";
 import type { SessionKeyRequest } from "@/utils/setupLink";
 import { type KeyGrant, keyGrant, SETUP_POLL_MS } from "./data/setupStatus";
-import { SetupStep, type StepTone } from "./SetupStep";
+import { Detail, SetupStep, type StepTone } from "./SetupStep";
 
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 
@@ -87,13 +87,6 @@ function expiryText(existing: ExistingKeyPrefill | null, days: number) {
     return `Keeps its current expiry, ${formatDateTime(Number(existing.expirySec) * 1000)}`;
   return `After ${days} ${days === 1 ? "day" : "days"}, unless you change it`;
 }
-
-const Detail = ({ term, children }: { term: string; children: React.ReactNode }) => (
-  <div className='grid gap-1 py-2.5 sm:grid-cols-[7rem_1fr] sm:gap-4'>
-    <dt className='text-muted-foreground'>{term}</dt>
-    <dd className='min-w-0 text-foreground'>{children}</dd>
-  </div>
-);
 
 interface SessionKeyStepProps {
   number: number;

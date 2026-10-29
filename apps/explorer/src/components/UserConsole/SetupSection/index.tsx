@@ -19,6 +19,7 @@ import {
   writeDepositBaseline,
 } from "./data/setupStatus";
 import { type AvailableFunds, FundsStep, useSetupFunds } from "./FundsStep";
+import { GroupKeyStep } from "./GroupKeyStep";
 import { SessionKeyStep, useKeyGrant } from "./SessionKeyStep";
 import { useWarmStorageApproval, WarmStorageStep } from "./WarmStorageStep";
 
@@ -31,6 +32,10 @@ const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
   "bad-balance": "The balance it asks for cannot be read.",
   "bad-operator": "It names a service this page does not set up.",
   "bad-approval": "It asks for a kind of Warm Storage approval this page does not know.",
+  "pubkey-without-key": "It asks for access to encrypted uploads but names no session key to give it to.",
+  "bad-pubkey": "The session key's encryption key in it cannot be read.",
+  "bad-pubkeysig": "The session key's signature over its encryption key is missing or cannot be read.",
+  "bad-node": "It asks for a part of a group key, and this page only gives whole group keys.",
 };
 
 const NetworkName = ({ network }: { network: Network }) => <span className='capitalize'>{network}</span>;
@@ -135,6 +140,8 @@ function useDepositBaseline(network: Network, account: Hex, request: SetupReques
 
 const SetupSteps = ({ network, account, request }: { network: Network; account: Hex; request: SetupRequest }) => {
   const { grant, refetch: refetchGrant } = useKeyGrant(network, account, request.sessionKey);
+  // Nothing of a Grant is on chain, so only this visit knows one was made.
+  const [groupKeyGranted, setGroupKeyGranted] = useState(false);
   const approval = useWarmStorageApproval(network, account, request.unlimitedApproval);
   // An approval-only link never shows funds, so it reads none.
   const { funds, wallet: walletUsdfc } = useSetupFunds(network, account, !request.approvalOnly);
@@ -163,16 +170,19 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
     if (funds.state === "ready" && liveMissing?.kind === "none") setFundsReached(true);
   }, [funds.state, liveMissing?.kind]);
   const missing: Shortfall | null = fundsReached ? { kind: "none" } : liveMissing;
-  const complete = isSetupComplete({
-    keyRequested: request.sessionKey !== null,
-    grant,
-    approved: approval.state === "approved",
-    // An unreadable balance never reads as "none", so this needs no separate readiness check.
-    fundsCovered: request.approvalOnly || missing?.kind === "none",
-  });
+  const complete =
+    (request.keyAgreement === null || groupKeyGranted) &&
+    isSetupComplete({
+      keyRequested: request.sessionKey !== null,
+      grant,
+      approved: approval.state === "approved",
+      // An unreadable balance never reads as "none", so this needs no separate readiness check.
+      fundsCovered: request.approvalOnly || missing?.kind === "none",
+    });
   // The steps keep one order, whatever the reads say; only what each one offers changes.
   const offer = fundsOffer({ missing, walletUsdfc, approval: approval.state });
-  const first = request.sessionKey ? 2 : 1;
+  // A link only carries a key-agreement key beside a session key.
+  const first = 1 + (request.sessionKey ? 1 : 0) + (request.keyAgreement ? 1 : 0);
 
   return (
     <>
@@ -185,6 +195,18 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
             request={request.sessionKey}
             grant={grant}
             onGranted={() => void refetchGrant()}
+          />
+        )}
+        {request.sessionKey && request.keyAgreement && (
+          <GroupKeyStep
+            number={2}
+            network={network}
+            account={account}
+            sessionKey={request.sessionKey.address}
+            keyAgreement={request.keyAgreement}
+            // The Grant's claim ends with the key's authorization, so it waits for one.
+            expires={grant.state === "authorized" ? grant.expiresAt : null}
+            onIssued={() => setGroupKeyGranted(true)}
           />
         )}
         <WarmStorageStep
