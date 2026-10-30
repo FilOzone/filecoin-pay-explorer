@@ -80,7 +80,7 @@ const CustomConnectButton = () => {
           onClick={() => login({ loginMethods: ["email", "google"] })}
           type='button'
         >
-          Set up a Filecoin Pay wallet with email
+          Continue with email or Google
         </Button>
       </div>
 
