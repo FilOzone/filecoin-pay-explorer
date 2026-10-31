@@ -6,9 +6,9 @@ export type StepTone = "done" | "todo" | "waiting" | "problem";
 
 const STATUS_CLASSES: Record<StepTone, string> = {
   done: "text-green-700 dark:text-green-400",
-  todo: "text-muted-foreground",
-  waiting: "text-muted-foreground",
-  problem: "text-amber-700 dark:text-amber-400",
+  todo: "text-yellow-600 dark:text-yellow-400",
+  waiting: "text-yellow-600 dark:text-yellow-400",
+  problem: "text-red-700 dark:text-red-400",
 };
 
 interface SetupStepProps {
@@ -55,7 +55,7 @@ export const SetupStep = ({ number, title, description, status, children }: Setu
             {status.label}
           </p>
         </div>
-        <div className='mt-1 max-w-prose text-sm text-muted-foreground'>{description}</div>
+        <div className='mt-1 text-sm text-muted-foreground'>{description}</div>
         {children && <div className='mt-4'>{children}</div>}
       </div>
     </li>

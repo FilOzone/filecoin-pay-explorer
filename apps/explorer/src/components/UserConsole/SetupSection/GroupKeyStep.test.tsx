@@ -133,6 +133,7 @@ describe("GroupKeyStep", () => {
 
     expect(screen.getByText(SESSION.address)).toBeTruthy();
     expect(screen.getByText(GROUP_KEY_WARNING)).toBeTruthy();
+    expect(screen.queryByText("Fetching ends")).toBeNull();
     await waitFor(() => expect(screen.getByText("0x02ca08cf7e0222c8432adc159232b7eb")).toBeTruthy());
     expect(signButton()?.disabled).toBe(true);
     expect(state.events).toEqual([]);
@@ -265,7 +266,7 @@ describe("GroupKeyStep", () => {
   });
 
   it("names the group key it will sign for: none yet, a new one, or the one the data sets record", async () => {
-    const groupKeyRow = () => screen.getByText("Group key").nextElementSibling?.textContent;
+    const groupKeyRow = () => screen.getByText("Group key id").nextElementSibling?.textContent;
     await renderStep({ pubkeysig: await OWNER.signMessage({ message: keyAgreementMessage(PUBKEY) }) });
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(groupKeyRow()).toBe("Not chosen yet");
