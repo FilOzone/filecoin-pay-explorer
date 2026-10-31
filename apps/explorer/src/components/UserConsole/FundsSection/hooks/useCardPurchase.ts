@@ -15,6 +15,8 @@ import { withSquidAcquisitionLock } from "../data/squid-acquisition-lock";
 export const CARD_CHAIN_ID = 8453;
 export const CARD_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 export const CARD_USDC_DECIMALS = 6;
+// Privy's smallest card purchase. Small buys stay under the onramp's no-ID tier.
+export const CARD_DEFAULT_AMOUNT_USD = "20";
 const BALANCE_ATTEMPTS = 30;
 const BALANCE_INTERVAL_MS = 2_000;
 
@@ -231,6 +233,7 @@ export function useCardPurchase({
         if (!isCurrent(intent)) return null;
         const next = { before, ...intent };
         await fund({
+          defaultAmount: CARD_DEFAULT_AMOUNT_USD,
           source: {},
           destination: { address: intent.recipient, asset: CARD_USDC, chain: `eip155:${CARD_CHAIN_ID}` },
           environment: getOnrampEnvironment(),

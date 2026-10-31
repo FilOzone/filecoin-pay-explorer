@@ -48,15 +48,6 @@ vi.mock("wagmi", () => ({ useConnection: () => ({ address: "0x111111111111111111
 vi.mock("@/hooks/useContractTransaction", () => ({
   useContractTransaction: () => ({ execute: mocks.execute, isExecuting: mocks.isExecuting }),
 }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    synapse: {},
-    constants: {
-      chain: { id: 314, blockExplorers: { default: { url: "https://example.com" } } },
-      contracts: { payments: { address: "0x2222222222222222222222222222222222222222", abi: [] } },
-    },
-  }),
-}));
 
 const approvalFixture = {
   token: { id: "0x3333333333333333333333333333333333333333", symbol: "USDFC", decimals: "18" },
@@ -68,7 +59,7 @@ const approvalFixture = {
 const approval = approvalFixture as never;
 
 function renderDialog(onOpenChange = vi.fn()) {
-  render(<IncreaseApprovalDialog approval={approval} open onOpenChange={onOpenChange} />);
+  render(<IncreaseApprovalDialog approval={approval} network='mainnet' open onOpenChange={onOpenChange} />);
   const increase = () => screen.getByRole("button", { name: "Increase" });
   const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
   return { increase, type };

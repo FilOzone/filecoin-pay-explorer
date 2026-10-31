@@ -625,6 +625,61 @@ export const GET_ACCOUNT_OPERATOR_RAILS = gql`
   }
 `;
 
+const DATA_SET_ROW_FIELDS = `
+  fragment DataSetRowFields on DataSet {
+    id
+    dataSetId
+    provider
+    totalSize
+    lastWriteAt
+    pdpRail {
+      paymentRate
+      state
+      endEpoch
+      token {
+        id
+        symbol
+        decimals
+      }
+    }
+  }
+`;
+
+/** A payer's Warm Storage datasets that still exist on chain, oldest last-write first by default. */
+export const GET_ACCOUNT_DATA_SETS = gql`
+  ${DATA_SET_ROW_FIELDS}
+  query GetAccountDataSets($payer: Bytes!, $first: Int!, $skip: Int!) {
+    dataSets(
+      where: { payer: $payer, status_not: DELETED }
+      first: $first
+      skip: $skip
+      orderBy: lastWriteAt
+      orderDirection: asc
+    ) {
+      ...DataSetRowFields
+    }
+  }
+`;
+
+/**
+ * One cursor page of the triage queue's candidates: datasets with no write
+ * since `before` whose storage (PDP) payment is not terminated. The queue
+ * ranks them client-side.
+ */
+export const GET_STALE_DATA_SETS = gql`
+  ${DATA_SET_ROW_FIELDS}
+  query GetStaleDataSets($payer: Bytes!, $before: BigInt!, $cursor: Bytes!, $first: Int!) {
+    dataSets(
+      where: { payer: $payer, lastWriteAt_lt: $before, status_in: [ACTIVE, CDN_TERMINATED], id_gt: $cursor }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      ...DataSetRowFields
+    }
+  }
+`;
+
 export const GET_STATS_DASHBOARD = gql`
   query GetStatsDashboard {
     tokens(orderBy: symbol, orderDirection: desc) {

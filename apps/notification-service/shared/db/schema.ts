@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { ALERT_LEVELS } from "../alert-levels";
 
 export const verifiedEmails = sqliteTable(
@@ -45,6 +45,41 @@ export const notificationLog = sqliteTable(
     check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
     index("idx_notification_log_sent_at").on(table.sentAt),
     index("idx_notification_log_wallet_level").on(table.walletAddress, table.alertLevel, table.sentAt),
+  ],
+);
+
+export const mutedDataSets = sqliteTable(
+  "muted_data_sets",
+  {
+    id: text("id").notNull().primaryKey(),
+    walletAddress: text("wallet_address").notNull(),
+    dataSetId: text("data_set_id").notNull(),
+    mutedUntil: integer("muted_until").notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [
+    check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
+    uniqueIndex("idx_muted_data_sets_wallet_dataset").on(table.walletAddress, table.dataSetId),
+    // Expired mutes are kept, so reads of a wallet's active mutes range over muted_until instead of scanning them.
+    index("idx_muted_data_sets_wallet_until").on(table.walletAddress, table.mutedUntil),
+  ],
+);
+
+// The last inactivity email per dataset. One row per wallet and dataset, replaced on each send.
+export const inactivityAlerts = sqliteTable(
+  "inactivity_alerts",
+  {
+    id: text("id").notNull().primaryKey(),
+    walletAddress: text("wallet_address").notNull(),
+    dataSetId: text("data_set_id").notNull(),
+    // The dataset's lastWriteAt (unix seconds) when emailed. A new write starts a new inactive period.
+    lastWriteAt: integer("last_write_at").notNull(),
+    sentAt: integer("sent_at").notNull(),
+    emailSentTo: text("email_sent_to").notNull(),
+  },
+  (table) => [
+    check("wallet_address_lower", sql`${table.walletAddress} = lower(${table.walletAddress})`),
+    uniqueIndex("idx_inactivity_alerts_wallet_dataset").on(table.walletAddress, table.dataSetId),
   ],
 );
 

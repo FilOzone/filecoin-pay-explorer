@@ -1,6 +1,3 @@
-import type { Abi, Hex } from "viem";
-import type { supportedChains } from "@/services/wagmi/config";
-
 export type TransactionType =
   | "deposit"
   | "depositAndApprove"
@@ -30,18 +27,5 @@ export interface FaucetProvider {
   url: string;
   asset: "FIL" | "USDFC";
 }
-
-export type ChainConstants = {
-  chain: (typeof supportedChains)[number];
-  label: string;
-  contracts: {
-    usdfc: Hex;
-    payments: {
-      address: Hex;
-      abi: Abi;
-    };
-  };
-  faucets?: FaucetProvider[];
-};
 
 export type AccountInfo = [bigint, bigint, bigint, bigint];

@@ -12,6 +12,7 @@ import {
   parseAbi,
   toFunctionSelector,
 } from "viem";
+import { quoterAbi } from "./fake-usdc-gas";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data?: Hex; hash: Hex };
@@ -28,6 +29,7 @@ const GET_L1_FEE = toFunctionSelector("getL1Fee(bytes)");
 const SQUID_API_HOST = "v2.api.squidrouter.com";
 const NATIVE_TOKEN = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SQUID_ROUTER = "0xce16f69375520ab01377ce7b88f5ba8c48f8d666";
+const SUSHI_QUOTER = "0x3b9e156e93146b10551840701337b1c5356b1a98";
 const DESTINATION_HASH = `0x${"de".repeat(32)}` as const;
 // viem only multicalls at blocks after Multicall3 was deployed on Base.
 const BASE_BLOCK = 30_000_000n;
@@ -49,9 +51,19 @@ const paymentsAbi = parseAbi([
 export async function installFakeSquid(
   page: Page,
   payer: Hex,
+  // The bridge fee is the route's native `value`, as Axelar's fee is on a real route.
   {
     executableRoute = () => ({}),
-  }: { executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number } } = {},
+    payerEth = PAYER_ETH,
+    nativeFee = 0n,
+    alsoRead,
+  }: {
+    executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number };
+    payerEth?: bigint;
+    nativeFee?: bigint;
+    /** Another fake's reads, so a batched multicall mixing both is still answered. */
+    alsoRead?: (target: string, data: Hex) => Hex | undefined;
+  } = {},
 ): Promise<SquidRouteRequest[]> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet } = await import("@filoz/synapse-sdk");
@@ -90,10 +102,12 @@ export async function installFakeSquid(
   };
 
   const readBase = (txs: SentTransaction[], target: string, data: Hex): Hex | undefined => {
+    const other = alsoRead?.(target, data);
+    if (other !== undefined) return other;
     if (target.toLowerCase() === BASE_USDC) return readUsdc(txs, data);
     if (target.toLowerCase() === MULTICALL3 && data.startsWith(GET_ETH_BALANCE)) {
       const [owner] = decodeAbiParameters([{ type: "address" }], `0x${data.slice(10)}`);
-      return encodeAbiParameters([{ type: "uint256" }], [isPayer(owner) ? PAYER_ETH : 0n]);
+      return encodeAbiParameters([{ type: "uint256" }], [isPayer(owner) ? payerEth : 0n]);
     }
     // OP Stack chains add an L1 data fee to each transaction.
     if (target.toLowerCase() === GAS_PRICE_ORACLE && data.startsWith(GET_L1_FEE)) {
@@ -109,7 +123,7 @@ export async function installFakeSquid(
       case "eth_blockNumber":
         return numberToHex(BASE_BLOCK + BigInt((await sent()).length));
       case "eth_getBalance":
-        return numberToHex(isPayer(call.params[0] as string) ? PAYER_ETH : 0n);
+        return numberToHex(isPayer(call.params[0] as string) ? payerEth : 0n);
       case "eth_gasPrice":
       case "eth_maxPriorityFeePerGas":
         return numberToHex(GAS_PRICE);
@@ -196,6 +210,15 @@ export async function installFakeSquid(
     if (call.method === "eth_getTransactionReceipt" && call.params[0] === DESTINATION_HASH) return depositReceipt();
     if (call.method !== "eth_call") return undefined;
     const { to, data } = call.params[0] as { to: string; data: Hex };
+    // The FIL top-up's price: 1 WFIL buys 5 USDFC.
+    if (to.toLowerCase() === SUSHI_QUOTER) {
+      const { args } = decodeFunctionData({ abi: quoterAbi, data });
+      return encodeFunctionResult({
+        abi: quoterAbi,
+        functionName: "quoteExactOutputSingle",
+        result: [args[0].amount * 5n, 0n, 0, 0n],
+      });
+    }
     if (to.toLowerCase() !== MULTICALL3) return readPayments(to, data);
     const { functionName, args } = decodeFunctionData({ abi: multicall3Abi, data });
     if (functionName !== "aggregate3") return undefined;
@@ -251,7 +274,16 @@ export async function installFakeSquid(
               toAmount,
               toAmountMin: (BigInt(toAmount) - minimumShortfall).toString(),
               actions: [{ type: "custom", toChain: "314", provider: "Filecoin Pay" }],
-              feeCosts: [],
+              feeCosts:
+                nativeFee === 0n
+                  ? []
+                  : [
+                      {
+                        name: "Gas receiver fee",
+                        amount: nativeFee.toString(),
+                        token: { address: NATIVE_TOKEN, chainId: String(BASE_CHAIN_ID), symbol: "ETH", decimals: 18 },
+                      },
+                    ],
               // Squid prices the route's source gas; the review budgets the route from it.
               gasCosts: [
                 {
@@ -265,7 +297,7 @@ export async function installFakeSquid(
             transactionRequest: {
               target: SQUID_ROUTER,
               data: "0x12345678",
-              value: "0",
+              value: nativeFee.toString(),
               gasLimit: "500000",
               ...(expiresInSeconds === undefined
                 ? {}

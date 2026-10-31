@@ -44,7 +44,7 @@ export type SquidDepositSignature = { kind: SquidDepositTransactionKind; index: 
 /** A route this close to its expiry is not sent: the wallet prompt and the broadcast take time too. */
 export const ROUTE_EXPIRY_MARGIN_SECONDS = 30;
 
-const isRouteExpiring = (quote: ExecutableSquidDepositQuote, marginSeconds: number) =>
+export const isRouteExpiring = (quote: ExecutableSquidDepositQuote, marginSeconds: number) =>
   quote.transaction.expiresAt !== undefined &&
   quote.transaction.expiresAt <= Math.floor(Date.now() / 1000) + marginSeconds;
 export type SquidDepositStatus = "pending" | "success" | "failed" | "hook-failed" | "needs-gas";
@@ -111,7 +111,7 @@ export interface SquidDepositResult {
   depositedAmount: bigint;
 }
 
-interface PollingOptions {
+export interface PollingOptions {
   sleep?: (milliseconds: number) => Promise<void>;
   pollIntervalMs?: number;
   /** Bound on one status request; a request that never settles counts as a failed attempt. */

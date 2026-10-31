@@ -33,7 +33,7 @@ test("logging in with a different identity after logout reaches the console, not
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Continue with a Filecoin Pay wallet" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "second@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -46,7 +46,7 @@ test("logging out and back in with the same identity reconnects without getting 
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
-  await expect(page.getByRole("button", { name: "Continue with a Filecoin Pay wallet" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
   await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
@@ -87,6 +87,17 @@ test("closing Add funds opened from the wallet menu leaves the console reachable
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
 });
 
+test("a connected wallet's Add funds lists swap first and deposit last", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
+  await openAddFundsFromWalletMenu(page);
+
+  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    - button "Swap to USDFC"
+    - button "Verify wallet to buy USDC with card"
+    - button "Deposit token"
+  `);
+});
+
 test("closing Deposit tokens after choosing it in Add funds leaves the console reachable", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await openAddFundsFromWalletMenu(page);
@@ -118,7 +129,7 @@ test("a Squid deposit paid from another account of the extension credits the con
     `${payer.slice(0, 6)}...${payer.slice(-4)}`,
   );
   await squid.getByLabel(/^Amount/).fill("10");
-  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  // Keep the run to the plain deposit.
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
@@ -226,7 +237,7 @@ test("a Squid deposit paid from an extension without Filecoin closes the dialog"
     `${payer.slice(0, 6)}...${payer.slice(-4)} · Rabby`,
   );
   await squid.getByLabel(/^Amount/).fill("10");
-  // The FIL top-up adds a Filecoin swap leg this fake Squid does not quote.
+  // Keep the run to the plain deposit.
   await squid.getByRole("checkbox").click();
   await squid.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Pay 10 USDC for USDFC" }).click();
@@ -340,22 +351,30 @@ test("an email user's console stays on their own wallet when an extension connec
   expect(await consoleAccount(page)).toBe(own);
 });
 
-test("an account switch closes a form opened for the previous account", async ({ page, baseURL }) => {
+test("an account switch closes the link's form, and reopening it names the new account, never the previous one", async ({
+  page,
+  baseURL,
+}) => {
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   const cli = await filecoinPin(`${baseURL}`);
   const link = consoleLink(await cli.run("login", "--no-browser", "--no-wait"), `${baseURL}`);
   await stubAccountBackgroundRequests(page);
   await page.goto(link);
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
-  await page.getByRole("button", { name: "Review & authorize" }).click();
   const first = await consoleAccount(page);
   const [start] = first.split("...");
+  await page.getByRole("button", { name: "Review and authorize" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
 
   await switchExtensionAccount(page);
 
   await expect.poll(() => consoleAccount(page)).not.toBe(first);
-  await expect(page.getByRole("button", { name: /^Authorize as / })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "New session key" })).toBeHidden();
+  // The link stays in the URL, so the setup page still offers it, now for the new account.
+  const [next] = (await consoleAccount(page)).split("...");
+  await page.getByRole("button", { name: "Review and authorize" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${next}`, "i") })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeHidden();
 });
 
 async function connectAndOpenCardPurchase(page: Page): Promise<string> {
@@ -422,6 +441,20 @@ test("after a switch, the extension's new account verifies for itself before buy
   const [start, end] = newAccount.split("...");
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
+});
+
+test("an email account's Add funds lists card first", async ({ page }) => {
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await openAddFunds(page);
+
+  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    - button "Buy USDC with card"
+    - button "Swap to USDFC"
+    - button "Deposit token"
+  `);
 });
 
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {
