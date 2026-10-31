@@ -5,7 +5,6 @@ import { StaleQueue } from ".";
 
 const mockUseStaleDataSets = vi.hoisted(() => vi.fn());
 const mockUseMutedDataSets = vi.hoisted(() => vi.fn());
-const observed = vi.hoisted(() => ({ blockWatch: undefined as boolean | undefined }));
 
 vi.mock("@/hooks/useStaleDataSets", () => ({
   useStaleDataSets: () => mockUseStaleDataSets(),
@@ -17,10 +16,7 @@ vi.mock("@/utils/network", () => ({
   isNotificationsEligibleNetwork: (network: Network) => network === "mainnet",
 }));
 vi.mock("wagmi", () => ({
-  useBlockNumber: ({ watch }: { watch: boolean }) => {
-    observed.blockWatch = watch;
-    return { data: undefined };
-  },
+  useBlockNumber: () => ({ data: undefined }),
 }));
 vi.mock("@/components/shared/ListPagination", () => ({
   ListPagination: ({ page, hasMore }: { page: number; hasMore: boolean }) => (
@@ -103,16 +99,6 @@ describe("StaleQueue", () => {
     expect(markup).toContain("Couldn&#x27;t load the datasets you kept");
     expect(markup).toContain("Row 0xa");
     expect(markup).not.toContain("with Keep");
-  });
-
-  it("watches blocks only while a terminated rail needs the current epoch", () => {
-    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")]));
-    render();
-    expect(observed.blockWatch).toBe(false);
-
-    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1", "10", "TERMINATED")]));
-    render();
-    expect(observed.blockWatch).toBe(true);
   });
 
   it("renders rows highest spend first", () => {

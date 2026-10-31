@@ -6,7 +6,6 @@ import { useMutedDataSets } from "@/hooks/useMutedDataSets";
 import { useStaleDataSets } from "@/hooks/useStaleDataSets";
 import type { Network } from "@/types";
 import { isNotificationsEligibleNetwork } from "@/utils/network";
-import { monthlyDataSetSpend } from "../DatasetsSection/data/monthlySpend";
 import { StaleQueueErrorState, StaleQueueLayout, StaleQueueRow } from "./components";
 import { rankStaleDataSets } from "./data/staleness";
 
@@ -42,16 +41,7 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
     () => (staleList ?? []).filter((dataSet) => !mutedIds?.has(dataSet.dataSetId.toString())),
     [staleList, mutedIds],
   );
-  // Spend that can't be estimated without the epoch (a terminated rail) is the only reason to watch blocks.
-  const needsEpoch = useMemo(
-    () => unmuted.some((dataSet) => monthlyDataSetSpend(dataSet, undefined) === undefined),
-    [unmuted],
-  );
-  const { data: currentEpoch } = useBlockNumber({
-    chainId: getChain(network).id,
-    watch: needsEpoch,
-    query: { enabled: needsEpoch },
-  });
+  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
   // Up to 10,000 rows, so rank only when the list or epoch changes; days inactive refresh with them.
   const ranked = useMemo(
     () => rankStaleDataSets(unmuted, currentEpoch, BigInt(Math.floor(Date.now() / 1000))),
