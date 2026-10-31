@@ -141,7 +141,7 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
       status={{ tone: GRANT_STATUS[grant.state], label: grantLabel(grant) }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
-        <Detail term='Key'>
+        <Detail term='Session key'>
           <span className='inline-flex max-w-full items-start gap-1.5'>
             <span className='font-mono text-xs break-all leading-5'>{request.address}</span>
             <CopyButton
@@ -155,19 +155,22 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
           </span>
         </Detail>
         {request.name && <Detail term='Name'>{request.name}</Detail>}
-        <Detail term='Permissions'>
+        <Detail term='Scopes'>
           <ul className='flex flex-col gap-0.5'>
             {request.scopes.map((id) => (
               <li key={id}>
                 {SCOPE_BY_ID[id].label}
+                {/* The badge the New session key dialog puts on the same scopes. */}
                 {SCOPE_BY_ID[id].destructive && (
-                  <span className='text-amber-700 dark:text-amber-400'> (can remove data)</span>
+                  <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
+                    destructive
+                  </span>
                 )}
               </li>
             ))}
           </ul>
         </Detail>
-        <Detail term='Expires'>{expiryText(existing, request.days ?? DEFAULT_EXPIRY_DAYS)}</Detail>
+        <Detail term='Expiration'>{expiryText(existing, request.days ?? DEFAULT_EXPIRY_DAYS)}</Detail>
       </dl>
       {isSelf ? (
         <Notice tone='error' role='alert' title='This is your wallet address' className='mt-4'>

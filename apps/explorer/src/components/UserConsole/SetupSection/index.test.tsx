@@ -581,6 +581,23 @@ describe("SetupSection", () => {
     expect(refetchApproval).toHaveBeenCalledTimes(1);
   });
 
+  it("names the key's details as the New session key dialog does, marking destructive scopes", async () => {
+    await open(KEY_LINK.replace("createDataSet,addPieces", "addPieces,schedulePieceRemovals"));
+
+    const details = within(steps()[0]);
+    expect(details.getAllByRole("term").map((term) => term.textContent)).toEqual([
+      "Session key",
+      "Name",
+      "Scopes",
+      "Expiration",
+    ]);
+    expect(
+      within(details.getAllByRole("definition")[2])
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Add pieces", "Schedule piece removalsdestructive"]);
+  });
+
   it("says a one-day key expires after 1 day", async () => {
     await open(KEY_LINK.replace("days=7", "days=1"));
 
@@ -610,9 +627,9 @@ describe("SetupSection", () => {
         .map((row) => row.textContent);
       expect(rows).toEqual([
         "LimitYoursNeeded",
-        "Rate1.000 USDFC per epoch (too low)Unlimited",
-        "Lockup5.000 USDFC (too low)Unlimited",
-        "Lockup period1 day (too low)At least 30 days",
+        "Rate limit1.000 USDFC per epoch (too low)Unlimited",
+        "Reserve limit5.000 USDFC (too low)Unlimited",
+        "Max reserve period1 day (too low)At least 30 days",
       ]);
       expect(steps()[0].textContent).toContain("Approved with limits");
       expect(screen.queryByText("✓ Setup complete")).toBeNull();
