@@ -15,7 +15,6 @@ import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
-import { formatDateTime } from "@/utils/formatter";
 import { type ChosenGroupKey, chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { type KeyAgreementRequest, verifyKeyAgreementKey } from "@/utils/setupLink";
@@ -23,7 +22,7 @@ import { type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
 import { Detail, SetupStep, type StepTone } from "./SetupStep";
 
 export const GROUP_KEY_WARNING =
-  "This gives the session key permanent read access to everything in this group key, including future uploads. Expiry and revoking the session key do not take it back.";
+  "This session key can read all your uploads under this group key, including future ones. This access can't be revoked.";
 
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
@@ -115,11 +114,7 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
         </Notice>
       );
     case "waiting-for-key":
-      return (
-        <p className='mt-4 text-sm text-muted-foreground'>
-          Authorize the session key first: the Grant's fetching ends when its authorization does.
-        </p>
-      );
+      return <p className='mt-4 text-sm text-muted-foreground'>Authorize the session key first.</p>;
     case "read-failed":
       return (
         <Notice tone='error' role='alert' title='Could not read your data sets' className='mt-4'>
@@ -301,7 +296,7 @@ export const GroupKeyStep = ({
     <SetupStep
       number={number}
       title='Give this key access to encrypted uploads'
-      description='Lets the tool encrypt and decrypt your files with the session key, without your wallet. Your wallet signs two or three messages here; none of them is a transaction.'
+      description='Wraps your group key to this session key, so the tool can encrypt uploads and read them back without your wallet. A group key is the root encryption key for your encrypted data, derived from your wallet. Every dataset and piece you encrypt under it shares it, and your wallet can always re-derive it. No on-chain transaction is required.'
       status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
@@ -311,16 +306,11 @@ export const GroupKeyStep = ({
             <CopyButton value={sessionKey} tooltipText='Copy session key address' successMessage='Address copied' />
           </span>
           <span className='mt-0.5 block text-xs text-muted-foreground'>
-            Only this key can open the Grant. Check it matches the address your terminal printed.
+            Only this session key gets this access. Check it matches the address your terminal printed.
           </span>
         </Detail>
-        <Detail term='Group key'>
+        <Detail term='Group key id'>
           <GroupKeyDetail groupKey={groupKey} />
-        </Detail>
-        <Detail term='Fetching ends'>
-          {expires === null
-            ? "When the session key's authorization ends."
-            : `${formatDateTime(Number(expires) * 1000)}, with the session key's authorization.`}
         </Detail>
       </dl>
 
