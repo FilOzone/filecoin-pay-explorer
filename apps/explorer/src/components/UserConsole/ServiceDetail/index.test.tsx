@@ -35,6 +35,9 @@ vi.mock("../DatasetsSection", () => ({
     return <div data-testid='datasets' data-account-id={accountId} data-mount={mount} />;
   },
 }));
+vi.mock("../StaleQueue", () => ({
+  StaleQueue: () => null,
+}));
 
 afterEach(cleanup);
 
@@ -45,7 +48,7 @@ const FWSS = getChain("mainnet").contracts.fwss.address;
 describe("ServiceDetail", () => {
   it("shows not found when the payer has no relationship with the operator", () => {
     mocks.service = null;
-    render(<ServiceDetail network='mainnet' operatorAddress={OPERATOR} userAddress={PAYER} />);
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
 
     expect(screen.getByText("Service not found")).toBeTruthy();
     expect(screen.queryByText("Payment rails")).toBeNull();
@@ -53,7 +56,7 @@ describe("ServiceDetail", () => {
 
   it("skips datasets for an operator that isn't Warm Storage", () => {
     mocks.service = { totalRails: "1" };
-    render(<ServiceDetail network='mainnet' operatorAddress={OPERATOR} userAddress={PAYER} />);
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
 
     expect(screen.getByText("Payment rails")).toBeTruthy();
     expect(screen.queryByTestId("datasets")).toBeNull();
@@ -63,11 +66,13 @@ describe("ServiceDetail", () => {
     mocks.service = { totalRails: "0" };
     mocks.datasetMounts = 0;
 
-    const { rerender } = render(<ServiceDetail network='mainnet' operatorAddress={FWSS} userAddress={PAYER} />);
+    const { rerender } = render(
+      <ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={FWSS} userAddress={PAYER} />,
+    );
     expect(screen.getByTestId("datasets").dataset).toMatchObject({ accountId: PAYER, mount: "1" });
 
     const nextPayer = "0x3333333333333333333333333333333333333333";
-    rerender(<ServiceDetail network='mainnet' operatorAddress={FWSS} userAddress={nextPayer} />);
+    rerender(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={FWSS} userAddress={nextPayer} />);
     expect(screen.getByTestId("datasets").dataset).toMatchObject({ accountId: nextPayer, mount: "2" });
   });
 });
