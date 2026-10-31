@@ -29,13 +29,12 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
   const [page, setPage] = useState(1);
 
   // The notifications API serves a single network, so mutes only exist there.
-  const canMute =
-    isFilecoinChain &&
-    isNotificationsEligibleNetwork(network) &&
-    Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
+  const hasMutes = isNotificationsEligibleNetwork(network) && Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
+  // Reading mutes needs no signature, so only Keep waits for the wallet to be back on a Filecoin chain.
+  const canMute = hasMutes && isFilecoinChain;
 
   const staleDataSets = useStaleDataSets(accountId, { networkOverride: network });
-  const mutedDataSets = useMutedDataSets(canMute ? accountId : undefined);
+  const mutedDataSets = useMutedDataSets(hasMutes ? accountId : undefined);
 
   const staleList = staleDataSets.data?.dataSets;
   const mutedIds = mutedDataSets.data;

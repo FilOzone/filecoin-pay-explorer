@@ -171,12 +171,14 @@ describe("StaleQueue", () => {
   });
 
   // During a Squid top-up the console shows mainnet but the wallet signs on its source chain, which the API rejects.
-  it("skips mutes and Keep while the wallet is off a Filecoin chain", () => {
-    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1")]));
+  it("still excludes muted datasets but hides Keep while the wallet is off a Filecoin chain", () => {
+    mockUseStaleDataSets.mockReturnValue(loaded([staleDataSet("0xa", "1"), staleDataSet("0xb", "2")]));
+    mockUseMutedDataSets.mockReturnValue({ data: new Set(["1"]), isLoading: false });
 
     const markup = render("mainnet", false);
-    expect(mockUseMutedDataSets).toHaveBeenLastCalledWith(undefined);
-    expect(markup).toContain("Row 0xa");
+    expect(mockUseMutedDataSets).toHaveBeenLastCalledWith(ACCOUNT);
+    expect(markup).not.toContain("Row 0xa");
+    expect(markup).toContain("Row 0xb");
     expect(markup).not.toContain("with Keep");
   });
 
