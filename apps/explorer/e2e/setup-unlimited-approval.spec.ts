@@ -15,7 +15,7 @@ async function approveWarmStorageWithLimits(page: Page) {
 }
 
 const warmStorageStep = (page: Page) =>
-  page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Approve Warm Storage$/ }) });
+  page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Add Warm Storage$/ }) });
 
 test.describe("setup link that needs Warm Storage without spending limits", () => {
   test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");

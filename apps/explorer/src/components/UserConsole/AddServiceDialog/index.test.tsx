@@ -8,6 +8,7 @@ const OPERATOR = "0x2222222222222222222222222222222222222222";
 const mocks = vi.hoisted(() => ({
   dialogOpenChange: undefined as ((open: boolean) => void) | undefined,
   isDialogOpen: false,
+  selectDisabled: [] as (boolean | undefined)[],
   dialogContentProps: undefined as Record<string, unknown> | undefined,
   onSubmitOnChain: undefined as (() => void) | undefined,
   isSubmitting: false,
@@ -68,7 +69,10 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("@filecoin-pay/ui/components/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => children,
+  Select: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => {
+    mocks.selectDisabled.push(disabled);
+    return children;
+  },
   SelectContent: ({ children }: { children: React.ReactNode }) => children,
   SelectItem: ({ children }: { children: React.ReactNode }) => children,
   SelectSeparator: () => null,
@@ -144,6 +148,7 @@ function primaryButton(renderer: ReturnType<typeof create>) {
 
 beforeEach(() => {
   mocks.isDialogOpen = false;
+  mocks.selectDisabled = [];
   mocks.filBalanceStatus = "funded";
   mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
   mocks.chainId = 314;
@@ -182,6 +187,15 @@ describe("AddServiceDialog", () => {
     expect(mocks.setTokenChoice).toHaveBeenCalledWith(TOKEN);
     expect(mocks.setCustomServiceInput).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("2");
+  });
+
+  it("locks the service choice when a prefill names it, and leaves it open otherwise", () => {
+    renderDialog();
+    expect(mocks.selectDisabled.at(0)).toBe(false);
+
+    mocks.selectDisabled = [];
+    renderDialog(vi.fn(), { operator: OPERATOR, token: TOKEN, amount: "1" });
+    expect(mocks.selectDisabled.at(0)).toBe(true);
   });
 
   it("falls back to a custom address when the link names a service the list does not know", () => {

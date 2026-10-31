@@ -181,15 +181,34 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
     });
   // The steps keep one order, whatever the reads say; only what each one offers changes.
   const offer = fundsOffer({ missing, walletUsdfc, approval: approval.state });
-  // A link only carries a key-agreement key beside a session key.
-  const first = 1 + (request.sessionKey ? 1 : 0) + (request.keyAgreement ? 1 : 0);
+  // Warm Storage is step 1; the key steps follow Funds when it is shown.
+  const keyStep = request.approvalOnly ? 2 : 3;
 
   return (
     <>
       <ol className='flex flex-col'>
+        <WarmStorageStep
+          number={1}
+          network={network}
+          account={account}
+          approval={approval}
+          // An approval-only link never deposits.
+          deposit={!request.approvalOnly && offer === "with-approval" ? missing : null}
+        />
+        {!request.approvalOnly && (
+          <FundsStep
+            number={2}
+            network={network}
+            account={account}
+            deposit={request.deposit}
+            funds={funds}
+            missing={missing}
+            offer={offer}
+          />
+        )}
         {request.sessionKey && (
           <SessionKeyStep
-            number={1}
+            number={keyStep}
             network={network}
             account={account}
             request={request.sessionKey}
@@ -199,7 +218,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
         )}
         {request.sessionKey && request.keyAgreement && (
           <GroupKeyStep
-            number={2}
+            number={keyStep + 1}
             network={network}
             account={account}
             sessionKey={request.sessionKey.address}
@@ -207,25 +226,6 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
             // The Grant's claim ends with the key's authorization, so it waits for one.
             expires={grant.state === "authorized" ? grant.expiresAt : null}
             onIssued={() => setGroupKeyGranted(true)}
-          />
-        )}
-        <WarmStorageStep
-          number={first}
-          network={network}
-          account={account}
-          approval={approval}
-          // An approval-only link never deposits.
-          deposit={!request.approvalOnly && offer === "with-approval" ? missing : null}
-        />
-        {!request.approvalOnly && (
-          <FundsStep
-            number={first + 1}
-            network={network}
-            account={account}
-            deposit={request.deposit}
-            funds={funds}
-            missing={missing}
-            offer={offer}
           />
         )}
       </ol>
