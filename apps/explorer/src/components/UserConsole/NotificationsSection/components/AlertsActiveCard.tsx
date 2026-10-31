@@ -15,7 +15,8 @@ export const AlertsActiveCard = ({ onTurnOff, error }: AlertsActiveCardProps) =>
       </div>
       <h3 className='text-xl font-semibold'>Alerts are on</h3>
       <p className='text-sm text-muted-foreground'>
-        This wallet will receive alerts when the account has less than 30 days of service runway remaining.
+        This wallet will receive alerts when the account has less than 30 days of service runway remaining, and when a
+        Warm Storage dataset has had no new data for 30 days.
       </p>
       {error && <p className='text-sm text-destructive'>{error}</p>}
       <button type='button' onClick={onTurnOff} className='cursor-pointer text-sm text-destructive hover:underline'>

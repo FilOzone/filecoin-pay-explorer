@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlockNumber } from "wagmi";
 import { ListPagination } from "@/components/shared/ListPagination";
 import { getChain } from "@/constants/chains";
@@ -25,7 +26,10 @@ interface StaleQueueProps {
  * loading and when nothing is stale.
  */
 export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFilecoinChain }) => {
-  const [page, setPage] = useState(1);
+  // Null until the reader picks a page, so a linked dataset can choose it.
+  const [page, setPage] = useState<number | null>(null);
+  // Inactivity emails link to `?dataset=<id>#stale`.
+  const linkedDataSetId = useSearchParams().get("dataset");
 
   // The notifications API serves a single network, so mutes only exist there.
   const hasMutes = isNotificationsEligibleNetwork(network) && Boolean(process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL);
@@ -49,7 +53,27 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
   );
 
   // Waiting for mutes too keeps muted rows from flashing in.
-  if (staleDataSets.isLoading || mutedDataSets.isLoading) {
+  const isLoading = staleDataSets.isLoading || mutedDataSets.isLoading;
+
+  const linkedIndex = useMemo(
+    () =>
+      linkedDataSetId === null
+        ? -1
+        : ranked.findIndex((entry) => entry.dataSet.dataSetId.toString() === linkedDataSetId),
+    [ranked, linkedDataSetId],
+  );
+
+  // The queue renders after its data loads, too late for the browser's own jump to #stale.
+  const hasRows = !isLoading && ranked.length > 0;
+  const hasScrolled = useRef(false);
+  useEffect(() => {
+    if (!hasRows || hasScrolled.current || window.location.hash !== "#stale") return;
+    hasScrolled.current = true;
+    const target = document.getElementById(`stale-dataset-${linkedDataSetId}`) ?? document.getElementById("stale");
+    target?.scrollIntoView({ block: "center" });
+  }, [hasRows, linkedDataSetId]);
+
+  if (isLoading) {
     return null;
   }
 
@@ -70,7 +94,8 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
 
   // Keeping the last row of the last page shrinks the page count under `page`.
   const pageCount = Math.ceil(ranked.length / PAGE_SIZE);
-  const currentPage = Math.min(page, pageCount);
+  const linkedPage = linkedIndex === -1 ? 1 : Math.floor(linkedIndex / PAGE_SIZE) + 1;
+  const currentPage = Math.min(page ?? linkedPage, pageCount);
   const pageRows = ranked.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
@@ -82,7 +107,13 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
       ) : null}
       <ul className='flex flex-col divide-y'>
         {pageRows.map((entry) => (
-          <StaleQueueRow key={entry.dataSet.id} {...entry} accountId={accountId} canMute={canMute && !mutesFailed} />
+          <StaleQueueRow
+            key={entry.dataSet.id}
+            {...entry}
+            accountId={accountId}
+            canMute={canMute && !mutesFailed}
+            isLinked={entry.dataSet.dataSetId.toString() === linkedDataSetId}
+          />
         ))}
       </ul>
       {pageCount > 1 ? (
