@@ -619,7 +619,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
 
               <div className='flex flex-col gap-2'>
                 <Label>Session signer</Label>
-                {!isExistingKey && (
+                {!addressLocked && (
                   <label className='flex items-start gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 cursor-pointer'>
                     <input
                       type='radio'
