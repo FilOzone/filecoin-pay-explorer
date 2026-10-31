@@ -8,7 +8,7 @@ test("clicking another field while a select is open keeps the dialog open", asyn
   });
   await page.goto("/console/setup?deposit=2&operator=fwss&network=mainnet");
   await loginWithTestAccount(page);
-  await page.getByRole("button", { name: "Approve and deposit 2 USDFC" }).click({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }).click({ timeout: 30_000 });
 
   const dialog = page.getByRole("dialog", { name: "Add a Service" });
   const heading = dialog.getByRole("heading", { name: "Add a Service" });
