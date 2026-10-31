@@ -5,7 +5,7 @@ export const formatPercentage = (value: number): string => `${value >= 0 ? "+" :
 
 export const formatAddress = (address: string): string => `${address.slice(0, 6)}...${address.slice(-4)}`;
 
-export const formatDate = (timestamp: bigint): string =>
+export const formatDate = (timestamp: bigint | string): string =>
   new Date(Number(timestamp) * 1000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -21,7 +21,7 @@ export function formatCompactNumber(value: number | string | bigint, decimals: n
 
 export function formatToken(
   value: number | string | bigint,
-  tokenDecimals: number | bigint = 18,
+  tokenDecimals: number | string | bigint = 18,
   symbol: string = "",
   decimals: number = 2,
 ) {
@@ -37,7 +37,7 @@ export function formatToken(
  */
 export function formatTokenTruncated(
   value: bigint,
-  tokenDecimals: number | bigint,
+  tokenDecimals: number | string | bigint,
   symbol: string = "",
   decimals: number = 2,
 ): string {
@@ -117,7 +117,7 @@ export const isUnlimitedValue = (value: number | string | bigint): boolean => {
 };
 
 export const epochToDate = (
-  futureEpoch: bigint | number,
+  futureEpoch: bigint | number | string,
   currentEpoch: bigint | number,
   epochDuration: number = EPOCH_DURATION,
 ): Date => {
@@ -177,7 +177,10 @@ export const formatFutureTimestamp = (
   }
 };
 
-export const formatEpochDuration = (epochs: bigint | number, epochDuration: number = EPOCH_DURATION): string => {
+export const formatEpochDuration = (
+  epochs: bigint | number | string,
+  epochDuration: number = EPOCH_DURATION,
+): string => {
   const totalSeconds = BigInt(epochs) * BigInt(epochDuration);
   if (totalSeconds === 0n) return "None";
   if (totalSeconds < 60n) return "<1m";

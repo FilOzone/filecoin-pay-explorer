@@ -86,7 +86,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-2xl font-semibold'>Rails</h2>
-        <span className='text-sm text-muted-foreground'>{operator.totalRails.toString()} total</span>
+        <span className='text-sm text-muted-foreground'>{operator.totalRails} total</span>
       </div>
 
       <Card>
@@ -107,7 +107,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
               <TableRow key={rail.id}>
                 <TableCell className='font-medium'>
                   <StyledLink>
-                    <NetworkLink href={`/rail/${rail.railId}`}>{rail.railId.toString()}</NetworkLink>
+                    <NetworkLink href={`/rail/${rail.railId}`}>{rail.railId}</NetworkLink>
                   </StyledLink>
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
