@@ -296,7 +296,18 @@ export const GroupKeyStep = ({
     <SetupStep
       number={number}
       title='Give this key access to encrypted uploads'
-      description='Wraps your group key to this session key, so the tool can encrypt uploads and read them back without your wallet. A group key is the root encryption key for your encrypted data, derived from your wallet. Every dataset and piece you encrypt under it shares it, and your wallet can always re-derive it. No on-chain transaction is required.'
+      description={
+        <>
+          <p>
+            Wraps your group key to this session key, so the tool can encrypt uploads and read them back without your
+            wallet. No on-chain transaction is required.
+          </p>
+          <p className='mt-2'>
+            A group key is the root encryption key for your encrypted data, derived from your wallet. Every dataset and
+            piece you encrypt under it shares it, and your wallet can always re-derive it.
+          </p>
+        </>
+      }
       status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
