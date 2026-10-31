@@ -209,4 +209,17 @@ describe("CreateKeyFlow requested name", () => {
 
     expect(nameInput().value).toBe("my laptop");
   });
+
+  it("hides the generate option when the link supplies the address", () => {
+    renderRequest(["createDataSet"]);
+
+    expect(screen.queryByText(/Generate for me/)).toBeNull();
+    expect(screen.getByText("0x00000000000000000000000000000000000000bb")).toBeTruthy();
+  });
+
+  it("offers the generate option without a link", () => {
+    renderRequest([], { prefillAddress: undefined });
+
+    expect(screen.getByText(/Generate for me/)).toBeTruthy();
+  });
 });
