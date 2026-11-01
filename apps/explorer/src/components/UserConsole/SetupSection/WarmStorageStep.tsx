@@ -143,7 +143,7 @@ interface WarmStorageStepProps {
 }
 
 /**
- * Approve Warm Storage in Add a Service, filled in with Warm Storage, USDFC
+ * Add Warm Storage in Add a Service, filled in with Warm Storage, USDFC
  * and, when it also deposits, what Filecoin Pay still lacks. Never
  * offered once approved: the dialog's unlimited defaults would overwrite the
  * limits the owner set. Lifting those limits is its own confirmed step,
@@ -167,12 +167,12 @@ export const WarmStorageStep = ({ number, network, account, approval, deposit }:
   );
   // Only once the chain says there is none: an approval that could not be read may already exist.
   const canApprove = approval.state === "not-approved";
-  const approveLabel = deposit ? `Approve and deposit${amount ? ` ${amount} USDFC` : ""}` : "Approve Warm Storage";
+  const approveLabel = deposit ? `Add Warm Storage and deposit${amount ? ` ${amount} USDFC` : ""}` : "Add Warm Storage";
 
   return (
     <SetupStep
       number={number}
-      title='Approve Warm Storage'
+      title='Add Warm Storage'
       description={description(approval.state, deposit)}
       status={APPROVAL_STATUS[approval.state]}
     >

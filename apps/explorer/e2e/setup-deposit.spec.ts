@@ -15,7 +15,7 @@ test.describe("setup link for an approved account with USDFC in the wallet", () 
     await page.goto("/console/setup?deposit=2&network=mainnet");
     await loginWithTestAccount(page);
 
-    await expect(page.locator("ol > li h2")).toHaveText(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"], {
+    await expect(page.locator("ol > li h2")).toHaveText(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"], {
       timeout: 30_000,
     });
     await expect(page.getByRole("button", { name: "Add funds" })).toHaveCount(0);

@@ -213,27 +213,27 @@ describe("SetupSection", () => {
     expect(switchChain).toHaveBeenCalledWith({ chainId: getChain("calibration").id });
   });
 
-  it("lists the key, the approval and the funds, in that order, for a key link", async () => {
+  it("lists the approval, the funds and the key, in that order, for a key link", async () => {
     await open(KEY_LINK);
 
     expect(stepTitles()).toEqual([
-      "Step 1: Authorize a session key",
-      "Step 2: Approve Warm Storage",
-      "Step 3: Fund Filecoin Pay",
+      "Step 1: Add Warm Storage",
+      "Step 2: Fund Filecoin Pay",
+      "Step 3: Authorize a session key",
     ]);
-    expect(steps()[0].textContent).toContain(KEY);
-    expect(steps()[0].textContent).toContain("filecoin-cli");
-    expect(steps()[0].textContent).toContain("After 7 days");
+    expect(steps()[2].textContent).toContain(KEY);
+    expect(steps()[2].textContent).toContain("filecoin-cli");
+    expect(steps()[2].textContent).toContain("After 7 days");
   });
 
-  it("adds the group key step after the key, only for a link with a pubkey, waiting for the authorization", async () => {
+  it("adds the group key step right after the key, only for a link with a pubkey, waiting for the authorization", async () => {
     const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
     await open(link);
     expect(stepTitles()).toEqual([
-      "Step 1: Authorize a session key",
-      "Step 2: Give this key access to encrypted uploads",
-      "Step 3: Approve Warm Storage",
-      "Step 4: Fund Filecoin Pay",
+      "Step 1: Add Warm Storage",
+      "Step 2: Fund Filecoin Pay",
+      "Step 3: Authorize a session key",
+      "Step 4: Give this key access to encrypted uploads",
     ]);
     const before = dialogs.groupKey.at(-1);
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
@@ -302,7 +302,7 @@ describe("SetupSection", () => {
     ];
     await open(KEY_LINK);
 
-    expect(steps()[0].textContent).toContain("Authorized until");
+    expect(steps()[2].textContent).toContain("Authorized until");
     expect(screen.queryByRole("button", { name: "Review and authorize" })).toBeNull();
   });
 
@@ -310,11 +310,11 @@ describe("SetupSection", () => {
     state.walletUsdfc = 2n * ONE_USDFC;
     await open("deposit=2&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     // The funds step points at the approval rather than offering a second deposit.
     expect(steps()[1].textContent).toContain("Approving Warm Storage above also deposits the 2 USDFC");
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Approve and deposit 2 USDFC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }));
 
     expect(screen.getByRole("dialog", { name: "Add a Service" })).toBeTruthy();
     expect(dialogs.addService.at(-1)?.prefill).toEqual({
@@ -347,7 +347,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     await open("deposit=2&operator=fwss&network=mainnet");
 
-    fireEvent.click(screen.getByRole("button", { name: "Approve and deposit 2 USDFC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }));
     expect(dialogs.addService.at(-1)?.prefill).toEqual(expect.objectContaining({ amount: "2" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(false);
   });
@@ -358,9 +358,9 @@ describe("SetupSection", () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     await open("deposit=10&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     expect(within(steps()[1]).getByRole("button", { name: "Add funds" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Approve Warm Storage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
   });
 
@@ -370,7 +370,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 20n * ONE_USDFC;
     await open("deposit=10&balance=17.342&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     fireEvent.click(screen.getByRole("button", { name: "Deposit 10 USDFC" }));
     const props = dialogs.deposit.at(-1);
     expect({ amount: props?.initialAmount, token: props?.initialTokenAddress }).toEqual({
@@ -430,12 +430,12 @@ describe("SetupSection", () => {
     state.approved = true;
     state.walletUsdfc = ONE_USDFC;
     await open("network=mainnet");
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     expect(screen.queryByText("✓ Setup complete")).toBeNull();
 
     cleanup();
     await open("operator=fwss&network=mainnet");
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage"]);
     expect(screen.getByText("✓ Setup complete")).toBeTruthy();
   });
 
@@ -447,9 +447,9 @@ describe("SetupSection", () => {
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
 
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Approve Warm Storage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
   });
 
@@ -500,7 +500,7 @@ describe("SetupSection", () => {
     state.fundsUnreadable = false;
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
-    expect(stepTitles()).toEqual(["Step 1: Approve Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
     expect(screen.getByText("✓ Setup complete")).toBeTruthy();
   });
@@ -557,7 +557,7 @@ describe("SetupSection", () => {
   it("counts an approval and its deposit as soon as the chain shows them, offering no second deposit", async () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
-    expect(screen.getByRole("button", { name: "Approve and deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" })).toBeTruthy();
 
     // The receipt lands: approval and deposit in the same read, whatever the subgraph has indexed.
     state.approved = true;
@@ -584,7 +584,7 @@ describe("SetupSection", () => {
   it("says a one-day key expires after 1 day", async () => {
     await open(KEY_LINK.replace("days=7", "days=1"));
 
-    expect(steps()[0].textContent).toContain("After 1 day, unless you change it");
+    expect(steps()[2].textContent).toContain("After 1 day, unless you change it");
   });
 
   describe("a link asking for unlimited approval", () => {
@@ -653,7 +653,7 @@ describe("SetupSection", () => {
     it("still offers Add a Service when nothing is approved yet", async () => {
       await open("operator=fwss&network=mainnet&approval=unlimited");
 
-      expect(screen.getByRole("button", { name: "Approve Warm Storage" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Add Warm Storage" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: "Remove spending limits" })).toBeNull();
     });
   });

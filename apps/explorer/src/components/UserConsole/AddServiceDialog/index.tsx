@@ -37,7 +37,7 @@ import {
   useTokenSelection,
 } from "./hooks";
 
-/** Values a funding link fills in before the dialog opens; the user can still edit every field. */
+/** Values the setup step fills in before the dialog opens. The service is locked to `operator`; the other fields stay editable. */
 export interface AddServicePrefill {
   operator: Hex;
   token: Hex;
@@ -116,6 +116,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
   withoutDeposit = false,
 }) => {
   const serviceSelection = useServiceSelection(network);
+  // Only the setup step passes a prefill, and it must approve that service, not another.
+  const serviceLocked = !!prefill;
   const tokenSelection = useTokenSelection(network, open);
   const [isCheckingGas, setIsCheckingGas] = useState(false);
   const isGasCheckInFlight = useRef(false);
@@ -291,7 +293,11 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
           {/* Service */}
           <div className='grid gap-3'>
             <Label htmlFor='service'>Select Service</Label>
-            <Select value={serviceChoice} onValueChange={serviceSelection.setServiceChoice} disabled={isBusy}>
+            <Select
+              value={serviceChoice}
+              onValueChange={serviceSelection.setServiceChoice}
+              disabled={isBusy || serviceLocked}
+            >
               <SelectTrigger id='service' className='w-full'>
                 <SelectValue placeholder={isLoadingServices ? "Loading services…" : "Choose a service…"} />
               </SelectTrigger>
@@ -320,7 +326,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
                   placeholder='Service contract address 0x…'
                   value={serviceSelection.customServiceInput}
                   onChange={serviceSelection.setCustomServiceInput}
-                  disabled={isBusy}
+                  disabled={isBusy || serviceLocked}
                 />
                 {serviceSelection.customServiceInput &&
                   (isOperatorValid ? (
