@@ -14,7 +14,9 @@ test("clicking another field while a select is open keeps the dialog open", asyn
   const heading = dialog.getByRole("heading", { name: "Add a Service" });
   await expect(heading).toBeVisible();
   const field = await dialog.getByPlaceholder("0.0").first().boundingBox();
-  await dialog.getByRole("combobox").first().click();
+  // From setup the service is locked to Warm Storage; the token select is still open to the user.
+  await expect(dialog.locator("#service")).toBeDisabled();
+  await dialog.locator("#paymentToken").click();
   await expect(page.getByRole("listbox")).toBeVisible();
 
   // The open select sets `pointer-events: none` on body, so click by position.
