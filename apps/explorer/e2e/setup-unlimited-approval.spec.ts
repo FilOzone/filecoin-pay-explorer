@@ -36,7 +36,7 @@ test.describe("setup link that needs Warm Storage without spending limits", () =
 
     const step = warmStorageStep(page);
     await expect(step.getByText("Approved with limits")).toBeVisible({ timeout: 30_000 });
-    await expect(step.getByRole("row", { name: /^Lockup period/ })).toContainText("At least 30 days");
+    await expect(step.getByRole("row", { name: /^Max reserve period/ })).toContainText("At least 30 days");
     await page.getByRole("button", { name: "Remove spending limits" }).click();
     await page
       .getByRole("dialog", { name: "Remove Warm Storage spending limits" })

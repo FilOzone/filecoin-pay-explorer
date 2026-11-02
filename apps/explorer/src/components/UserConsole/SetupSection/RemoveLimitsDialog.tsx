@@ -73,7 +73,7 @@ export const RemoveLimitsDialog = ({ network, account, current, open, onOpenChan
         <DialogHeader>
           <DialogTitle>Remove Warm Storage spending limits</DialogTitle>
           <DialogDescription>
-            Warm Storage will be able to charge for storage without a cap on its rate or lockup. It still only charges
+            Warm Storage will be able to charge for storage without a cap on its rate or reserve. It still only charges
             for data sets you or your session keys create, and you can set limits again from the dashboard.
           </DialogDescription>
         </DialogHeader>

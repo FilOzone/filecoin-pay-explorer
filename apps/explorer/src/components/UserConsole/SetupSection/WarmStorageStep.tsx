@@ -76,19 +76,22 @@ const formatPeriod = (epochs: bigint) => {
   return days === 1n ? "1 day" : `${days.toString()} days`;
 };
 
-/** The owner's current limits beside what the tool needs, so the change is visible before the wallet asks. */
+/**
+ * The owner's current limits beside what the tool needs, so the change is visible before the wallet asks.
+ * Named as Add a Service names them where the owner set them.
+ */
 const LimitsTable = ({ terms }: { terms: OperatorApprovalTerms }) => {
   const short = limitShortfalls(terms);
   const rows = [
     {
-      label: "Rate",
+      label: "Rate limit",
       yours: formatAllowance(terms.rateAllowance, " per epoch"),
       needed: "Unlimited",
       short: short.rate,
     },
-    { label: "Lockup", yours: formatAllowance(terms.lockupAllowance), needed: "Unlimited", short: short.lockup },
+    { label: "Reserve limit", yours: formatAllowance(terms.lockupAllowance), needed: "Unlimited", short: short.lockup },
     {
-      label: "Lockup period",
+      label: "Max reserve period",
       yours: formatPeriod(terms.maxLockupPeriod),
       needed: `At least ${formatPeriod(DEFAULT_MAX_LOCKUP_PERIOD)}`,
       short: short.period,
