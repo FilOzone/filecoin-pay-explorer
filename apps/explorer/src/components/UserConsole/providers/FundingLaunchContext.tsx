@@ -11,6 +11,10 @@ type FundingLaunch = {
   closeAddFunds: () => void;
   openSquid: () => void;
   closeSquid: () => void;
+  /** A login just created a new user, so the first unfunded overview leads with Add funds. */
+  isFundingAfterSignup: boolean;
+  requestFundingAfterSignup: () => void;
+  clearFundingAfterSignup: () => void;
 };
 const FundingLaunchContext = createContext<FundingLaunch | null>(null);
 
@@ -18,6 +22,7 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
   const [isAddFundsOpen, setAddFundsOpen] = useState(false);
   const [isSquidOpen, setSquidOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
+  const [isFundingAfterSignup, setFundingAfterSignup] = useState(false);
   const openAddFunds = useCallback((nextToken?: UserToken | null) => {
     setDepositToken(nextToken ?? null);
     setSquidOpen(false);
@@ -29,9 +34,33 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
     setSquidOpen(true);
   }, []);
   const closeSquid = useCallback(() => setSquidOpen(false), []);
+  const requestFundingAfterSignup = useCallback(() => setFundingAfterSignup(true), []);
+  const clearFundingAfterSignup = useCallback(() => setFundingAfterSignup(false), []);
   const value = useMemo(
-    () => ({ closeAddFunds, closeSquid, depositToken, isAddFundsOpen, isSquidOpen, openAddFunds, openSquid }),
-    [closeAddFunds, closeSquid, depositToken, isAddFundsOpen, isSquidOpen, openAddFunds, openSquid],
+    () => ({
+      clearFundingAfterSignup,
+      closeAddFunds,
+      closeSquid,
+      depositToken,
+      isAddFundsOpen,
+      isFundingAfterSignup,
+      isSquidOpen,
+      openAddFunds,
+      openSquid,
+      requestFundingAfterSignup,
+    }),
+    [
+      clearFundingAfterSignup,
+      closeAddFunds,
+      closeSquid,
+      depositToken,
+      isAddFundsOpen,
+      isFundingAfterSignup,
+      isSquidOpen,
+      openAddFunds,
+      openSquid,
+      requestFundingAfterSignup,
+    ],
   );
   return <FundingLaunchContext.Provider value={value}>{children}</FundingLaunchContext.Provider>;
 }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
@@ -18,30 +19,48 @@ vi.mock("../AddServiceDialog", () => ({
 }));
 
 function LaunchState() {
-  const { isAddFundsOpen } = useFundingLaunch();
-  return <output data-open={isAddFundsOpen} />;
+  const { isAddFundsOpen, isFundingAfterSignup } = useFundingLaunch();
+  return <output data-open={isAddFundsOpen} data-after-signup={isFundingAfterSignup} />;
+}
+
+function SignupFlag() {
+  const { requestFundingAfterSignup } = useFundingLaunch();
+  useEffect(() => requestFundingAfterSignup(), [requestFundingAfterSignup]);
+  return null;
+}
+
+function renderCard(children?: React.ReactNode) {
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <FundingLaunchProvider>
+        {children}
+        <AccountNotFound network='mainnet' />
+        <LaunchState />
+      </FundingLaunchProvider>,
+    );
+  });
+  return renderer;
 }
 
 describe("AccountNotFound", () => {
-  it("keeps Deposit and Add Service primary and direct funding secondary", () => {
-    let renderer!: ReturnType<typeof create>;
-    act(() => {
-      renderer = create(
-        <FundingLaunchProvider>
-          <AccountNotFound network='mainnet' />
-          <LaunchState />
-        </FundingLaunchProvider>,
-      );
-    });
+  it("leads with Add funds and keeps adding a service secondary", () => {
+    const renderer = renderCard();
+    expect(renderer.root.findByProps({ "data-open": false })).toBeDefined();
 
-    const primary = renderer.root.findByProps({ "data-variant": "primary" });
-    expect(primary.findByType("span").children).toContain("Deposit and Add Service");
-    act(() => primary.props.onClick());
+    const service = renderer.root.findByProps({ "data-variant": "ghost" });
+    expect(service.children).toContain("Add a service");
+    act(() => service.props.onClick());
     expect(renderer.root.findByProps({ "data-add-service-open": true })).toBeDefined();
 
-    const addFunds = renderer.root.findByProps({ "data-variant": "ghost" });
-    expect(addFunds.children).toContain("Add funds");
+    const addFunds = renderer.root.findByProps({ "data-variant": "primary" });
+    expect(addFunds.findByType("span").children).toContain("Add funds");
     act(() => addFunds.props.onClick());
     expect(renderer.root.findByProps({ "data-open": true })).toBeDefined();
+  });
+
+  it("opens Add funds once for a wallet that just signed up", () => {
+    const renderer = renderCard(<SignupFlag />);
+    expect(renderer.root.findByProps({ "data-open": true, "data-after-signup": false })).toBeDefined();
   });
 });
