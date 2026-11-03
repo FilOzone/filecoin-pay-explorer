@@ -2,25 +2,50 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Account, Address } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { ArrowsSplitIcon, CoinsIcon, UserCheckIcon } from "@phosphor-icons/react";
+import OnchainNameMarker from "@/components/shared/OnchainNameMarker";
 import { resolveAddressName } from "@/constants/known-addresses";
+import useNetwork from "@/hooks/useNetwork";
+import { useAddressServiceMetadata } from "@/hooks/useServiceMetadata";
 import { formatCompactNumber } from "@/utils/formatter";
-import { CopyableText, MetricItem } from "../../shared";
+import { CopyableText, CopyButton, MetricItem } from "../../shared";
 
 interface AccountOverviewLayoutProps {
   children: React.ReactNode;
   address: Address;
 }
 
-const AccountOverviewLayout: React.FC<AccountOverviewLayoutProps> = ({ children, address }) => (
-  <PageSection backgroundVariant='light'>
-    <div className='flex flex-col gap-6 -mt-15'>
-      <div className='flex items-center justify-between'>
-        <h3 className='text-2xl font-medium'>{resolveAddressName(address)?.name ?? address}</h3>
+const AccountOverviewLayout: React.FC<AccountOverviewLayoutProps> = ({ children, address }) => {
+  const { network } = useNetwork();
+  const { data: metadata } = useAddressServiceMetadata(address, network);
+  const name = resolveAddressName(address, metadata?.name);
+
+  return (
+    <PageSection backgroundVariant='light'>
+      <div className='flex flex-col gap-6 -mt-15'>
+        <div className='group flex items-center gap-1'>
+          <h3 className='flex min-w-0 items-center gap-1 text-2xl font-medium' title={address}>
+            {name?.source === "onchain" ? (
+              <>
+                {/* Up to 256 chars of contract text; the address tooltip is the identity that counts. */}
+                <span className='max-w-xl truncate'>{name.name}</span>
+                <OnchainNameMarker />
+              </>
+            ) : (
+              // A curated name, or the address when unnamed or the onchain name was rejected.
+              (name?.name ?? address)
+            )}
+          </h3>
+          <CopyButton
+            value={address}
+            className='opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100 transition-opacity ml-1'
+            successMessage='Account address copied to clipboard'
+          />
+        </div>
+        {children}
       </div>
-      {children}
-    </div>
-  </PageSection>
-);
+    </PageSection>
+  );
+};
 
 interface AccountOverviewProps {
   account: Account;
