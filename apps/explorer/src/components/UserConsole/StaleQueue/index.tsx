@@ -22,7 +22,7 @@ interface StaleQueueProps {
 
 /**
  * Triage queue for stale Warm Storage datasets: ranked by monthly spend times
- * days inactive, with Keep (snooze) and a stubbed Terminate. Hidden while
+ * days inactive, with Keep (snooze) and Terminate. Hidden while
  * loading and when nothing is stale.
  */
 export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFilecoinChain }) => {
@@ -111,6 +111,7 @@ export const StaleQueue: React.FC<StaleQueueProps> = ({ accountId, network, isFi
             key={entry.dataSet.id}
             {...entry}
             accountId={accountId}
+            network={network}
             canMute={canMute && !mutesFailed}
             isLinked={entry.dataSet.dataSetId.toString() === linkedDataSetId}
           />

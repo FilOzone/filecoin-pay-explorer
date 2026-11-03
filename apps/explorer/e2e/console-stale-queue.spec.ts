@@ -86,5 +86,6 @@ test("an inactivity email link opens the queue on its dataset's page, scrolled t
   const linkedRow = page.locator("#stale-dataset-11");
   await expect(linkedRow).toHaveAttribute("aria-current", "true", { timeout: 30_000 });
   await expect(linkedRow).toBeInViewport();
+  await expect(linkedRow.getByRole("button", { name: "Terminate" })).toBeEnabled();
   await expect(page.locator("#stale-dataset-1")).toHaveCount(0);
 });

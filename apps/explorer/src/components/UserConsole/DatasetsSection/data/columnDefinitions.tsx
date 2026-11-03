@@ -7,6 +7,7 @@ import { CopyableText, RailStateBadge, StyledLink } from "@/components/shared";
 import type { Network } from "@/types";
 import { formatBytes, formatDate } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
+import { TerminateDataSet } from "../components/TerminateDataSet";
 import { monthlyDataSetSpend } from "./monthlySpend";
 
 const columnHelper = createColumnHelper<DataSet>();
@@ -96,5 +97,15 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
         PDP Explorer
       </StyledLink>
     ),
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: () => <span className='sr-only'>Actions</span>,
+    cell: (info) => {
+      const dataSet = info.row.original;
+      const { state } = dataSet.pdpRail;
+      if (state === "TERMINATED" || state === "FINALIZED") return null;
+      return <TerminateDataSet dataSet={dataSet} network={network} />;
+    },
   }),
 ];

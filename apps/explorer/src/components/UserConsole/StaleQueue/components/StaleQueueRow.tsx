@@ -1,23 +1,33 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ID } from "@filecoin-foundation/ui-filecoin/Table/ID";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import clsx from "clsx";
 import { useState } from "react";
 import { InlineTextLoader } from "@/components/shared";
 import { useMuteDataSet } from "@/hooks/useMuteDataSet";
+import type { Network } from "@/types";
 import { isUserRejection } from "@/utils/wallet-errors";
+import { TerminateDataSet } from "../../DatasetsSection/components/TerminateDataSet";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import type { RankedDataSet } from "../data/staleness";
 import { SnoozeDialog } from "./SnoozeDialog";
 
 type StaleQueueRowProps = RankedDataSet & {
   accountId: string;
+  network: Network;
   canMute: boolean;
   /** Opened from an inactivity email link. */
   isLinked: boolean;
 };
 
-export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute, isLinked }: StaleQueueRowProps) {
+export function StaleQueueRow({
+  dataSet,
+  days,
+  monthlySpend,
+  accountId,
+  network,
+  canMute,
+  isLinked,
+}: StaleQueueRowProps) {
   const muteDataSet = useMuteDataSet(accountId);
   const [isSnoozeDialogOpen, setIsSnoozeDialogOpen] = useState(false);
   const dataSetId = dataSet.dataSetId.toString();
@@ -53,17 +63,7 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute,
             {muteDataSet.isPending ? <InlineTextLoader text='Keeping' /> : "Keep"}
           </Button>
         ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: makes the disabled action explanation keyboard-accessible */}
-            <span tabIndex={0}>
-              <Button variant='ghost' disabled={true} className='text-destructive'>
-                Terminate
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side='top'>Terminating datasets from the console isn't available yet.</TooltipContent>
-        </Tooltip>
+        <TerminateDataSet dataSet={dataSet} network={network} />
       </div>
       {isSnoozeDialogOpen ? (
         <SnoozeDialog

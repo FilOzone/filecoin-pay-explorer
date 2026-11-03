@@ -1,3 +1,4 @@
+import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import type { TransactionMetadata } from "@/types";
 import { formatAddress } from "./formatter";
 
@@ -105,19 +106,19 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
         },
       }[status];
 
-    case "terminateRail":
+    case "terminateDataSet":
       return {
         pending: {
-          title: railId ? `Terminating Rail #${railId}` : "Terminating Rail",
+          title: `Terminating Dataset #${metadata.dataSetId}`,
           description: "Processing termination...",
         },
         success: {
-          title: "Rail Terminated",
-          description: railId ? `Rail #${railId} has been terminated` : "Rail termination complete",
+          title: "Dataset Terminated",
+          description: `Dataset #${metadata.dataSetId} stops paying within ${TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS} days`,
         },
         error: {
           title: "Termination Failed",
-          description: railId ? `Failed to terminate Rail #${railId}` : "Rail termination rejected",
+          description: `Failed to terminate Dataset #${metadata.dataSetId}`,
         },
       }[status];
 

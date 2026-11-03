@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
 
@@ -10,6 +10,10 @@ vi.mock("@/hooks/useAccountDataSets", () => ({
 }));
 vi.mock("wagmi", () => ({
   useBlockNumber: () => ({ data: undefined }),
+  useConnection: () => ({ address: undefined }),
+}));
+vi.mock("@/hooks/useContractTransaction", () => ({
+  useContractTransaction: () => ({ execute: vi.fn(), isExecuting: false }),
 }));
 // The explorer URL network differs from the console's, so links must follow the prop.
 vi.mock("@/hooks/useNetwork", () => ({
@@ -94,5 +98,25 @@ describe("DatasetsSection", () => {
       "https://pdp.filecoin.cloud/mainnet/dataset/7",
     );
     expect(screen.getByTitle(PROVIDER).getAttribute("href")).toBe(`/mainnet/accounts/${PROVIDER}`);
+  });
+
+  it("offers Terminate only for datasets whose storage payment is still running", () => {
+    const terminatedDataSet = {
+      ...wireRow,
+      id: "0x08",
+      dataSetId: "8",
+      pdpRail: { ...wireRow.pdpRail, state: "TERMINATED" },
+    };
+    mockUseAccountDataSets.mockReturnValue({
+      data: { dataSets: [wireRow, terminatedDataSet], hasMore: false },
+      isLoading: false,
+      isError: false,
+    });
+
+    renderSection();
+
+    const [, activeRow, terminatedRow] = screen.getAllByRole("row");
+    expect(within(activeRow).getByRole("button", { name: "Terminate" })).toBeTruthy();
+    expect(within(terminatedRow).queryByRole("button", { name: "Terminate" })).toBeNull();
   });
 });
