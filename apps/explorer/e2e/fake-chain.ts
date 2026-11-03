@@ -35,13 +35,18 @@ const OPERATOR_APPROVALS = toFunctionSelector(operatorApprovalsAbi[0]);
 // The card purchase checks the recipient's USDC on Base before and after buying.
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
+// IFilecoinServiceMetadata, which the explorer reads from operators and validators.
+const SERVICE_METADATA = ["name()", "description()", "homepage()"].map((signature) => toFunctionSelector(signature));
+// A reverted call inside aggregate3, as from a contract without the interface.
+const REVERTED = null;
 
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
  * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
  * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet; a spec can set the wallet's USDFC in
  * window.__fakeUsdfcBalance (base units, as a decimal string). Filecoin Pay reports no operator approved
- * unless a spec lists the operator in window.__fakeApprovedOperators. Any other RPC call falls through to the route
+ * unless a spec lists the operator in window.__fakeApprovedOperators. Batched IFilecoinServiceMetadata reads revert,
+ * so every service renders as its address. Any other RPC call falls through to the route
  * that blocks it (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
@@ -165,13 +170,18 @@ export async function installFakeChain(page: Page): Promise<void> {
     const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
       if (registryAt(c.target)) return readRegistry(txs, c.callData);
       if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
-      return readBalance(c.target, c.callData, usdfc);
+      const balance = readBalance(c.target, c.callData, usdfc);
+      // Token metadata (USDFC's name()) is answered above; any other service has no metadata.
+      if (balance === undefined && SERVICE_METADATA.includes(c.callData.slice(0, 10) as Hex)) return REVERTED;
+      return balance;
     });
-    if (!results.every((r): r is Hex => r !== undefined)) return undefined;
+    if (!results.every((r) => r !== undefined)) return undefined;
     return encodeFunctionResult({
       abi: multicall3Abi,
       functionName: "aggregate3",
-      result: results.map((returnData) => ({ success: true, returnData })),
+      result: results.map((returnData) =>
+        returnData === REVERTED ? { success: false, returnData: "0x" as const } : { success: true, returnData },
+      ),
     });
   };
 
