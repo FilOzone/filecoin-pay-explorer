@@ -3,10 +3,8 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { resolveAddressName } from "@/constants/known-addresses";
 import useNetwork from "@/hooks/useNetwork";
-import { useAddressServiceMetadata } from "@/hooks/useServiceMetadata";
 import type { Network } from "@/types";
 import CopyButton from "./CopyButton";
-import OnchainNameMarker, { ONCHAIN_NAME_LABEL } from "./OnchainNameMarker";
 
 interface CopyableTextProps {
   value: string;
@@ -19,10 +17,12 @@ interface CopyableTextProps {
   linkClassName?: string;
   monospace?: boolean;
   lookupName?: boolean;
-  /** Read the address's IFilecoinServiceMetadata from chain (operators and validators). */
-  lookupServiceMetadata?: boolean;
   /** Overrides the shared network context, which /console pages never sync to the wallet's chain. */
   networkOverride?: Network;
+  /** Tooltip; defaults to `value`. */
+  title?: string;
+  /** Replaces the computed display (name or truncated value). */
+  children?: React.ReactNode;
 }
 
 const CopyableText = ({
@@ -36,32 +36,18 @@ const CopyableText = ({
   linkClassName,
   monospace = true,
   lookupName = true,
-  lookupServiceMetadata = false,
   networkOverride,
+  title = value,
+  children,
 }: CopyableTextProps) => {
+  const displayValue =
+    children ??
+    ((lookupName && resolveAddressName(value)?.name) ||
+      (truncate && value.length > truncateLength * 2
+        ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
+        : value));
   const { network: contextNetwork } = useNetwork();
   const network = networkOverride ?? contextNetwork;
-  // Until (or unless) the read lands, the address renders as it always has.
-  const { data: metadata } = useAddressServiceMetadata(
-    lookupServiceMetadata && lookupName ? value : undefined,
-    network,
-  );
-  const name = lookupName ? resolveAddressName(value, metadata?.name) : undefined;
-  const onchain = name?.source === "onchain";
-  const description = name?.source === "rejected" ? undefined : metadata?.description;
-  const title = [onchain && `${ONCHAIN_NAME_LABEL}: ${name.name}`, description, value].filter(Boolean).join("\n");
-  const displayValue = onchain ? (
-    <>
-      {/* Up to 256 chars of contract text; the tooltip carries the full name. */}
-      <span className='inline-block max-w-64 truncate align-bottom'>{name.name}</span>
-      <OnchainNameMarker />
-    </>
-  ) : (
-    (name?.name ??
-    (truncate && value.length > truncateLength * 2
-      ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
-      : value))
-  );
 
   return (
     <div

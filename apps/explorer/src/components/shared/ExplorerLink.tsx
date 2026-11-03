@@ -1,18 +1,18 @@
 import useNetwork from "@/hooks/useNetwork";
 import { explorerUrls } from "@/utils/constants";
-import CopyableText from "./CopyableText";
+import ServiceAddress from "./ServiceAddress";
 
 interface ExplorerLinkProps {
   address: string;
   label?: string;
-  lookupServiceMetadata?: boolean;
 }
 
-const ExplorerLink = ({ address, label = "address", lookupServiceMetadata }: ExplorerLinkProps) => {
+/** A service (operator) address linked to the network's block explorer. */
+const ExplorerLink = ({ address, label = "address" }: ExplorerLinkProps) => {
   const { network } = useNetwork();
 
   return (
-    <CopyableText
+    <ServiceAddress
       value={address}
       to={`${explorerUrls[network]}/address/${address}`}
       external
@@ -20,7 +20,6 @@ const ExplorerLink = ({ address, label = "address", lookupServiceMetadata }: Exp
       label={label}
       truncate={true}
       truncateLength={8}
-      lookupServiceMetadata={lookupServiceMetadata}
     />
   );
 };

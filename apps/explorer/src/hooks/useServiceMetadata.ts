@@ -49,12 +49,17 @@ async function fetchServiceMetadata(address: `0x${string}`, network: Network): P
   return metadata;
 }
 
+// Metadata is set at deployment and rarely changes. gcTime matches staleTime so the
+// entry outlives the default 5 minutes once no component uses it.
+const METADATA_CACHE_MS = 24 * 60 * 60 * 1000;
+
 /** One cache entry per (network, address), shared by every hook below. */
 const serviceMetadataQueryOptions = (address: string, network: Network) =>
   queryOptions({
     queryKey: ["serviceMetadata", network, address.toLowerCase()],
     queryFn: () => fetchServiceMetadata(address as `0x${string}`, network),
-    staleTime: 60 * 60 * 1000,
+    staleTime: METADATA_CACHE_MS,
+    gcTime: METADATA_CACHE_MS,
   });
 
 /** Metadata for one address; pass `undefined` to skip the read. The zero address (no validator) is skipped too. */

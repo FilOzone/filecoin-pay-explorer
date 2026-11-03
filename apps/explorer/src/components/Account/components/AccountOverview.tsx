@@ -2,12 +2,13 @@ import { PageSection } from "@filecoin-foundation/ui-filecoin/PageSection";
 import type { Account, Address } from "@filecoin-pay/types";
 import { Card } from "@filecoin-pay/ui/components/card";
 import { ArrowsSplitIcon, CoinsIcon, UserCheckIcon } from "@phosphor-icons/react";
+import CopyableText from "@/components/shared/CopyableText";
+import CopyButton from "@/components/shared/CopyButton";
+import MetricItem from "@/components/shared/MetricItem";
 import OnchainNameMarker from "@/components/shared/OnchainNameMarker";
-import { resolveAddressName } from "@/constants/known-addresses";
+import { useAddressName } from "@/hooks/useAddressName";
 import useNetwork from "@/hooks/useNetwork";
-import { useAddressServiceMetadata } from "@/hooks/useServiceMetadata";
 import { formatCompactNumber } from "@/utils/formatter";
-import { CopyableText, CopyButton, MetricItem } from "../../shared";
 
 interface AccountOverviewLayoutProps {
   children: React.ReactNode;
@@ -16,8 +17,7 @@ interface AccountOverviewLayoutProps {
 
 const AccountOverviewLayout: React.FC<AccountOverviewLayoutProps> = ({ children, address }) => {
   const { network } = useNetwork();
-  const { data: metadata } = useAddressServiceMetadata(address, network);
-  const name = resolveAddressName(address, metadata?.name);
+  const { name } = useAddressName(address, network);
 
   return (
     <PageSection backgroundVariant='light'>

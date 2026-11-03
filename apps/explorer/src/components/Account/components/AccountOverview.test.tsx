@@ -13,11 +13,6 @@ vi.mock("@/hooks/useNetwork", () => ({
 vi.mock("@/components/shared/CopyButton", () => ({
   default: ({ value }: { value: string }) => <button type='button'>{value}</button>,
 }));
-vi.mock("@/components/shared", async () => ({
-  CopyableText: (await import("@/components/shared/CopyableText")).default,
-  CopyButton: (await import("@/components/shared/CopyButton")).default,
-  MetricItem: (await import("@/components/shared/MetricItem")).default,
-}));
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef12345678";
 const DEALBOT = "0x305025d07c1dee47f25a4990179eff2becddca0b";

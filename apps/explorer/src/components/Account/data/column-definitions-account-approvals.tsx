@@ -11,7 +11,7 @@ const columnHelper = createColumnHelper<OperatorApproval>();
 export const columns = [
   columnHelper.accessor("operator.address", {
     header: "Operator",
-    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' lookupServiceMetadata />,
+    cell: (info) => <ExplorerLink address={info.getValue()} label='Service address' />,
   }),
   columnHelper.accessor("token", {
     header: "Token",

@@ -16,17 +16,9 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   ),
 }));
 vi.mock("@/assests/USDFCLogo", () => ({ default: () => null }));
-vi.mock("@/components/shared", () => ({
-  CopyableText: ({
-    value,
-    lookupServiceMetadata,
-    networkOverride,
-  }: {
-    value: string;
-    lookupServiceMetadata?: boolean;
-    networkOverride?: string;
-  }) => (
-    <span data-testid='service' data-metadata={String(lookupServiceMetadata)} data-network={networkOverride}>
+vi.mock("@/components/shared/ServiceAddress", () => ({
+  default: ({ value, networkOverride }: { value: string; networkOverride?: string }) => (
+    <span data-testid='service' data-network={networkOverride}>
       {value}
     </span>
   ),
@@ -70,9 +62,9 @@ describe("ApprovalsTable", () => {
   });
 
   // Console pages never sync the shared network context, so the column must name the console network itself.
-  it("reads each service's onchain metadata on the console network", () => {
+  it("names each service on the console network", () => {
     render(<ApprovalsTable data={[UNLIMITED]} onIncrease={vi.fn()} network='calibration' />);
 
-    expect(screen.getByTestId("service").dataset).toMatchObject({ metadata: "true", network: "calibration" });
+    expect(screen.getByTestId("service").dataset.network).toBe("calibration");
   });
 });

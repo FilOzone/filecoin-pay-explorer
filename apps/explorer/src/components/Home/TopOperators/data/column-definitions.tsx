@@ -17,7 +17,7 @@ export const columns = [
   columnHelper.accessor("operator.address", {
     header: "Address",
     cell: (info) => {
-      return <ExplorerLink address={info.getValue()} label='Service address' lookupServiceMetadata />;
+      return <ExplorerLink address={info.getValue()} label='Service address' />;
     },
   }),
   columnHelper.accessor(

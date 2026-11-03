@@ -4,8 +4,8 @@ import type { OperatorApproval } from "@filecoin-pay/types";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Infinity as InfinityIcon } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
-import { CopyableText } from "@/components/shared";
 import AllowanceDisplay from "@/components/shared/AllowanceDisplay";
+import ServiceAddress from "@/components/shared/ServiceAddress";
 import type { Network } from "@/types";
 import { formatToken, isUnlimitedValue } from "@/utils/formatter";
 
@@ -22,14 +22,13 @@ export const createColumns = (onIncrease: (approval: OperatorApproval) => void, 
     cell: (info) => {
       const approval = info.row.original;
       return (
-        <CopyableText
+        <ServiceAddress
           // to={`/operator/${approval.operator.address}`}
           value={approval.operator.address}
           monospace={true}
           label='Service address'
           truncate={true}
           truncateLength={10}
-          lookupServiceMetadata
           networkOverride={network}
         />
       );
