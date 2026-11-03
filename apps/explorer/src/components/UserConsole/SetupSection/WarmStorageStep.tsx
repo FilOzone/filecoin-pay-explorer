@@ -128,7 +128,7 @@ function description(state: ApprovalState, deposit: Shortfall | null): string {
     return "The tool needs Warm Storage approved without spending limits before it can upload. Yours has limits.";
   }
   if (deposit) {
-    return `One transaction approves Warm Storage to charge for your data sets and deposits ${shortfallLabel(deposit)} from your wallet into Filecoin Pay to pay for them.`;
+    return `One transaction approves Warm Storage to charge for your data sets and deposits ${shortfallLabel(deposit)} from your wallet into your Filecoin Pay account to pay for them.`;
   }
   return "Lets Filecoin Warm Storage open payment rails for your data sets and charge for storage, within the limits you set.";
 }

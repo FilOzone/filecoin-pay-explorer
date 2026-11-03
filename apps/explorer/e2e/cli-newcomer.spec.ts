@@ -169,7 +169,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
     const titles = page.locator("ol > li h2");
-    await expect(titles).toHaveText(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"], {
+    await expect(titles).toHaveText(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"], {
       timeout: 30_000,
     });
     // The steps show at once; what the funds step offers waits on the balance read.
