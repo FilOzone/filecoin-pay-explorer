@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { DataSet } from "@filecoin-pay/types";
+import { fwss } from "@filoz/synapse-core/abis";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChain } from "@/constants/chains";
@@ -59,13 +60,13 @@ describe("TerminateDataSet", () => {
     expect(mocks.hookOptions).toEqual({
       account: PAYER,
       contractAddress: chain.contracts.fwss.address,
-      abi: chain.contracts.fwss.abi,
+      abi: fwss,
       chainId: chain.id,
       explorerUrl: chain.blockExplorers?.default.url,
     });
     expect(mocks.execute).toHaveBeenCalledWith({
       functionName: "terminateService",
-      args: [7n],
+      args: [7n, "0x"],
       metadata: { type: "terminateDataSet", dataSetId: "7" },
       onConfirmed: expect.any(Function),
       onReverted: expect.any(Function),

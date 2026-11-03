@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
+import { fwss } from "@filoz/synapse-core/abis";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -39,7 +40,8 @@ export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
   const { execute } = useContractTransaction({
     account: address,
     contractAddress: chain.contracts.fwss.address,
-    abi: chain.contracts.fwss.abi,
+    // The SDK's bundled FWSS ABI predates the two-argument terminateService.
+    abi: fwss,
     chainId: chain.id,
     explorerUrl: chain.blockExplorers?.default.url,
   });
@@ -48,10 +50,11 @@ export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
     if (phase !== "idle") return;
     setPhase("pending");
     try {
-      // The payer-sent overload; the one taking a signature is accepted only from the provider.
+      // Empty extraData lets the payer send it, winding payment down over the lockup period;
+      // a payer signature instead is accepted only from the provider.
       await execute({
         functionName: "terminateService",
-        args: [BigInt(dataSetId)],
+        args: [BigInt(dataSetId), "0x"],
         metadata: { type: "terminateDataSet", dataSetId },
         onConfirmed: () => {
           setPhase("confirmed");

@@ -25,8 +25,8 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
   test.skip(process.env.E2E_MODE === "real", "answers the subgraph and receipt from the fake chain");
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
   const { mainnet } = await import("@filoz/synapse-sdk");
-  const fwss = mainnet.contracts.fwss;
-  const warmStorage = fwss.address.toLowerCase();
+  const { fwss } = await import("@filoz/synapse-core/abis");
+  const warmStorage = mainnet.contracts.fwss.address.toLowerCase();
   let isTerminated = false;
 
   await page.route(
@@ -95,8 +95,8 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
   );
   const tx = (await sent.jsonValue()) as { to: string; data: Hex };
   expect(tx.to.toLowerCase()).toBe(warmStorage);
-  const { functionName, args } = decodeFunctionData({ abi: fwss.abi, data: tx.data });
-  expect({ functionName, args }).toEqual({ functionName: "terminateService", args: [7n] });
+  const { functionName, args } = decodeFunctionData({ abi: fwss, data: tx.data });
+  expect({ functionName, args }).toEqual({ functionName: "terminateService", args: [7n, "0x"] });
 
   // The subgraph indexes the termination by the time the receipt's refresh reads it.
   isTerminated = true;
