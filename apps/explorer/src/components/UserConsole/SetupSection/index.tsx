@@ -46,7 +46,7 @@ const Header = ({ network, account, caution }: { network: Network; account: Hex 
     <p className='max-w-prose text-muted-foreground'>
       A command-line tool asked to set up{" "}
       {account ? <span className='font-mono'>{formatAddress(account)}</span> : "this wallet"} on{" "}
-      <NetworkName network={network} />. Each step is its own wallet transaction, and you can change what it asked for
+      <NetworkName network={network} />. Each step is confirmed in your wallet, and you can change what it asked for
       before you approve.
     </p>
     {caution && (
@@ -235,9 +235,22 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
         {complete && (
           <section className='rounded-xl bg-zinc-950 px-5 py-4 font-mono text-sm text-zinc-100 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 dark:bg-zinc-900'>
             <h2 className='text-green-400'>✓ Setup complete</h2>
-            <p className='mt-2 text-zinc-300'>
-              Go back to your terminal. A command that is still waiting carries on by itself; otherwise run it again.
-            </p>
+            {request.sessionKey && request.keyAgreement ? (
+              <>
+                <p className='mt-2 text-zinc-300'>
+                  Copy the Grant above and paste it at the filecoin-pin prompt. If the command already exited, run:{" "}
+                  <code className='text-zinc-100'>filecoin-pin login --grant &lt;grant&gt;</code>
+                </p>
+                <p className='mt-2 text-zinc-300'>Once you've pasted the Grant, you can close this window.</p>
+              </>
+            ) : (
+              <>
+                <p className='mt-2 text-zinc-300'>
+                  Return to your terminal; the command continues on its own. If it already exited, run it again.
+                </p>
+                <p className='mt-2 text-zinc-300'>You can close this window.</p>
+              </>
+            )}
           </section>
         )}
       </div>

@@ -218,7 +218,7 @@ describe("SetupSection", () => {
 
     expect(stepTitles()).toEqual([
       "Step 1: Add Warm Storage",
-      "Step 2: Fund Filecoin Pay",
+      "Step 2: Fund your Filecoin Pay account",
       "Step 3: Authorize a session key",
     ]);
     expect(steps()[2].textContent).toContain(KEY);
@@ -231,7 +231,7 @@ describe("SetupSection", () => {
     await open(link);
     expect(stepTitles()).toEqual([
       "Step 1: Add Warm Storage",
-      "Step 2: Fund Filecoin Pay",
+      "Step 2: Fund your Filecoin Pay account",
       "Step 3: Authorize a session key",
       "Step 4: Give this key access to encrypted uploads",
     ]);
@@ -263,6 +263,31 @@ describe("SetupSection", () => {
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
     expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+  });
+
+  it("tells a Grant link to paste the Grant, and any other link to return to the terminal", async () => {
+    state.approved = true;
+    state.grants = [
+      { status: "success", result: FUTURE },
+      { status: "success", result: FUTURE },
+    ];
+    state.usdfcFunds = 2n * ONE_USDFC;
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
+    expect(screen.getByText(/^Copy the Grant above and paste it at the filecoin-pin prompt\./)).toBeTruthy();
+    expect(screen.getByText("filecoin-pin login --grant <grant>", { selector: "section code" })).toBeTruthy();
+    expect(screen.getByText("Once you've pasted the Grant, you can close this window.")).toBeTruthy();
+    expect(screen.queryByText(/^Return to your terminal/)).toBeNull();
+
+    cleanup();
+    await open(`${KEY_LINK}&balance=2`);
+    expect(
+      screen.getByText(
+        "Return to your terminal; the command continues on its own. If it already exited, run it again.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("You can close this window.")).toBeTruthy();
+    expect(screen.queryByText(/^Copy the Grant above/)).toBeNull();
   });
 
   it("opens the key dialog with the link's request, and only when asked", async () => {
@@ -310,7 +335,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 2n * ONE_USDFC;
     await open("deposit=2&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     // The funds step points at the approval rather than offering a second deposit.
     expect(steps()[1].textContent).toContain("Approving Warm Storage above also deposits the 2 USDFC");
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
@@ -358,7 +383,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     await open("deposit=10&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     expect(within(steps()[1]).getByRole("button", { name: "Add funds" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
@@ -370,7 +395,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 20n * ONE_USDFC;
     await open("deposit=10&balance=17.342&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     fireEvent.click(screen.getByRole("button", { name: "Deposit 10 USDFC" }));
     const props = dialogs.deposit.at(-1);
     expect({ amount: props?.initialAmount, token: props?.initialTokenAddress }).toEqual({
@@ -430,7 +455,7 @@ describe("SetupSection", () => {
     state.approved = true;
     state.walletUsdfc = ONE_USDFC;
     await open("network=mainnet");
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     expect(screen.queryByText("✓ Setup complete")).toBeNull();
 
     cleanup();
@@ -447,7 +472,7 @@ describe("SetupSection", () => {
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
@@ -500,7 +525,7 @@ describe("SetupSection", () => {
     state.fundsUnreadable = false;
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
+    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"]);
     expect(within(steps()[1]).queryByRole("button")).toBeNull();
     expect(screen.getByText("✓ Setup complete")).toBeTruthy();
   });

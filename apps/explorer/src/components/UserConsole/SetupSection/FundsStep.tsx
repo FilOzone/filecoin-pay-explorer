@@ -98,7 +98,7 @@ function offerText(offer: FundsOffer, missing: Shortfall | null): string | null 
     case "with-approval":
       return `Approving Warm Storage above also deposits the ${label} from your wallet, in the same transaction.`;
     case "add-funds":
-      return `Your wallet does not hold the ${label} still missing. Add funds gets USDFC and deposits it into Filecoin Pay.`;
+      return `Your wallet does not hold the ${label} still missing. Add funds gets USDFC and deposits it into your Filecoin Pay account.`;
     default:
       return null;
   }
@@ -144,11 +144,11 @@ export const FundsStep = ({ number, network, account, deposit, funds, missing, o
   return (
     <SetupStep
       number={number}
-      title='Fund Filecoin Pay'
+      title='Fund your Filecoin Pay account'
       description={
         deposit
-          ? `The tool needs ${deposit} USDFC more in Filecoin Pay. Storage is paid from that balance.`
-          : "Storage is paid from your Filecoin Pay balance, so the tool needs some there to upload."
+          ? `The tool needs ${deposit} USDFC more in your Filecoin Pay account. Storage is paid from that balance.`
+          : "Storage is paid from your Filecoin Pay account, so the tool needs some there to upload."
       }
       status={balanceStatus(funds, offer === "done")}
     >
