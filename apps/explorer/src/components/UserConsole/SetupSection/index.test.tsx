@@ -584,7 +584,7 @@ describe("SetupSection", () => {
   it("names the key's details as the New session key dialog does, marking destructive scopes", async () => {
     await open(KEY_LINK.replace("createDataSet,addPieces", "addPieces,schedulePieceRemovals"));
 
-    const details = within(steps()[0]);
+    const details = within(steps()[2]);
     expect(details.getAllByRole("term").map((term) => term.textContent)).toEqual([
       "Session key",
       "Name",
