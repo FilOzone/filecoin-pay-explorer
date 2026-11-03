@@ -107,4 +107,15 @@ describe("TerminateDataSet", () => {
     expect(confirm.disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Terminate" }) as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it("terminates the dataset it was opened for, even if the row is handed another one", () => {
+    const { rerender } = render(<TerminateDataSet dataSet={dataSet} network='mainnet' />);
+    fireEvent.click(screen.getByRole("button", { name: "Terminate" }));
+
+    rerender(<TerminateDataSet dataSet={{ ...dataSet, id: "0x08", dataSetId: 8n }} network='mainnet' />);
+
+    expect(screen.getByRole("heading", { name: "Terminate dataset #7?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Terminate dataset" }));
+    expect(lastExecuteCall()).toMatchObject({ args: [7n, "0x"], metadata: { dataSetId: "7" } });
+  });
 });

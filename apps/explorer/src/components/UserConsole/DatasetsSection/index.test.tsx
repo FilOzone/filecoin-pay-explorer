@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
 
 const mockUseAccountDataSets = vi.hoisted(() => vi.fn());
+const mocks = vi.hoisted(() => ({ blockNumber: undefined as bigint | undefined, execute: vi.fn() }));
 
 vi.mock("@/hooks/useAccountDataSets", () => ({
   useAccountDataSets: () => mockUseAccountDataSets(),
 }));
 vi.mock("wagmi", () => ({
-  useBlockNumber: () => ({ data: undefined }),
+  useBlockNumber: () => ({ data: mocks.blockNumber }),
   useConnection: () => ({ address: undefined }),
 }));
 vi.mock("@/hooks/useContractTransaction", () => ({
-  useContractTransaction: () => ({ execute: vi.fn(), isExecuting: false }),
+  useContractTransaction: () => ({ execute: mocks.execute, isExecuting: false }),
 }));
 // The explorer URL network differs from the console's, so links must follow the prop.
 vi.mock("@/hooks/useNetwork", () => ({
@@ -50,8 +51,30 @@ const wireRow = {
   },
 };
 
-const renderSection = () =>
-  render(<DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />);
+// A new element each call: rerendering the same element object would let React skip the update.
+const section = () => <DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />;
+const renderSection = () => render(section());
+
+const activeDataSet = (dataSetId: string) => ({ ...wireRow, id: `0x0${dataSetId}`, dataSetId });
+
+const loaded = (dataSets: unknown[]) => ({ data: { dataSets, hasMore: false }, isLoading: false, isError: false });
+
+/** The table row of a dataset, found by its PDP Explorer link. */
+const rowOf = (dataSetId: string) => {
+  const row = screen.getAllByRole("row").find((candidate) =>
+    within(candidate)
+      .queryByRole("link", { name: /PDP Explorer/ })
+      ?.getAttribute("href")
+      ?.endsWith(`/dataset/${dataSetId}`),
+  );
+  if (!row) throw new Error(`No row for dataset #${dataSetId}`);
+  return row;
+};
+
+beforeEach(() => {
+  mocks.blockNumber = undefined;
+  mocks.execute.mockReset();
+});
 
 describe("DatasetsSection", () => {
   it("shows the empty state when the payer has no datasets", () => {
@@ -118,5 +141,37 @@ describe("DatasetsSection", () => {
     const [, activeRow, terminatedRow] = screen.getAllByRole("row");
     expect(within(activeRow).getByRole("button", { name: "Terminate" })).toBeTruthy();
     expect(within(terminatedRow).queryByRole("button", { name: "Terminate" })).toBeNull();
+  });
+
+  it("keeps an open confirmation through a block update", () => {
+    mocks.blockNumber = 1n;
+    mockUseAccountDataSets.mockReturnValue(loaded([wireRow]));
+    const { rerender } = renderSection();
+
+    fireEvent.click(screen.getByRole("button", { name: "Terminate" }));
+    expect(screen.getByRole("dialog", { name: "Terminate dataset #7?" })).toBeTruthy();
+
+    mocks.blockNumber = 2n;
+    rerender(section());
+
+    expect(screen.getByRole("dialog", { name: "Terminate dataset #7?" })).toBeTruthy();
+  });
+
+  it("keeps a pending termination on its dataset when a refresh reorders the rows", () => {
+    // Never settles, so the termination stays pending.
+    mocks.execute.mockReturnValue(new Promise(() => {}));
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("7"), activeDataSet("8")]));
+    const { rerender } = renderSection();
+
+    fireEvent.click(within(rowOf("7")).getByRole("button", { name: "Terminate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Terminate dataset" }));
+    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({ args: [7n, "0x"] }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("8"), activeDataSet("7")]));
+    rerender(section());
+
+    expect(within(rowOf("7")).getByRole("button", { name: "Terminating…" })).toBeTruthy();
+    expect(within(rowOf("8")).getByRole("button", { name: "Terminate" })).toBeTruthy();
   });
 });

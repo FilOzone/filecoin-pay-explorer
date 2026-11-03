@@ -98,6 +98,13 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
       </StyledLink>
     ),
   }),
+];
+
+/**
+ * Kept apart from the epoch-dependent columns so its cell function survives block updates: a new one would
+ * remount the cell and drop a pending termination.
+ */
+export const getDatasetActionsColumn = (network: Network) =>
   columnHelper.display({
     id: "actions",
     header: () => <span className='sr-only'>Actions</span>,
@@ -107,5 +114,4 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
       if (state === "TERMINATED" || state === "FINALIZED") return null;
       return <TerminateDataSet dataSet={dataSet} network={network} />;
     },
-  }),
-];
+  });

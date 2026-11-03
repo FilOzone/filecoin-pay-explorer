@@ -28,6 +28,8 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
   const { fwss } = await import("@filoz/synapse-core/abis");
   const warmStorage = mainnet.contracts.fwss.address.toLowerCase();
   let isTerminated = false;
+  // Each poll sees a new block, as the chain does.
+  let blockNumber = 0;
 
   await page.route(
     // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
@@ -57,8 +59,10 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
     (url) => url.hostname.endsWith("glif.io"),
     (route) => {
       const call = route.request().postDataJSON();
-      if (call?.method === "eth_blockNumber")
-        return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result: "0x1" } });
+      if (call?.method === "eth_blockNumber") {
+        blockNumber += 1;
+        return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result: `0x${blockNumber.toString(16)}` } });
+      }
       const { to, data } = call?.params?.[0] ?? {};
       if (call?.method !== "eth_call" || to?.toLowerCase() !== MULTICALL3) return route.fallback();
       const { args } = decodeFunctionData({ abi: multicall3Abi, data });
@@ -84,6 +88,11 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
   await row.getByRole("button", { name: "Terminate" }).click({ timeout: 30_000 });
   const dialog = page.getByRole("dialog", { name: "Terminate dataset #7?" });
   await expect(dialog).toContainText("This cannot be undone.");
+  // Regression: each new block rebuilt the table's columns, remounting the action cell and closing the dialog.
+  const openedAtBlock = blockNumber;
+  await expect.poll(() => blockNumber, { timeout: 20_000 }).toBeGreaterThan(openedAtBlock + 1);
+  // The dialog element itself is a zero-height wrapper, so check what it shows.
+  await expect(dialog.getByRole("heading", { name: "Terminate dataset #7?" })).toBeVisible();
   await dialog.getByRole("button", { name: "Terminate dataset" }).click();
 
   const wallet = page.locator("#privy-dialog");

@@ -4,7 +4,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
 import type { Network } from "@/types";
-import { getDatasetColumns } from "../data/columnDefinitions";
+import { getDatasetActionsColumn, getDatasetColumns } from "../data/columnDefinitions";
 
 export type DatasetsTableProps = {
   data: DataSet[];
@@ -13,11 +13,17 @@ export type DatasetsTableProps = {
 };
 
 function DatasetsTable({ data, network, currentEpoch }: DatasetsTableProps) {
-  const columns = useMemo(() => getDatasetColumns(network, currentEpoch), [network, currentEpoch]);
+  const actionsColumn = useMemo(() => getDatasetActionsColumn(network), [network]);
+  const columns = useMemo(
+    () => [...getDatasetColumns(network, currentEpoch), actionsColumn],
+    [network, currentEpoch, actionsColumn],
+  );
 
   const table = useReactTable({
     data,
     columns,
+    // Index-based ids would hand a row's cell state to another dataset when a refresh reorders the page.
+    getRowId: (dataSet) => dataSet.id,
     getCoreRowModel: getCoreRowModel(),
     enableSorting: false,
   });
