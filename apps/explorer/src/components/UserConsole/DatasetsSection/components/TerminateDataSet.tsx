@@ -10,9 +10,9 @@ import {
 } from "@filecoin-pay/ui/components/dialog";
 import { fwss } from "@filoz/synapse-core/abis";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useConnection } from "wagmi";
+import InlineTextLoader from "@/components/shared/InlineTextLoader";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
@@ -25,11 +25,7 @@ interface TerminateDataSetProps {
   network: Network;
 }
 
-/**
- * Terminate button and its confirmation for one Warm Storage dataset. It stays
- * mounted with its row, so a submitted termination keeps its pending state
- * until the receipt lands.
- */
+/** Terminate button and confirmation for one Warm Storage dataset; stays mounted with its row until the receipt lands. */
 export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetProps) {
   const { address } = useConnection();
   const [isOpen, setIsOpen] = useState(false);
@@ -95,13 +91,7 @@ export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetPro
               onClick={handleTerminate}
               className='rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5'
             >
-              {phase === "pending" ? (
-                <span className='flex items-center gap-2'>
-                  <Loader2 className='h-4 w-4 animate-spin' /> Terminating…
-                </span>
-              ) : (
-                "Terminate dataset"
-              )}
+              {phase === "pending" ? <InlineTextLoader text='Terminating…' /> : "Terminate dataset"}
             </button>
           </DialogFooter>
         </DialogContent>

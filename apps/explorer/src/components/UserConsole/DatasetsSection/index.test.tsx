@@ -59,7 +59,6 @@ const activeDataSet = (dataSetId: string) => ({ ...wireRow, id: `0x0${dataSetId}
 
 const loaded = (dataSets: unknown[]) => ({ data: { dataSets, hasMore: false }, isLoading: false, isError: false });
 
-/** The table row of a dataset, found by its PDP Explorer link. */
 const rowOf = (dataSetId: string) => {
   const row = screen.getAllByRole("row").find((candidate) =>
     within(candidate)
@@ -124,23 +123,13 @@ describe("DatasetsSection", () => {
   });
 
   it("offers Terminate only for datasets whose storage payment is still running", () => {
-    const terminatedDataSet = {
-      ...wireRow,
-      id: "0x08",
-      dataSetId: "8",
-      pdpRail: { ...wireRow.pdpRail, state: "TERMINATED" },
-    };
-    mockUseAccountDataSets.mockReturnValue({
-      data: { dataSets: [wireRow, terminatedDataSet], hasMore: false },
-      isLoading: false,
-      isError: false,
-    });
+    const terminated = { ...activeDataSet("8"), pdpRail: { ...wireRow.pdpRail, state: "TERMINATED" } };
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("7"), terminated]));
 
     renderSection();
 
-    const [, activeRow, terminatedRow] = screen.getAllByRole("row");
-    expect(within(activeRow).getByRole("button", { name: "Terminate" })).toBeTruthy();
-    expect(within(terminatedRow).queryByRole("button", { name: "Terminate" })).toBeNull();
+    expect(within(rowOf("7")).getByRole("button", { name: "Terminate" })).toBeTruthy();
+    expect(within(rowOf("8")).queryByRole("button", { name: "Terminate" })).toBeNull();
   });
 
   it("keeps an open confirmation through a block update", () => {

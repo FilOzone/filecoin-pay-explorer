@@ -4,20 +4,16 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
 import type { Network } from "@/types";
-import { getDatasetActionsColumn, getDatasetColumns } from "../data/columnDefinitions";
+import { getDatasetColumns } from "../data/columnDefinitions";
 
 export type DatasetsTableProps = {
   data: DataSet[];
   network: Network;
-  currentEpoch: bigint | undefined;
 };
 
-function DatasetsTable({ data, network, currentEpoch }: DatasetsTableProps) {
-  const actionsColumn = useMemo(() => getDatasetActionsColumn(network), [network]);
-  const columns = useMemo(
-    () => [...getDatasetColumns(network, currentEpoch), actionsColumn],
-    [network, currentEpoch, actionsColumn],
-  );
+function DatasetsTable({ data, network }: DatasetsTableProps) {
+  // Rebuilt columns would remount every cell, dropping an open or pending termination.
+  const columns = useMemo(() => getDatasetColumns(network), [network]);
 
   const table = useReactTable({
     data,
