@@ -65,8 +65,9 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
       }
       const { to, data } = call?.params?.[0] ?? {};
       if (call?.method !== "eth_call" || to?.toLowerCase() !== MULTICALL3) return route.fallback();
-      const { args } = decodeFunctionData({ abi: multicall3Abi, data });
-      const calls = args[0] as readonly { target: string }[];
+      const decoded = decodeFunctionData({ abi: multicall3Abi, data });
+      if (decoded.functionName !== "aggregate3") return route.fallback();
+      const [calls] = decoded.args;
       if (!calls.every((c) => c.target.toLowerCase() === warmStorage)) return route.fallback();
       const result = encodeFunctionResult({
         abi: multicall3Abi,
@@ -102,7 +103,8 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
       (window as typeof window & { __fakePrivyTransactions?: { to: string; data: Hex }[] })
         .__fakePrivyTransactions?.[0],
   );
-  const tx = (await sent.jsonValue()) as { to: string; data: Hex };
+  const tx = await sent.jsonValue();
+  if (!tx) throw new Error("No transaction was sent");
   expect(tx.to.toLowerCase()).toBe(warmStorage);
   const { functionName, args } = decodeFunctionData({ abi: fwss, data: tx.data });
   expect({ functionName, args }).toEqual({ functionName: "terminateService", args: [7n, "0x"] });

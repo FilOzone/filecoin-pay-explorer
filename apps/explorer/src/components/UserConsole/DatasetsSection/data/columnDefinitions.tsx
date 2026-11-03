@@ -112,6 +112,6 @@ export const getDatasetActionsColumn = (network: Network) =>
       const dataSet = info.row.original;
       const { state } = dataSet.pdpRail;
       if (state === "TERMINATED" || state === "FINALIZED") return null;
-      return <TerminateDataSet dataSet={dataSet} network={network} />;
+      return <TerminateDataSet dataSetId={dataSet.dataSetId} network={network} />;
     },
   });

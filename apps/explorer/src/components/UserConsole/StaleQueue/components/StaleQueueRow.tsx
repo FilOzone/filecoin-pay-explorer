@@ -63,7 +63,7 @@ export function StaleQueueRow({
             {muteDataSet.isPending ? <InlineTextLoader text='Keeping' /> : "Keep"}
           </Button>
         ) : null}
-        <TerminateDataSet dataSet={dataSet} network={network} />
+        <TerminateDataSet dataSetId={dataSet.dataSetId} network={network} />
       </div>
       {isSnoozeDialogOpen ? (
         <SnoozeDialog

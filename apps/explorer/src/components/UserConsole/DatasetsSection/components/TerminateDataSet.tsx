@@ -21,7 +21,7 @@ import type { Network } from "@/types";
 const TRIGGER_LABEL = { idle: "Terminate", pending: "Terminating…", confirmed: "Terminated" } as const;
 
 interface TerminateDataSetProps {
-  dataSet: DataSet;
+  dataSetId: DataSet["dataSetId"];
   network: Network;
 }
 
@@ -30,14 +30,12 @@ interface TerminateDataSetProps {
  * mounted with its row, so a submitted termination keeps its pending state
  * until the receipt lands.
  */
-export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
+export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetProps) {
   const { address } = useConnection();
   const [isOpen, setIsOpen] = useState(false);
   const [phase, setPhase] = useState<keyof typeof TRIGGER_LABEL>("idle");
   const chain = getChain(network);
-  const dataSetId = dataSet.dataSetId.toString();
-  // Snapshotted on open, so a refresh that hands this row another dataset can't change what gets terminated.
-  const [targetId, setTargetId] = useState(dataSetId);
+  const dataSetId = id.toString();
 
   const { execute } = useContractTransaction({
     account: address,
@@ -56,8 +54,8 @@ export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
       // a payer signature instead is accepted only from the provider.
       await execute({
         functionName: "terminateService",
-        args: [BigInt(targetId), "0x"],
-        metadata: { type: "terminateDataSet", dataSetId: targetId },
+        args: [BigInt(dataSetId), "0x"],
+        metadata: { type: "terminateDataSet", dataSetId },
         onConfirmed: () => {
           setPhase("confirmed");
           setIsOpen(false);
@@ -72,15 +70,7 @@ export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
 
   return (
     <>
-      <Button
-        variant='ghost'
-        disabled={phase !== "idle"}
-        onClick={() => {
-          setTargetId(dataSetId);
-          setIsOpen(true);
-        }}
-        className='text-destructive'
-      >
+      <Button variant='ghost' disabled={phase !== "idle"} onClick={() => setIsOpen(true)} className='text-destructive'>
         {TRIGGER_LABEL[phase]}
       </Button>
 
@@ -88,7 +78,7 @@ export function TerminateDataSet({ dataSet, network }: TerminateDataSetProps) {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className='sm:max-w-lg'>
           <DialogHeader>
-            <DialogTitle>Terminate dataset #{targetId}?</DialogTitle>
+            <DialogTitle>Terminate dataset #{dataSetId}?</DialogTitle>
             <DialogDescription>Stops paying Warm Storage for this dataset.</DialogDescription>
           </DialogHeader>
 
