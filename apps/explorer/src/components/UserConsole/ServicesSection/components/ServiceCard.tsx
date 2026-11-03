@@ -25,6 +25,7 @@ export const ServiceCard = ({ service, profile }: { service: AccountService; pro
             value={address}
             label='Operator address'
             truncate
+            truncateLength={6}
             lookupName={false}
             className='text-sm font-normal'
           />

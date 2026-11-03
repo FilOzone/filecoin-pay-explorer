@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
@@ -46,8 +47,13 @@ const wireRow = {
   },
 };
 
+// CopyableText reads through TanStack Query, whose client the app root provides.
 const renderSection = () =>
-  render(<DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />);
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />
+    </QueryClientProvider>,
+  );
 
 describe("DatasetsSection", () => {
   it("shows the empty state when the payer has no datasets", () => {

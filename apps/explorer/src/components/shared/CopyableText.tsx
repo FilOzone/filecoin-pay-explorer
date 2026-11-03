@@ -5,7 +5,6 @@ import { resolveAddressName } from "@/constants/known-addresses";
 import useNetwork from "@/hooks/useNetwork";
 import { useAddressServiceMetadata } from "@/hooks/useServiceMetadata";
 import type { Network } from "@/types";
-import { formatAddress } from "@/utils/formatter";
 import CopyButton from "./CopyButton";
 import OnchainNameMarker, { ONCHAIN_NAME_LABEL } from "./OnchainNameMarker";
 
@@ -15,12 +14,13 @@ interface CopyableTextProps {
   label?: string;
   truncate?: boolean;
   external?: boolean;
+  truncateLength?: number;
   className?: string;
   linkClassName?: string;
   monospace?: boolean;
   lookupName?: boolean;
   /** Read the address's IFilecoinServiceMetadata from chain (operators and validators). */
-  serviceMetadata?: boolean;
+  lookupServiceMetadata?: boolean;
   /** Overrides the shared network context, which /console pages never sync to the wallet's chain. */
   networkOverride?: Network;
 }
@@ -31,17 +31,21 @@ const CopyableText = ({
   label = "Text",
   truncate = false,
   external = false,
+  truncateLength = 8,
   className,
   linkClassName,
   monospace = true,
   lookupName = true,
-  serviceMetadata = false,
+  lookupServiceMetadata = false,
   networkOverride,
 }: CopyableTextProps) => {
   const { network: contextNetwork } = useNetwork();
   const network = networkOverride ?? contextNetwork;
   // Until (or unless) the read lands, the address renders as it always has.
-  const { data: metadata } = useAddressServiceMetadata(serviceMetadata && lookupName ? value : undefined, network);
+  const { data: metadata } = useAddressServiceMetadata(
+    lookupServiceMetadata && lookupName ? value : undefined,
+    network,
+  );
   const name = lookupName ? resolveAddressName(value, metadata?.name) : undefined;
   const onchain = name?.source === "onchain";
   const description = name?.source === "rejected" ? undefined : metadata?.description;
@@ -53,7 +57,10 @@ const CopyableText = ({
       <OnchainNameMarker />
     </>
   ) : (
-    (name?.name ?? (truncate ? formatAddress(value) : value))
+    (name?.name ??
+    (truncate && value.length > truncateLength * 2
+      ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
+      : value))
   );
 
   return (

@@ -5,10 +5,10 @@ import CopyableText from "./CopyableText";
 interface ExplorerLinkProps {
   address: string;
   label?: string;
-  serviceMetadata?: boolean;
+  lookupServiceMetadata?: boolean;
 }
 
-const ExplorerLink = ({ address, label = "address", serviceMetadata }: ExplorerLinkProps) => {
+const ExplorerLink = ({ address, label = "address", lookupServiceMetadata }: ExplorerLinkProps) => {
   const { network } = useNetwork();
 
   return (
@@ -19,7 +19,8 @@ const ExplorerLink = ({ address, label = "address", serviceMetadata }: ExplorerL
       monospace={true}
       label={label}
       truncate={true}
-      serviceMetadata={serviceMetadata}
+      truncateLength={8}
+      lookupServiceMetadata={lookupServiceMetadata}
     />
   );
 };

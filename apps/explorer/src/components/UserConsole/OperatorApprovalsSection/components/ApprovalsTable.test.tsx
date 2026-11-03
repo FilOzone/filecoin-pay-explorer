@@ -16,7 +16,21 @@ vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   ),
 }));
 vi.mock("@/assests/USDFCLogo", () => ({ default: () => null }));
-vi.mock("@/components/shared", () => ({ CopyableText: ({ value }: { value: string }) => <span>{value}</span> }));
+vi.mock("@/components/shared", () => ({
+  CopyableText: ({
+    value,
+    lookupServiceMetadata,
+    networkOverride,
+  }: {
+    value: string;
+    lookupServiceMetadata?: boolean;
+    networkOverride?: string;
+  }) => (
+    <span data-testid='service' data-metadata={String(lookupServiceMetadata)} data-network={networkOverride}>
+      {value}
+    </span>
+  ),
+}));
 vi.mock("@/components/shared/AllowanceDisplay", () => ({ default: () => null }));
 
 const approval = (operator: string, maxLockupPeriod: bigint) =>
@@ -39,7 +53,7 @@ describe("ApprovalsTable", () => {
   const rowOf = (operator: string) => screen.getByRole("row", { name: new RegExp(operator) });
 
   it("shows an unlimited maximum lockup period as infinite and a limited one in epochs", () => {
-    render(<ApprovalsTable data={[UNLIMITED, LIMITED]} onIncrease={vi.fn()} />);
+    render(<ApprovalsTable data={[UNLIMITED, LIMITED]} onIncrease={vi.fn()} network='mainnet' />);
 
     const unlimited = within(rowOf(UNLIMITED.operator.address)).getByText(/Max:/);
     expect(unlimited.querySelector("svg.lucide-infinity")).not.toBeNull();
@@ -49,9 +63,16 @@ describe("ApprovalsTable", () => {
 
   it("increases the approval in the row whose action was clicked", () => {
     const onIncrease = vi.fn();
-    render(<ApprovalsTable data={[UNLIMITED, LIMITED]} onIncrease={onIncrease} />);
+    render(<ApprovalsTable data={[UNLIMITED, LIMITED]} onIncrease={onIncrease} network='mainnet' />);
 
     fireEvent.click(within(rowOf(LIMITED.operator.address)).getByRole("button", { name: "Increase" }));
     expect(onIncrease).toHaveBeenCalledWith(LIMITED);
+  });
+
+  // Console pages never sync the shared network context, so the column must name the console network itself.
+  it("reads each service's onchain metadata on the console network", () => {
+    render(<ApprovalsTable data={[UNLIMITED]} onIncrease={vi.fn()} network='calibration' />);
+
+    expect(screen.getByTestId("service").dataset).toMatchObject({ metadata: "true", network: "calibration" });
   });
 });

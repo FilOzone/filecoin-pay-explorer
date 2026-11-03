@@ -117,6 +117,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                     monospace={true}
                     label='Account address'
                     truncate={true}
+                    truncateLength={8}
                   />
                 </TableCell>
                 <TableCell className='font-mono text-sm'>
@@ -126,6 +127,7 @@ export const OperatorRails: React.FC<OperatorRailsProps> = ({ operator }) => {
                     monospace={true}
                     label='Account address'
                     truncate={true}
+                    truncateLength={8}
                   />
                 </TableCell>
                 <TableCell>

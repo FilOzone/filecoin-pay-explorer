@@ -27,6 +27,7 @@ export const ServiceHeader = ({ operatorAddress, profile }: ServiceHeaderProps) 
         value={operatorAddress}
         label='Operator address'
         truncate
+        truncateLength={6}
         lookupName={false}
         className='text-sm font-normal text-muted-foreground'
       />

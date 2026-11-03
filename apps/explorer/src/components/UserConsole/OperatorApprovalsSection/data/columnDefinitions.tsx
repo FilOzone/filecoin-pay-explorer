@@ -6,12 +6,16 @@ import { Infinity as InfinityIcon } from "lucide-react";
 import USDFCLogo from "@/assests/USDFCLogo";
 import { CopyableText } from "@/components/shared";
 import AllowanceDisplay from "@/components/shared/AllowanceDisplay";
+import type { Network } from "@/types";
 import { formatToken, isUnlimitedValue } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<OperatorApproval>();
 
-/** Increase is the table's action, not approval data, so the column closes over it instead of each row carrying it. */
-export const createColumns = (onIncrease: (approval: OperatorApproval) => void) => [
+/**
+ * Increase is the table's action, not approval data, so the column closes over it instead of each row carrying it.
+ * `network` is the console network: console pages never sync the shared network context.
+ */
+export const createColumns = (onIncrease: (approval: OperatorApproval) => void, network: Network) => [
   columnHelper.display({
     id: "operator",
     header: "Service",
@@ -24,6 +28,9 @@ export const createColumns = (onIncrease: (approval: OperatorApproval) => void) 
           monospace={true}
           label='Service address'
           truncate={true}
+          truncateLength={10}
+          lookupServiceMetadata
+          networkOverride={network}
         />
       );
     },

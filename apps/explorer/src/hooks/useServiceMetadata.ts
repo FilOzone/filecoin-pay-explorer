@@ -50,7 +50,7 @@ async function fetchServiceMetadata(address: `0x${string}`, network: Network): P
 }
 
 /** One cache entry per (network, address), shared by every hook below. */
-export const serviceMetadataQueryOptions = (address: string, network: Network) =>
+const serviceMetadataQueryOptions = (address: string, network: Network) =>
   queryOptions({
     queryKey: ["serviceMetadata", network, address.toLowerCase()],
     queryFn: () => fetchServiceMetadata(address as `0x${string}`, network),

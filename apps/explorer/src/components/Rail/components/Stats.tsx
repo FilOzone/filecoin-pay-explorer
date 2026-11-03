@@ -100,6 +100,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                 monospace={true}
                 label='Payer address'
                 truncate={true}
+                truncateLength={8}
               />
             }
             Icon={HandDepositIcon}
@@ -113,6 +114,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                 monospace={true}
                 label='Payee address'
                 truncate={true}
+                truncateLength={8}
               />
             }
             Icon={HandWithdrawIcon}
@@ -125,8 +127,9 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                 to={`/accounts/${rail.operator.address}`}
                 monospace={true}
                 label='Operator address'
-                serviceMetadata
+                lookupServiceMetadata
                 truncate={true}
+                truncateLength={8}
               />
             }
             Icon={UserGearIcon}
@@ -226,6 +229,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                     monospace={true}
                     label='Service Fee Recipient address'
                     truncate={true}
+                    truncateLength={8}
                   />
                 }
                 Icon={ReceiptIcon}
@@ -241,8 +245,9 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
                   value={rail.validator}
                   monospace={true}
                   label='Validator address'
-                  serviceMetadata
+                  lookupServiceMetadata
                   truncate={true}
+                  truncateLength={8}
                 />
               }
               Icon={GavelIcon}

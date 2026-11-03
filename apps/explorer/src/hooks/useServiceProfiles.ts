@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { getServiceProfile, type ServiceProfile } from "@/constants/service-metadata";
 import type { Network } from "@/types";
 import { useServiceMetadata } from "./useServiceMetadata";
@@ -15,11 +15,7 @@ export function useServiceProfiles(
   operatorAddresses: string[],
   network: Network,
 ): (operatorAddress: string) => ServiceProfile {
-  // Keyed on the addresses themselves so callers need not memoize the array.
-  const addressKey = operatorAddresses.join(",").toLowerCase();
-  const addresses = useMemo(() => addressKey.split(",").filter(Boolean), [addressKey]);
-
-  const { metadata } = useServiceMetadata(addresses, network);
+  const { metadata } = useServiceMetadata(operatorAddresses, network);
 
   return useCallback(
     (operatorAddress: string) => getServiceProfile(operatorAddress, metadata.get(operatorAddress.toLowerCase())),
