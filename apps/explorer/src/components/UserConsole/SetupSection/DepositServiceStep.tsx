@@ -224,15 +224,11 @@ const LimitsTable = ({ terms }: { terms: OperatorApprovalTerms }) => {
   );
 };
 
-function description(state: ApprovalState, withFunds: boolean): string {
+function description(state: ApprovalState): string {
   if (state === "limited") {
     return "This setup requires unlimited spending approval. Your current approval has limits. Review the change before removing them.";
   }
-  if (!withFunds) {
-    // An approval-only link deposits nothing, so the one-transaction copy would overpromise.
-    return "This lets Warm Storage charge your Filecoin Pay balance for the data sets you or your session keys create. Check the spending limits before you approve.";
-  }
-  return "One transaction does both: it deposits USDFC from your wallet into your Filecoin Pay balance, and lets Warm Storage charge that balance for the data sets you or your session keys create. Check the spending limits before you approve.";
+  return "Lets Warm Storage charge your Filecoin Pay balance for the data sets you or your session keys create, and makes sure that balance holds what the tool needs.";
 }
 
 function approveLabel(withDeposit: boolean, amount: string): string {
@@ -368,7 +364,7 @@ export const DepositServiceStep = ({
     <SetupStep
       number={number}
       title='Deposit and add Warm Storage'
-      description={description(approval.state, funds !== null)}
+      description={description(approval.state)}
       status={stepStatus(approval.state, funds, offer === "done")}
     >
       {approval.state === "limited" && approval.terms && (

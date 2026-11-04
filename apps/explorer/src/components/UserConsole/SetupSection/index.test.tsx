@@ -350,9 +350,12 @@ describe("SetupSection", () => {
     await open("deposit=2&operator=fwss&network=mainnet");
 
     expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
-    // The step names the combined transaction rather than offering a second deposit.
-    expect(steps()[0].textContent).toContain("One transaction does both");
-    expect(screen.queryByRole("button", { name: "Review 2 USDFC deposit" })).toBeNull();
+    // One transaction: the approval carries the deposit, so neither a separate deposit nor Add funds is offered.
+    expect(
+      within(steps()[0])
+        .queryAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Review approval and 2 USDFC deposit"]);
     fireEvent.click(screen.getByRole("button", { name: "Review approval and 2 USDFC deposit" }));
 
     expect(screen.getByRole("dialog", { name: "Add a Service" })).toBeTruthy();
