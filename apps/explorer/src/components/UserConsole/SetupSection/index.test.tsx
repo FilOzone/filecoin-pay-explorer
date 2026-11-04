@@ -302,7 +302,7 @@ describe("SetupSection", () => {
     await open(`${KEY_LINK}&balance=2`);
     expect(
       screen.getByText(
-        /Return to your terminal\. If the command is still waiting, it will continue; otherwise run it again\. You can close this window\./,
+        /Return to your terminal; the command continues on its own\. If it already exited, run it again\. You can close this window\./,
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/This package contains the group key/)).toBeNull();

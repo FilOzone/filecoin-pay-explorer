@@ -276,7 +276,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
                   . Once you have imported it, you can close this window.
                 </>
               ) : (
-                "Return to your terminal. If the command is still waiting, it will continue; otherwise run it again. You can close this window."
+                "Return to your terminal; the command continues on its own. If it already exited, run it again. You can close this window."
               )}
             </p>
           </Notice>
