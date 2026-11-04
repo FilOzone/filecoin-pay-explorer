@@ -1,7 +1,7 @@
 /**
  * Validate the `?authorize=` / `?scopes=` search params used by the
- * filecoin-pin CLI pairing flow (`session create --console`). Both params are
- * untrusted URL input and never throw:
+ * filecoin-pin CLI pairing flow (`session create --console`), read by
+ * `parseSetupLink`. Both params are untrusted URL input and never throw:
  * - `authorize` is either a real 20-byte EVM address, checksummed here so
  *   the UI only ever renders the canonical form, or a typed error the page
  *   shows instead of dropping the request.
@@ -16,10 +16,16 @@ import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
  * shape whose letter case does not match EIP-55: mixed case with the wrong
  * checksum, or all uppercase. All-lowercase input never hits it.
  */
-export type AuthorizeParamError = "bad-checksum" | "not-an-address" | "no-network" | "no-scopes";
+export type AuthorizeParamError = AddressParamError | "no-network" | "no-scopes";
+
+/** Why an address value alone was refused; see {@link AuthorizeParamError}. */
+export type AddressParamError = "bad-checksum" | "not-an-address";
+
+/** Why a `?revoke=` link was refused. It names no scopes, so it can never lack them. */
+export type RevokeLinkError = AddressParamError | "no-network";
 
 /** null means the param was absent or blank, so there is no request to show at all. */
-export type AuthorizeParamResult = { address: `0x${string}` } | { error: AuthorizeParamError } | null;
+export type AuthorizeParamResult = { address: `0x${string}` } | { error: AddressParamError } | null;
 
 export function parseAuthorizeParam(value: string | null | undefined): AuthorizeParamResult {
   if (typeof value !== "string") return null;
@@ -46,19 +52,25 @@ export function parseScopesParam(value: string | null | undefined): ScopeId[] | 
 
 /**
  * How each scope checkbox opens in a request-initiated create dialog:
- * - "checked": requested, non-destructive — granted unless the user unchecks it.
- * - "requested-unchecked": requested AND destructive — the CLI asked for it,
- *   but destructive power needs an explicit opt-in click from the owner.
- * - "locked-off": not requested — reduce-only consent means the dialog never
+ * - "checked": the link requested it, or a renewed key held it and it is not
+ *   destructive — granted unless the owner unchecks it. The dialog warns on a
+ *   destructive one the link requested, so the owner sees what they are granting.
+ * - "unchecked": a destructive scope a renewed key held that the link did not
+ *   request — offered, never preselected.
+ * - "locked-off": neither — reduce-only consent means the dialog never
  *   grants more than the request named; rendered disabled.
  */
-export type RequestedScopePreset = "checked" | "requested-unchecked" | "locked-off";
+export type RequestedScopePreset = "checked" | "unchecked" | "locked-off";
 
-export function presetScopeStates(requested: ScopeId[]): Record<ScopeId, RequestedScopePreset> {
+export function presetScopeStates(
+  requested: readonly ScopeId[],
+  renewed: readonly ScopeId[] = [],
+): Record<ScopeId, RequestedScopePreset> {
   return Object.fromEntries(
     SESSION_KEY_SCOPES.map((scope) => {
-      if (!requested.includes(scope.id)) return [scope.id, "locked-off"];
-      return [scope.id, scope.destructive ? "requested-unchecked" : "checked"];
+      if (requested.includes(scope.id)) return [scope.id, "checked"];
+      if (!renewed.includes(scope.id)) return [scope.id, "locked-off"];
+      return [scope.id, scope.destructive ? "unchecked" : "checked"];
     }),
   ) as Record<ScopeId, RequestedScopePreset>;
 }
@@ -78,8 +90,24 @@ export function parseNetworkParam(value: string | null | undefined): "mainnet" |
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
-/** Every search param a CLI link can carry; acting on one clears them all. */
-export const LINK_PARAMS = ["authorize", "scopes", "network", "revoke"] as const;
+/**
+ * The longest expiry a link may suggest, matching the `filecoin` CLI's `--days`.
+ * The owner can still type a longer one; a link alone cannot ask for it.
+ */
+export const MAX_LINK_EXPIRY_DAYS = 365;
+
+/** `?days=`: a whole number of days, at least 1, capped at {@link MAX_LINK_EXPIRY_DAYS}; null when unusable. */
+export function parseDaysParam(value: string | null | undefined): number | null {
+  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) return null;
+  const days = Number(value.trim());
+  return days >= 1 ? Math.min(days, MAX_LINK_EXPIRY_DAYS) : null;
+}
+
+/**
+ * Every search param a CLI link can carry. Acting on a revoke link clears
+ * them all: an `authorize` left behind would reopen as a setup request on reload.
+ */
+export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "days", "revoke"] as const;
 
 export interface RevokeLink {
   address: `0x${string}`;
@@ -87,37 +115,11 @@ export interface RevokeLink {
 }
 
 /** `?revoke=&network=`, as `filecoin-pin logout` prints it. Same rules as the pairing link; network required. */
-export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: AuthorizeParamError } | null {
+export function parseRevokeLink(params: URLSearchParams): RevokeLink | { error: RevokeLinkError } | null {
   if (!params.has("revoke")) return null;
   const requested = parseAuthorizeParam(params.get("revoke")) ?? { error: "not-an-address" as const };
   if ("error" in requested) return requested;
   const network = parseNetworkParam(params.get("network"));
   if (!network) return { error: "no-network" };
   return { address: requested.address, network };
-}
-
-export interface AuthorizeLink {
-  address: `0x${string}`;
-  scopes: ScopeId[] | null;
-  network: "mainnet" | "calibration";
-}
-
-/**
- * The whole pairing request from a page's search params: null when there is
- * none, an error when any part is unusable, otherwise every field validated.
- */
-export function parseAuthorizeLink(params: URLSearchParams): AuthorizeLink | { error: AuthorizeParamError } | null {
-  // A revoke link also carries `network`; it wins, it only removes authority.
-  if (params.has("revoke")) return null;
-  if (!params.has("authorize") && !params.has("scopes") && !params.has("network")) return null;
-  // Scopes or a network without an address is still a pairing request, just a broken one.
-  const requested = parseAuthorizeParam(params.get("authorize")) ?? { error: "not-an-address" as const };
-  if ("error" in requested) return requested;
-  const network = parseNetworkParam(params.get("network"));
-  if (!network) return { error: "no-network" };
-  // The CLI always names scopes; a link without any usable one is malformed,
-  // and reduce-only consent has nothing to reduce to.
-  const scopes = parseScopesParam(params.get("scopes"));
-  if (!scopes) return { error: "no-scopes" };
-  return { address: requested.address, scopes, network };
 }

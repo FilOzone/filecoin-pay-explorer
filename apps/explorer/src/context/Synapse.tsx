@@ -1,41 +1,30 @@
 "use client";
 import { asClient, Synapse } from "@filoz/synapse-sdk";
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useMemo } from "react";
 import { useChainId, useConnectorClient } from "wagmi";
-import { supportedChains } from "@/services/wagmi/config";
-import { appConstants } from "@/utils/constants";
+import { isSupportedChainId } from "@/utils/network";
 import type { SynapseContextType } from "./types";
 
 export const SynapseContext = createContext<SynapseContextType | null>(null);
 
+/**
+ * Owns the SDK client for the connected wallet. It follows the wallet's chain, so it carries no contract
+ * configuration: that comes from the network the console displays, which during a Squid top-up is mainnet while the
+ * wallet sits on the source chain.
+ */
 export const SynapseProvider = ({ children }: { children: React.ReactNode }) => {
-  const [synapse, setSynapse] = useState<Synapse | null>(null);
   const chainId = useChainId();
   const { data: client } = useConnectorClient({ chainId });
 
-  const constants = useMemo(() => {
-    const effectiveChainId = chainId ?? supportedChains[0].id;
-    return (
-      appConstants[effectiveChainId as (typeof supportedChains)[number]["id"]] ?? appConstants[supportedChains[0].id]
-    );
-  }, [chainId]);
-
-  useEffect(() => {
-    if (!client || !supportedChains.some((chain) => chain.id === chainId)) {
-      setSynapse(null);
-      return;
-    }
-    setSynapse(new Synapse({ client: asClient(client), source: "filecoin-pay-explorer" }));
-  }, [chainId, client]);
-
-  return (
-    <SynapseContext.Provider
-      value={{
-        synapse,
-        constants,
-      }}
-    >
-      {children}
-    </SynapseContext.Provider>
+  const value = useMemo(
+    () => ({
+      synapse:
+        client && isSupportedChainId(chainId)
+          ? new Synapse({ client: asClient(client), source: "filecoin-pay-explorer" })
+          : null,
+    }),
+    [chainId, client],
   );
+
+  return <SynapseContext.Provider value={value}>{children}</SynapseContext.Provider>;
 };

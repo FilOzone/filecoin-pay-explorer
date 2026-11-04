@@ -7,4 +7,7 @@ schema.graphql
 tests/.bin/
 tests/.latest.json
 
+# Synced from @filoz/synapse-core/abis by scripts/sync-abis.mjs; regenerated on every `pnpm codegen`.
+abis/
+
 

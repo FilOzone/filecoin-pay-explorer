@@ -100,16 +100,16 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.
     - `utils/index.ts`: If modifying shared utility functions or constants.
 
-2.  **Regenerate Code:** After modifying the schema or manifest, always regenerate the AssemblyScript types:
+2.  **Regenerate Code:** After modifying the schema or manifest, always regenerate the AssemblyScript types. Use the `pnpm` script, not `graph codegen` directly, so it also syncs ABIs and regenerates `schema.graphql`/`subgraph.yaml`:
 
     ```bash
-    graph codegen
+    pnpm codegen
     ```
 
 3.  **Rebuild:** Compile the updated subgraph code:
 
     ```bash
-    graph build
+    pnpm build
     ```
 
 4.  **Redeploy:** Deploy the new version to Goldsky. It's good practice to increment the version number:

@@ -38,6 +38,9 @@ importers:
       '@filecoin-project/squid-evm-funding':
         specifier: ^0.3.3
         version: 0.3.3(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5)
+      '@filoz/keysmith':
+        specifier: ^0.1.0
+        version: 0.1.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
       '@filoz/synapse-core':
         specifier: ^0.9.0
         version: 0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
@@ -290,6 +293,9 @@ importers:
       '@filecoin-pay/configs':
         specifier: workspace:*
         version: link:../configs
+      '@filoz/synapse-core':
+        specifier: ^0.9.0
+        version: 0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       assemblyscript:
         specifier: 0.19.23
         version: 0.19.23
@@ -1983,6 +1989,11 @@ packages:
   '@filecoin-project/squid-evm-funding@0.3.3':
     resolution: {integrity: sha512-O8fUzmMm6U29HJMsOZn9myxlRSd3cx0RnX7QSOIbrv7kLzaUAaLCj2XWZ34e49GTiAmcvURaHWQSOmGM0vs95w==}
     engines: {node: '>=18'}
+
+  '@filoz/keysmith@0.1.0':
+    resolution: {integrity: sha512-rHtKdR9YDZzto9hWGrJXyBI6NvEj8LsWWgFz7fAnLBgSf4rDJv7fyi232flbC3ICiuPz3IqNo8+avQtHb8ycfw==}
+    peerDependencies:
+      viem: 2.x
 
   '@filoz/synapse-core@0.10.0':
     resolution: {integrity: sha512-i1mN0YbjMUtNrkg0VxgiOoHoJ5ytBvrtMcbAWK/IDzmOZUC879pkEUPpgQPkBrBeJi+0YfkKuRc560fkju3jbQ==}
@@ -6482,6 +6493,10 @@ packages:
 
   cborg@6.1.2:
     resolution: {integrity: sha512-hQfFh6FuuCDoycN68FtUpjtQx5kCtxOLA8msbpJZxjtxaMqxgHl+4GNwO+0YexH/lHmVzhhAKa0ua+vtmTRoVw==}
+    hasBin: true
+
+  cborg@6.1.5:
+    resolution: {integrity: sha512-1aoxfkckZmul5tFUL0p1+VRiZrXUGMxk6JQVpVv42yD21K7fh86L5WlyYgzsNv4w6Nm9ysQI9c6yDemom24HUQ==}
     hasBin: true
 
   ccount@2.0.1:
@@ -13495,6 +13510,13 @@ snapshots:
       - utf-8-validate
       - zod
 
+  '@filoz/keysmith@0.1.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
+    dependencies:
+      '@noble/curves': 2.4.0
+      '@noble/hashes': 2.4.0
+      cborg: 6.1.5
+      viem: 2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5)
+
   '@filoz/synapse-core@0.10.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
     dependencies:
       dnum: 2.17.0
@@ -13536,6 +13558,20 @@ snapshots:
       sync-multihash-sha2: 1.0.0
       viem: 2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5)
       zod: 4.6.5
+    transitivePeerDependencies:
+      - typescript
+
+  '@filoz/synapse-core@0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      dnum: 2.17.0
+      iso-web: 3.1.2
+      multiformats: 14.0.5
+      ox: 0.14.29(typescript@6.0.3)(zod@4.4.3)
+      p-locate: 7.0.0
+      p-some: 7.0.0
+      sync-multihash-sha2: 1.0.0
+      viem: 2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+      zod: 4.4.3
     transitivePeerDependencies:
       - typescript
 
@@ -20146,6 +20182,8 @@ snapshots:
   cborg@5.1.1: {}
 
   cborg@6.1.2: {}
+
+  cborg@6.1.5: {}
 
   ccount@2.0.1: {}
 

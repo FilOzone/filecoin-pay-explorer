@@ -6,8 +6,6 @@ import { useMutation } from "@tanstack/react-query";
 import { ChevronRight, WifiOff } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BaseError, UserRejectedRequestError } from "viem";
-import { createSiweMessage, generateSiweNonce } from "viem/siwe";
 import { useConnection, useSignMessage } from "wagmi";
 import {
   AlertsActiveCard,
@@ -19,15 +17,12 @@ import {
   PendingVerificationCard,
   UnsubscribeDialog,
 } from "@/components/UserConsole/NotificationsSection/components";
+import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { useNotificationStatus } from "@/hooks/useNotificationStatus";
-import {
-  getNetworkFromChainId,
-  getNotificationsEligibleNetwork,
-  isNotificationsEligibleNetwork,
-  isSupportedChainId,
-} from "@/utils/network";
+import { buildNotificationsSiwe, NOTIFICATIONS_API_URL, postNotificationsApi } from "@/services/notifications";
+import { getNotificationsEligibleNetwork, isNotificationsEligibleNetwork } from "@/utils/network";
+import { isUserRejection } from "@/utils/wallet-errors";
 
-const API_URL = process.env.NEXT_PUBLIC_NOTIFICATIONS_API_URL;
 const POLL_INTERVAL_MS = 10_000;
 const POLL_TIMEOUT_MS = 3 * 60 * 1_000;
 const RESEND_COOLDOWN_MS = 90_000;
@@ -94,80 +89,11 @@ type Overlay =
 
 // Baseline view derived purely from the shared /status query.
 function deriveBaseView(status: ReturnType<typeof useNotificationStatus>): NotificationsView {
-  if (!API_URL) return { type: "status-error" };
+  if (!NOTIFICATIONS_API_URL) return { type: "status-error" };
   if (status.isPending) return { type: "loading" };
   if (status.isError) return { type: "status-error" };
   if (status.data?.subscribed) return { type: "subscribed" };
   return { type: "not-subscribed" };
-}
-
-async function callRegister(body: {
-  message: string;
-  signature: string;
-  email: string;
-  preferredName: string;
-}): Promise<void> {
-  if (!API_URL) throw new Error("Notifications API URL not configured");
-  const res = await fetch(`${API_URL}/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    if (res.status === 429) throw new Error("Too many requests. Please wait a moment and try again.");
-    if (res.status === 400 && data?.error) throw new Error(data.error);
-    if (res.status === 401) throw new Error("Signature verification failed. Please try again.");
-    throw new Error(data?.error ?? data?.message ?? "Registration failed. Please try again.");
-  }
-}
-
-async function callUnsubscribe(body: { message: string; signature: string }): Promise<void> {
-  if (!API_URL) throw new Error("Notifications API URL not configured");
-  const res = await fetch(`${API_URL}/unsubscribe`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    if (res.status === 429) throw new Error("Too many requests. Please wait a moment and try again.");
-    if (res.status === 400 && data?.error) throw new Error(data.error);
-    if (res.status === 401) throw new Error("Signature verification failed. Please try again.");
-    throw new Error(data?.error ?? data?.message ?? "Failed to turn off alerts. Please try again.");
-  }
-}
-
-// Statements must match api/auth.ts SIWE_STATEMENTS exactly.
-function buildSiweMessage(action: "register", address: `0x${string}`, chainId: number, email: string): string;
-function buildSiweMessage(action: "unsubscribe", address: `0x${string}`, chainId: number): string;
-function buildSiweMessage(
-  action: "register" | "unsubscribe",
-  address: `0x${string}`,
-  chainId: number,
-  email?: string,
-): string {
-  const statement =
-    action === "register"
-      ? `Subscribe to Filecoin Pay notifications for ${email}`
-      : "Unsubscribe from Filecoin Pay notifications";
-  return createSiweMessage({
-    domain: window.location.host,
-    address,
-    statement,
-    uri: window.location.origin,
-    version: "1",
-    chainId,
-    nonce: generateSiweNonce(),
-    issuedAt: new Date(),
-  });
-}
-
-// wagmi/viem usually wraps the rejection, so walk the cause chain rather than
-// matching the top-level error (UserRejectedRequestError extends BaseError, so a
-// direct throw is covered too).
-function isUserRejection(err: unknown): boolean {
-  return err instanceof BaseError && Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
 }
 
 const eligibleNetwork = getNotificationsEligibleNetwork();
@@ -226,9 +152,13 @@ const NotificationsContent = ({
   // initial submit (via the mutation below) and the resend action.
   const register = useCallback(
     async (email: string, preferredName: string) => {
-      const message = buildSiweMessage("register", address, chainId, email);
+      const message = buildNotificationsSiwe(address, chainId, `Subscribe to Filecoin Pay notifications for ${email}`);
       const signature = await signMessageAsync({ message });
-      await callRegister({ message, signature, email, preferredName });
+      await postNotificationsApi(
+        "/register",
+        { message, signature, email, preferredName },
+        "Registration failed. Please try again.",
+      );
       const pending: PendingData = { email, preferredName, resendAvailableAt: Date.now() + RESEND_COOLDOWN_MS };
       writePending(address, pending);
       setOverlay({ type: "pending-verification", ...pending });
@@ -327,11 +257,15 @@ const NotificationsContent = ({
     cancelledRef.current = false;
     setOverlay({ type: "unsubscribing", cancellable: true });
     try {
-      const message = buildSiweMessage("unsubscribe", address, chainId);
+      const message = buildNotificationsSiwe(address, chainId, "Unsubscribe from Filecoin Pay notifications");
       const signature = await signMessageAsync({ message });
       if (cancelledRef.current) return;
       setOverlay({ type: "unsubscribing", cancellable: false });
-      await callUnsubscribe({ message, signature });
+      await postNotificationsApi(
+        "/unsubscribe",
+        { message, signature },
+        "Failed to turn off alerts. Please try again.",
+      );
       if (!cancelledRef.current) {
         clearPending(address);
         setOverlay({ type: "unsubscribed-success" });
@@ -413,8 +347,8 @@ const NotificationsContent = ({
 
 const NotificationsPage = () => {
   const { address, isConnected, chainId } = useConnection();
-  const walletNetwork = getNetworkFromChainId(chainId);
-  const isEligibleNetwork = isSupportedChainId(chainId) && isNotificationsEligibleNetwork(walletNetwork);
+  const { network, isFilecoinChain } = useConsoleNetwork();
+  const isEligibleNetwork = isFilecoinChain && isNotificationsEligibleNetwork(network);
   const [viewType, setViewType] = useState<NotificationsView["type"]>("loading");
   const updateEmailRef = useRef<(() => void) | null>(null);
 
@@ -455,7 +389,8 @@ const NotificationsPage = () => {
         </div>
         <p className='mt-2 text-muted-foreground'>
           Receive alerts when your account has less than 30 days of service runway remaining, so you can top up before
-          services are affected.
+          services are affected, and when a Warm Storage dataset has had no new data for 30 days, so you can decide
+          whether to keep paying for it.
         </p>
       </div>
 

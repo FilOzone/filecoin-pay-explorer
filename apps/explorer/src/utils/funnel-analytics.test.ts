@@ -74,6 +74,7 @@ describe("readFunnelLabels", () => {
     assert.equal(product("foc_ref=agent-skills-fund-console&foc_entry=pricing"), "agent-skills");
     assert.equal(product("foc_ref=docs-open-console&foc_entry=data-storage"), "data-storage");
     assert.equal(product("utm_source=filecoin-pin&utm_campaign=fund"), "filecoin-pin");
+    assert.equal(product("utm_source=filecoin-cli&utm_medium=status&utm_term=fund"), "filecoin-cli");
     assert.equal(product("foc_ref=docs-open-console&utm_source=other"), undefined);
   });
 

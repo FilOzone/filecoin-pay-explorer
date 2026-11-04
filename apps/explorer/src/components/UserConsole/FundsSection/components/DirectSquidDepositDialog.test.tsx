@@ -129,6 +129,7 @@ vi.mock("@privy-io/react-auth", () => ({
     payers.connectWalletOnSuccess = onSuccess;
     return { connectWallet: payers.connectWallet };
   },
+  useSign7702Authorization: () => ({ signAuthorization: vi.fn() }),
   useWallets: () => ({ wallets: connectedWallets.current }),
 }));
 vi.mock("wagmi", () => ({
@@ -372,6 +373,31 @@ describe("DirectSquidDepositDialog safety integration", () => {
 
     expect(amountInput(renderer).props.value).toBe("12.5");
     expect(renderer.root.findByProps({ "aria-label": "Source token" }).props.value).toBe(USDC);
+  });
+
+  it("holds the USDC fee reserve back from a purchase an embedded wallet pays network fees for in USDC", async () => {
+    const baseUsdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+    const tokens = query.tokens;
+    query.tokens = [...tokens, { chainId: 8453, decimals: 6, name: "USD Coin", symbol: "USDC", token: baseUsdc }];
+    wallet.walletClientType = "privy";
+    try {
+      let renderer!: ReactTestRenderer;
+      await act(async () => {
+        renderer = create(
+          <DirectSquidDepositDialog
+            accountId={RECIPIENT.toLowerCase()}
+            initialSource={{ amount: 12_500_000n, chainId: 8453, decimals: 6, token: baseUsdc }}
+            onOpenChange={() => undefined}
+            open
+          />,
+        );
+      });
+
+      expect(amountInput(renderer).props.value).toBe("12");
+    } finally {
+      query.tokens = tokens;
+      wallet.walletClientType = "metamask";
+    }
   });
 
   it("keeps the user's edits when a pending marker appears and clears", async () => {

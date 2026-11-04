@@ -7,11 +7,12 @@ import {
   buildRevokeArgs,
   deriveKeyStatus,
   deriveSessionKeys,
-  EXPIRY_PRESETS,
   existingKeyPrefill,
   hasUniformExpiry,
   isScopeActive,
+  MAX_EXPIRY_SEC,
   normalizeKeyName,
+  parseExpiryDays,
   pickRevokeTarget,
   resolveExpiry,
   type ScopeId,
@@ -99,13 +100,26 @@ describe("hasUniformExpiry", () => {
   });
 });
 
-describe("expiry presets", () => {
-  it("offers 7, 30, 90 days and no 'never' option", () => {
-    assert.deepEqual(
-      EXPIRY_PRESETS.map((p) => p.seconds),
-      [7 * 86400, 30 * 86400, 90 * 86400],
-    );
-    assert.ok(EXPIRY_PRESETS.every((p) => p.seconds > 0));
+describe("parseExpiryDays", () => {
+  const maxDays = MAX_EXPIRY_SEC / 86400;
+
+  it("accepts any whole number of days from 1 up to the last date a JS Date holds", () => {
+    assert.deepEqual(["1", " 30 ", "3650", String(maxDays)].map(parseExpiryDays), [1, 30, 3650, maxDays]);
+  });
+
+  it("refuses no expiry, fractions, signs, and counts past the last date a JS Date holds", () => {
+    assert.deepEqual(["0", "", "1.5", "-3", "+3", "1e2", "abc", String(maxDays + 1)].map(parseExpiryDays), [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
+    assert.equal(parseExpiryDays(null), null);
+    assert.equal(parseExpiryDays(undefined), null);
   });
 });
 
@@ -233,21 +247,15 @@ describe("resolveExpiry", () => {
   const nowMs = 1_700_000_000_123;
   const nowSec = 1_700_000_000n;
 
-  it("adds the preset's days to now", () => {
-    assert.equal(resolveExpiry("0", "", nowMs), nowSec + 7n * 86400n);
-    assert.equal(resolveExpiry("1", "", nowMs), nowSec + 30n * 86400n);
-    assert.equal(resolveExpiry("2", "", nowMs), nowSec + 90n * 86400n);
+  it("adds whole days to now", () => {
+    assert.equal(resolveExpiry("1", nowMs), nowSec + 86400n);
+    assert.equal(resolveExpiry("30", nowMs), nowSec + 30n * 86400n);
   });
 
-  it("treats a custom date as the absolute end of that local day", () => {
-    const endOfDay = BigInt(Math.floor(new Date("2100-01-02T23:59:59").getTime() / 1000));
-    assert.equal(resolveExpiry("custom", "2100-01-02", nowMs), endOfDay);
-  });
-
-  it("rejects a custom date in the past, an empty custom date, and an unknown preset", () => {
-    assert.equal(resolveExpiry("custom", "2000-01-01", nowMs), null);
-    assert.equal(resolveExpiry("custom", "", nowMs), null);
-    assert.equal(resolveExpiry("99", "", nowMs), null);
+  it("has no expiry for days the form refuses, or one past the last date a JS Date holds", () => {
+    assert.equal(resolveExpiry("0", nowMs), null);
+    assert.equal(resolveExpiry("", nowMs), null);
+    assert.equal(resolveExpiry(String(MAX_EXPIRY_SEC / 86400), nowMs), null);
   });
 });
 

@@ -32,11 +32,27 @@ describe("AddFundsDialog", () => {
     expect(visibleText).toContain("Swap to USDFC");
     expect(visibleText).toContain("Buy USDC with card");
     expect(visibleText).toContain("Already hold USDFC or another token on Filecoin? Deposit it directly.");
+    expect(visibleText).toContain(
+      "Buy USDC on Base, then swap and deposit it into Filecoin Pay. Requires identity verification.",
+    );
+    const methodOrder = renderer.root.findAllByType("button").map((node) => node.props["aria-label"]);
+    expect(methodOrder).toEqual(["Swap to USDFC", "Buy USDC with card", "Deposit token"]);
 
     act(() => card.props.onClick());
     act(() => deposit.props.onClick());
     act(() => swap.props.onClick());
     expect(onSelect.mock.calls).toEqual([["card"], ["deposit"], ["squid"]]);
+
+    act(() =>
+      renderer.update(
+        <AddFundsDialog cardFirst onOpenChange={() => undefined} onSelect={onSelect} open squidAvailable />,
+      ),
+    );
+    expect(renderer.root.findAllByType("button").map((node) => node.props["aria-label"])).toEqual([
+      "Buy USDC with card",
+      "Swap to USDFC",
+      "Deposit token",
+    ]);
   });
 
   it("refuses to close while a card purchase is busy", () => {

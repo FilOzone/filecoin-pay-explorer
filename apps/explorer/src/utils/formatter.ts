@@ -1,3 +1,4 @@
+import { SIZE_CONSTANTS } from "@filoz/synapse-sdk";
 import { EPOCH_DURATION, UNLIMITED_THRESHOLD } from "./constants";
 
 export const formatPercentage = (value: number): string => `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -87,6 +88,24 @@ export const formatFIL = (attoFil: string | bigint) => {
 
   return "0 FIL";
 };
+
+/** Largest unit first, so the first one the rounded size clears is the one it's shown in. */
+const BYTE_UNITS = [
+  { unit: "PiB", size: SIZE_CONSTANTS.PiB },
+  { unit: "TiB", size: SIZE_CONSTANTS.TiB },
+  { unit: "GiB", size: SIZE_CONSTANTS.GiB },
+  { unit: "MiB", size: SIZE_CONSTANTS.MiB },
+  { unit: "KiB", size: SIZE_CONSTANTS.KiB },
+] as const;
+
+export function formatBytes(bytes: bigint): string {
+  if (bytes <= 0n) return "0 B";
+  for (const { unit, size } of BYTE_UNITS) {
+    const value = (Number(bytes) / Number(size)).toFixed(2);
+    if (Number(value) >= 1) return `${value} ${unit}`;
+  }
+  return `${bytes} B`;
+}
 
 export const isUnlimitedValue = (value: number | string | bigint): boolean => {
   try {

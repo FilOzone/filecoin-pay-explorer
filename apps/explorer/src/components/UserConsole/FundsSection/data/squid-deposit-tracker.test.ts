@@ -92,6 +92,33 @@ describe("pending Squid deposit tracker", () => {
     expect(loadPendingSquidDeposit(storage, OWNER)).toEqual(pending);
   });
 
+  it("keeps a USDC-gas operation sent before its bundle is known, so a reload resumes the receipt lookup", () => {
+    const { transactionHash: _broadcast, ...requested } = pending;
+    const stored: PendingSquidDeposit = {
+      ...requested,
+      executionStage: "swap-requested",
+      userOperationHash: `0x${"a".repeat(64)}` as Hash,
+    };
+    savePendingSquidDeposit(storage, stored);
+
+    expect(loadPendingSquidDeposit(storage, OWNER)).toEqual(stored);
+  });
+
+  it("discards a marker whose operation hash is malformed", () => {
+    storage.setItem(
+      getPendingSquidDepositKey(OWNER),
+      JSON.stringify({
+        ...pending,
+        sourceAmount: "1",
+        minimumDestinationAmount: "1",
+        fundsBefore: "1",
+        userOperationHash: "0x12",
+      }),
+    );
+
+    expect(loadPendingSquidDeposit(storage, OWNER)).toBeNull();
+  });
+
   it("keeps the paid token's symbol and decimals when they were recorded", () => {
     savePendingSquidDeposit(storage, { ...pending, sourceSymbol: "USDC", sourceDecimals: 6 });
     expect(loadPendingSquidDeposit(storage, OWNER)).toEqual({

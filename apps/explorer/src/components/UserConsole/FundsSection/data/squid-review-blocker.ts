@@ -1,3 +1,7 @@
+import { formatUnits } from "viem";
+import { CIRCLE_PAYMASTER_TOKEN_DECIMALS } from "./circle-paymaster";
+import { FEE_RESERVE_USDC, type UsdcGasPayer } from "./usdc-gas-payer";
+
 /**
  * Why Review is disabled:
  * - missing: the form needs more input
@@ -23,6 +27,7 @@ export function getSquidReviewBlocker({
   quoteReady,
   requiredNative,
   sourceSymbol,
+  usdcGas,
 }: {
   amount: string;
   balances: { native: bigint; token: bigint } | undefined;
@@ -38,6 +43,8 @@ export function getSquidReviewBlocker({
   quoteReady: boolean;
   requiredNative: bigint | null;
   sourceSymbol: string | undefined;
+  /** Set when network fees are paid in USDC; its payer check then stands in for the native balance. */
+  usdcGas?: { payer: UsdcGasPayer | undefined; failed: boolean };
 }): SquidReviewBlocker | null {
   if (!sourceSymbol) return { kind: "missing", message: "Choose a source token." };
   if (amount.trim() === "") return { kind: "missing", message: "Enter an amount." };
@@ -47,12 +54,30 @@ export function getSquidReviewBlocker({
   if (balances.token < parsedAmount) {
     return { kind: "funds", message: `${payerLabel} doesn't have enough ${sourceSymbol}.` };
   }
+  if (usdcGas) {
+    if (usdcGas.failed) return { kind: "failed", message: "USDC network fees could not be estimated." };
+    if (!usdcGas.payer) return { kind: "waiting", message: "Checking USDC network fees…" };
+    if (usdcGas.payer === "conflict") {
+      return {
+        kind: "funds",
+        message: `${payerLabel} is set up with another smart account, so its network fees can't be paid in ${sourceSymbol}.`,
+      };
+    }
+    if (balances.token < parsedAmount + FEE_RESERVE_USDC) {
+      const reserve = `${formatUnits(FEE_RESERVE_USDC, CIRCLE_PAYMASTER_TOKEN_DECIMALS)} ${sourceSymbol}`;
+      return {
+        kind: "funds",
+        message: `${payerLabel} needs up to ${reserve} on top of the deposit for network fees.`,
+      };
+    }
+  }
   if (quoteFailed) return { kind: "failed", message: "Squid could not quote this amount." };
   if (!quoteReady) {
     return quoteLoading
       ? { kind: "waiting", message: "Getting a quote…" }
       : { kind: "missing", message: "No quote is available yet." };
   }
+  if (usdcGas) return null;
   if (feesFailed) return { kind: "failed", message: "Network fees could not be estimated." };
   if (requiredNative === null) {
     return feesLoading

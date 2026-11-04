@@ -19,6 +19,7 @@ export type SettlementAmountState =
 export type SettleRail = (params: SettleRailParams) => Promise<Hex | undefined>;
 
 interface UseSettleRailDialogOptions {
+  chainId: number;
   rail: Rail;
   userAddress: string;
   currentEpoch: bigint | undefined;
@@ -29,6 +30,7 @@ interface UseSettleRailDialogOptions {
 }
 
 export function useSettleRailDialog({
+  chainId,
   rail,
   userAddress,
   currentEpoch,
@@ -51,6 +53,7 @@ export function useSettleRailDialog({
     isFetching,
     isPending,
   } = useRailSettlementAmounts({
+    chainId,
     railId,
     untilEpoch,
     enabled: open && isSettlementAllowed,

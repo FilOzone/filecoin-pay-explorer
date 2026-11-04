@@ -1,8 +1,8 @@
-/** What survives a mount: consumed params go, kept ones stay. */
+/** A link's params are read on mount and stay in the URL until something acts on them. */
 import assert from "node:assert/strict";
 import { act, create } from "react-test-renderer";
 import { afterEach, describe, it, vi } from "vitest";
-import { dropSearchParams, useConsumedSearchParams } from "./useConsumedSearchParams";
+import { dropSearchParams, useLinkSearchParams } from "./useLinkSearchParams";
 
 const original = globalThis.window;
 
@@ -24,10 +24,10 @@ function fakeWindow(search: string) {
 }
 
 /** Mount the hook once and hand back what it read. */
-function mount(keys: string[], keep?: string[]) {
+function mount(keys: string[]) {
   const read: { params: URLSearchParams | null } = { params: null };
   const Probe = () => {
-    read.params = useConsumedSearchParams(keys, keep);
+    read.params = useLinkSearchParams(keys);
     return null;
   };
   act(() => {
@@ -36,38 +36,22 @@ function mount(keys: string[], keep?: string[]) {
   return read.params;
 }
 
-describe("useConsumedSearchParams", () => {
-  it("reads the named params and strips them", () => {
-    const win = fakeWindow("?authorize=0xabc&scopes=createDataSet&network=mainnet");
-
-    const seen = mount(["authorize", "scopes", "network"]);
-
-    assert.equal(seen?.get("authorize"), "0xabc");
-    assert.equal(win.location.search, "");
-  });
-
-  it("leaves a kept param in the URL, and the network it needs with it", () => {
+describe("useLinkSearchParams", () => {
+  it("reads the whole query and leaves it in the URL, the network it needs included", () => {
     const win = fakeWindow("?revoke=0xabc&network=calibration");
 
-    const seen = mount(["authorize", "scopes", "network"], ["revoke"]);
+    const seen = mount(["revoke"]);
 
     assert.equal(seen?.get("revoke"), "0xabc");
+    assert.equal(seen?.get("network"), "calibration");
     assert.equal(win.location.search, "?revoke=0xabc&network=calibration");
-  });
-
-  it("reads a kept param even when no consumed one is present, so a bad link can still be reported", () => {
-    const win = fakeWindow("?revoke=0xabc");
-
-    const seen = mount(["authorize", "scopes", "network"], ["revoke"]);
-
-    assert.equal(seen?.get("revoke"), "0xabc");
-    assert.equal(win.location.search, "?revoke=0xabc");
+    assert.equal(win.history.replaceState.mock.calls.length, 0);
   });
 
   it("reads nothing when the query names none of them", () => {
     const win = fakeWindow("?unrelated=1");
 
-    const seen = mount(["authorize", "scopes", "network"], ["revoke"]);
+    const seen = mount(["revoke"]);
 
     assert.equal(seen, null);
     assert.equal(win.location.search, "?unrelated=1");

@@ -20,6 +20,8 @@ describe("invalidateAccountQueries", () => {
       ["payments", "account-summary", 314, OWNER],
       ["balance", { address: OWNER }],
       ["readContract", { functionName: "balanceOf" }],
+      // The setup page's Filecoin Pay and wallet USDFC, and the key-grant reads.
+      ["readContracts", { contracts: [{ functionName: "accounts" }] }],
       ["rail", "7"],
       ["railSettlementAmounts", 314, "7"],
       ["direct-squid-destination-fil", OWNER],

@@ -33,7 +33,7 @@ type ServiceMetadataEntry = Omit<ServiceProfile, "name">;
 
 const WARM_STORAGE_ENTRY: ServiceMetadataEntry = {
   description:
-    "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.",
+    "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed data sets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.",
   homepageUrl: "https://github.com/filozone/filecoin-services",
   pricing: [
     { label: "Storage", amount: "2.5 USDFC", unit: "per TiB / month" },

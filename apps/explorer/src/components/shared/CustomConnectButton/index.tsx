@@ -66,13 +66,13 @@ const CustomConnectButton = () => {
 
   return (
     <div className='flex w-full max-w-md flex-col gap-3 text-left'>
-      <div className='rounded-lg border border-primary/30 bg-primary/5 p-4'>
+      <div className='rounded-lg border p-4'>
         <div className='mb-2 flex items-center justify-between gap-3'>
           <h3 className='font-medium'>Email or Google</h3>
           <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>New to crypto</span>
         </div>
         <p className='mb-4 text-sm text-muted-foreground'>
-          We’ll create a Filecoin Pay wallet if you don’t have one yet.
+          We’ll create a Filecoin Pay wallet if you don’t have one yet. Fund it by card after a one-time identity check.
         </p>
         <Button
           className='w-full'
@@ -80,7 +80,7 @@ const CustomConnectButton = () => {
           onClick={() => login({ loginMethods: ["email", "google"] })}
           type='button'
         >
-          Continue with a Filecoin Pay wallet
+          Continue with email or Google
         </Button>
       </div>
 
@@ -96,7 +96,7 @@ const CustomConnectButton = () => {
           Use MetaMask or another wallet you already control. No sign-up needed. Card payments need a one-time
           signature.
         </p>
-        <Button className='w-full' variant='ghost' type='button' onClick={() => connectWallet()}>
+        <Button className='w-full' variant='primary' type='button' onClick={() => connectWallet()}>
           Connect existing wallet
         </Button>
       </div>

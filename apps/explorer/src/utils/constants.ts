@@ -1,11 +1,15 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
-import { calibration, mainnet } from "@/constants/chains";
-import type { supportedChains } from "@/services/wagmi/config";
-import type { ChainConstants } from "@/types";
 
 export const UNLIMITED_THRESHOLD = BigInt("1000000000000000000000000000000000000000000000000000000000000");
 export const EPOCH_DURATION = TIME_CONSTANTS.EPOCH_DURATION;
 export const WITHDRAW_MAX_BUFFER_EPOCHS = 5;
+/**
+ * A service contract reserves upcoming charges from the deposit for its lockup
+ * period (30 days for Filecoin Warm Storage Service), so an approval must allow
+ * at least that long. Submitted with every new approval, in epochs, instead of
+ * asking users to reason about epochs.
+ */
+export const DEFAULT_MAX_LOCKUP_PERIOD = TIME_CONSTANTS.EPOCHS_PER_MONTH;
 
 export const DEFAULT_THEME = "system";
 export const THEME_STORAGE_KEY = "filecoin-pay-explorer-theme";
@@ -16,34 +20,3 @@ export const explorerUrls = {
   mainnet: "https://filfox.info/en",
   calibration: "https://calibration.filfox.info/en",
 };
-
-export const appConstants: Record<(typeof supportedChains)[number]["id"], ChainConstants> = {
-  [calibration.id]: {
-    chain: calibration,
-    label: "Calibration",
-    contracts: {
-      usdfc: calibration.contracts.usdfc.address,
-      payments: calibration.contracts.payments,
-    },
-    faucets: [
-      {
-        name: "Get FIL",
-        url: "https://faucet.calibnet.chainsafe-fil.io/funds.html",
-        asset: "FIL",
-      },
-      {
-        name: "Get USDFC",
-        url: "https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc",
-        asset: "USDFC",
-      },
-    ],
-  },
-  [mainnet.id]: {
-    chain: mainnet,
-    label: "Mainnet",
-    contracts: {
-      usdfc: mainnet.contracts.usdfc.address,
-      payments: mainnet.contracts.payments,
-    },
-  },
-} as const;

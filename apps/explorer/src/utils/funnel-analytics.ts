@@ -20,6 +20,8 @@ declare global {
 
 const FT_TYPES = new Set(["direct", "organic", "referral", "campaign"]);
 const PRODUCTS = ["agent-skills", "ipfs-pinning", "data-storage", "backups-archives", "pricing", "dev-quickstart"];
+// CLIs that tag their console links with utm_source=<name>; the source is the product.
+const CLI_SOURCES = new Set(["filecoin-pin", "filecoin-cli"]);
 // Untrusted URL input: a slug (dots allowed for source domains) with no long hex run,
 // so addresses, hashes, and UUIDs can't pass as labels.
 const LABEL = /^[a-z0-9.-]{1,64}$/;
@@ -38,7 +40,8 @@ const productOf = (ref: string | null, entry: string | null, params: URLSearchPa
   const fromRef = PRODUCTS.find((product) => ref?.startsWith(`${product}-`));
   if (fromRef) return fromRef;
   if (entry && PRODUCTS.includes(entry)) return entry;
-  return params.get("utm_source") === "filecoin-pin" ? "filecoin-pin" : null;
+  const source = params.get("utm_source");
+  return source && CLI_SOURCES.has(source) ? source : null;
 };
 
 /**

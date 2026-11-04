@@ -149,27 +149,33 @@ export function existingKeyPrefill(key: ExistingKeyPrefillInput | undefined): Ex
   return { name: key.name, scopes, expirySec: keepExpiry ? key.maxExpiry : null };
 }
 
-export const EXPIRY_PRESETS: { label: string; seconds: number }[] = [
-  { label: "7 days", seconds: 7 * 86400 },
-  { label: "30 days", seconds: 30 * 86400 },
-  { label: "90 days", seconds: 90 * 86400 },
-];
+/** Days a new key lasts unless the owner or the link picks otherwise. */
+export const DEFAULT_EXPIRY_DAYS = 30;
+
+/** The latest expiry (unix seconds) the form offers: the last moment a JS Date can hold, so it always shows as a date. */
+export const MAX_EXPIRY_SEC = 8.64e12;
 
 /**
- * Absolute expiry (unix seconds) for the create form. A preset index is a
- * duration added to `nowMs`; "custom" is an absolute `YYYY-MM-DD` taken as
- * end of day in local time. Returns null when the choice is missing or in
- * the past.
+ * A whole number of days, at least 1, or null: every key has to expire. No
+ * count past {@link MAX_EXPIRY_SEC} even from the epoch can ever be usable.
  */
-export function resolveExpiry(presetIndex: string, customDate: string, nowMs: number): bigint | null {
-  const nowSec = Math.floor(nowMs / 1000);
-  if (presetIndex === "custom") {
-    if (!customDate) return null;
-    const ts = Math.floor(new Date(`${customDate}T23:59:59`).getTime() / 1000);
-    return ts > nowSec ? BigInt(ts) : null;
-  }
-  const preset = EXPIRY_PRESETS[Number(presetIndex)];
-  return preset ? BigInt(nowSec + preset.seconds) : null;
+export function parseExpiryDays(value: string | null | undefined): number | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const days = Number(trimmed);
+  return days >= 1 && days * 86400 <= MAX_EXPIRY_SEC ? days : null;
+}
+
+/**
+ * Absolute expiry (unix seconds) for the create form: `days` whole days after
+ * `nowMs`, or null when the days are unusable or land past {@link MAX_EXPIRY_SEC}.
+ */
+export function resolveExpiry(days: string, nowMs: number): bigint | null {
+  const parsed = parseExpiryDays(days);
+  if (parsed == null) return null;
+  const expiry = Math.floor(nowMs / 1000) + parsed * 86400;
+  return expiry <= MAX_EXPIRY_SEC ? BigInt(expiry) : null;
 }
 
 export interface SessionKeyWithStatus extends SessionKeyRecord {

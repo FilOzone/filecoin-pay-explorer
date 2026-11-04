@@ -34,6 +34,8 @@ Connected-wallet pages live under `src/app/console/(console)/**`. The shared lay
 
 Do not repeat those providers or access gates inside individual console pages.
 
+CLI links land on `/console/setup`, in the `(setup)` route group: the same shell (`src/app/console/_shell/`, shared by both groups) with `focused` set, which drops the sidebar. Its search params are a contract shared with the CLIs (`src/utils/setupLink.ts`); `src/proxy.ts` redirects the older `/console/session-keys?authorize=` and `/console?deposit=` links there. A `?revoke=` link stays on the session keys page.
+
 `src/app/console/notifications/verify/page.tsx` deliberately sits outside the `(console)` route group. Verification links must work without a connected wallet or console-only providers.
 
 ### API routes
@@ -92,6 +94,12 @@ Render loading, empty, and error states explicitly. Follow the matching list or 
 - Preserve the URL-to-context synchronization under `src/app/[network]`. Network-sensitive data must not reuse cache entries from another network.
 - Keep token amounts, epochs, rates, allowances, and transaction values exact. Use `bigint` and the established viem and formatting helpers; do not pass exact values through JavaScript `number` when precision can be lost.
 - Reuse `useContractTransaction` and existing domain flows before creating another write lifecycle.
+
+In the console, the wallet `chainId` and the console `network` are different values. During a Squid top-up the wallet sits on the source chain while the console keeps showing mainnet.
+
+- `network` selects contracts (`getChain(network)`), subgraph queries, and what the console displays. Read it with `useConsoleNetwork()` in console routes and top-level hosts such as `FundingHost`, `ConsoleSidebar`, and `Balance`, then pass it as a prop. Components and dialogs below take `network` as a prop and do not read it themselves.
+- Use the wallet `chainId` only for connector readiness, access gates, chain-mismatch and chain-switch UI, Squid source-chain detection, SIWE, and resetting dialogs on a chain change. Never use it to pick contracts or queries.
+- `getNetworkFromChainId` is private to `useConsoleNetwork` (`src/components/UserConsole/useConsoleNetwork.ts`); its mainnet fallback hides non-Filecoin chains. Do not read console contract configuration from `useSynapse()` or the explorer URL context (`useNetwork()`).
 
 Contract dialogs and transaction hooks own behavior such as wallet signature progress, duplicate-submission guards, receipt tracking, pending and success toasts, query invalidation, and close restrictions while work is pending. UI refactors must preserve handlers, disabled states, callback timing, and mount lifetime.
 
@@ -172,6 +180,8 @@ Never read `.env` files. Use documented variable names and inspect code referenc
 - `NEXT_PUBLIC_SQUID_INTEGRATOR_ID`
 - `NEXT_PUBLIC_NOTIFICATIONS_API_URL`
 - `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS`
+
+Server-only configuration: `PIMLICO_API_KEY`, read by `src/app/api/bundler`.
 
 Do not hardcode deployment endpoints, credentials, private keys, or new environment-specific values in source. Validate required configuration at its boundary and name a missing variable without printing its value.
 

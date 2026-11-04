@@ -9,7 +9,6 @@ import {
 import { ChevronDown, Globe } from "lucide-react";
 import { useSwitchChain } from "wagmi";
 import { supportedChains } from "@/services/wagmi/config";
-import { getNetworkFromChainId } from "@/utils/network";
 
 interface ChainSwitcherProps {
   chainId: number;
@@ -17,8 +16,7 @@ interface ChainSwitcherProps {
 
 const ChainSwitcher = ({ chainId }: ChainSwitcherProps) => {
   const { switchChain } = useSwitchChain();
-  const currentNetwork = getNetworkFromChainId(chainId);
-  const currentChain = supportedChains.find((c) => c.slug === currentNetwork) ?? supportedChains[0];
+  const currentChain = supportedChains.find((c) => c.id === chainId) ?? supportedChains[0];
 
   return (
     <DropdownMenu>

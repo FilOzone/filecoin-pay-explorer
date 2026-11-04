@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFutureTimestamp } from "./formatter";
+import { formatBytes, formatFutureTimestamp } from "./formatter";
 
 /**
  * Boundary tests for the unit the function picks. The absolute calendar day a
@@ -97,5 +97,37 @@ describe("formatFutureTimestamp", () => {
     const twoHoursFromNow = BigInt(Math.floor(Date.now() / 1000)) + 2n * HOUR;
 
     expect(formatFutureTimestamp(twoHoursFromNow)).toMatch(/^1h 59m$|^2h 0m$/);
+  });
+});
+
+describe("formatBytes", () => {
+  const KiB = 1024n;
+  const MiB = 1024n * KiB;
+  const GiB = 1024n * MiB;
+  const TiB = 1024n * GiB;
+
+  it("shows zero and negative sizes as 0 B", () => {
+    expect(formatBytes(0n)).toBe("0 B");
+    expect(formatBytes(-1n)).toBe("0 B");
+  });
+
+  it("shows sizes that don't round up to a KiB in bytes", () => {
+    expect(formatBytes(1000n)).toBe("1000 B");
+  });
+
+  it("moves to the next unit when rounding reaches it", () => {
+    expect(formatBytes(KiB - 1n)).toBe("1.00 KiB");
+    expect(formatBytes(MiB - 1n)).toBe("1.00 MiB");
+  });
+
+  it("switches units at exactly one unit", () => {
+    expect(formatBytes(KiB)).toBe("1.00 KiB");
+    expect(formatBytes(MiB)).toBe("1.00 MiB");
+    expect(formatBytes(GiB)).toBe("1.00 GiB");
+    expect(formatBytes(TiB)).toBe("1.00 TiB");
+  });
+
+  it("picks the largest unit the size clears", () => {
+    expect(formatBytes(2n * TiB + 512n * GiB)).toBe("2.50 TiB");
   });
 });

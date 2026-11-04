@@ -19,6 +19,8 @@ function getAccountQueryPrefixes(address: string): readonly (readonly unknown[])
     ["payments", "account-summary"],
     ["balance"],
     ["readContract"],
+    // wagmi keys batched reads apart from single ones, and prefixes match whole key elements.
+    ["readContracts"],
     ["rail"],
     ["rails"],
     ["railSettlementAmounts"],

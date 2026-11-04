@@ -19,6 +19,14 @@ const privyAlias =
   process.env.E2E_MODE === "mock" && isDevelopment ? { "@privy-io/react-auth": "./e2e/fake-privy.tsx" } : undefined;
 const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
+// ConsoleProviders falls back to the development Privy app when these are unset (#443); a production build must not.
+const missingPrivyVars = ["NEXT_PUBLIC_PRIVY_APP_ID", "NEXT_PUBLIC_PRIVY_CLIENT_ID"].filter(
+  (name) => !process.env[name]?.trim(),
+);
+if (process.env.VERCEL_ENV === "production" && missingPrivyVars.length > 0) {
+  throw new Error(`A production deployment needs its own Privy app: set ${missingPrivyVars.join(" and ")}.`);
+}
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   // 'unsafe-inline': the Next runtime and the Plausible init snippet are inline scripts.

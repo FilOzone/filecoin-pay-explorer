@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SpendChart } from "@/components/UserConsole/SpendChart";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
+import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
-import useSynapse from "@/hooks/useSynapse";
 import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
 import {
@@ -39,7 +39,7 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
 
-  const { constants } = useSynapse();
+  const usdfcAddress = getChain(network).contracts.usdfc.address;
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -63,8 +63,8 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
   const selectedToken = useMemo(() => {
     if (!userTokens || userTokens.length === 0) return null;
     const selected = userTokens.find((userToken) => userToken.id === selectedTokenId);
-    return selected ?? findDefaultToken(userTokens, constants.contracts.usdfc);
-  }, [userTokens, selectedTokenId, constants.contracts.usdfc]);
+    return selected ?? findDefaultToken(userTokens, usdfcAddress);
+  }, [userTokens, selectedTokenId, usdfcAddress]);
 
   const handleOpenDeposit = useCallback(() => openAddFunds(selectedToken), [openAddFunds, selectedToken]);
 
@@ -115,7 +115,12 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
 
       {/* Mounted only once a token is captured, so WithdrawDialog keeps a non-nullable prop. */}
       {withdrawToken ? (
-        <WithdrawDialog userToken={withdrawToken} open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen} />
+        <WithdrawDialog
+          network={network}
+          userToken={withdrawToken}
+          open={withdrawDialogOpen}
+          onOpenChange={setWithdrawDialogOpen}
+        />
       ) : null}
     </>
   );

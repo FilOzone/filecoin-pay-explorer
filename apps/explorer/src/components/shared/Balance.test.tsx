@@ -1,6 +1,7 @@
 import { act, create } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
+import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
 import Balance from "./Balance";
 
 vi.mock("@filecoin-pay/ui/components/button", () => ({
@@ -46,9 +47,6 @@ vi.mock("wagmi", () => ({
   useReadContract: () => ({ data: 0n, isLoading: false }),
   useWalletClient: () => ({ data: undefined }),
 }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({ constants: { contracts: { usdfc: "0x2222222222222222222222222222222222222222" } } }),
-}));
 vi.mock("@/assests/FilecoinLogo", () => ({ default: () => null }));
 vi.mock("@/assests/USDFCLogo", () => ({ default: () => null }));
 
@@ -63,10 +61,12 @@ function render() {
   let renderer!: ReturnType<typeof create>;
   act(() => {
     renderer = create(
-      <FundingLaunchProvider>
-        <Balance />
-        <LaunchState />
-      </FundingLaunchProvider>,
+      <TopUpActivityProvider>
+        <FundingLaunchProvider>
+          <Balance />
+          <LaunchState />
+        </FundingLaunchProvider>
+      </TopUpActivityProvider>,
     );
   });
   return renderer;

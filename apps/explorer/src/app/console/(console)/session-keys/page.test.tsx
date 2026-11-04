@@ -1,6 +1,7 @@
 /** The page drops a revoke link nothing can act on, so a reload does not report it again. */
 import { act, create } from "react-test-renderer";
 import { afterEach, expect, it, vi } from "vitest";
+import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
 import SessionKeysPage from "./page";
 
 vi.mock("wagmi", async (importOriginal) => ({
@@ -22,7 +23,11 @@ it.each([
   });
 
   await act(async () => {
-    create(<SessionKeysPage />);
+    create(
+      <TopUpActivityProvider>
+        <SessionKeysPage />
+      </TopUpActivityProvider>,
+    );
   });
 
   expect(replaceState).toHaveBeenCalledWith(null, "", "/console/session-keys");
@@ -40,7 +45,11 @@ it("leaves a usable revoke link for the section to act on", async () => {
   });
 
   await act(async () => {
-    create(<SessionKeysPage />);
+    create(
+      <TopUpActivityProvider>
+        <SessionKeysPage />
+      </TopUpActivityProvider>,
+    );
   });
 
   expect(replaceState).not.toHaveBeenCalled();

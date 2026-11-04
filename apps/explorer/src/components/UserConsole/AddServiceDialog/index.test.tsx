@@ -8,6 +8,7 @@ const OPERATOR = "0x2222222222222222222222222222222222222222";
 const mocks = vi.hoisted(() => ({
   dialogOpenChange: undefined as ((open: boolean) => void) | undefined,
   isDialogOpen: false,
+  selectDisabled: [] as (boolean | undefined)[],
   dialogContentProps: undefined as Record<string, unknown> | undefined,
   onSubmitOnChain: undefined as (() => void) | undefined,
   isSubmitting: false,
@@ -68,7 +69,10 @@ vi.mock("@filecoin-pay/ui/components/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("@filecoin-pay/ui/components/select", () => ({
-  Select: ({ children }: { children: React.ReactNode }) => children,
+  Select: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => {
+    mocks.selectDisabled.push(disabled);
+    return children;
+  },
   SelectContent: ({ children }: { children: React.ReactNode }) => children,
   SelectItem: ({ children }: { children: React.ReactNode }) => children,
   SelectSeparator: () => null,
@@ -80,18 +84,6 @@ vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
   useFundingLaunch: () => ({ isSquidOpen: mocks.isSquidOpen, openSquid: mocks.openSquid }),
 }));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
-vi.mock("@/hooks/useSynapse", () => ({
-  default: () => ({
-    constants: {
-      chain: { blockExplorers: { default: { url: "https://example.com" } }, slug: mocks.network },
-      faucets:
-        mocks.network === "calibration"
-          ? [{ asset: "FIL", name: "Get FIL", url: "https://faucet.example.com/filecoin" }]
-          : undefined,
-      label: mocks.network === "calibration" ? "Calibration" : "Mainnet",
-    },
-  }),
-}));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
   useServiceSelection: () => ({
@@ -128,7 +120,7 @@ vi.mock("./hooks", () => ({
     switchToFilecoin: mocks.switchToFilecoin,
     targetChainId: mocks.targetChainId,
   }),
-  useAddServiceSubmit: (onSubmitOnChain: () => void) => {
+  useAddServiceSubmit: (_network: string, onSubmitOnChain: () => void) => {
     mocks.onSubmitOnChain = onSubmitOnChain;
     return { submit: mocks.submit, isSubmitting: mocks.isSubmitting, isExecuting: mocks.isExecuting };
   },
@@ -140,7 +132,7 @@ function renderDialog(
 ) {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<AddServiceDialog open onOpenChange={onOpenChange} prefill={prefill} />);
+    renderer = create(<AddServiceDialog network={mocks.network} open onOpenChange={onOpenChange} prefill={prefill} />);
   });
   return { renderer, onOpenChange };
 }
@@ -156,6 +148,7 @@ function primaryButton(renderer: ReturnType<typeof create>) {
 
 beforeEach(() => {
   mocks.isDialogOpen = false;
+  mocks.selectDisabled = [];
   mocks.filBalanceStatus = "funded";
   mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000001";
   mocks.chainId = 314;
@@ -194,6 +187,15 @@ describe("AddServiceDialog", () => {
     expect(mocks.setTokenChoice).toHaveBeenCalledWith(TOKEN);
     expect(mocks.setCustomServiceInput).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("2");
+  });
+
+  it("locks the service choice when a prefill names it, and leaves it open otherwise", () => {
+    renderDialog();
+    expect(mocks.selectDisabled.at(0)).toBe(false);
+
+    mocks.selectDisabled = [];
+    renderDialog(vi.fn(), { operator: OPERATOR, token: TOKEN, amount: "1" });
+    expect(mocks.selectDisabled.at(0)).toBe(true);
   });
 
   it("falls back to a custom address when the link names a service the list does not know", () => {
@@ -235,7 +237,9 @@ describe("AddServiceDialog", () => {
 
     expect(primaryButton(renderer).props.disabled).toBe(true);
     expect(
-      renderer.root.findAllByType("a").some((link) => link.props.href === "https://faucet.example.com/filecoin"),
+      renderer.root
+        .findAllByType("a")
+        .some((link) => link.props.href === "https://faucet.calibnet.chainsafe-fil.io/funds.html"),
     ).toBe(true);
     expect(mocks.openSquid).not.toHaveBeenCalled();
   });
@@ -258,7 +262,7 @@ describe("AddServiceDialog", () => {
     mocks.refreshFilBalance.mockClear();
 
     mocks.isSquidOpen = false;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(mocks.refreshFilBalance).toHaveBeenCalledOnce();
   });
@@ -279,7 +283,7 @@ describe("AddServiceDialog", () => {
     expect(primaryButton(renderer).props.disabled).toBe(true);
 
     mocks.filBalanceStatus = "funded";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(primaryButton(renderer).props.disabled).toBe(false);
   });
@@ -313,11 +317,11 @@ describe("AddServiceDialog", () => {
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
 
     mocks.isSquidOpen = true;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
     expect(mocks.isDialogOpen).toBe(false);
 
     mocks.isSquidOpen = false;
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
     expect(mocks.isDialogOpen).toBe(true);
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("7");
   });
@@ -327,7 +331,7 @@ describe("AddServiceDialog", () => {
     act(() => renderer.root.findByProps({ id: "amount" }).props.onChange("7"));
 
     mocks.filBalanceOwner = "0xABCDEF0000000000000000000000000000000002";
-    act(() => renderer.update(<AddServiceDialog open onOpenChange={vi.fn()} />));
+    act(() => renderer.update(<AddServiceDialog network={mocks.network} open onOpenChange={vi.fn()} />));
 
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("");
   });
