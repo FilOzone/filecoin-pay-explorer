@@ -26,6 +26,8 @@ const state = vi.hoisted(() => ({
   fundsUnreadable: false,
   /** The approval has never been read. */
   approvalUnreadable: false,
+  /** The setup funds (Filecoin Pay account, wallet USDFC, block) have not answered yet. */
+  fundsPending: false,
 }));
 const refetchApproval = vi.hoisted(() => vi.fn());
 const execute = vi.hoisted(() => vi.fn());
@@ -59,6 +61,7 @@ vi.mock("wagmi", async (importOriginal) => ({
     if (contracts[0]?.functionName !== "accounts") {
       return { data: state.grants, dataUpdatedAt: Date.now(), refetch: vi.fn() };
     }
+    if (state.fundsPending) return { data: undefined, isPending: true };
     const account = state.fundsUnreadable
       ? { status: "failure" as const, error: new Error("boom") }
       : { status: "success" as const, result: [state.usdfcFunds ?? 0n, 0n, 0n, 0n] };
@@ -181,6 +184,7 @@ describe("SetupSection", () => {
     state.approvalRefetchFailed = false;
     state.fundsUnreadable = false;
     state.approvalUnreadable = false;
+    state.fundsPending = false;
     refetchApproval.mockReset();
     execute.mockReset().mockResolvedValue("0xhash");
     switchChain.mockReset();
@@ -624,6 +628,22 @@ describe("SetupSection", () => {
     await rerender();
     expect(screen.queryByRole("button", { name: /USDFC deposit$/ })).toBeNull();
     expect(screen.getByText("Console setup complete")).toBeTruthy();
+  });
+
+  it("offers no approval for a deposit link until it has read the balance, so a quick click cannot approve alone", async () => {
+    state.fundsPending = true;
+    state.walletUsdfc = 5n * ONE_USDFC;
+    const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
+    const checking = screen.getByRole<HTMLButtonElement>("button", { name: "Checking balance…" });
+    expect(checking.disabled).toBe(true);
+    fireEvent.click(checking);
+    expect(screen.queryByRole("dialog", { name: "Add a Service" })).toBeNull();
+
+    // The reads answer with the deposit in the wallet: approving carries it.
+    state.fundsPending = false;
+    await rerender();
+    const approve = screen.getByRole<HTMLButtonElement>("button", { name: "Review approval and 2 USDFC deposit" });
+    expect(approve.disabled).toBe(false);
   });
 
   it("offers a Retry, not an approval, when the approval could not be read", async () => {

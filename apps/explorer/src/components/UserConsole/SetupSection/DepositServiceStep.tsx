@@ -231,7 +231,16 @@ function description(state: ApprovalState): string {
   return "Lets Warm Storage charge your Filecoin Pay balance for the data sets you or your session keys create, and makes sure that balance holds what the tool needs.";
 }
 
-function approveLabel(withDeposit: boolean, amount: string): string {
+function approveLabel({
+  checking,
+  withDeposit,
+  amount,
+}: {
+  checking: boolean;
+  withDeposit: boolean;
+  amount: string;
+}): string {
+  if (checking) return "Checking balance…";
   if (!withDeposit) return "Review storage approval";
   if (!amount) return "Review approval and deposit";
   return `Review approval and ${amount} USDFC deposit`;
@@ -358,6 +367,9 @@ export const DepositServiceStep = ({
   );
   // Only once the chain says there is none: an approval that could not be read may already exist.
   const canApprove = approval.state === "not-approved";
+  // Until the balance answers, whether the approval carries the deposit is unknown: a click would approve alone.
+  // A failed read does not wait: the owner can still approve alone.
+  const checking = funds !== null && funds.state === "loading";
   const text = funds !== null ? offerText(offer, missing, network) : null;
 
   return (
@@ -403,12 +415,13 @@ export const DepositServiceStep = ({
           <Button
             variant='primary'
             size='compact'
+            disabled={checking}
             onClick={() => {
               setDialogMounted(true);
               setOpen(true);
             }}
           >
-            {approveLabel(withDeposit, amount)}
+            {approveLabel({ checking, withDeposit, amount })}
           </Button>
         )}
         {funds !== null && <DepositActions network={network} account={account} missing={missing} offer={offer} />}
