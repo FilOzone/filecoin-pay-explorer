@@ -43,7 +43,7 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute,
         </span>
         {showError ? (
           <span className='text-xs text-destructive'>
-            {muteDataSet.error instanceof Error ? muteDataSet.error.message : "Failed to mute this dataset."}
+            {muteDataSet.error instanceof Error ? muteDataSet.error.message : "Failed to mute this data set."}
           </span>
         ) : null}
       </div>
@@ -62,7 +62,7 @@ export function StaleQueueRow({ dataSet, days, monthlySpend, accountId, canMute,
               </Button>
             </span>
           </TooltipTrigger>
-          <TooltipContent side='top'>Terminating datasets from the console isn't available yet.</TooltipContent>
+          <TooltipContent side='top'>Terminating data sets from the console isn't available yet.</TooltipContent>
         </Tooltip>
       </div>
       {isSnoozeDialogOpen ? (

@@ -31,7 +31,7 @@ async function authorizeFromCli(page: Page, baseURL: string): Promise<URLSearchP
     await page.getByRole("button", { name: /Switch network/ }).click();
     await page.getByText("Calibration", { exact: true }).last().click();
   }
-  await page.getByRole("button", { name: "Review and authorize" }).click();
+  await page.getByRole("button", { name: "Review permissions" }).click();
   await page.getByRole("button", { name: /^Authorize as / }).click();
   return new URL(link, baseURL).searchParams;
 }
@@ -47,8 +47,8 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     // The CLI's session keys link lands on the setup page, which lists the key before anything opens.
     await expect(page).toHaveURL(/\/console\/setup\?/);
-    await expect(page.getByRole("heading", { name: "Step 3: Authorize a session key" })).toBeVisible();
-    await page.getByRole("button", { name: "Review and authorize" }).click();
+    await expect(page.getByRole("heading", { name: "Step 2: Authorize a session key" })).toBeVisible();
+    await page.getByRole("button", { name: "Review permissions" }).click();
     const dialog = page.getByRole("dialog", { name: "New session key" });
     // The link carries the address lowercase; the dialog shows it checksummed.
     await expect(dialog.getByText(new RegExp(`^${sessionKey}$`, "i"))).toBeVisible();
@@ -63,7 +63,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
 
-    await page.getByRole("button", { name: "Review and authorize" }).click();
+    await page.getByRole("button", { name: "Review permissions" }).click();
     const dialog = page.getByRole("dialog", { name: "New session key" });
     const name = dialog.getByRole("textbox", { name: /^Name/ });
     await expect(name).toHaveValue("filecoin-cli");
@@ -147,18 +147,33 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
     await expect(page).toHaveURL(/\/console\/setup\?deposit=2&operator=fwss&network=mainnet$/);
-    await page.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Review approval and 2 USDFC deposit" }).click({ timeout: 30_000 });
 
     // The dialog root has no box of its own (everything inside is `fixed`), so assert on its heading.
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
     // The form renders after a chain read; a cold `next dev` in CI can take well past the default 5s.
     await expect(dialog.getByPlaceholder("0.0").first()).toHaveValue("2", { timeout: 30_000 });
-    // The wallet covers it, so the funds step points at the approval instead of offering Add funds.
-    await expect(page.getByText("Approving Warm Storage above also deposits the 2 USDFC")).toBeVisible({
-      timeout: 30_000,
-    });
+    // The wallet covers it, so the one approval deposits too, with no separate deposit or Add funds.
     await expect(page.getByRole("button", { name: "Add funds" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review 2 USDFC deposit" })).toHaveCount(0);
+  });
+
+  test("signs up from a link without an amount with USDFC in the wallet and types the deposit into the approval", async ({
+    page,
+  }) => {
+    test.skip(REAL_MODE, "sets the wallet's USDFC in the fake chain");
+    await page.addInitScript(() => {
+      (window as unknown as { __fakeUsdfcBalance: string }).__fakeUsdfcBalance = (5n * 10n ** 18n).toString();
+    });
+    await page.goto("/console/setup?network=mainnet");
+
+    await loginWithTestAccount(page);
+    await page.getByRole("button", { name: "Review approval and deposit" }).click({ timeout: 30_000 });
+    const dialog = page.getByRole("dialog", { name: "Add a Service" });
+    await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
+    // No amount in the link: the deposit field is there, empty, for the owner to fill in.
+    await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveValue("", { timeout: 30_000 });
   });
 
   test("signs up from the funding link with an empty wallet, approves alone and is offered Add funds", async ({
@@ -169,13 +184,11 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
     const titles = page.locator("ol > li h2");
-    await expect(titles).toHaveText(["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"], {
-      timeout: 30_000,
-    });
-    // The steps show at once; what the funds step offers waits on the balance read.
+    await expect(titles).toHaveText(["Step 1: Deposit and add Warm Storage"], { timeout: 30_000 });
+    // The step shows at once; what it offers for funds waits on the balance read.
     await expect(page.getByRole("button", { name: "Add funds" })).toBeVisible({ timeout: 30_000 });
     // The wallet holds nothing, so the approval goes ahead without the deposit, which Add funds makes.
-    await page.getByRole("button", { name: "Add Warm Storage" }).click();
+    await page.getByRole("button", { name: "Review storage approval" }).click();
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible({ timeout: 30_000 });
     await expect(dialog.getByRole("spinbutton", { name: "Deposit amount" })).toHaveCount(0);
@@ -187,7 +200,7 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
     await page.goto(APPROVAL_LINK);
 
     await loginWithTestAccount(page);
-    await page.getByRole("button", { name: "Add Warm Storage" }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Review storage approval" }).click({ timeout: 30_000 });
 
     const dialog = page.getByRole("dialog", { name: "Add a Service" });
     await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
@@ -215,9 +228,12 @@ test.describe("CLI newcomer authorizes a session key from `filecoin-pin login`",
 
     await loginWithTestAccount(page);
 
-    const step = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Add Warm Storage$/ }) });
+    const step = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: /Deposit and add Warm Storage$/ }) });
     await expect(step.getByText("Approved", { exact: true })).toBeVisible({ timeout: 30_000 });
     // Never offered again: its unlimited defaults would overwrite the owner's own limits.
-    await expect(page.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review storage approval" })).toHaveCount(0);
+    await expect(page.getByText("Console setup complete")).toBeVisible();
   });
 });

@@ -15,14 +15,9 @@ test.describe("setup link for an approved account with USDFC in the wallet", () 
     await page.goto("/console/setup?deposit=2&network=mainnet");
     await loginWithTestAccount(page);
 
-    await expect(page.locator("ol > li h2")).toHaveText(
-      ["Step 1: Add Warm Storage", "Step 2: Fund your Filecoin Pay account"],
-      {
-        timeout: 30_000,
-      },
-    );
+    await expect(page.locator("ol > li h2")).toHaveText(["Step 1: Deposit and add Warm Storage"], { timeout: 30_000 });
     await expect(page.getByRole("button", { name: "Add funds" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Deposit 2 USDFC" }).click();
+    await page.getByRole("button", { name: "Review 2 USDFC deposit" }).click();
 
     const dialog = page.getByRole("dialog", { name: "Deposit tokens" });
     await expect(dialog.getByRole("textbox", { name: "Token contract address" })).toHaveValue(

@@ -29,7 +29,7 @@ export function useMuteDataSet(accountId: string) {
       await postNotificationsApi(
         "/mute-dataset",
         { ...mute, message, signature },
-        "Failed to mute this dataset. Please try again.",
+        "Failed to mute this data set. Please try again.",
         // Only mutedUntil can fail validation for a request built here, and it fails when the device clock is off.
         { 422: "This date was rejected. Check that your device clock is correct and try again." },
       );

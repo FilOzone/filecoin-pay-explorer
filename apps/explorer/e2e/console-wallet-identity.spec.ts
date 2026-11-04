@@ -363,7 +363,7 @@ test("an account switch closes the link's form, and reopening it names the new a
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
   const first = await consoleAccount(page);
   const [start] = first.split("...");
-  await page.getByRole("button", { name: "Review and authorize" }).click();
+  await page.getByRole("button", { name: "Review permissions" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeVisible();
 
   await switchExtensionAccount(page);
@@ -372,7 +372,7 @@ test("an account switch closes the link's form, and reopening it names the new a
   await expect(page.getByRole("dialog", { name: "New session key" })).toBeHidden();
   // The link stays in the URL, so the setup page still offers it, now for the new account.
   const [next] = (await consoleAccount(page)).split("...");
-  await page.getByRole("button", { name: "Review and authorize" }).click();
+  await page.getByRole("button", { name: "Review permissions" }).click();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${next}`, "i") })).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(`^Authorize as ${start}`, "i") })).toBeHidden();
 });
