@@ -141,7 +141,7 @@ vi.mock("./GroupKeyStep", () => ({
     return (
       <li>
         <h2>
-          <span className='sr-only'>Step {props.number}: </span>Give this key access to encrypted uploads
+          <span className='sr-only'>Step {props.number}: </span>Give this tool an encryption key
         </h2>
         <button type='button' onClick={props.onIssued}>
           Issue
@@ -198,7 +198,7 @@ describe("SetupSection", () => {
     await open("authorize=0xnope&scopes=addPieces&network=mainnet");
 
     expect(screen.getByRole("alert").textContent).toBe(
-      "This setup link cannot be usedIt does not contain a valid session key address. Nothing was changed. Run the command again for a new link.",
+      "This setup link cannot be usedThe request does not contain a valid session key address. This page has not submitted an approval for this request. Run the command again for a new link.",
     );
     expect(steps()).toEqual([]);
   });
@@ -207,33 +207,49 @@ describe("SetupSection", () => {
     await open("deposit=2&operator=fwss&network=calibration");
 
     const notice = screen.getByRole("alert");
-    expect(notice.textContent).toContain("This request is for calibration");
+    expect(notice.textContent).toContain("Switch to calibration to continue");
     expect(steps()).toEqual([]);
     fireEvent.click(within(notice).getByRole("button", { name: /Switch to/ }));
     expect(switchChain).toHaveBeenCalledWith({ chainId: getChain("calibration").id });
   });
 
-  it("lists the approval, the funds and the key, in that order, for a key link", async () => {
+  it("omits the session-key caution line for a link without one, and offers an exit", async () => {
+    await open("deposit=2&network=mainnet");
+    expect(screen.queryByText(/Compare the session key address below/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Go to console" }).getAttribute("href")).toBe("/console");
+  });
+
+  it("titles the page statically and offers the full wallet address to copy", async () => {
+    await open(KEY_LINK);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Set up your Filecoin Storage");
+    expect(screen.getByRole("button", { name: "Copy wallet address" })).toBeTruthy();
+  });
+
+  it("does not promise that calibration Add funds acquires USDFC", async () => {
+    state.network = "calibration";
+    await open("deposit=2&network=calibration");
+    expect(steps()[0].textContent).toContain("Get testnet USDFC before depositing");
+    expect(steps()[0].textContent).not.toContain("Add funds gets USDFC");
+    fireEvent.click(screen.getByRole("button", { name: "Add funds" }));
+    expect(openAddFunds).toHaveBeenCalled();
+  });
+
+  it("lists the deposit-and-service step and the key, in that order, for a key link", async () => {
     await open(KEY_LINK);
 
-    expect(stepTitles()).toEqual([
-      "Step 1: Add Warm Storage",
-      "Step 2: Fund Filecoin Pay",
-      "Step 3: Authorize a session key",
-    ]);
-    expect(steps()[2].textContent).toContain(KEY);
-    expect(steps()[2].textContent).toContain("filecoin-cli");
-    expect(steps()[2].textContent).toContain("After 7 days");
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage", "Step 2: Authorize a session key"]);
+    expect(steps()[1].textContent).toContain(KEY);
+    expect(steps()[1].textContent).toContain("filecoin-cli");
+    expect(steps()[1].textContent).toContain("7 days from submission");
   });
 
   it("adds the group key step right after the key, only for a link with a pubkey, waiting for the authorization", async () => {
     const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
     await open(link);
     expect(stepTitles()).toEqual([
-      "Step 1: Add Warm Storage",
-      "Step 2: Fund Filecoin Pay",
-      "Step 3: Authorize a session key",
-      "Step 4: Give this key access to encrypted uploads",
+      "Step 1: Deposit and add Warm Storage",
+      "Step 2: Authorize a session key",
+      "Step 3: Give this tool an encryption key",
     ]);
     const before = dialogs.groupKey.at(-1);
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
@@ -259,17 +275,17 @@ describe("SetupSection", () => {
     ];
     state.usdfcFunds = 2n * ONE_USDFC;
     await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
-    expect(screen.queryByText("✓ Setup complete")).toBeNull();
+    expect(screen.queryByText("Console steps complete — finish in your terminal")).toBeNull();
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.getByText("Console steps complete — finish in your terminal")).toBeTruthy();
   });
 
   it("opens the key dialog with the link's request, and only when asked", async () => {
     await open(KEY_LINK);
     expect(screen.queryByRole("dialog", { name: "New session key" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Review and authorize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review permissions" }));
 
     expect(screen.getByRole("dialog", { name: "New session key" })).toBeTruthy();
     const props = dialogs.createKey.at(-1);
@@ -291,8 +307,8 @@ describe("SetupSection", () => {
   it("refuses to authorize the connected wallet as its own session key", async () => {
     await open(`authorize=${OWNER}&scopes=addPieces&network=mainnet`);
 
-    expect(screen.getByRole("alert").textContent).toContain("This is your wallet address");
-    expect(screen.queryByRole("button", { name: "Review and authorize" })).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("Use a separate session key");
+    expect(screen.queryByRole("button", { name: "Review permissions" })).toBeNull();
   });
 
   it("shows a key with every scope live as done, with no button", async () => {
@@ -302,19 +318,19 @@ describe("SetupSection", () => {
     ];
     await open(KEY_LINK);
 
-    expect(steps()[2].textContent).toContain("Authorized until");
-    expect(screen.queryByRole("button", { name: "Review and authorize" })).toBeNull();
+    expect(steps()[1].textContent).toContain("Authorized until");
+    expect(screen.queryByRole("button", { name: "Review permissions" })).toBeNull();
   });
 
   it("approves and deposits in one step when the wallet holds the deposit, filled with the link's amount", async () => {
     state.walletUsdfc = 2n * ONE_USDFC;
     await open("deposit=2&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    // The funds step points at the approval rather than offering a second deposit.
-    expect(steps()[1].textContent).toContain("Approving Warm Storage above also deposits the 2 USDFC");
-    expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }));
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    // The step names the combined transaction rather than offering a second deposit.
+    expect(steps()[0].textContent).toContain("One transaction does both");
+    expect(screen.queryByRole("button", { name: "Review 2 USDFC deposit" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review approval and 2 USDFC deposit" }));
 
     expect(screen.getByRole("dialog", { name: "Add a Service" })).toBeTruthy();
     expect(dialogs.addService.at(-1)?.prefill).toEqual({
@@ -330,7 +346,7 @@ describe("SetupSection", () => {
     await open("operator=fwss&network=mainnet");
 
     expect(steps()[0].textContent).toContain("Approved");
-    expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review storage approval" })).toBeNull();
   });
 
   it("opens the usual Add funds flow when the wallet cannot cover the deposit", async () => {
@@ -347,7 +363,7 @@ describe("SetupSection", () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     await open("deposit=2&operator=fwss&network=mainnet");
 
-    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review approval and 2 USDFC deposit" }));
     expect(dialogs.addService.at(-1)?.prefill).toEqual(expect.objectContaining({ amount: "2" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(false);
   });
@@ -358,9 +374,9 @@ describe("SetupSection", () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     await open("deposit=10&operator=fwss&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    expect(within(steps()[1]).getByRole("button", { name: "Add funds" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    expect(within(steps()[0]).getByRole("button", { name: "Add funds" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review storage approval" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
   });
 
@@ -370,8 +386,8 @@ describe("SetupSection", () => {
     state.walletUsdfc = 20n * ONE_USDFC;
     await open("deposit=10&balance=17.342&network=mainnet");
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    fireEvent.click(screen.getByRole("button", { name: "Deposit 10 USDFC" }));
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    fireEvent.click(screen.getByRole("button", { name: "Review 10 USDFC deposit" }));
     const props = dialogs.deposit.at(-1);
     expect({ amount: props?.initialAmount, token: props?.initialTokenAddress }).toEqual({
       amount: "10",
@@ -382,8 +398,8 @@ describe("SetupSection", () => {
     cleanup();
     state.usdfcFunds = 17_342n * 10n ** 15n;
     await open("deposit=10&balance=17.342&network=mainnet");
-    expect(steps()[1].textContent).toContain("17.342 USDFC available");
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(steps()[0].textContent).toContain("17.342 USDFC available");
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
   it("without a balance, is done once this tab sees the deposit go in, and keeps that across a reload", async () => {
@@ -391,23 +407,23 @@ describe("SetupSection", () => {
     state.usdfcFunds = 7n * ONE_USDFC;
     state.walletUsdfc = 20n * ONE_USDFC;
     const { rerender } = await open("deposit=2&network=mainnet");
-    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review 2 USDFC deposit" })).toBeTruthy();
 
     state.usdfcFunds = 9n * ONE_USDFC;
     await rerender();
-    expect(screen.queryByRole("button", { name: /^Deposit/ })).toBeNull();
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /USDFC deposit$/ })).toBeNull();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
 
     // A reload in this tab remembers where it started.
     cleanup();
     await open("deposit=2&network=mainnet");
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
 
     // Another tab starts from what is there now, so it asks again.
     cleanup();
     window.sessionStorage.clear();
     await open("deposit=2&network=mainnet");
-    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review 2 USDFC deposit" })).toBeTruthy();
   });
 
   it("says setup is complete only once every requested step is done", async () => {
@@ -418,38 +434,40 @@ describe("SetupSection", () => {
     ];
     state.usdfcFunds = ONE_USDFC;
     await open(`${KEY_LINK}&balance=2`);
-    expect(screen.queryByText("✓ Setup complete")).toBeNull();
+    expect(screen.queryByText("Console setup complete")).toBeNull();
 
     cleanup();
     state.usdfcFunds = 2n * ONE_USDFC;
     await open(`${KEY_LINK}&balance=2`);
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
   it("asks for funds too when the link does not say, but not for an approval-only link", async () => {
     state.approved = true;
     state.walletUsdfc = ONE_USDFC;
     await open("network=mainnet");
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    expect(screen.queryByText("✓ Setup complete")).toBeNull();
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    expect(steps()[0].textContent).toContain("USDFC available");
+    expect(screen.queryByText("Console setup complete")).toBeNull();
 
     cleanup();
     await open("operator=fwss&network=mainnet");
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage"]);
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    expect(steps()[0].textContent).not.toContain("USDFC available");
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
   it("counts the funds as done once Add funds fills Filecoin Pay, keeping the order", async () => {
     const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
-    expect(within(steps()[1]).getByRole("button", { name: "Add funds" })).toBeTruthy();
+    expect(within(steps()[0]).getByRole("button", { name: "Add funds" })).toBeTruthy();
 
     // The card or swap route deposited straight into Filecoin Pay.
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
 
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add Warm Storage" }));
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    expect(within(steps()[0]).queryByRole("button", { name: "Add funds" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review storage approval" }));
     expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(true);
   });
 
@@ -459,7 +477,7 @@ describe("SetupSection", () => {
     await open("operator=fwss&network=mainnet");
 
     expect(steps()[0].textContent).toContain("Approved");
-    expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review storage approval" })).toBeNull();
   });
 
   it("does not count an earlier request's deposit for a new key asking the same amount in this tab", async () => {
@@ -470,57 +488,59 @@ describe("SetupSection", () => {
     const { rerender } = await open(first);
     state.usdfcFunds = 9n * ONE_USDFC;
     await rerender();
-    expect(screen.queryByRole("button", { name: /^Deposit/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /USDFC deposit$/ })).toBeNull();
 
     cleanup();
     const otherKey = getAddress("0x00000000000000000000000000000000000000bb");
     await open(`${KEY_LINK.replace(KEY.toLowerCase(), otherKey.toLowerCase())}&deposit=2`);
-    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review 2 USDFC deposit" })).toBeTruthy();
   });
 
   it("stays complete for this visit once the balance is reached, as lockup draws it down", async () => {
     state.approved = true;
     state.usdfcFunds = 2n * ONE_USDFC;
     const { rerender } = await open("balance=2&network=mainnet");
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
 
     state.usdfcFunds = 2n * ONE_USDFC - 10n ** 15n;
     await rerender();
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /^Deposit/ })).toBeNull();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /USDFC deposit$/ })).toBeNull();
   });
 
   it("follows the balance once a read that failed answers, without changing the steps", async () => {
     state.approved = true;
     state.fundsUnreadable = true;
     const { rerender } = await open("balance=2&network=mainnet");
-    expect(steps()[1].textContent).toContain("Could not read your balance");
-    expect(within(steps()[1]).getByRole("button", { name: "Add funds" })).toBeTruthy();
+    expect(steps()[0].textContent).toContain(
+      "Could not check the available balance. Check it before depositing again.",
+    );
+    expect(within(steps()[0]).getByRole("button", { name: "Add funds" })).toBeTruthy();
 
     state.fundsUnreadable = false;
     state.usdfcFunds = 2n * ONE_USDFC;
     await rerender();
-    expect(stepTitles()).toEqual(["Step 1: Add Warm Storage", "Step 2: Fund Filecoin Pay"]);
-    expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(stepTitles()).toEqual(["Step 1: Deposit and add Warm Storage"]);
+    expect(within(steps()[0]).queryByRole("button")).toBeNull();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
   it("keeps the Deposit dialog mounted from before the approval until after the deposit lands", async () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     const { rerender } = await open("deposit=2&network=mainnet");
     expect(dialogs.deposit.length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Deposit 2 USDFC" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review 2 USDFC deposit" })).toBeNull();
 
     // Approved with no deposit: the deposit is offered on its own.
     state.approved = true;
     await rerender();
-    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review 2 USDFC deposit" })).toBeTruthy();
 
     // The deposit lands; the dialog that sent it is still rendered.
     state.usdfcFunds = 2n * ONE_USDFC;
     const rendered = dialogs.deposit.length;
     await rerender();
-    expect(screen.queryByRole("button", { name: "Deposit 2 USDFC" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review 2 USDFC deposit" })).toBeNull();
     expect(dialogs.deposit.length).toBeGreaterThan(rendered);
   });
 
@@ -529,14 +549,16 @@ describe("SetupSection", () => {
     state.walletUsdfc = 20n * ONE_USDFC;
     state.fundsUnreadable = true;
     const { rerender } = await open("deposit=2&network=mainnet");
-    expect(steps()[1].textContent).toContain("Could not read your balance");
-    expect(within(steps()[1]).queryByRole("button")).toBeNull();
+    expect(steps()[0].textContent).toContain(
+      "Could not check the available balance. Check it before depositing again.",
+    );
+    expect(within(steps()[0]).queryByRole("button")).toBeNull();
 
     // The read recovers: the deposit is measured from here.
     state.fundsUnreadable = false;
     state.usdfcFunds = 7n * ONE_USDFC;
     await rerender();
-    expect(screen.getByRole("button", { name: "Deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review 2 USDFC deposit" })).toBeTruthy();
   });
 
   it("starts again when the page moves to another setup link without unmounting", async () => {
@@ -547,25 +569,25 @@ describe("SetupSection", () => {
     await act(async () => {
       result = render(<SetupSection query='balance=2&network=mainnet' />);
     });
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
 
     await act(async () => result.rerender(<SetupSection query='balance=10&network=mainnet' />));
-    expect(screen.queryByText("✓ Setup complete")).toBeNull();
-    expect(screen.getByRole("button", { name: "Deposit 8 USDFC" })).toBeTruthy();
+    expect(screen.queryByText("Console setup complete")).toBeNull();
+    expect(screen.getByRole("button", { name: "Review 8 USDFC deposit" })).toBeTruthy();
   });
 
   it("counts an approval and its deposit as soon as the chain shows them, offering no second deposit", async () => {
     state.walletUsdfc = 5n * ONE_USDFC;
     const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
-    expect(screen.getByRole("button", { name: "Add Warm Storage and deposit 2 USDFC" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review approval and 2 USDFC deposit" })).toBeTruthy();
 
     // The receipt lands: approval and deposit in the same read, whatever the subgraph has indexed.
     state.approved = true;
     state.usdfcFunds = 2n * ONE_USDFC;
     state.walletUsdfc = 3n * ONE_USDFC;
     await rerender();
-    expect(screen.queryByRole("button", { name: /^Deposit/ })).toBeNull();
-    expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /USDFC deposit$/ })).toBeNull();
+    expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
   it("offers a Retry, not an approval, when the approval could not be read", async () => {
@@ -574,17 +596,20 @@ describe("SetupSection", () => {
     await open("deposit=2&operator=fwss&network=mainnet");
 
     expect(steps()[0].textContent).toContain("Could not read the approval");
-    expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
-    // The funds step waits too, rather than depositing beside an approval it may not need.
-    expect(within(steps()[1]).queryByRole("button")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Could not read the approval. Retry" }));
+    // Only the Retry is offered: no approval, no deposit, no Add funds, until the read answers.
+    expect(
+      within(steps()[0])
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Retry"]);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(refetchApproval).toHaveBeenCalledTimes(1);
   });
 
   it("names the key's details as the New session key dialog does, marking destructive scopes", async () => {
     await open(KEY_LINK.replace("createDataSet,addPieces", "addPieces,schedulePieceRemovals"));
 
-    const details = within(steps()[0]);
+    const details = within(steps()[1]);
     expect(details.getAllByRole("term").map((term) => term.textContent)).toEqual([
       "Session key",
       "Name",
@@ -595,13 +620,13 @@ describe("SetupSection", () => {
       within(details.getAllByRole("definition")[2])
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["Add pieces", "Schedule piece removalsdestructive"]);
+    ).toEqual(["Add pieces", "Schedule piece removalsCan remove stored data"]);
   });
 
   it("says a one-day key expires after 1 day", async () => {
     await open(KEY_LINK.replace("days=7", "days=1"));
 
-    expect(steps()[2].textContent).toContain("After 1 day, unless you change it");
+    expect(steps()[1].textContent).toContain("1 day from submission");
   });
 
   describe("a link asking for unlimited approval", () => {
@@ -613,8 +638,8 @@ describe("SetupSection", () => {
       await open("operator=fwss&network=mainnet");
 
       expect(steps()[0].textContent).toContain("Approved");
-      expect(screen.queryByRole("button", { name: "Remove spending limits" })).toBeNull();
-      expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Review removal of limits" })).toBeNull();
+      expect(screen.getByText("Console setup complete")).toBeTruthy();
     });
 
     it("shows the owner's limits beside what the tool needs, and is not done", async () => {
@@ -626,13 +651,13 @@ describe("SetupSection", () => {
         .getAllByRole("row")
         .map((row) => row.textContent);
       expect(rows).toEqual([
-        "LimitYoursNeeded",
-        "Rate limit1.000 USDFC per epoch (too low)Unlimited",
-        "Reserve limit5.000 USDFC (too low)Unlimited",
-        "Max reserve period1 day (too low)At least 30 days",
+        "LimitCurrentRequested",
+        "Maximum storage charge rate1.000 USDFC per epoch (too low)Unlimited",
+        "Maximum funds reserved for storage5.000 USDFC (too low)Unlimited",
+        "Maximum reservation period1 day (too low)At least 30 days",
       ]);
       expect(steps()[0].textContent).toContain("Approved with limits");
-      expect(screen.queryByText("✓ Setup complete")).toBeNull();
+      expect(screen.queryByText("Console setup complete")).toBeNull();
     });
 
     it("lifts every limit after the owner confirms, keeping it on Warm Storage and USDFC", async () => {
@@ -640,7 +665,7 @@ describe("SetupSection", () => {
       state.limits = LIMITS;
       await open("operator=fwss&network=mainnet&approval=unlimited");
 
-      fireEvent.click(screen.getByRole("button", { name: "Remove spending limits" }));
+      fireEvent.click(screen.getByRole("button", { name: "Review removal of limits" }));
       expect(execute).not.toHaveBeenCalled();
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: "Remove limits" }));
@@ -663,15 +688,15 @@ describe("SetupSection", () => {
       await open("operator=fwss&network=mainnet&approval=unlimited");
 
       expect(steps()[0].textContent).toContain("Approved");
-      expect(screen.queryByRole("button", { name: "Remove spending limits" })).toBeNull();
-      expect(screen.getByText("✓ Setup complete")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Review removal of limits" })).toBeNull();
+      expect(screen.getByText("Console setup complete")).toBeTruthy();
     });
 
     it("still offers Add a Service when nothing is approved yet", async () => {
       await open("operator=fwss&network=mainnet&approval=unlimited");
 
-      expect(screen.getByRole("button", { name: "Add Warm Storage" })).toBeTruthy();
-      expect(screen.queryByRole("button", { name: "Remove spending limits" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Review storage approval" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Review removal of limits" })).toBeNull();
     });
   });
 });

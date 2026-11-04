@@ -109,7 +109,8 @@ async function renderStep({ expires = EXPIRES as bigint | null, pubkeysig = PUBK
     );
   });
 }
-const signButton = () => screen.queryByRole("button", { name: "Sign and create Grant" }) as HTMLButtonElement | null;
+const signButton = () =>
+  screen.queryByRole("button", { name: /Sign to share the group key|Try signing again/ }) as HTMLButtonElement | null;
 
 describe("GroupKeyStep", () => {
   beforeEach(() => {
@@ -151,7 +152,7 @@ describe("GroupKeyStep", () => {
       name: "a pubkey the session key did not sign",
       setup: () => {},
       props: { forged: true },
-      alert: "The session key did not sign this encryption key",
+      alert: "Encryption recipient could not be verified",
       button: null,
     },
     {
@@ -160,8 +161,8 @@ describe("GroupKeyStep", () => {
         state.dataSets = BROKEN_DEFAULT;
       },
       props: {},
-      alert: "Data sets 3 use group key 0x02ca08cf7e0222c8432adc159232b7eb",
-      button: "Sign and create Grant",
+      alert: "Data sets 3 record conflicting encryption details for group 0x02ca08cf7e0222c8432adc159232b7eb",
+      button: "Sign to share the group key",
     },
     {
       // The step must feed `expires` into the phase: before authorization the warning still shows.
@@ -170,8 +171,8 @@ describe("GroupKeyStep", () => {
         state.dataSets = BROKEN_DEFAULT;
       },
       props: { expires: null },
-      alert: "Your default group key is in an inconsistent state",
-      button: "Sign and create Grant",
+      alert: "Encryption group records disagree",
+      button: "Sign to share the group key",
     },
     {
       name: "a broken default group key and no wallet",
@@ -180,8 +181,8 @@ describe("GroupKeyStep", () => {
         state.walletReady = false;
       },
       props: {},
-      alert: "Your default group key is in an inconsistent state",
-      button: "Sign and create Grant",
+      alert: "Encryption group records disagree",
+      button: "Sign to share the group key",
     },
     {
       name: "data sets that cannot be read",
@@ -189,8 +190,9 @@ describe("GroupKeyStep", () => {
         state.failReads = 1;
       },
       props: {},
-      alert: "Could not read your data setsRetry",
-      button: "Sign and create Grant",
+      alert:
+        "Could not check your encryption groupYour data sets could not be read. Retry before sharing an encryption key.Retry",
+      button: "Sign to share the group key",
     },
     {
       name: "no wallet client yet",
@@ -199,7 +201,7 @@ describe("GroupKeyStep", () => {
       },
       props: {},
       alert: null,
-      button: "Connecting to your wallet…",
+      button: "Connecting wallet…",
     },
   ])("renders one notice and a disabled or no sign button for $name", async ({ setup, props, alert, button }) => {
     setup();
@@ -211,7 +213,7 @@ describe("GroupKeyStep", () => {
       const alerts = screen.queryAllByRole("alert").map((a) => a.textContent ?? "");
       expect(alerts).toHaveLength(alert ? 1 : 0);
       if (alert) expect(alerts[0]).toContain(alert);
-      const buttons = screen.queryAllByRole("button").filter((b) => /Grant|wallet/.test(b.textContent ?? ""));
+      const buttons = screen.queryAllByRole("button").filter((b) => /Sign to share|wallet/.test(b.textContent ?? ""));
       expect(buttons.map((b) => [b.textContent, (b as HTMLButtonElement).disabled])).toEqual(
         button ? [[button, true]] : [],
       );
@@ -266,7 +268,7 @@ describe("GroupKeyStep", () => {
   });
 
   it("names the group key it will sign for: none yet, a new one, or the one the data sets record", async () => {
-    const groupKeyRow = () => screen.getByText("Group key id").nextElementSibling?.textContent;
+    const groupKeyRow = () => screen.getByText("Group key ID").closest("dt")?.nextElementSibling?.textContent;
     await renderStep({ pubkeysig: await OWNER.signMessage({ message: keyAgreementMessage(PUBKEY) }) });
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(groupKeyRow()).toBe("Not chosen yet");
@@ -274,7 +276,9 @@ describe("GroupKeyStep", () => {
 
     await renderStep();
     await waitFor(() =>
-      expect(groupKeyRow()).toBe("0x02ca08cf7e0222c8432adc159232b7ebNew: none of your data sets uses a group key yet."),
+      expect(groupKeyRow()).toBe(
+        "0x02ca08cf7e0222c8432adc159232b7ebPublic identifier, not the secret key. Access covers everything encrypted with this group key — existing and future uploads.",
+      ),
     );
     cleanup();
 
@@ -284,7 +288,7 @@ describe("GroupKeyStep", () => {
     await renderStep();
     await waitFor(() =>
       expect(groupKeyRow()).toBe(
-        `0x${"11".repeat(16)}Tags your encrypted data sets. The session key gets access to every data set under this key.`,
+        `0x${"11".repeat(16)}Public identifier, not the secret key. Access covers everything encrypted with this group key — existing and future uploads.`,
       ),
     );
   });
@@ -299,13 +303,15 @@ describe("GroupKeyStep", () => {
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
-        "No Grant was madeYou declined the signature. No Grant was made.",
+        "Encryption Grant was not createdThe signing process did not complete. You declined the signature. No Grant was made.",
       ),
     );
     expect(onIssued).not.toHaveBeenCalled();
 
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
-    await waitFor(() => expect((screen.getByLabelText("Grant") as HTMLTextAreaElement).value).toBe(GRANT));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Encryption Grant for this session key") as HTMLTextAreaElement).value).toBe(GRANT),
+    );
     expect(screen.queryByRole("alert")).toBeNull();
     expect(onIssued).toHaveBeenCalledOnce();
   });
@@ -329,10 +335,10 @@ describe("GroupKeyStep", () => {
     });
     expect(state.events).toEqual(["wait", "sign KeyspaceKey", "wait", "sign KeyspaceKey", "wait", "sign ReadGrant"]);
     expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
-    const output = screen.getByLabelText("Grant") as HTMLTextAreaElement;
+    const output = screen.getByLabelText("Encryption Grant for this session key") as HTMLTextAreaElement;
     expect(output.readOnly).toBe(true);
     expect(output.value).toBe(GRANT);
-    expect(screen.getByText("filecoin-pin login --grant <grant>")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /copy grant/i })).toBeTruthy();
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

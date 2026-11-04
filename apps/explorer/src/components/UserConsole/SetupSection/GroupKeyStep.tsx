@@ -1,5 +1,7 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
 import { paginate } from "@filoz/synapse-core";
 import { dataSetLiveCall } from "@filoz/synapse-core/pdp-verifier";
@@ -9,6 +11,7 @@ import {
   parseAllDataSetMetadata,
 } from "@filoz/synapse-core/warm-storage";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { CircleHelp } from "lucide-react";
 import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
@@ -22,7 +25,7 @@ import { type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
 import { Detail, SetupStep, type StepTone } from "./SetupStep";
 
 export const GROUP_KEY_WARNING =
-  "This session key can read all your uploads under this group key, including future ones. This access can't be revoked.";
+  "Only continue if you trust this tool with every data set created and every piece uploaded under this group key. Revoking the session key or letting it expire only ends its scopes — it does not take back the encryption key: anyone who obtained it keeps decrypting everything under this group key, existing and future uploads, and can share the contents or the key with others.";
 
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
@@ -73,7 +76,7 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
   });
 }
 
-const SIGN = "Sign and create Grant";
+const SIGN = "Sign to share the group key";
 
 /**
  * Each phase's status, and its sign button: hidden where the step offers no
@@ -83,22 +86,32 @@ const GROUP_KEY_STATUS: Record<
   GroupKeyPhase["phase"],
   { tone: StepTone; label: string; sign: "hidden" | "disabled" | "enabled"; button?: string }
 > = {
-  issued: { tone: "done", label: "Grant ready", sign: "hidden" },
+  issued: { tone: "done", label: "Encryption Grant created — copy it to your terminal", sign: "hidden" },
   "unsigned-pubkey": { tone: "problem", label: "Key not signed by the session key", sign: "hidden" },
-  "waiting-for-key": { tone: "todo", label: "Waiting for the session key", sign: "disabled" },
+  "waiting-for-key": { tone: "todo", label: "Authorize the session key first", sign: "disabled" },
   "read-failed": { tone: "problem", label: "Could not read your data sets", sign: "disabled" },
   "inconsistent-default": { tone: "problem", label: "Could not choose a group key", sign: "disabled" },
-  choosing: { tone: "waiting", label: "Finding your group key", sign: "disabled" },
+  choosing: { tone: "waiting", label: "Finding the group key…", sign: "disabled" },
   // useWalletClient resolves after a connect or chain switch; until then nothing can sign.
   "connecting-wallet": {
     tone: "waiting",
-    label: "Connecting to your wallet",
+    label: "Connecting wallet…",
     sign: "disabled",
-    button: "Connecting to your wallet…",
+    button: "Connecting wallet…",
   },
-  signing: { tone: "waiting", label: "Waiting for your wallet", sign: "disabled", button: "Waiting for your wallet…" },
-  "sign-failed": { tone: "problem", label: "No Grant was made", sign: "enabled" },
-  ready: { tone: "todo", label: "Not given", sign: "enabled" },
+  signing: {
+    tone: "waiting",
+    label: "Waiting for wallet signatures…",
+    sign: "disabled",
+    button: "Waiting for wallet signatures…",
+  },
+  "sign-failed": {
+    tone: "problem",
+    label: "Encryption Grant was not created",
+    sign: "enabled",
+    button: "Try signing again",
+  },
+  ready: { tone: "todo", label: "Ready to share", sign: "enabled" },
 };
 
 /** The one notice a phase shows, if any. */
@@ -106,18 +119,23 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
   switch (phase.phase) {
     case "unsigned-pubkey":
       return (
-        <Notice tone='error' role='alert' title='The session key did not sign this encryption key' className='mt-4'>
+        <Notice tone='error' role='alert' title='Encryption recipient could not be verified' className='mt-4'>
           <p className='mt-1 text-xs'>
-            The Grant could go to someone other than the session key above, so this page will not make it. Run the
-            command again for a new link.
+            This encryption public key was not signed by the session key above. No Grant was created. Run the command
+            again for a new setup link.
           </p>
         </Notice>
       );
     case "waiting-for-key":
-      return <p className='mt-4 text-sm text-muted-foreground'>Authorize the session key first.</p>;
+      return (
+        <p className='mt-4 text-sm text-muted-foreground'>
+          Authorize the session key in the previous step first. Its expiry sets the date the CLI will accept this Grant.
+        </p>
+      );
     case "read-failed":
       return (
-        <Notice tone='error' role='alert' title='Could not read your data sets' className='mt-4'>
+        <Notice tone='error' role='alert' title='Could not check your encryption group' className='mt-4'>
+          <p>Your data sets could not be read. Retry before sharing an encryption key.</p>
           <Button variant='ghost' size='compact' className='mt-2' onClick={onRetryRead}>
             Retry
           </Button>
@@ -125,17 +143,17 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
       );
     case "inconsistent-default":
       return (
-        <Notice tone='error' role='alert' title='Your default group key is in an inconsistent state' className='mt-4'>
+        <Notice tone='error' role='alert' title='Encryption group records disagree' className='mt-4'>
           <p className='mt-1 text-xs'>
-            Data sets {phase.dataSetIds.join(", ")} use group key {phase.groupKeyId} but disagree on its commitment or
-            encryption version, so this page will not sign for it.
+            Data sets {phase.dataSetIds.join(", ")} record conflicting encryption details for group {phase.groupKeyId}.
+            No Grant was created. Resolve these records before continuing.
           </p>
         </Notice>
       );
     case "sign-failed":
       return (
-        <Notice tone='error' role='alert' title='No Grant was made' className='mt-4'>
-          <p className='mt-1 text-xs break-words'>{phase.message}</p>
+        <Notice tone='error' role='alert' title='Encryption Grant was not created' className='mt-4'>
+          <p className='mt-1 text-xs break-words'>The signing process did not complete. {phase.message}</p>
         </Notice>
       );
     case "issued":
@@ -152,7 +170,7 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
 const GrantOutput = ({ grant }: { grant: string }) => (
   <div className='mt-4 flex flex-col gap-2'>
     <label htmlFor='group-key-grant' className='text-sm font-medium'>
-      Grant
+      Encryption Grant for this session key
     </label>
     <div className='flex items-start gap-2'>
       <textarea
@@ -164,34 +182,18 @@ const GrantOutput = ({ grant }: { grant: string }) => (
       />
       <CopyButton value={grant} tooltipText='Copy Grant' successMessage='Grant copied' />
     </div>
-    <p className='text-sm text-muted-foreground'>
-      Paste it at the login prompt, or run{" "}
-      <code className='font-mono text-xs text-foreground'>filecoin-pin login --grant &lt;grant&gt;</code>. It is safe to
-      paste into a terminal or chat: only this session key can open it. It is not stored in this browser or sent
-      anywhere.
-    </p>
   </div>
 );
 
 /** The chosen group key: a new one, or the one the owner's data sets record. */
 const GroupKeyDetail = ({ groupKey }: { groupKey: ChosenGroupKey | null }) => {
   if (!groupKey) return "Not chosen yet";
-  const id = <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>;
-  if (!groupKey.commitment) {
-    return (
-      <>
-        {id}
-        <span className='mt-0.5 block text-xs text-muted-foreground'>
-          New: none of your data sets uses a group key yet.
-        </span>
-      </>
-    );
-  }
   return (
     <>
-      {id}
+      <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>
       <span className='mt-0.5 block text-xs text-muted-foreground'>
-        Tags your encrypted data sets. The session key gets access to every data set under this key.
+        Public identifier, not the secret key. Access covers everything encrypted with this group key — existing and
+        future uploads.
       </span>
     </>
   );
@@ -203,9 +205,20 @@ const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: ()
   if (sign === "hidden") return null;
   return (
     <>
-      <Notice tone='warn' title='Before you sign' className='mt-4'>
-        <p className='mt-1'>{GROUP_KEY_WARNING}</p>
+      <Notice tone='warn' title='Encryption access cannot be revoked' className='mt-4'>
+        <p className='mt-1'>
+          <span>{GROUP_KEY_WARNING}</span> Read more about{" "}
+          <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md#lifecycle-and-limits'>
+            lifecycle and limits
+          </ExternalTextLink>
+          .
+        </p>
       </Notice>
+      <p className='mt-4 text-sm'>
+        Your wallet will sign two messages, or three for a new group key: derive the group key, repeat that signature
+        for a new key to check it is reproducible, then authorize its encrypted delivery to this session key. These are
+        message signatures, not transactions; no network fee is required for this step.
+      </p>
       <div className='mt-4'>
         <Button variant='primary' size='compact' disabled={sign === "disabled"} onClick={onSign}>
           {button}
@@ -231,7 +244,7 @@ interface GroupKeyStepProps {
  * Give the session key the owner's group key, so the tool can encrypt and
  * decrypt without the wallet. The wallet signs for the group key (twice for a
  * new one, to check it signs deterministically), then signs the claim that
- * lets providers serve the session key until its authorization ends. Nothing
+ * sets the date the CLI accepts the Grant until. Nothing
  * is written on chain or stored: the Grant is shown once to paste, and a
  * reload offers the step again.
  */
@@ -295,32 +308,74 @@ export const GroupKeyStep = ({
   return (
     <SetupStep
       number={number}
-      title='Give this key access to encrypted uploads'
+      title='Give this tool an encryption key'
       description={
         <>
           <p>
-            Wraps your group key to this session key, so the tool can encrypt uploads and read them back without your
-            wallet. No on-chain transaction is required.
+            This shares a group key: a secret that can decrypt every upload encrypted under the group ID below —
+            existing and future uploads, across every data set that uses this group key. Access is granted per group,
+            not per file or per data set.
           </p>
           <p className='mt-2'>
-            A group key is the root encryption key for your encrypted data, derived from your wallet. Every dataset and
-            piece you encrypt under it shares it, and your wallet can always re-derive it.
+            Encryption is optional and per-upload; it never changes files already uploaded. Read more in the{" "}
+            <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
+              encryption guide
+            </ExternalTextLink>
+            .
           </p>
         </>
       }
       status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
-        <Detail term='Session key'>
+        <Detail term='Recipient session key'>
           <span className='inline-flex max-w-full items-start gap-1.5'>
             <span className='font-mono text-base font-medium break-all'>{sessionKey}</span>
             <CopyButton value={sessionKey} tooltipText='Copy session key address' successMessage='Address copied' />
           </span>
           <span className='mt-0.5 block text-xs text-muted-foreground'>
-            Only this session key gets this access. Check it matches the address your terminal printed.
+            Only this session key can open the encryption Grant
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type='button'
+                  aria-label='What is a Grant?'
+                  className='ml-1 inline-flex align-text-top text-muted-foreground hover:text-foreground'
+                >
+                  <CircleHelp className='size-3.5' />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className='max-w-xs'>
+                A Grant is a signed permission that lets exactly this session key use your group key, without handing
+                the key itself to anyone else. Your wallet key never leaves your wallet.
+              </TooltipContent>
+            </Tooltip>
+            . Check the address against your terminal.
           </span>
         </Detail>
-        <Detail term='Group key id'>
+        <Detail
+          term={
+            <span className='inline-flex items-center gap-1'>
+              Group key ID
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type='button'
+                    aria-label='What is a group key?'
+                    className='inline-flex align-text-top text-muted-foreground hover:text-foreground'
+                  >
+                    <CircleHelp className='size-3.5' />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className='max-w-xs'>
+                  A group key is the root encryption key for your uploads — one symmetric secret, not a keypair. Your
+                  wallet derives it from a signature, so it is never stored anywhere: signing again re-creates the exact
+                  same key. Every upload gets its own key derived beneath it.
+                </TooltipContent>
+              </Tooltip>
+            </span>
+          }
+        >
           <GroupKeyDetail groupKey={groupKey} />
         </Detail>
       </dl>
