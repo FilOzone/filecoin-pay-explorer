@@ -480,6 +480,16 @@ describe("SetupSection", () => {
     expect(screen.getByText("Console setup complete")).toBeTruthy();
   });
 
+  it("keeps the deposit in the approval for a link without an amount, leaving it for the owner to type", async () => {
+    state.walletUsdfc = ONE_USDFC;
+    await open("network=mainnet");
+
+    expect(screen.queryByRole("button", { name: "Review storage approval" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review approval and deposit" }));
+    expect(dialogs.addService.at(-1)?.prefill).toEqual(expect.objectContaining({ amount: "" }));
+    expect(dialogs.addService.at(-1)?.withoutDeposit).toBe(false);
+  });
+
   it("counts the funds as done once Add funds fills Filecoin Pay, keeping the order", async () => {
     const { rerender } = await open("deposit=2&operator=fwss&network=mainnet");
     expect(within(steps()[0]).getByRole("button", { name: "Add funds" })).toBeTruthy();

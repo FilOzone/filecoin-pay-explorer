@@ -235,6 +235,12 @@ function description(state: ApprovalState, withFunds: boolean): string {
   return "One transaction does both: it deposits USDFC from your wallet into your Filecoin Pay balance, and lets Warm Storage charge that balance for the data sets you or your session keys create. Check the spending limits before you approve.";
 }
 
+function approveLabel(withDeposit: boolean, amount: string): string {
+  if (!withDeposit) return "Review storage approval";
+  if (!amount) return "Review approval and deposit";
+  return `Review approval and ${amount} USDFC deposit`;
+}
+
 /** The one line beside the actions; only the Add funds path needs explaining beyond the description. */
 function offerText(offer: FundsOffer, missing: Shortfall | null, network: Network): string | null {
   if (offer !== "add-funds") return null;
@@ -342,8 +348,9 @@ export const DepositServiceStep = ({
   // until then. It then stays mounted, so a submission in flight keeps its own lifecycle.
   const [dialogMounted, setDialogMounted] = useState(false);
   const [removeLimitsOpen, setRemoveLimitsOpen] = useState(false);
-  // An approval-only link never deposits.
-  const amount = funds !== null && offer === "with-approval" && missing ? depositPrefill(missing) : "";
+  // An approval-only link never deposits. A link without an amount still deposits in the approval, the owner typing it.
+  const withDeposit = funds !== null && offer === "with-approval";
+  const amount = withDeposit && missing ? depositPrefill(missing) : "";
   // Stable across renders: the dialog applies its prefill whenever the object changes.
   const prefill = useMemo<AddServicePrefill>(
     () => ({
@@ -355,7 +362,6 @@ export const DepositServiceStep = ({
   );
   // Only once the chain says there is none: an approval that could not be read may already exist.
   const canApprove = approval.state === "not-approved";
-  const approveLabel = amount ? `Review approval and ${amount} USDFC deposit` : "Review storage approval";
   const text = funds !== null ? offerText(offer, missing, network) : null;
 
   return (
@@ -406,7 +412,7 @@ export const DepositServiceStep = ({
               setOpen(true);
             }}
           >
-            {approveLabel}
+            {approveLabel(withDeposit, amount)}
           </Button>
         )}
         {funds !== null && <DepositActions network={network} account={account} missing={missing} offer={offer} />}
@@ -418,7 +424,7 @@ export const DepositServiceStep = ({
           open={open}
           onOpenChange={setOpen}
           prefill={prefill}
-          withoutDeposit={amount === ""}
+          withoutDeposit={!withDeposit}
         />
       )}
     </SetupStep>
