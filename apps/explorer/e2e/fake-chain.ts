@@ -36,7 +36,13 @@ const OPERATOR_APPROVALS = toFunctionSelector(operatorApprovalsAbi[0]);
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
 // IFilecoinServiceMetadata, which the explorer reads from operators and validators.
-const SERVICE_METADATA = ["name()", "description()", "homepage()"].map((signature) => toFunctionSelector(signature));
+const serviceMetadataAbi = parseAbi([
+  "function name() view returns (string)",
+  "function description() view returns (string)",
+  "function homepage() view returns (string)",
+]);
+const SERVICE_METADATA = serviceMetadataAbi.map((fn) => toFunctionSelector(fn));
+type ServiceMetadata = Partial<Record<(typeof serviceMetadataAbi)[number]["name"], string>>;
 // A reverted call inside aggregate3, as from a contract without the interface.
 const REVERTED = null;
 
@@ -46,8 +52,8 @@ const REVERTED = null;
  * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet; a spec can set the wallet's USDFC in
  * window.__fakeUsdfcBalance (base units, as a decimal string). Filecoin Pay reports no operator approved
  * unless a spec lists the operator in window.__fakeApprovedOperators. Batched IFilecoinServiceMetadata reads revert,
- * so every service renders as its address. Any other RPC call falls through to the route
- * that blocks it (fixtures.ts).
+ * so a service renders as its address, unless a spec sets that field in window.__fakeServiceMetadata (keyed by
+ * lowercase address). Any other RPC call falls through to the route that blocks it (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
@@ -71,6 +77,16 @@ export async function installFakeChain(page: Page): Promise<void> {
         a.toLowerCase(),
       ),
     );
+
+  // Read on every batch, so a reload mid-read must not leave the request unanswered: a page that is gone has none.
+  const serviceMetadata = () =>
+    page
+      .evaluate(
+        () =>
+          (window as unknown as { __fakeServiceMetadata?: Record<string, ServiceMetadata> }).__fakeServiceMetadata ??
+          {},
+      )
+      .catch((): Record<string, ServiceMetadata> => ({}));
 
   const readApproval = (approved: string[], target: string, data: Hex): Hex | undefined => {
     if (!paymentsContracts.includes(target.toLowerCase()) || !data.startsWith(OPERATOR_APPROVALS)) return undefined;
@@ -167,13 +183,17 @@ export async function installFakeChain(page: Page): Promise<void> {
     const txs = await sent();
     const approved = await approvedOperators();
     const usdfc = await usdfcBalance();
+    const metadata = await serviceMetadata();
     const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
       if (registryAt(c.target)) return readRegistry(txs, c.callData);
       if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
       const balance = readBalance(c.target, c.callData, usdfc);
-      // Token metadata (USDFC's name()) is answered above; any other service has no metadata.
-      if (balance === undefined && SERVICE_METADATA.includes(c.callData.slice(0, 10) as Hex)) return REVERTED;
-      return balance;
+      // Token metadata (USDFC's name()) is answered above; any other service has only what a spec gave it.
+      const field = serviceMetadataAbi[SERVICE_METADATA.indexOf(c.callData.slice(0, 10) as Hex)]?.name;
+      if (balance !== undefined || !field) return balance;
+      const value = metadata[c.target.toLowerCase()]?.[field];
+      if (value === undefined) return REVERTED;
+      return encodeFunctionResult({ abi: serviceMetadataAbi, functionName: field, result: value });
     });
     if (!results.every((r) => r !== undefined)) return undefined;
     return encodeFunctionResult({
