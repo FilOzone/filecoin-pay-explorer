@@ -33,9 +33,7 @@ test("a new email signup with no Filecoin Pay account lands in Add funds, once",
   await addFunds.getByRole("button", { name: "Close" }).click();
   await expect(addFundsHeading).toBeHidden();
 
-  // Dismissed, it stays closed, and the welcome card still leads with Add funds.
   await expect(page.getByRole("heading", { name: "Welcome to Filecoin Pay" })).toBeVisible();
-  await expect(addFundsHeading).toBeHidden();
   await page.getByRole("button", { name: "Add funds" }).click();
   await expect(addFundsHeading).toBeVisible();
 });

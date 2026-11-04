@@ -21,8 +21,7 @@ const CustomConnectButton = () => {
     onComplete: ({ user, isNewUser, wasAlreadyAuthenticated }) => {
       if (wasAlreadyAuthenticated) return;
       trackWalletConnected("embedded", isNewUser);
-      // Only flagged here: the funding dialogs mount after the new wallet connects, and the
-      // unfunded overview opens Add funds then, for this user only. See AccountNotFound.
+      // The funding dialogs mount only after the new wallet connects, so AccountNotFound opens Add funds.
       if (isNewUser) requestFundingAfterSignup(user.id);
     },
     onError: (code) => {

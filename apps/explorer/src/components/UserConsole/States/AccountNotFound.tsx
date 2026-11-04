@@ -14,10 +14,7 @@ const AccountNotFound = ({ network }: { network: Network }) => {
   const userId = user?.id ?? null;
   const [addServiceDialogOpen, setAddServiceDialogOpen] = useState(false);
 
-  // A wallet that just signed up has nothing to do until it is funded, so Add funds opens once.
-  // This card renders only on the overview of an account Filecoin Pay has never seen, so a
-  // setup link or a returning account is never interrupted. A request left by another user, or
-  // by a session that has since logged out, is dropped instead.
+  // A new signup has nothing to do until funded; a request left by another user or session is dropped.
   useEffect(() => {
     if (!signupUserId) return;
     clearFundingAfterSignup();
