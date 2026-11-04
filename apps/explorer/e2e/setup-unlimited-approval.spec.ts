@@ -15,7 +15,7 @@ async function approveWarmStorageWithLimits(page: Page) {
 }
 
 const warmStorageStep = (page: Page) =>
-  page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Add Warm Storage$/ }) });
+  page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: /Deposit and add Warm Storage$/ }) });
 
 test.describe("setup link that needs Warm Storage without spending limits", () => {
   test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");
@@ -26,7 +26,7 @@ test.describe("setup link that needs Warm Storage without spending limits", () =
     await loginWithTestAccount(page);
 
     await expect(warmStorageStep(page).getByText("Approved", { exact: true })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("button", { name: "Remove spending limits" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review removal of limits" })).toHaveCount(0);
   });
 
   test("shows the limits and lifts them in one confirmed transaction", async ({ page }) => {
@@ -36,8 +36,8 @@ test.describe("setup link that needs Warm Storage without spending limits", () =
 
     const step = warmStorageStep(page);
     await expect(step.getByText("Approved with limits")).toBeVisible({ timeout: 30_000 });
-    await expect(step.getByRole("row", { name: /^Max reserve period/ })).toContainText("At least 30 days");
-    await page.getByRole("button", { name: "Remove spending limits" }).click();
+    await expect(step.getByRole("row", { name: /^Maximum reservation period/ })).toContainText("At least 30 days");
+    await page.getByRole("button", { name: "Review removal of limits" }).click();
     await page
       .getByRole("dialog", { name: "Remove Warm Storage spending limits" })
       .getByRole("button", {
