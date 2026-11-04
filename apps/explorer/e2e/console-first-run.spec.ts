@@ -4,8 +4,14 @@ import { loginWithTestAccount } from "./privy";
 // CI points the subgraph at placeholder.invalid, which the page's connect-src CSP refuses before any route can answer.
 test.use({ bypassCSP: true });
 
-// Fake Privy reports every email login as a new user; the real test account signed up long ago.
+// The real test account signed up long ago.
 test.skip(process.env.E2E_MODE === "real", "needs a login that creates a new user");
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as typeof window & { __fakePrivyNewUser?: boolean }).__fakePrivyNewUser = true;
+  });
+});
 
 test("a new email signup with no Filecoin Pay account lands in Add funds, once", async ({ page }) => {
   await page.route(

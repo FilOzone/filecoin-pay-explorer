@@ -18,12 +18,12 @@ const CustomConnectButton = () => {
   const { requestFundingAfterSignup } = useFundingLaunch();
   // An email or Google login needs no callback: the console account follows the Privy session.
   const { login } = useLogin({
-    onComplete: ({ isNewUser, wasAlreadyAuthenticated }) => {
+    onComplete: ({ user, isNewUser, wasAlreadyAuthenticated }) => {
       if (wasAlreadyAuthenticated) return;
       trackWalletConnected("embedded", isNewUser);
       // Only flagged here: the funding dialogs mount after the new wallet connects, and the
-      // unfunded overview opens Add funds then. See AccountNotFound.
-      if (isNewUser) requestFundingAfterSignup();
+      // unfunded overview opens Add funds then, for this user only. See AccountNotFound.
+      if (isNewUser) requestFundingAfterSignup(user.id);
     },
     onError: (code) => {
       if (isUserCancelledFlow(code)) return;
