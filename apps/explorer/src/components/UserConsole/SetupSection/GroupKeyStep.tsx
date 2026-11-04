@@ -215,10 +215,23 @@ const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: ()
         </p>
       </Notice>
       <p className='mt-4 text-sm'>
-        Your wallet will sign two messages, or three for a new group key: derive the group key, repeat that signature
-        for a new key to check it is reproducible, then authorize its encrypted delivery to this session key. These are
-        message signatures, not transactions; no network fee is required for this step.
+        Your wallet signs 2 messages (3 for a new group key). No transaction or network fee.
       </p>
+      <details className='mt-2 rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-3 text-sm'>
+        <summary className='cursor-pointer font-medium'>What will my wallet sign?</summary>
+        <ol className='mt-2 list-decimal space-y-1 pl-5 text-zinc-600 dark:text-zinc-400'>
+          <li>A signature that derives the group key.</li>
+          <li>For a new group key, the same signature again, to check it is reproducible.</li>
+          <li>A signature that authorizes the group key's encrypted delivery to this session key.</li>
+        </ol>
+        <p className='mt-2 text-zinc-600 dark:text-zinc-400'>
+          Encryption is optional and per-upload; it never changes files already uploaded. Read more in the{" "}
+          <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
+            encryption guide
+          </ExternalTextLink>
+          .
+        </p>
+      </details>
       <div className='mt-4'>
         <Button variant='primary' size='compact' disabled={sign === "disabled"} onClick={onSign}>
           {button}
@@ -310,20 +323,11 @@ export const GroupKeyStep = ({
       number={number}
       title='Give this tool an encryption key'
       description={
-        <>
-          <p>
-            This shares a group key: a secret that can decrypt every upload encrypted under the group ID below —
-            existing and future uploads, across every data set that uses this group key. Access is granted per group,
-            not per file or per data set.
-          </p>
-          <p className='mt-2'>
-            Encryption is optional and per-upload; it never changes files already uploaded. Read more in the{" "}
-            <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
-              encryption guide
-            </ExternalTextLink>
-            .
-          </p>
-        </>
+        <p>
+          This shares a group key: a secret that can decrypt every upload encrypted under the group ID below — existing
+          and future uploads, across every data set that uses this group key. Access is granted per group, not per file
+          or per data set.
+        </p>
       }
       status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >

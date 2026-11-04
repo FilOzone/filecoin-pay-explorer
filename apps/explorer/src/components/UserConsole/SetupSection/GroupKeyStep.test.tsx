@@ -140,6 +140,23 @@ describe("GroupKeyStep", () => {
     expect(state.events).toEqual([]);
   });
 
+  it("keeps the signing summary visible and the itemized details in a disclosure", async () => {
+    await renderStep();
+
+    const summary = screen.getByText(
+      "Your wallet signs 2 messages (3 for a new group key). No transaction or network fee.",
+    );
+    expect(summary.closest("details")).toBeNull();
+    const details = screen.getByText("What will my wallet sign?").closest("details");
+    expect(details?.open).toBe(false);
+    expect(Array.from(details?.querySelectorAll("li") ?? [], (li) => li.textContent)).toEqual([
+      "A signature that derives the group key.",
+      "For a new group key, the same signature again, to check it is reproducible.",
+      "A signature that authorizes the group key's encrypted delivery to this session key.",
+    ]);
+    expect(details?.contains(screen.getByRole("link", { name: /encryption guide/ }))).toBe(true);
+  });
+
   const BROKEN_DEFAULT = [
     {
       dataSetId: 3n,
