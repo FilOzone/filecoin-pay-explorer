@@ -32,7 +32,7 @@ vi.mock("@/components/shared/ListPagination", () => ({
 }));
 vi.mock("./components", () => ({
   StaleQueueLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  StaleQueueErrorState: () => <div>Failed to load inactive datasets</div>,
+  StaleQueueErrorState: () => <div>Failed to load inactive data sets</div>,
   StaleQueueRow: ({ dataSet, canMute, isLinked }: { dataSet: { id: string }; canMute: boolean; isLinked: boolean }) => (
     <div>
       Row {dataSet.id}
@@ -94,7 +94,7 @@ describe("StaleQueue", () => {
   it("shows the error state when the query fails", () => {
     mockUseStaleDataSets.mockReturnValue({ data: undefined, isLoading: false, isError: true });
 
-    expect(render()).toContain("Failed to load inactive datasets");
+    expect(render()).toContain("Failed to load inactive data sets");
   });
 
   it("shows the mutes error and hides Keep when the mutes request fails", () => {

@@ -59,7 +59,7 @@ describe("DatasetsSection", () => {
 
     renderSection();
 
-    expect(screen.getByText("No datasets")).toBeTruthy();
+    expect(screen.getByText("No data sets")).toBeTruthy();
   });
 
   it("shows the loading state before data arrives", () => {
@@ -67,7 +67,7 @@ describe("DatasetsSection", () => {
 
     renderSection();
 
-    expect(screen.getByText("Loading datasets...")).toBeTruthy();
+    expect(screen.getByText("Loading data sets...")).toBeTruthy();
   });
 
   it("shows the error state when the query fails", () => {
@@ -75,7 +75,7 @@ describe("DatasetsSection", () => {
 
     renderSection();
 
-    expect(screen.getByText("Failed to load datasets")).toBeTruthy();
+    expect(screen.getByText("Failed to load data sets")).toBeTruthy();
   });
 
   it("renders a wire-format row with its size, spend, status and links", () => {
