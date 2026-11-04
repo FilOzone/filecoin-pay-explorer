@@ -6,7 +6,8 @@ import ExplorerLink from "./ExplorerLink";
 import ServiceAddress from "./ServiceAddress";
 
 const multicall = vi.hoisted(() => vi.fn());
-vi.mock("@/services/viem/client", () => ({ getPublicClient: () => ({ multicall }) }));
+const getPublicClient = vi.hoisted(() => vi.fn(() => ({ multicall })));
+vi.mock("@/services/viem/client", () => ({ getPublicClient }));
 vi.mock("@/hooks/useNetwork", () => ({
   default: () => ({ network: "mainnet", setNetwork: vi.fn(), subgraphUrl: "" }),
 }));
@@ -41,6 +42,7 @@ const tooltipOf = (text: string) => screen.getByText(text).closest("[title]")?.g
 afterEach(() => {
   cleanup();
   multicall.mockReset();
+  getPublicClient.mockClear();
 });
 
 describe("ServiceAddress", () => {
@@ -88,6 +90,23 @@ describe("ServiceAddress", () => {
     await vi.waitFor(() => expect(tooltipOf("Storacha")).toBe(`Hot storage\n${STORACHA}`));
     expect(screen.queryByText("Impostor")).toBeNull();
     expect(screen.queryByRole("img", { name: MARKER })).toBeNull();
+  });
+
+  it("reads on the shared network context by default", async () => {
+    multicall.mockResolvedValue([failed, failed, failed]);
+    const client = renderOperator(OPERATOR);
+
+    await metadataSettled(client);
+    expect(getPublicClient.mock.calls).toEqual([["mainnet"]]);
+  });
+
+  // Console pages never sync the shared context, so they pass the console network instead.
+  it("reads on networkOverride instead of the shared network context", async () => {
+    multicall.mockResolvedValue([ok("FCSS"), failed, failed]);
+    renderWithClient(<ServiceAddress value={OPERATOR} label='Operator address' networkOverride='calibration' />);
+
+    await screen.findByText("FCSS");
+    expect(getPublicClient.mock.calls).toEqual([["calibration"]]);
   });
 });
 
