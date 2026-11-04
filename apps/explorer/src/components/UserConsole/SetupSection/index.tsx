@@ -273,10 +273,10 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
                   <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
                     encryption guide
                   </ExternalTextLink>
-                  .
+                  . Once you have imported it, you can close this window.
                 </>
               ) : (
-                "Return to your terminal. If the command is still waiting, it will continue; otherwise run it again."
+                "Return to your terminal. If the command is still waiting, it will continue; otherwise run it again. You can close this window."
               )}
             </p>
           </Notice>

@@ -281,6 +281,29 @@ describe("SetupSection", () => {
     expect(screen.getByText("Console steps complete — finish in your terminal")).toBeTruthy();
   });
 
+  it("tells a Grant link to paste the Grant, and any other link to return to the terminal", async () => {
+    state.approved = true;
+    state.grants = [
+      { status: "success", result: FUTURE },
+      { status: "success", result: FUTURE },
+    ];
+    state.usdfcFunds = 2n * ONE_USDFC;
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
+    expect(screen.getByText(/This package contains the group key encrypted for this session key/)).toBeTruthy();
+    expect(screen.getByText(/Once you have imported it, you can close this window\./)).toBeTruthy();
+    expect(screen.queryByText(/^Return to your terminal/)).toBeNull();
+
+    cleanup();
+    await open(`${KEY_LINK}&balance=2`);
+    expect(
+      screen.getByText(
+        /Return to your terminal\. If the command is still waiting, it will continue; otherwise run it again\. You can close this window\./,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/This package contains the group key/)).toBeNull();
+  });
+
   it("opens the key dialog with the link's request, and only when asked", async () => {
     await open(KEY_LINK);
     expect(screen.queryByRole("dialog", { name: "New session key" })).toBeNull();
