@@ -228,7 +228,7 @@ function description(state: ApprovalState): string {
   if (state === "limited") {
     return "This setup requires unlimited spending approval. Your current approval has limits. Review the change before removing them.";
   }
-  return "Lets Warm Storage charge your Filecoin Pay balance for the data sets you or your session keys create, and makes sure that balance holds what the tool needs.";
+  return "Lets Warm Storage charge your Filecoin Pay account for the data sets you or your session keys create, and makes sure it holds what the tool needs.";
 }
 
 function approveLabel({
@@ -251,8 +251,8 @@ function offerText(offer: FundsOffer, missing: Shortfall | null, network: Networ
   if (offer !== "add-funds") return null;
   const label = missing ? shortfallLabel(missing) : "USDFC";
   return network === "calibration"
-    ? `Your wallet does not hold the ${label} still missing. Get testnet USDFC before depositing it into Filecoin Pay.`
-    : `Your wallet does not hold the ${label} still missing. Add funds gets USDFC and deposits it into Filecoin Pay.`;
+    ? `Your wallet does not hold the ${label} still missing. Get testnet USDFC before depositing it into your Filecoin Pay account.`
+    : `Your wallet does not hold the ${label} still missing. Add funds gets USDFC and deposits it into your Filecoin Pay account.`;
 }
 
 /**
