@@ -11,9 +11,9 @@ type FundingLaunch = {
   closeAddFunds: () => void;
   openSquid: () => void;
   closeSquid: () => void;
-  /** A login just created a new user, so the first unfunded overview leads with Add funds. */
-  isFundingAfterSignup: boolean;
-  requestFundingAfterSignup: () => void;
+  /** The Privy user a login just created, whose first unfunded overview leads with Add funds. */
+  signupUserId: string | null;
+  requestFundingAfterSignup: (userId: string) => void;
   clearFundingAfterSignup: () => void;
 };
 const FundingLaunchContext = createContext<FundingLaunch | null>(null);
@@ -22,7 +22,7 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
   const [isAddFundsOpen, setAddFundsOpen] = useState(false);
   const [isSquidOpen, setSquidOpen] = useState(false);
   const [depositToken, setDepositToken] = useState<UserToken | null>(null);
-  const [isFundingAfterSignup, setFundingAfterSignup] = useState(false);
+  const [signupUserId, setSignupUserId] = useState<string | null>(null);
   const openAddFunds = useCallback((nextToken?: UserToken | null) => {
     setDepositToken(nextToken ?? null);
     setSquidOpen(false);
@@ -34,8 +34,8 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
     setSquidOpen(true);
   }, []);
   const closeSquid = useCallback(() => setSquidOpen(false), []);
-  const requestFundingAfterSignup = useCallback(() => setFundingAfterSignup(true), []);
-  const clearFundingAfterSignup = useCallback(() => setFundingAfterSignup(false), []);
+  const requestFundingAfterSignup = useCallback((userId: string) => setSignupUserId(userId), []);
+  const clearFundingAfterSignup = useCallback(() => setSignupUserId(null), []);
   const value = useMemo(
     () => ({
       clearFundingAfterSignup,
@@ -43,11 +43,11 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
       closeSquid,
       depositToken,
       isAddFundsOpen,
-      isFundingAfterSignup,
       isSquidOpen,
       openAddFunds,
       openSquid,
       requestFundingAfterSignup,
+      signupUserId,
     }),
     [
       clearFundingAfterSignup,
@@ -55,11 +55,11 @@ export function FundingLaunchProvider({ children }: { children: ReactNode }) {
       closeSquid,
       depositToken,
       isAddFundsOpen,
-      isFundingAfterSignup,
       isSquidOpen,
       openAddFunds,
       openSquid,
       requestFundingAfterSignup,
+      signupUserId,
     ],
   );
   return <FundingLaunchContext.Provider value={value}>{children}</FundingLaunchContext.Provider>;
