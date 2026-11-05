@@ -4,15 +4,15 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { DatabaseIcon } from "lucide-react";
 
 export function DatasetsLoadingState() {
-  return <LoadingStateCard message='Loading datasets...' />;
+  return <LoadingStateCard message='Loading data sets...' />;
 }
 
 export function DatasetsErrorState() {
   return (
     <ErrorStateCard
       titleTag='h2'
-      title='Failed to load datasets'
-      description='Unable to fetch your Warm Storage datasets. Please try again.'
+      title='Failed to load data sets'
+      description='Unable to fetch your Warm Storage data sets. Please try again.'
     />
   );
 }
@@ -21,8 +21,8 @@ export function DatasetsEmptyState() {
   return (
     <EmptyStateCard
       titleTag='h2'
-      title='No datasets'
-      description='This service has no datasets for your account yet.'
+      title='No data sets'
+      description='This service has no data sets for your account yet.'
       icon={DatabaseIcon}
     />
   );

@@ -53,7 +53,7 @@ export function StaleQueueRow({
         </span>
         {showError ? (
           <span className='text-xs text-destructive'>
-            {muteDataSet.error instanceof Error ? muteDataSet.error.message : "Failed to mute this dataset."}
+            {muteDataSet.error instanceof Error ? muteDataSet.error.message : "Failed to mute this data set."}
           </span>
         ) : null}
       </div>

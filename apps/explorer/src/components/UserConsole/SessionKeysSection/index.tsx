@@ -275,7 +275,7 @@ const ConnectedSessionKeys = ({ network, account, revokeError, revokeAddress, re
           titleTag='h4'
           icon={KeyIcon}
           title='No session keys yet'
-          description='Create one to let an app or agent upload to your datasets without holding your wallet key.'
+          description='Create one to let an app or agent upload to your data sets without holding your wallet key.'
         >
           <div className='flex gap-2 justify-center'>
             <Button variant='primary' size='compact' onClick={() => setCreateOpen(true)}>
