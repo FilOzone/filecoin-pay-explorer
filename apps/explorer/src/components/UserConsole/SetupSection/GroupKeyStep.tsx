@@ -208,7 +208,7 @@ const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: ()
       <Notice tone='warn' title='Encryption access cannot be revoked' className='mt-4'>
         <p className='mt-1'>
           <span>{GROUP_KEY_WARNING}</span> Read more about{" "}
-          <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md#lifecycle-and-limits'>
+          <ExternalTextLink href='https://docs.filecoin.cloud/developer-guides/encryption/share-encrypted-data/#limits'>
             lifecycle and limits
           </ExternalTextLink>
           .
@@ -226,7 +226,7 @@ const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: ()
         </ol>
         <p className='mt-2 text-zinc-600 dark:text-zinc-400'>
           Encryption is optional and per-upload; it never changes files already uploaded. Read more in the{" "}
-          <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
+          <ExternalTextLink href='https://docs.filecoin.cloud/developer-guides/encryption/keysmith-encryption-keys/'>
             encryption guide
           </ExternalTextLink>
           .
