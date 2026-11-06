@@ -19,10 +19,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./useGraphQLQuery", () => ({
-  useGraphQLClient: () => ({ executeQuery: mocks.executeQuery }),
+  useGraphQLClient: () => ({ executeQuery: mocks.executeQuery, network: "mainnet" }),
   useGraphQLQuery: mocks.useGraphQLQuery,
 }));
-vi.mock("./useNetwork", () => ({ default: () => ({ network: "mainnet" }) }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: mocks.useQuery }));
 
 const USDFC = { id: "0xusdfc" };

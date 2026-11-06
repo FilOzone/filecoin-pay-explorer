@@ -15,13 +15,11 @@ import {
   GET_SERVICE_METRICS,
   GET_SERVICE_ONE_TIME_PAYMENTS,
   GET_SERVICE_TOKEN_RAIL,
-  GET_SUBGRAPH_BLOCK,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
-import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
+import { fetchAllPages, fetchSubgraphMeta, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { toAccountId } from "@/utils/hexUtils";
 import { useGraphQLClient, useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
-import useNetwork from "./useNetwork";
 
 /**
  * Reads a payer's service relationships from the `AccountOperator` projection.
@@ -187,7 +185,7 @@ export interface ServiceMetricsResponse {
   oneTimePayments: ServiceOneTimePayment[];
 }
 
-/** Everything the service metrics table reads, in one request and so from one block. */
+/** The service metrics table's per-token figures, in one request and so from one block. */
 export const useAccountServiceMetrics = (
   address: string,
   operatorAddress: string,
@@ -215,7 +213,6 @@ export const useAccountServiceMetrics = (
 
 type PagedServiceOneTimePayment = Pick<OneTimePayment, "id"> & ServiceOneTimePayment;
 
-/** Bounded like the spend chart's history. */
 const SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES = 10;
 
 // A busy pair's walk is about ten requests, so tab focus should not repeat it. Transactions still invalidate it.
@@ -234,20 +231,13 @@ export const useAccountServiceOneTimePayments = (
 ) => {
   const accountId = toAccountId(address);
   const operatorId = toAccountId(operatorAddress);
-  const { network: contextNetwork } = useNetwork();
-  const network = options.networkOverride ?? contextNetwork;
-  const { executeQuery } = useGraphQLClient({ networkOverride: options.networkOverride });
+  const { executeQuery, network } = useGraphQLClient({ networkOverride: options.networkOverride });
 
   return useQuery({
     queryKey: ["account", accountId, "services", operatorId, "one-time-payments", monthStart.toString(), network],
     queryFn: async ({ signal }) => {
       // Payment ids carry no order in time, so one written mid-walk could land below the cursor unless the block is fixed.
-      const { _meta } = await executeQuery<{ _meta: { block: { number: number } } | null }>(
-        GET_SUBGRAPH_BLOCK,
-        undefined,
-        signal,
-      );
-      if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
+      const { block } = await fetchSubgraphMeta(executeQuery, signal);
 
       return fetchAllPages<PagedServiceOneTimePayment>(async (cursor) => {
         const page = await executeQuery<{ oneTimePayments: PagedServiceOneTimePayment[] }>(
@@ -258,7 +248,7 @@ export const useAccountServiceOneTimePayments = (
             monthStart: monthStart.toString(),
             first: SUBGRAPH_PAGE_SIZE,
             cursor,
-            block: _meta.block.number,
+            block: block.number,
           },
           signal,
         );
@@ -282,9 +272,7 @@ export const useAccountServiceRailTokens = (
 ) => {
   const accountId = toAccountId(address);
   const operatorId = toAccountId(operatorAddress);
-  const { network: contextNetwork } = useNetwork();
-  const network = options?.networkOverride ?? contextNetwork;
-  const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
+  const { executeQuery, network } = useGraphQLClient({ networkOverride: options?.networkOverride });
 
   return useQuery({
     queryKey: ["account", accountId, "services", operatorId, "rail-tokens", approvedTokenIds, network],

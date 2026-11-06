@@ -17,8 +17,6 @@ import { SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import { buildServiceMetricsRows, type ServiceMetricsRow } from "../utils/buildServiceMetricsRows";
 
-const NO_TOKEN_IDS: string[] = [];
-
 const columnHelper = createColumnHelper<ServiceMetricsRow>();
 
 const columns = [
@@ -114,10 +112,7 @@ const ServiceMetrics = ({ accountId, network, operatorId }: ServiceMetricsProps)
     networkOverride: network,
   });
 
-  const approvedTokenIds = useMemo(
-    () => data?.account?.operatorApprovals.map(({ token }) => token.id) ?? NO_TOKEN_IDS,
-    [data],
-  );
+  const approvedTokenIds = data?.account?.operatorApprovals.map(({ token }) => token.id) ?? [];
   const { data: tokenIdsWithRails } = useAccountServiceRailTokens(accountId, operatorId, approvedTokenIds, {
     networkOverride: network,
   });

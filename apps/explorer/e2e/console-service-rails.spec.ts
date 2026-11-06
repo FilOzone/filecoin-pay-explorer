@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeFunctionResult, multicall3Abi } from "viem";
+import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -6,7 +6,6 @@ import { loginWithTestAccount } from "./privy";
 test.use({ bypassCSP: true });
 
 const OPERATOR = "0x2222222222222222222222222222222222222222";
-const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 
 const rail = (railId: number) => ({
   id: `rail-${railId}`,
@@ -56,27 +55,7 @@ test("rail pagination numbers and marks pages beyond the fifth", async ({ page }
       return route.fulfill({ json: { data: { accounts: [], userTokens: [] } } });
     },
   );
-  // The rail table watches the block number, and the header reads the service's on-chain name, which this
-  // operator does not have.
-  await page.route(
-    (url) => url.hostname.endsWith("glif.io"),
-    (route) => {
-      const call = route.request().postDataJSON();
-      if (call?.method === "eth_blockNumber")
-        return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result: "0x1" } });
-      const { to, data } = call?.params?.[0] ?? {};
-      if (call?.method !== "eth_call" || to?.toLowerCase() !== MULTICALL3) return route.fallback();
-      const { args } = decodeFunctionData({ abi: multicall3Abi, data });
-      const calls = args[0] as readonly { target: string }[];
-      if (!calls.every((c) => c.target.toLowerCase() === OPERATOR)) return route.fallback();
-      const result = encodeFunctionResult({
-        abi: multicall3Abi,
-        functionName: "aggregate3",
-        result: calls.map(() => ({ success: false, returnData: "0x" }) as const),
-      });
-      return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result } });
-    },
-  );
+  await answerServicePageRpc(page, OPERATOR);
   await page.route(
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),
