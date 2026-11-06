@@ -49,7 +49,7 @@ const FundsOverview = ({ userToken, currentTimestamp }: FundsOverviewProps) => {
   );
 
   const isInDebt = debt > 0n;
-  const decimals = token.decimals;
+  const decimals = Number(token.decimals);
 
   return (
     // The meters read the same figures as the cards, so they live under the same

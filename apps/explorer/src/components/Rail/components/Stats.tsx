@@ -84,7 +84,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
   const { data: currentBlock, isLoading, isError, refetch, error } = useBlockNumber();
 
   return (
-    <StatsLayout railId={String(rail.railId)} state={rail.state}>
+    <StatsLayout railId={rail.railId} state={rail.state}>
       {isLoading && <LoadingStateCard message='Loading Stats...' />}
 
       {isError && <ErrorState refetch={refetch} error={error} />}

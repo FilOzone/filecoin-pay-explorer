@@ -14,9 +14,9 @@ interface CheckAddressResponse {
 export interface LookupResult {
   type: "account" | "operator";
   address: string;
-  totalRails: bigint;
-  totalTokens: bigint;
-  totalApprovals: bigint;
+  totalRails: string;
+  totalTokens: string;
+  totalApprovals: string;
 }
 
 export interface UseAddressLookupReturn {

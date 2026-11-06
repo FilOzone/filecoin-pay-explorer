@@ -84,7 +84,7 @@ export const SpendChart = ({ accountId, network, userToken, currentTimestamp }: 
     <SpendChartLayout tokenSymbol={token.symbol}>
       <SpendBarChart
         rows={rows}
-        tokenDecimals={token.decimals}
+        tokenDecimals={Number(token.decimals)}
         tokenSymbol={token.symbol}
         hasReachedHistoryLimit={data?.reachedPageLimit ?? false}
       />

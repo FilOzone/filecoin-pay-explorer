@@ -9,10 +9,9 @@ generates:
     plugins:
       - typescript
     config:
-      skipTypename: false
+      skipTypename: true
       enumsAsTypes: true
       futureProofEnums: true
-      nonOptionalTypename: true
       scalars:
-        BigInt: ../index.js#BigInt
+        BigInt: string
         Bytes: ../index.js#Bytes

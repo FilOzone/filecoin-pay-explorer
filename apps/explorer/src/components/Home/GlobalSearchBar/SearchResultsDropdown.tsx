@@ -59,7 +59,7 @@ export function SearchResultsDropdown({
                   </Badge>
                   <span className='font-mono text-sm truncate'>{option.result.address}</span>
                   <span className='ml-auto shrink-0 text-sm text-muted-foreground'>
-                    {option.result.totalRails.toString()} rails
+                    {option.result.totalRails} rails
                   </span>
                 </>
               )}

@@ -28,7 +28,7 @@ export const ServiceCard = ({ service, profile }: { service: AccountService; pro
           <span className='hidden h-4 w-px bg-border sm:block' />
           <span className='flex items-center gap-2'>
             <Waypoints className='size-4' />
-            {service.totalActiveRails.toString()} active / {service.totalRails.toString()} total rails
+            {service.totalActiveRails} active / {service.totalRails} total rails
           </span>
         </div>
       </div>

@@ -81,7 +81,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
     () =>
       rails.map((rail) => ({
         ...rail,
-        isSettling: isSettling(rail.railId.toString()),
+        isSettling: isSettling(rail.railId),
       })),
     [rails, isSettling],
   );
@@ -149,7 +149,7 @@ export const RailsSection: React.FC<RailsSectionProps> = ({
           currentEpoch={settleSelection.currentEpoch}
           open={settleSelection.open}
           onOpenChange={(open) => setSettleSelection({ ...settleSelection, open })}
-          isSettling={isSettling(settleSelection.rail.railId.toString())}
+          isSettling={isSettling(settleSelection.rail.railId)}
           settleRail={settleRail}
         />
       )}
