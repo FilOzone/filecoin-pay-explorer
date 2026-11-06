@@ -1,8 +1,25 @@
-import type { AccountOperator, Operator, Rail } from "@filecoin-pay/types";
-import { GET_ACCOUNT_OPERATOR, GET_ACCOUNT_OPERATOR_RAILS, GET_ACCOUNT_OPERATORS } from "@/services/grapql/queries";
+import type {
+  AccountOperator,
+  OneTimePayment,
+  Operator,
+  OperatorApproval,
+  Rail,
+  Token,
+  UserToken,
+} from "@filecoin-pay/types";
+import { useQuery } from "@tanstack/react-query";
+import {
+  GET_ACCOUNT_OPERATOR,
+  GET_ACCOUNT_OPERATOR_RAILS,
+  GET_ACCOUNT_OPERATORS,
+  GET_SERVICE_METRICS,
+  GET_SERVICE_ONE_TIME_PAYMENTS,
+  GET_SERVICE_TOKEN_RAIL,
+} from "@/services/grapql/queries";
 import type { Network } from "@/types";
+import { fetchAllPages, fetchSubgraphMeta, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { toAccountId } from "@/utils/hexUtils";
-import { useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
+import { useGraphQLClient, useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
 
 /**
  * Reads a payer's service relationships from the `AccountOperator` projection.
@@ -145,5 +162,132 @@ export const useAccountServiceRails = (
     }),
     enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
+  });
+};
+
+type WithTokenId = { token: Pick<Token, "id"> };
+
+export type ServiceOneTimePayment = Pick<OneTimePayment, "totalAmount"> & WithTokenId;
+
+export interface ServiceMetricsResponse {
+  /** Null when the payer has never been indexed. */
+  account: {
+    operatorApprovals: (Pick<OperatorApproval, "lockupUsage"> & { token: Pick<Token, "id" | "symbol" | "decimals"> })[];
+    userTokens: (Pick<
+      UserToken,
+      "funds" | "lockupCurrent" | "lockupRate" | "lockupLastSettledUntilEpoch" | "lockupLastSettledUntilTimestamp"
+    > &
+      WithTokenId)[];
+  } | null;
+  /** Only the pair's paying `ACTIVE` rails. */
+  rails: (Pick<Rail, "paymentRate" | "lockupPeriod"> & WithTokenId)[];
+  /** The first page of this pair's payments since `monthStart`. A full page means more are unread. */
+  oneTimePayments: ServiceOneTimePayment[];
+}
+
+/** The service metrics table's per-token figures, in one request and so from one block. */
+export const useAccountServiceMetrics = (
+  address: string,
+  operatorAddress: string,
+  /** Unix seconds. */
+  monthStart: bigint,
+  options?: AccountServicesOptions,
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+
+  return useGraphQLQuery<ServiceMetricsResponse>({
+    queryKey: ["account", accountId, "services", operatorId, "metrics", monthStart.toString()],
+    query: GET_SERVICE_METRICS,
+    variables: {
+      accountId,
+      payer: accountId,
+      operator: operatorId,
+      monthStart: monthStart.toString(),
+      first: SUBGRAPH_PAGE_SIZE,
+    },
+    enabled: !!accountId && !!operatorId,
+    networkOverride: options?.networkOverride,
+  });
+};
+
+type PagedServiceOneTimePayment = Pick<OneTimePayment, "id"> & ServiceOneTimePayment;
+
+const SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES = 10;
+
+// A busy pair's walk is about ten requests, so tab focus should not repeat it. Transactions still invalidate it.
+const SERVICE_ONE_TIME_PAYMENTS_STALE_MS = 5 * 60 * 1_000;
+
+/**
+ * Every payment of a pair whose payments overflow the metrics query's page. Busy pairs make thousands a month.
+ * Bounded: `reachedPageLimit` says `items` is an arbitrary subset.
+ */
+export const useAccountServiceOneTimePayments = (
+  address: string,
+  operatorAddress: string,
+  /** Unix seconds. */
+  monthStart: bigint,
+  options: AccountServicesOptions & { enabled: boolean },
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+  const { executeQuery, network } = useGraphQLClient({ networkOverride: options.networkOverride });
+
+  return useQuery({
+    queryKey: ["account", accountId, "services", operatorId, "one-time-payments", monthStart.toString(), network],
+    queryFn: async ({ signal }) => {
+      // Payment ids carry no order in time, so one written mid-walk could land below the cursor unless the block is fixed.
+      const { block } = await fetchSubgraphMeta(executeQuery, signal);
+
+      return fetchAllPages<PagedServiceOneTimePayment>(async (cursor) => {
+        const page = await executeQuery<{ oneTimePayments: PagedServiceOneTimePayment[] }>(
+          GET_SERVICE_ONE_TIME_PAYMENTS,
+          {
+            payer: accountId,
+            operator: operatorId,
+            monthStart: monthStart.toString(),
+            first: SUBGRAPH_PAGE_SIZE,
+            cursor,
+            block: block.number,
+          },
+          signal,
+        );
+        return page.oneTimePayments;
+      }, SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES);
+    },
+    enabled: options.enabled && !!accountId && !!operatorId,
+    staleTime: SERVICE_ONE_TIME_PAYMENTS_STALE_MS,
+  });
+};
+
+/**
+ * Which of a pair's approved tokens it has rails in. An approval can exist with no rail, and only a pair with more
+ * than one approved token needs asking: a rail requires an approval, so a pair's only approved token holds its rails.
+ */
+export const useAccountServiceRailTokens = (
+  address: string,
+  operatorAddress: string,
+  approvedTokenIds: string[],
+  options?: AccountServicesOptions,
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+  const { executeQuery, network } = useGraphQLClient({ networkOverride: options?.networkOverride });
+
+  return useQuery({
+    queryKey: ["account", accountId, "services", operatorId, "rail-tokens", approvedTokenIds, network],
+    queryFn: async ({ signal }) => {
+      const pages = await Promise.all(
+        approvedTokenIds.map((token) =>
+          executeQuery<{ rails: { id: string }[] }>(
+            GET_SERVICE_TOKEN_RAIL,
+            { payer: accountId, operator: operatorId, token },
+            signal,
+          ),
+        ),
+      );
+      return approvedTokenIds.filter((_, index) => pages[index]?.rails.length);
+    },
+    enabled: approvedTokenIds.length > 1 && !!accountId && !!operatorId,
   });
 };
