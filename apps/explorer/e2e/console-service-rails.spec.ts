@@ -50,6 +50,9 @@ test("rail pagination numbers and marks pages beyond the fifth", async ({ page }
         };
         return route.fulfill({ json: { data: { accountOperator } } });
       }
+      if (query.includes("GetServiceMetrics")) {
+        return route.fulfill({ json: { data: { account: null, rails: [], oneTimePayments: [] } } });
+      }
       return route.fulfill({ json: { data: { accounts: [], userTokens: [] } } });
     },
   );

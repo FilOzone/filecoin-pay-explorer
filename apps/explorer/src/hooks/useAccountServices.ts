@@ -14,6 +14,8 @@ import {
   GET_ACCOUNT_OPERATORS,
   GET_SERVICE_METRICS,
   GET_SERVICE_ONE_TIME_PAYMENTS,
+  GET_SERVICE_TOKEN_RAIL,
+  GET_SUBGRAPH_BLOCK,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
@@ -165,7 +167,9 @@ export const useAccountServiceRails = (
   });
 };
 
-type TokenId = { token: Pick<Token, "id"> };
+type WithTokenId = { token: Pick<Token, "id"> };
+
+export type ServiceOneTimePayment = Pick<OneTimePayment, "totalAmount"> & WithTokenId;
 
 export interface ServiceMetricsResponse {
   /** Null when the payer has never been indexed. */
@@ -175,23 +179,15 @@ export interface ServiceMetricsResponse {
       UserToken,
       "funds" | "lockupCurrent" | "lockupRate" | "lockupLastSettledUntilEpoch" | "lockupLastSettledUntilTimestamp"
     > &
-      TokenId)[];
+      WithTokenId)[];
   } | null;
   /** Only the pair's paying `ACTIVE` rails. */
-  rails: (Pick<Rail, "paymentRate" | "lockupPeriod"> & TokenId)[];
-  /** Only this pair's payments since `monthStart`. */
-  oneTimePayments: (Pick<OneTimePayment, "totalAmount"> & TokenId)[];
+  rails: (Pick<Rail, "paymentRate" | "lockupPeriod"> & WithTokenId)[];
+  /** The first page of this pair's payments since `monthStart`. A full page means more are unread. */
+  oneTimePayments: ServiceOneTimePayment[];
 }
 
-export type ServiceMetrics = ServiceMetricsResponse & {
-  /** Payments were left unread, so `oneTimePayments` is an arbitrary subset. */
-  oneTimePaymentsReachedLimit: boolean;
-};
-
-/** Pages the same as the spend chart's history, so both give up at the same point. */
-const SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES = 10;
-
-/** Everything the service metrics table reads, in one request unless the pair's one-time payments overflow a page. */
+/** Everything the service metrics table reads, in one request and so from one block. */
 export const useAccountServiceMetrics = (
   address: string,
   operatorAddress: string,
@@ -201,40 +197,109 @@ export const useAccountServiceMetrics = (
 ) => {
   const accountId = toAccountId(address);
   const operatorId = toAccountId(operatorAddress);
+
+  return useGraphQLQuery<ServiceMetricsResponse>({
+    queryKey: ["account", accountId, "services", operatorId, "metrics", monthStart.toString()],
+    query: GET_SERVICE_METRICS,
+    variables: {
+      accountId,
+      payer: accountId,
+      operator: operatorId,
+      monthStart: monthStart.toString(),
+      first: SUBGRAPH_PAGE_SIZE,
+    },
+    enabled: !!accountId && !!operatorId,
+    networkOverride: options?.networkOverride,
+  });
+};
+
+type PagedServiceOneTimePayment = Pick<OneTimePayment, "id"> & ServiceOneTimePayment;
+
+/** Bounded like the spend chart's history. */
+const SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES = 10;
+
+// A busy pair's walk is about ten requests, so tab focus should not repeat it. Transactions still invalidate it.
+const SERVICE_ONE_TIME_PAYMENTS_STALE_MS = 5 * 60 * 1_000;
+
+/**
+ * Every payment of a pair whose payments overflow the metrics query's page. Busy pairs make thousands a month.
+ * Bounded: `reachedPageLimit` says `items` is an arbitrary subset.
+ */
+export const useAccountServiceOneTimePayments = (
+  address: string,
+  operatorAddress: string,
+  /** Unix seconds. */
+  monthStart: bigint,
+  options: AccountServicesOptions & { enabled: boolean },
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+  const { network: contextNetwork } = useNetwork();
+  const network = options.networkOverride ?? contextNetwork;
+  const { executeQuery } = useGraphQLClient({ networkOverride: options.networkOverride });
+
+  return useQuery({
+    queryKey: ["account", accountId, "services", operatorId, "one-time-payments", monthStart.toString(), network],
+    queryFn: async ({ signal }) => {
+      // Payment ids carry no order in time, so one written mid-walk could land below the cursor unless the block is fixed.
+      const { _meta } = await executeQuery<{ _meta: { block: { number: number } } | null }>(
+        GET_SUBGRAPH_BLOCK,
+        undefined,
+        signal,
+      );
+      if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
+
+      return fetchAllPages<PagedServiceOneTimePayment>(async (cursor) => {
+        const page = await executeQuery<{ oneTimePayments: PagedServiceOneTimePayment[] }>(
+          GET_SERVICE_ONE_TIME_PAYMENTS,
+          {
+            payer: accountId,
+            operator: operatorId,
+            monthStart: monthStart.toString(),
+            first: SUBGRAPH_PAGE_SIZE,
+            cursor,
+            block: _meta.block.number,
+          },
+          signal,
+        );
+        return page.oneTimePayments;
+      }, SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES);
+    },
+    enabled: options.enabled && !!accountId && !!operatorId,
+    staleTime: SERVICE_ONE_TIME_PAYMENTS_STALE_MS,
+  });
+};
+
+/**
+ * Which of a pair's approved tokens it has rails in. An approval can exist with no rail, and only a pair with more
+ * than one approved token needs asking: a rail requires an approval, so a pair's only approved token holds its rails.
+ */
+export const useAccountServiceRailTokens = (
+  address: string,
+  operatorAddress: string,
+  approvedTokenIds: string[],
+  options?: AccountServicesOptions,
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
   const { network: contextNetwork } = useNetwork();
   const network = options?.networkOverride ?? contextNetwork;
   const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
 
-  return useQuery<ServiceMetrics>({
-    queryKey: ["account", accountId, "services", operatorId, "metrics", monthStart.toString(), network],
+  return useQuery({
+    queryKey: ["account", accountId, "services", operatorId, "rail-tokens", approvedTokenIds, network],
     queryFn: async ({ signal }) => {
-      const pairMonth = {
-        payer: accountId,
-        operator: operatorId,
-        monthStart: monthStart.toString(),
-        first: SUBGRAPH_PAGE_SIZE,
-      };
-      const metrics = await executeQuery<ServiceMetricsResponse>(
-        GET_SERVICE_METRICS,
-        { accountId, ...pairMonth },
-        signal,
+      const pages = await Promise.all(
+        approvedTokenIds.map((token) =>
+          executeQuery<{ rails: { id: string }[] }>(
+            GET_SERVICE_TOKEN_RAIL,
+            { payer: accountId, operator: operatorId, token },
+            signal,
+          ),
+        ),
       );
-      if (metrics.oneTimePayments.length < SUBGRAPH_PAGE_SIZE) {
-        return { ...metrics, oneTimePaymentsReachedLimit: false };
-      }
-
-      // Busy pairs make thousands of these a month. Restarting from the first page costs them one extra read.
-      const { items, reachedPageLimit } = await fetchAllPages<
-        Pick<OneTimePayment, "id"> & ServiceMetricsResponse["oneTimePayments"][number]
-      >(async (cursor) => {
-        const page = await executeQuery<{
-          oneTimePayments: (Pick<OneTimePayment, "id"> & ServiceMetricsResponse["oneTimePayments"][number])[];
-        }>(GET_SERVICE_ONE_TIME_PAYMENTS, { ...pairMonth, cursor }, signal);
-        return page.oneTimePayments;
-      }, SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES);
-
-      return { ...metrics, oneTimePayments: items, oneTimePaymentsReachedLimit: reachedPageLimit };
+      return approvedTokenIds.filter((_, index) => pages[index]?.rails.length);
     },
-    enabled: !!accountId && !!operatorId,
+    enabled: approvedTokenIds.length > 1 && !!accountId && !!operatorId,
   });
 };

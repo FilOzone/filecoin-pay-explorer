@@ -3,14 +3,21 @@ import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateC
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
 import { createColumnHelper, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { AlertCircle } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
-import { useAccountServiceMetrics } from "@/hooks/useAccountServices";
+import {
+  useAccountServiceMetrics,
+  useAccountServiceOneTimePayments,
+  useAccountServiceRailTokens,
+} from "@/hooks/useAccountServices";
 import type { Network } from "@/types";
 import { EPOCH_DURATION } from "@/utils/constants";
 import { SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import { buildServiceMetricsRows, type ServiceMetricsRow } from "../utils/buildServiceMetricsRows";
+
+const NO_TOKEN_IDS: string[] = [];
 
 const columnHelper = createColumnHelper<ServiceMetricsRow>();
 
@@ -33,6 +40,8 @@ const columns = [
     header: "One-time, this month",
     cell: ({ row }) => {
       const { oneTimeThisMonth, token } = row.original;
+      if (oneTimeThisMonth === "loading") return "Loading...";
+      if (oneTimeThisMonth === "unavailable") return "Unavailable";
       return <span className='tabular-nums'>{formatTokenAmount(oneTimeThisMonth, token.decimals)}</span>;
     },
   }),
@@ -53,7 +62,7 @@ const columns = [
   columnHelper.display({
     id: "runway",
     header: "Account runway",
-    cell: ({ row }) => row.original.accountRunway,
+    cell: ({ row }) => row.original.accountRunwayText,
   }),
 ];
 
@@ -66,6 +75,13 @@ const ServiceMetricsTable = ({ data }: { data: ServiceMetricsRow[] }) => {
     </ResponsiveTable>
   );
 };
+
+const ServiceMetricsLayout = ({ children }: { children: ReactNode }) => (
+  <section className='flex flex-col gap-4'>
+    <h3 className='text-2xl font-medium'>Spend and funding</h3>
+    {children}
+  </section>
+);
 
 type ServiceMetricsProps = {
   accountId: string;
@@ -92,30 +108,55 @@ const ServiceMetrics = ({ accountId, network, operatorId }: ServiceMetricsProps)
     networkOverride: network,
   });
 
-  const rows = useMemo(() => (data ? buildServiceMetricsRows(data, currentTimestamp) : []), [data, currentTimestamp]);
+  const paymentsOverflowPage = data?.oneTimePayments.length === SUBGRAPH_PAGE_SIZE;
+  const allPayments = useAccountServiceOneTimePayments(accountId, operatorId, monthStart, {
+    enabled: paymentsOverflowPage,
+    networkOverride: network,
+  });
+
+  const approvedTokenIds = useMemo(
+    () => data?.account?.operatorApprovals.map(({ token }) => token.id) ?? NO_TOKEN_IDS,
+    [data],
+  );
+  const { data: tokenIdsWithRails } = useAccountServiceRailTokens(accountId, operatorId, approvedTokenIds, {
+    networkOverride: network,
+  });
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const unreadPayments = allPayments.isError ? "unavailable" : "loading";
+    const oneTimePayments = paymentsOverflowPage ? (allPayments.data?.items ?? unreadPayments) : data.oneTimePayments;
+
+    return buildServiceMetricsRows({ ...data, oneTimePayments, tokenIdsWithRails }, currentTimestamp);
+  }, [data, paymentsOverflowPage, allPayments.data, allPayments.isError, tokenIdsWithRails, currentTimestamp]);
 
   if (isLoading) {
-    return <LoadingStateCard message='Loading spend and funding...' />;
+    return (
+      <ServiceMetricsLayout>
+        <LoadingStateCard message='Loading spend and funding...' />
+      </ServiceMetricsLayout>
+    );
   }
 
   if (isError) {
     return (
-      <ErrorStateCard
-        titleTag='h2'
-        title='Failed to load spend and funding'
-        description='Unable to fetch the totals for this service. Please try again.'
-      />
+      <ServiceMetricsLayout>
+        <ErrorStateCard
+          titleTag='h2'
+          title='Failed to load spend and funding'
+          description='Unable to fetch the totals for this service. Please try again.'
+        />
+      </ServiceMetricsLayout>
     );
   }
 
   if (!data || rows.length === 0) return null;
 
   // ponytail: rails read one page, page them when a pair nears the limit (largest on mainnet: 267 paying rails).
-  const mayBeIncomplete = data.rails.length === SUBGRAPH_PAGE_SIZE || data.oneTimePaymentsReachedLimit;
+  const mayBeIncomplete = data.rails.length === SUBGRAPH_PAGE_SIZE || allPayments.data?.reachedPageLimit;
 
   return (
-    <section className='flex flex-col gap-4'>
-      <h3 className='text-2xl font-medium'>Spend and funding</h3>
+    <ServiceMetricsLayout>
       <ServiceMetricsTable data={rows} />
       {mayBeIncomplete ? (
         <p className='flex items-start gap-2 text-sm text-foreground'>
@@ -123,7 +164,7 @@ const ServiceMetrics = ({ accountId, network, operatorId }: ServiceMetricsProps)
           <span>This service reached the data limit, so these totals may be incomplete.</span>
         </p>
       ) : null}
-    </section>
+    </ServiceMetricsLayout>
   );
 };
 

@@ -671,8 +671,10 @@ export const GET_SERVICE_ONE_TIME_PAYMENTS = gql`
     $monthStart: BigInt!
     $first: Int!
     $cursor: Bytes!
+    $block: Int!
   ) {
     oneTimePayments(
+      block: { number: $block }
       where: { payer: $payer, operator: $operator, createdAt_gte: $monthStart, id_gt: $cursor }
       first: $first
       orderBy: id
@@ -683,6 +685,14 @@ export const GET_SERVICE_ONE_TIME_PAYMENTS = gql`
       token {
         id
       }
+    }
+  }
+`;
+
+export const GET_SERVICE_TOKEN_RAIL = gql`
+  query GetServiceTokenRail($payer: String!, $operator: String!, $token: String!) {
+    rails(where: { payer: $payer, operator: $operator, token: $token }, first: 1) {
+      id
     }
   }
 `;

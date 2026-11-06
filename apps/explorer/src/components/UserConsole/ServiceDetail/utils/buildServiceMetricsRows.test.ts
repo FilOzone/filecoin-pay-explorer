@@ -1,7 +1,8 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { describe, expect, it } from "vitest";
-import type { ServiceMetricsResponse } from "@/hooks/useAccountServices";
 import { buildServiceMetricsRows } from "./buildServiceMetricsRows";
+
+type RowsInput = Parameters<typeof buildServiceMetricsRows>[0];
 
 const MONTH = TIME_CONSTANTS.EPOCHS_PER_MONTH;
 const DAY = TIME_CONSTANTS.EPOCHS_PER_DAY;
@@ -18,15 +19,24 @@ const userToken = (token: { id: `0x${string}` }, funds = 0n, lockupRate = 0n, la
   token,
 });
 
-const response = (overrides: Partial<ServiceMetricsResponse> = {}): ServiceMetricsResponse => ({
+const input = (overrides: Partial<RowsInput> = {}): RowsInput => ({
   account: {
     operatorApprovals: [{ lockupUsage: 0n, token: USDFC }],
     userTokens: [userToken(USDFC)],
   },
   rails: [],
   oneTimePayments: [],
+  tokenIdsWithRails: undefined,
   ...overrides,
 });
+
+const twoApprovedTokens = {
+  operatorApprovals: [
+    { lockupUsage: 9n, token: USDFC },
+    { lockupUsage: 7n, token: AXL_USDC },
+  ],
+  userTokens: [userToken(USDFC), userToken(AXL_USDC)],
+};
 
 const rail = (paymentRate: bigint, lockupPeriod: bigint = 30n * DAY, token: { id: `0x${string}` } = USDFC) => ({
   paymentRate,
@@ -34,22 +44,16 @@ const rail = (paymentRate: bigint, lockupPeriod: bigint = 30n * DAY, token: { id
   token,
 });
 
-const buildOne = (overrides: Partial<ServiceMetricsResponse>) => {
-  const [row] = buildServiceMetricsRows(response(overrides), NOW);
+const buildOne = (overrides: Partial<RowsInput>) => {
+  const [row] = buildServiceMetricsRows(input(overrides), NOW);
   return row;
 };
 
 describe("buildServiceMetricsRows", () => {
   it("keeps each token's amounts on its own row, sorted by symbol", () => {
     const rows = buildServiceMetricsRows(
-      response({
-        account: {
-          operatorApprovals: [
-            { lockupUsage: 9n, token: USDFC },
-            { lockupUsage: 7n, token: AXL_USDC },
-          ],
-          userTokens: [userToken(USDFC), userToken(AXL_USDC)],
-        },
+      input({
+        account: twoApprovedTokens,
         rails: [rail(10n), rail(20n), rail(5n, 30n * DAY, AXL_USDC)],
         oneTimePayments: [
           { totalAmount: 1n, token: USDFC },
@@ -68,7 +72,7 @@ describe("buildServiceMetricsRows", () => {
         oneTimeThisMonth: 4n,
         lockedDeposit: 7n,
         noticeCopy: notice,
-        accountRunway: "No recurring charges",
+        accountRunwayText: "No recurring charges",
       },
       {
         token: USDFC,
@@ -76,7 +80,7 @@ describe("buildServiceMetricsRows", () => {
         oneTimeThisMonth: 3n,
         lockedDeposit: 9n,
         noticeCopy: notice,
-        accountRunway: "No recurring charges",
+        accountRunwayText: "No recurring charges",
       },
     ]);
   });
@@ -88,12 +92,36 @@ describe("buildServiceMetricsRows", () => {
       oneTimeThisMonth: 0n,
       lockedDeposit: 7n,
       noticeCopy: null,
-      accountRunway: "—",
+      accountRunwayText: "—",
     });
   });
 
   it("returns no rows for an account that was never indexed", () => {
-    expect(buildServiceMetricsRows(response({ account: null }), NOW)).toEqual([]);
+    expect(buildServiceMetricsRows(input({ account: null }), NOW)).toEqual([]);
+  });
+
+  describe("which tokens get a row", () => {
+    const symbols = (tokenIdsWithRails: string[] | undefined) =>
+      buildServiceMetricsRows(input({ account: twoApprovedTokens, tokenIdsWithRails }), NOW).map(
+        (row) => row.token.symbol,
+      );
+
+    it("leaves out an approved token the pair has no rail in", () => {
+      expect(symbols([AXL_USDC.id])).toEqual(["axlUSDC"]);
+    });
+
+    it("keeps every approved token until the check has answered", () => {
+      expect(symbols(undefined)).toEqual(["axlUSDC", "USDFC"]);
+    });
+  });
+
+  it.each(["loading", "unavailable"] as const)("carries %s one-time payments beside the other figures", (reason) => {
+    const row = buildOne({
+      account: { operatorApprovals: [{ lockupUsage: 7n, token: USDFC }], userTokens: [] },
+      oneTimePayments: reason,
+    });
+
+    expect(row).toMatchObject({ oneTimeThisMonth: reason, lockedDeposit: 7n });
   });
 
   describe("notice copy", () => {
@@ -104,11 +132,11 @@ describe("buildServiceMetricsRows", () => {
       ["a period that isn't whole days", [rail(1n, DAY + 1n)], "Pays the notice period after you terminate"],
       ["only rails without a lockup", [rail(1n, 0n)], null],
     ])("handles %s", (_, rails, noticeCopy) => {
-      expect(buildOne({ rails }).noticeCopy).toBe(noticeCopy);
+      expect(buildOne({ rails })?.noticeCopy).toBe(noticeCopy);
     });
 
     it("ignores rails without a lockup when another rail has a notice", () => {
-      expect(buildOne({ rails: [rail(1n), rail(1n, 0n)] }).noticeCopy).toBe(
+      expect(buildOne({ rails: [rail(1n), rail(1n, 0n)] })?.noticeCopy).toBe(
         "Pays the 30-day notice after you terminate",
       );
     });
@@ -120,11 +148,11 @@ describe("buildServiceMetricsRows", () => {
 
     it("gives the date and the days left", () => {
       // 12.5 days at 10 per epoch.
-      expect(withToken(userToken(USDFC, 360_000n, 10n)).accountRunway).toMatch(/^\w+ \d+(, \d+)? \(in 12 days\)$/);
+      expect(withToken(userToken(USDFC, 360_000n, 10n))?.accountRunwayText).toMatch(/^\w+ \d+(, \d+)? \(in 12 days\)$/);
     });
 
     it("says funding expired once the account has run out", () => {
-      expect(withToken(userToken(USDFC, 100n, 100n, NOW - 86_400n)).accountRunway).toBe("Funding expired");
+      expect(withToken(userToken(USDFC, 100n, 100n, NOW - 86_400n))?.accountRunwayText).toBe("Funding expired");
     });
 
     it("reads the runway of the row's own token", () => {
@@ -135,7 +163,7 @@ describe("buildServiceMetricsRows", () => {
         },
       });
 
-      expect(row.accountRunway).toBe("No recurring charges");
+      expect(row?.accountRunwayText).toBe("No recurring charges");
     });
   });
 });

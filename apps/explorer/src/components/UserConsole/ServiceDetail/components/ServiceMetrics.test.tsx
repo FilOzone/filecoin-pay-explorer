@@ -1,24 +1,34 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ServiceMetrics as ServiceMetricsData } from "@/hooks/useAccountServices";
+import type { ServiceMetricsResponse } from "@/hooks/useAccountServices";
 import { SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import ServiceMetrics from "./ServiceMetrics";
 
 const mocks = vi.hoisted(() => ({
-  query: {} as { data?: ServiceMetricsData; isLoading?: boolean; isError?: boolean },
+  metrics: {} as { data?: ServiceMetricsResponse; isLoading?: boolean; isError?: boolean },
+  allPayments: {} as {
+    data?: { items: { totalAmount: bigint; token: { id: `0x${string}` } }[]; reachedPageLimit: boolean };
+    isError?: boolean;
+  },
+  railTokens: {} as { data?: string[] },
   useAccountServiceMetrics: vi.fn(),
+  useAccountServiceOneTimePayments: vi.fn(),
 }));
 
 vi.mock("@/hooks/useAccountServices", () => ({
   useAccountServiceMetrics: mocks.useAccountServiceMetrics,
+  useAccountServiceOneTimePayments: mocks.useAccountServiceOneTimePayments,
+  useAccountServiceRailTokens: () => mocks.railTokens,
 }));
 
 const OPERATOR = "0x2222222222222222222222222222222222222222";
 const USDFC = { id: "0xusdfc" as const, symbol: "USDFC", decimals: 18n };
 const AXL_USDC = { id: "0xaxl" as const, symbol: "axlUSDC", decimals: 6n };
+const NOTICE = "Pays the 30-day notice after you terminate";
+const ONE_TOKEN_THOUSANDTH = 1_000_000_000_000_000n;
 
-const data: ServiceMetricsData = {
+const data: ServiceMetricsResponse = {
   account: {
     operatorApprovals: [
       { lockupUsage: 9_640_000_000_000_000_000n, token: USDFC },
@@ -31,7 +41,14 @@ const data: ServiceMetricsData = {
     { paymentRate: 10n, lockupPeriod: 86_400n, token: AXL_USDC },
   ],
   oneTimePayments: [{ totalAmount: 420_000_000_000_000_000n, token: USDFC }],
-  oneTimePaymentsReachedLimit: false,
+};
+
+const fullFirstPage: ServiceMetricsResponse = {
+  ...data,
+  oneTimePayments: Array.from({ length: SUBGRAPH_PAGE_SIZE }, () => ({
+    totalAmount: ONE_TOKEN_THOUSANDTH,
+    token: USDFC,
+  })),
 };
 
 const renderMetrics = () => render(<ServiceMetrics accountId='0xaccount' network='mainnet' operatorId={OPERATOR} />);
@@ -45,22 +62,34 @@ const cellsOf = (symbol: string) => {
 };
 
 beforeEach(() => {
-  mocks.query = { data };
-  mocks.useAccountServiceMetrics.mockImplementation(() => mocks.query);
+  mocks.metrics = { data };
+  mocks.allPayments = {};
+  mocks.railTokens = {};
+  mocks.useAccountServiceMetrics.mockImplementation(() => mocks.metrics);
+  mocks.useAccountServiceOneTimePayments.mockImplementation(() => mocks.allPayments);
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.clearAllMocks();
 });
 
 describe("ServiceMetrics", () => {
   it("shows one row per token, in that token's own decimals", () => {
     renderMetrics();
 
-    const notice = "Pays the 30-day notice after you terminate";
-    expect(cellsOf("USDFC")).toEqual(["USDFC", "8.640", "0.420", `9.640${notice}`, "—"]);
-    expect(cellsOf("axlUSDC")).toEqual(["axlUSDC", "0.864", "0", `0.864${notice}`, "—"]);
+    expect(cellsOf("USDFC")).toEqual(["USDFC", "8.640", "0.420", `9.640${NOTICE}`, "—"]);
+    expect(cellsOf("axlUSDC")).toEqual(["axlUSDC", "0.864", "0", `0.864${NOTICE}`, "—"]);
+  });
+
+  it("leaves out an approved token the pair has no rail in", () => {
+    mocks.railTokens = { data: [USDFC.id] };
+
+    renderMetrics();
+
+    expect(screen.getByRole("cell", { name: "USDFC" })).toBeTruthy();
+    expect(screen.queryByRole("cell", { name: "axlUSDC" })).toBeNull();
   });
 
   it("asks for payments from the start of the viewer's current month", () => {
@@ -76,24 +105,72 @@ describe("ServiceMetrics", () => {
     );
   });
 
-  it("shows loading while the metrics load", () => {
-    mocks.query = { isLoading: true };
+  describe("when a pair's payments overflow the first page", () => {
+    const lastWalkOptions = () => mocks.useAccountServiceOneTimePayments.mock.lastCall?.[3];
+
+    it("does not walk the payments of a pair that fits the page", () => {
+      renderMetrics();
+
+      expect(lastWalkOptions().enabled).toBe(false);
+    });
+
+    it("shows the other figures while the rest of the payments load", () => {
+      mocks.metrics = { data: fullFirstPage };
+
+      renderMetrics();
+
+      expect(lastWalkOptions().enabled).toBe(true);
+      expect(cellsOf("USDFC").slice(0, 4)).toEqual(["USDFC", "8.640", "Loading...", `9.640${NOTICE}`]);
+    });
+
+    it("totals every payment once they have loaded, not just the first page", () => {
+      mocks.metrics = { data: fullFirstPage };
+      mocks.allPayments = {
+        data: {
+          items: Array.from({ length: SUBGRAPH_PAGE_SIZE + 5 }, () => ({
+            totalAmount: ONE_TOKEN_THOUSANDTH,
+            token: USDFC,
+          })),
+          reachedPageLimit: false,
+        },
+      };
+
+      renderMetrics();
+
+      expect(cellsOf("USDFC")[2]).toBe("1.005");
+      expect(screen.queryByText(/reached the data limit/)).toBeNull();
+    });
+
+    it("keeps the rest of the table when the payments fail", () => {
+      mocks.metrics = { data: fullFirstPage };
+      mocks.allPayments = { isError: true };
+
+      renderMetrics();
+
+      expect(cellsOf("USDFC").slice(0, 4)).toEqual(["USDFC", "8.640", "Unavailable", `9.640${NOTICE}`]);
+    });
+  });
+
+  it("keeps the heading while the metrics load", () => {
+    mocks.metrics = { isLoading: true };
 
     renderMetrics();
 
+    expect(screen.getByRole("heading", { name: "Spend and funding" })).toBeTruthy();
     expect(screen.getByText("Loading spend and funding...")).toBeTruthy();
   });
 
-  it("shows an error when the metrics fail", () => {
-    mocks.query = { isError: true };
+  it("keeps the heading when the metrics fail", () => {
+    mocks.metrics = { isError: true };
 
     renderMetrics();
 
+    expect(screen.getByRole("heading", { name: "Spend and funding" })).toBeTruthy();
     expect(screen.getByText("Failed to load spend and funding")).toBeTruthy();
   });
 
   it("renders nothing when the pair has no approved token", () => {
-    mocks.query = { data: { ...data, account: { operatorApprovals: [], userTokens: [] } } };
+    mocks.metrics = { data: { ...data, account: { operatorApprovals: [], userTokens: [] } } };
 
     const { container } = renderMetrics();
 
@@ -101,10 +178,21 @@ describe("ServiceMetrics", () => {
   });
 
   it.each([
-    ["rails fill a page", { rails: Array.from({ length: SUBGRAPH_PAGE_SIZE }, () => data.rails[0]) }],
-    ["payments reach their limit", { oneTimePaymentsReachedLimit: true }],
-  ])("warns when the %s", (_, overrides) => {
-    mocks.query = { data: { ...data, ...overrides } };
+    [
+      "rails fill a page",
+      () => {
+        mocks.metrics = { data: { ...data, rails: Array.from({ length: SUBGRAPH_PAGE_SIZE }, () => data.rails[0]) } };
+      },
+    ],
+    [
+      "payments reach their limit",
+      () => {
+        mocks.metrics = { data: fullFirstPage };
+        mocks.allPayments = { data: { items: [], reachedPageLimit: true } };
+      },
+    ],
+  ])("warns when the %s", (_, arrange) => {
+    arrange();
 
     renderMetrics();
 
