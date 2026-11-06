@@ -3,15 +3,17 @@ import type { OperatorApproval } from "@filecoin-pay/types";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
+import type { Network } from "@/types";
 import { createColumns } from "../data/columnDefinitions";
 
 export type ApprovalsTableProps = {
   data: OperatorApproval[];
   onIncrease: (approval: OperatorApproval) => void;
+  network: Network;
 };
 
-function ApprovalsTable({ data, onIncrease }: ApprovalsTableProps) {
-  const columns = useMemo(() => createColumns(onIncrease), [onIncrease]);
+function ApprovalsTable({ data, onIncrease, network }: ApprovalsTableProps) {
+  const columns = useMemo(() => createColumns(onIncrease, network), [onIncrease, network]);
   const table = useReactTable({
     data,
     columns,
