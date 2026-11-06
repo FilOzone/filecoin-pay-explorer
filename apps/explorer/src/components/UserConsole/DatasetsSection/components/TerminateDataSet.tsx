@@ -74,13 +74,13 @@ export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetPro
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className='sm:max-w-lg'>
           <DialogHeader>
-            <DialogTitle>Terminate dataset #{dataSetId}?</DialogTitle>
-            <DialogDescription>Stops paying Warm Storage for this dataset.</DialogDescription>
+            <DialogTitle>Terminate data set #{dataSetId}?</DialogTitle>
+            <DialogDescription>Stops paying Warm Storage for this data set.</DialogDescription>
           </DialogHeader>
 
           <Notice tone='warn'>
             <b>This cannot be undone.</b> Payment continues for up to {TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS.toString()}{" "}
-            days, paid from the funds already locked for this dataset, and then stops. After that the provider can
+            days, paid from the funds already locked for this data set, and then stops. After that the provider can
             delete the data, and it cannot be recovered.
           </Notice>
 
@@ -91,7 +91,7 @@ export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetPro
               onClick={handleTerminate}
               className='rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5'
             >
-              {phase === "pending" ? <InlineTextLoader text='Terminating…' /> : "Terminate dataset"}
+              {phase === "pending" ? <InlineTextLoader text='Terminating…' /> : "Terminate data set"}
             </button>
           </DialogFooter>
         </DialogContent>

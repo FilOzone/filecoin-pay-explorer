@@ -87,14 +87,14 @@ test("terminating a dataset sends terminateService and the row shows it ended", 
 
   const row = page.getByRole("row").filter({ hasText: "PDP Explorer" });
   await row.getByRole("button", { name: "Terminate" }).click({ timeout: 30_000 });
-  const dialog = page.getByRole("dialog", { name: "Terminate dataset #7?" });
+  const dialog = page.getByRole("dialog", { name: "Terminate data set #7?" });
   await expect(dialog).toContainText("This cannot be undone.");
   // Regression: each new block rebuilt the table's columns, remounting the action cell and closing the dialog.
   const openedAtBlock = blockNumber;
   await expect.poll(() => blockNumber, { timeout: 20_000 }).toBeGreaterThan(openedAtBlock + 1);
   // The dialog element itself is a zero-height wrapper, so check what it shows.
-  await expect(dialog.getByRole("heading", { name: "Terminate dataset #7?" })).toBeVisible();
-  await dialog.getByRole("button", { name: "Terminate dataset" }).click();
+  await expect(dialog.getByRole("heading", { name: "Terminate data set #7?" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Terminate data set" }).click();
 
   const wallet = page.locator("#privy-dialog");
   await wallet.getByRole("button", { name: "Approve" }).click();

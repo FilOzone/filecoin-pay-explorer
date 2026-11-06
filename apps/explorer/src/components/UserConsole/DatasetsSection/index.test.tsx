@@ -138,12 +138,12 @@ describe("DatasetsSection", () => {
     const { rerender } = renderSection();
 
     fireEvent.click(screen.getByRole("button", { name: "Terminate" }));
-    expect(screen.getByRole("dialog", { name: "Terminate dataset #7?" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Terminate data set #7?" })).toBeTruthy();
 
     mocks.blockNumber = 2n;
     rerender(section());
 
-    expect(screen.getByRole("dialog", { name: "Terminate dataset #7?" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Terminate data set #7?" })).toBeTruthy();
   });
 
   it("keeps a pending termination on its dataset when a refresh reorders the rows", () => {
@@ -153,7 +153,7 @@ describe("DatasetsSection", () => {
     const { rerender } = renderSection();
 
     fireEvent.click(within(rowOf("7")).getByRole("button", { name: "Terminate" }));
-    fireEvent.click(screen.getByRole("button", { name: "Terminate dataset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Terminate data set" }));
     expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({ args: [7n, "0x"] }));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 

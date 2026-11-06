@@ -109,16 +109,16 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
     case "terminateDataSet":
       return {
         pending: {
-          title: `Terminating Dataset #${metadata.dataSetId}`,
+          title: `Terminating Data Set #${metadata.dataSetId}`,
           description: "Processing termination...",
         },
         success: {
-          title: "Dataset Terminated",
-          description: `Dataset #${metadata.dataSetId} stops paying within ${TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS} days`,
+          title: "Data Set Terminated",
+          description: `Payment for data set #${metadata.dataSetId} ends within ${TIME_CONSTANTS.DEFAULT_LOCKUP_DAYS} days`,
         },
         error: {
           title: "Termination Failed",
-          description: `Failed to terminate Dataset #${metadata.dataSetId}`,
+          description: `Failed to terminate data set #${metadata.dataSetId}`,
         },
       }[status];
 

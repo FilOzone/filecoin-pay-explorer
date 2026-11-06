@@ -43,7 +43,7 @@ const lastExecuteCall = () => {
 
 function openAndConfirm() {
   fireEvent.click(screen.getByRole("button", { name: "Terminate" }));
-  fireEvent.click(screen.getByRole("button", { name: "Terminate dataset" }));
+  fireEvent.click(screen.getByRole("button", { name: "Terminate data set" }));
 }
 
 describe("TerminateDataSet", () => {
@@ -94,7 +94,7 @@ describe("TerminateDataSet", () => {
 
     act(() => lastExecuteCall().onReverted(new Error("reverted")));
 
-    expect(screen.getByRole("button", { name: "Terminate dataset" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Terminate data set" })).toHaveProperty("disabled", false);
   });
 
   it("can be retried after the wallet rejects", async () => {
@@ -102,7 +102,7 @@ describe("TerminateDataSet", () => {
     render(<TerminateDataSet dataSetId={7n} network='mainnet' />);
     openAndConfirm();
 
-    expect(await screen.findByRole("button", { name: "Terminate dataset" })).toHaveProperty("disabled", false);
+    expect(await screen.findByRole("button", { name: "Terminate data set" })).toHaveProperty("disabled", false);
     expect(screen.getByRole("button", { name: "Terminate" })).toHaveProperty("disabled", false);
   });
 });
