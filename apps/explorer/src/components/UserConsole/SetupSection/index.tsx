@@ -270,7 +270,7 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
                   it before leaving this page. It reveals the wallet address, session key address, group ID and expiry —
                   send it only where you intend to share those details. Read how to make encrypted uploads with the CLI
                   and SDK in the{" "}
-                  <ExternalTextLink href='https://github.com/filecoin-project/filecoin-pin/blob/master/documentation/encryption.md'>
+                  <ExternalTextLink href='https://docs.filecoin.cloud/developer-guides/encryption/keysmith-encryption-keys/'>
                     encryption guide
                   </ExternalTextLink>
                   . Once you have imported it, you can close this window.
