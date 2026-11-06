@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatasetsSection } from ".";
 
@@ -53,7 +54,11 @@ const wireRow = {
 
 // A new element each call: rerendering the same element object would let React skip the update.
 const section = () => <DatasetsSection accountId='0x1111111111111111111111111111111111111111' network='mainnet' />;
-const renderSection = () => render(section());
+let queryClient: QueryClient;
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+);
+const renderSection = () => render(section(), { wrapper });
 
 const activeDataSet = (dataSetId: string) => ({ ...wireRow, id: `0x0${dataSetId}`, dataSetId });
 
@@ -71,6 +76,7 @@ const rowOf = (dataSetId: string) => {
 };
 
 beforeEach(() => {
+  queryClient = new QueryClient();
   mocks.blockNumber = undefined;
   mocks.execute.mockReset();
 });
@@ -146,7 +152,7 @@ describe("DatasetsSection", () => {
     expect(screen.getByRole("dialog", { name: "Terminate data set #7?" })).toBeTruthy();
   });
 
-  it("keeps a pending termination on its dataset when a refresh reorders the rows", () => {
+  it("keeps a pending termination on its dataset when a refresh reorders the rows", async () => {
     // Never settles, so the termination stays pending.
     mocks.execute.mockReturnValue(new Promise(() => {}));
     mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("7"), activeDataSet("8")]));
@@ -154,13 +160,30 @@ describe("DatasetsSection", () => {
 
     fireEvent.click(within(rowOf("7")).getByRole("button", { name: "Terminate" }));
     fireEvent.click(screen.getByRole("button", { name: "Terminate data set" }));
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({ args: [7n, "0x"] }));
+    await waitFor(() => expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({ args: [7n, "0x"] })));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("8"), activeDataSet("7")]));
     rerender(section());
 
-    expect(within(rowOf("7")).getByRole("button", { name: "Terminating…" })).toBeTruthy();
+    expect(await within(rowOf("7")).findByRole("button", { name: "Terminating…" })).toBeTruthy();
     expect(within(rowOf("8")).getByRole("button", { name: "Terminate" })).toBeTruthy();
+  });
+
+  it("still shows a pending termination after paging away and back", async () => {
+    mocks.execute.mockReturnValue(new Promise(() => {}));
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("7")]));
+    const { rerender } = renderSection();
+
+    fireEvent.click(within(rowOf("7")).getByRole("button", { name: "Terminate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Terminate data set" }));
+    await waitFor(() => expect(mocks.execute).toHaveBeenCalled());
+
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("8")]));
+    rerender(section());
+    mockUseAccountDataSets.mockReturnValue(loaded([activeDataSet("7")]));
+    rerender(section());
+
+    expect(await within(rowOf("7")).findByRole("button", { name: "Terminating…" })).toHaveProperty("disabled", true);
   });
 });
