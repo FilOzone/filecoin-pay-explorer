@@ -9,7 +9,12 @@ import {
   useAccountTokens,
   useInfiniteAccountApprovals,
 } from "./useAccountDetails";
-import { useAccountService, useAccountServiceRails, useAccountServices } from "./useAccountServices";
+import {
+  useAccountService,
+  useAccountServiceMetrics,
+  useAccountServiceRails,
+  useAccountServices,
+} from "./useAccountServices";
 
 type ObservedQuery = {
   queryKey: readonly unknown[];
@@ -53,6 +58,7 @@ describe("account query ids", () => {
     useAccountServices: (address) => useAccountServices(address),
     useAccountService: (address) => useAccountService(address, "0xoperator"),
     useAccountServiceRails: (address) => useAccountServiceRails(address, "0xoperator"),
+    useAccountServiceMetrics: (address) => useAccountServiceMetrics(address, "0xoperator", 1n),
   };
 
   const readWith = (read: (address: string) => void, address: string) => {
@@ -72,6 +78,7 @@ describe("account query ids", () => {
     Object.entries({
       useAccountService: (operator: string) => useAccountService(LOWERCASE, operator),
       useAccountServiceRails: (operator: string) => useAccountServiceRails(LOWERCASE, operator),
+      useAccountServiceMetrics: (operator: string) => useAccountServiceMetrics(LOWERCASE, operator, 1n),
     }),
   )("%s shares one cache entry between checksummed and lowercase operators", (_, read) => {
     expect(readWith(read, CHECKSUMMED)).toEqual(readWith(read, LOWERCASE));

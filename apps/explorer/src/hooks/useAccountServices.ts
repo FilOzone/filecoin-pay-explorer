@@ -1,8 +1,25 @@
-import type { AccountOperator, Operator, Rail } from "@filecoin-pay/types";
-import { GET_ACCOUNT_OPERATOR, GET_ACCOUNT_OPERATOR_RAILS, GET_ACCOUNT_OPERATORS } from "@/services/grapql/queries";
+import type {
+  AccountOperator,
+  OneTimePayment,
+  Operator,
+  OperatorApproval,
+  Rail,
+  Token,
+  UserToken,
+} from "@filecoin-pay/types";
+import { useQuery } from "@tanstack/react-query";
+import {
+  GET_ACCOUNT_OPERATOR,
+  GET_ACCOUNT_OPERATOR_RAILS,
+  GET_ACCOUNT_OPERATORS,
+  GET_SERVICE_METRICS,
+  GET_SERVICE_ONE_TIME_PAYMENTS,
+} from "@/services/grapql/queries";
 import type { Network } from "@/types";
+import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { toAccountId } from "@/utils/hexUtils";
-import { useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
+import { useGraphQLClient, useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
+import useNetwork from "./useNetwork";
 
 /**
  * Reads a payer's service relationships from the `AccountOperator` projection.
@@ -145,5 +162,79 @@ export const useAccountServiceRails = (
     }),
     enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
+  });
+};
+
+type TokenId = { token: Pick<Token, "id"> };
+
+export interface ServiceMetricsResponse {
+  /** Null when the payer has never been indexed. */
+  account: {
+    operatorApprovals: (Pick<OperatorApproval, "lockupUsage"> & { token: Pick<Token, "id" | "symbol" | "decimals"> })[];
+    userTokens: (Pick<
+      UserToken,
+      "funds" | "lockupCurrent" | "lockupRate" | "lockupLastSettledUntilEpoch" | "lockupLastSettledUntilTimestamp"
+    > &
+      TokenId)[];
+  } | null;
+  /** Only the pair's paying `ACTIVE` rails. */
+  rails: (Pick<Rail, "paymentRate" | "lockupPeriod"> & TokenId)[];
+  /** Only this pair's payments since `monthStart`. */
+  oneTimePayments: (Pick<OneTimePayment, "totalAmount"> & TokenId)[];
+}
+
+export type ServiceMetrics = ServiceMetricsResponse & {
+  /** Payments were left unread, so `oneTimePayments` is an arbitrary subset. */
+  oneTimePaymentsReachedLimit: boolean;
+};
+
+/** Pages the same as the spend chart's history, so both give up at the same point. */
+const SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES = 10;
+
+/** Everything the service metrics table reads, in one request unless the pair's one-time payments overflow a page. */
+export const useAccountServiceMetrics = (
+  address: string,
+  operatorAddress: string,
+  /** Unix seconds. */
+  monthStart: bigint,
+  options?: AccountServicesOptions,
+) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+  const { network: contextNetwork } = useNetwork();
+  const network = options?.networkOverride ?? contextNetwork;
+  const { executeQuery } = useGraphQLClient({ networkOverride: options?.networkOverride });
+
+  return useQuery<ServiceMetrics>({
+    queryKey: ["account", accountId, "services", operatorId, "metrics", monthStart.toString(), network],
+    queryFn: async ({ signal }) => {
+      const pairMonth = {
+        payer: accountId,
+        operator: operatorId,
+        monthStart: monthStart.toString(),
+        first: SUBGRAPH_PAGE_SIZE,
+      };
+      const metrics = await executeQuery<ServiceMetricsResponse>(
+        GET_SERVICE_METRICS,
+        { accountId, ...pairMonth },
+        signal,
+      );
+      if (metrics.oneTimePayments.length < SUBGRAPH_PAGE_SIZE) {
+        return { ...metrics, oneTimePaymentsReachedLimit: false };
+      }
+
+      // Busy pairs make thousands of these a month. Restarting from the first page costs them one extra read.
+      const { items, reachedPageLimit } = await fetchAllPages<
+        Pick<OneTimePayment, "id"> & ServiceMetricsResponse["oneTimePayments"][number]
+      >(async (cursor) => {
+        const page = await executeQuery<{
+          oneTimePayments: (Pick<OneTimePayment, "id"> & ServiceMetricsResponse["oneTimePayments"][number])[];
+        }>(GET_SERVICE_ONE_TIME_PAYMENTS, { ...pairMonth, cursor }, signal);
+        return page.oneTimePayments;
+      }, SERVICE_ONE_TIME_PAYMENTS_MAX_PAGES);
+
+      return { ...metrics, oneTimePayments: items, oneTimePaymentsReachedLimit: reachedPageLimit };
+    },
+    enabled: !!accountId && !!operatorId,
   });
 };

@@ -17,7 +17,13 @@ export type FundedUntil = {
  * Rolls a token's on-chain lockup forward to `currentTimestamp` and derives the
  * four figures the funds overview reports. Call once per selected token.
  */
-export const calculateFundedUntil = (userToken: UserToken, currentTimestamp: bigint): FundedUntil => {
+export const calculateFundedUntil = (
+  userToken: Pick<
+    UserToken,
+    "funds" | "lockupCurrent" | "lockupRate" | "lockupLastSettledUntilEpoch" | "lockupLastSettledUntilTimestamp"
+  >,
+  currentTimestamp: bigint,
+): FundedUntil => {
   const funds = BigInt(userToken.funds);
   const lockupCurrent = BigInt(userToken.lockupCurrent);
   const lastSettledAt = BigInt(userToken.lockupLastSettledUntilEpoch);
