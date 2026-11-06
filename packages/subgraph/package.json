@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@filecoin-pay/configs": "workspace:*",
-    "@filoz/synapse-core": "^0.9.0",
+    "@filoz/synapse-core": "^0.10.2",
     "assemblyscript": "0.19.23",
     "matchstick-as": "^0.6.0",
     "mustache": "^4.2.0",
