@@ -3,10 +3,13 @@ import type { DataSet } from "@filecoin-pay/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Info } from "lucide-react";
+import { useBlockNumber } from "wagmi";
 import { CopyableText, RailStateBadge, StyledLink } from "@/components/shared";
+import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatBytes, formatDate } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
+import { TerminateDataSet } from "../components/TerminateDataSet";
 import { monthlyDataSetSpend } from "./monthlySpend";
 
 const columnHelper = createColumnHelper<DataSet>();
@@ -15,7 +18,19 @@ const columnHelper = createColumnHelper<DataSet>();
 const pdpExplorerUrl = (network: Network, dataSetId: bigint) =>
   `https://pdp.filecoin.cloud/${network}/dataset/${dataSetId}`;
 
-export const getDatasetColumns = (network: Network, currentEpoch: bigint | undefined) => [
+// Reads the epoch itself so a new block re-renders only this cell; columns built from it would remount every cell.
+function MonthlySpend({ dataSet, network }: { dataSet: DataSet; network: Network }) {
+  const { data: currentEpoch } = useBlockNumber({ chainId: getChain(network).id, watch: true });
+  const { token } = dataSet.pdpRail;
+  const monthlySpend = monthlyDataSetSpend(dataSet, currentEpoch);
+  return (
+    <div className='text-right font-medium text-sm tabular-nums'>
+      {monthlySpend === undefined ? "—" : `${formatTokenAmount(monthlySpend, token.decimals, "up")} ${token.symbol}`}
+    </div>
+  );
+}
+
+export const getDatasetColumns = (network: Network) => [
   columnHelper.accessor("dataSetId", {
     id: "dataSetId",
     header: "ID",
@@ -70,18 +85,7 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
         </Tooltip>
       </div>
     ),
-    cell: (info) => {
-      const dataSet = info.row.original;
-      const { token } = dataSet.pdpRail;
-      const monthlySpend = monthlyDataSetSpend(dataSet, currentEpoch);
-      return (
-        <div className='text-right font-medium text-sm tabular-nums'>
-          {monthlySpend === undefined
-            ? "—"
-            : `${formatTokenAmount(monthlySpend, token.decimals, "up")} ${token.symbol}`}
-        </div>
-      );
-    },
+    cell: (info) => <MonthlySpend dataSet={info.row.original} network={network} />,
   }),
   columnHelper.display({
     id: "provingStatus",
@@ -96,5 +100,15 @@ export const getDatasetColumns = (network: Network, currentEpoch: bigint | undef
         PDP Explorer
       </StyledLink>
     ),
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: () => <span className='sr-only'>Actions</span>,
+    cell: (info) => {
+      const dataSet = info.row.original;
+      const { state } = dataSet.pdpRail;
+      if (state === "TERMINATED" || state === "FINALIZED") return null;
+      return <TerminateDataSet dataSetId={dataSet.dataSetId} network={network} />;
+    },
   }),
 ];
