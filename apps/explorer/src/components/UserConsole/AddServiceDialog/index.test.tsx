@@ -84,8 +84,10 @@ vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
   useFundingLaunch: () => ({ isSquidOpen: mocks.isSquidOpen, openSquid: mocks.openSquid }),
 }));
 vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
+  useExistingApproval: () => ({ status: "not-approved", refresh: vi.fn().mockResolvedValue("not-approved") }),
   useServiceSelection: () => ({
     services: mocks.services,
     isLoadingServices: false,

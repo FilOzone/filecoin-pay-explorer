@@ -256,6 +256,45 @@ export function useFilecoinGasBalance(network: Network, open: boolean) {
   };
 }
 
+/** Where the selected service and token stand: an approval is per token, so another token can still be added. */
+export type ExistingApprovalStatus = "idle" | "loading" | "unreadable" | "approved" | "not-approved";
+
+function readExistingApproval(isApproved: boolean | undefined, isError: boolean): ExistingApprovalStatus {
+  if (isError || isApproved === undefined) return "unreadable";
+  return isApproved ? "approved" : "not-approved";
+}
+
+export function useExistingApproval(
+  network: Network,
+  operator: Hex | undefined,
+  token: Hex | undefined,
+  open: boolean,
+) {
+  const chain = getChain(network);
+  const { address: owner } = useAccount();
+  const args = owner && operator && token ? ([token, owner, operator] as const) : undefined;
+  const enabled = !!args && open;
+  // From the chain, not the subgraph: a removed service keeps its AccountOperator row, and indexing lags.
+  const { data, isError, isFetching, refetch } = useReadContract({
+    address: chain.contracts.payments.address,
+    abi: chain.contracts.payments.abi,
+    chainId: chain.id,
+    functionName: "operatorApprovals",
+    args,
+    query: { enabled },
+  });
+  const status: ExistingApprovalStatus = (() => {
+    if (!enabled) return "idle";
+    if (isFetching && data === undefined) return "loading";
+    return readExistingApproval(data?.[0], isError);
+  })();
+  const refresh = useCallback(async () => {
+    const result = await refetch();
+    return readExistingApproval(result.data?.[0], result.isError);
+  }, [refetch]);
+  return { status, refresh };
+}
+
 export interface SubmitArgs {
   operatorAddress: `0x${string}`;
   token: PaymentTokenDetails;

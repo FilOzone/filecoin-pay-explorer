@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import {
   decodeFunctionData,
+  encodeAbiParameters,
   encodeFunctionResult,
   erc20Abi,
   type Hex,
@@ -32,6 +33,8 @@ const operatorApprovalsAbi = parseAbi([
   "function operatorApprovals(address token, address client, address operator) view returns (bool isApproved, uint256 rateAllowance, uint256 lockupAllowance, uint256 rateUsage, uint256 lockupUsage, uint256 maxLockupPeriod)",
 ]);
 const OPERATOR_APPROVALS = toFunctionSelector(operatorApprovalsAbi[0]);
+// The service page reads an approved service's onchain identity; empty strings leave its local label.
+const SERVICE_METADATA = ["name()", "description()", "homepage()"].map((signature) => toFunctionSelector(signature));
 // The card purchase checks the recipient's USDC on Base before and after buying.
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
@@ -78,6 +81,11 @@ export async function installFakeChain(page: Page): Promise<void> {
       result: [isApproved, limit, limit, 0n, 0n, isApproved ? 86400n : 0n],
     });
   };
+
+  const readServiceMetadata = (approved: string[], target: string, data: Hex): Hex | undefined =>
+    approved.includes(target.toLowerCase()) && SERVICE_METADATA.some((selector) => data.startsWith(selector))
+      ? encodeAbiParameters([{ type: "string" }], [""])
+      : undefined;
 
   const sent = () =>
     page.evaluate(
@@ -165,7 +173,7 @@ export async function installFakeChain(page: Page): Promise<void> {
     const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
       if (registryAt(c.target)) return readRegistry(txs, c.callData);
       if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
-      return readBalance(c.target, c.callData, usdfc);
+      return readBalance(c.target, c.callData, usdfc) ?? readServiceMetadata(approved, c.target, c.callData);
     });
     if (!results.every((r): r is Hex => r !== undefined)) return undefined;
     return encodeFunctionResult({
