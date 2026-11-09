@@ -167,7 +167,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
-  const existingApproval = useExistingApproval(network, operatorAddress, token?.address as Hex | undefined, open);
+  const existingApproval = useExistingApproval(network, operatorAddress, token?.address, open);
   const alreadyAdded = existingApproval.status === "approved";
 
   // A funding link fills the form once per opening, after the service list has

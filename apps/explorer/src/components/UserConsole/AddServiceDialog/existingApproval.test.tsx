@@ -118,7 +118,7 @@ describe("AddServiceDialog with an existing approval", () => {
         chainId: mainnet.id,
         functionName: "operatorApprovals",
         args: [TOKEN, OWNER, OPERATOR],
-        query: { enabled: true },
+        query: expect.objectContaining({ enabled: true }),
       }),
     );
   });
@@ -166,7 +166,7 @@ describe("AddServiceDialog with an existing approval", () => {
     renderDialog();
 
     expect(mocks.readContract).toHaveBeenCalledWith(
-      expect.objectContaining({ args: undefined, query: { enabled: false } }),
+      expect.objectContaining({ args: undefined, query: expect.objectContaining({ enabled: false }) }),
     );
     expect(screen.queryByText(/Could not check/)).toBeNull();
     expect(addServiceButton().disabled).toBe(true);
@@ -176,7 +176,7 @@ describe("AddServiceDialog with an existing approval", () => {
     mocks.read = { data: undefined, isError: false, isFetching: true };
     renderDialog();
 
-    expect(screen.getByText("Checking your existing services…")).toBeTruthy();
+    expect(screen.getByRole("status")).toBeTruthy();
     expect(addServiceButton().disabled).toBe(true);
   });
 

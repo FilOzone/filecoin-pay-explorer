@@ -78,7 +78,7 @@ export function useServiceSelection(network: Network): ServiceSelection {
 
 /** A payment token the dialog can act on, curated or resolved from chain reads. */
 export interface PaymentTokenDetails {
-  address: string;
+  address: Hex;
   symbol: string;
   decimals: number;
   name?: string;
@@ -197,7 +197,7 @@ export function useTokenSelection(network: Network, open: boolean): TokenSelecti
   })();
 
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
-    address: (token?.address as Hex | undefined) ?? undefined,
+    address: token?.address,
     abi: erc20Abi,
     chainId,
     functionName: "balanceOf",
@@ -257,9 +257,9 @@ export function useFilecoinGasBalance(network: Network, open: boolean) {
 }
 
 /** Where the selected service and token stand: an approval is per token, so another token can still be added. */
-export type ExistingApprovalStatus = "idle" | "loading" | "unreadable" | "approved" | "not-approved";
+type ExistingApprovalStatus = "idle" | "loading" | "unreadable" | "approved" | "not-approved";
 
-function readExistingApproval(isApproved: boolean | undefined, isError: boolean): ExistingApprovalStatus {
+function existingApprovalStatus(isApproved: boolean | undefined, isError: boolean): ExistingApprovalStatus {
   if (isError || isApproved === undefined) return "unreadable";
   return isApproved ? "approved" : "not-approved";
 }
@@ -286,11 +286,11 @@ export function useExistingApproval(
   const status: ExistingApprovalStatus = (() => {
     if (!enabled) return "idle";
     if (isFetching && data === undefined) return "loading";
-    return readExistingApproval(data?.[0], isError);
+    return existingApprovalStatus(data?.[0], isError);
   })();
   const refresh = useCallback(async () => {
     const result = await refetch();
-    return readExistingApproval(result.data?.[0], result.isError);
+    return existingApprovalStatus(result.data?.[0], result.isError);
   }, [refetch]);
   return { status, refresh };
 }
@@ -330,7 +330,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
     lockupInWei,
     rateInWei,
   }: SubmitArgs) => {
-    const tokenAddress = token.address as `0x${string}`;
+    const tokenAddress = token.address;
     setIsSubmitting(true);
     try {
       if (parsedDeposit !== null && parsedDeposit > 0n) {

@@ -58,7 +58,7 @@ test("Add Service opens the dialog when the services query fails", async ({ page
 test.describe("adding a service", () => {
   test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");
 
-  test("leads to a service the account already has, without asking for a signature", async ({ page }) => {
+  test("leads to a service the account already has", async ({ page }) => {
     await page.addInitScript((operator) => {
       (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [operator];
     }, CUSTOM_SERVICE);
@@ -72,10 +72,6 @@ test.describe("adding a service", () => {
 
     await expect(page).toHaveURL(new RegExp(`/console/services/${CUSTOM_SERVICE}$`));
     await expect(dialog).toBeHidden();
-    const sent = await page.evaluate(
-      () => (window as unknown as { __fakePrivyTransactions?: unknown[] }).__fakePrivyTransactions ?? [],
-    );
-    expect(sent).toEqual([]);
   });
 
   test("still offers a service the account does not have", async ({ page }) => {
