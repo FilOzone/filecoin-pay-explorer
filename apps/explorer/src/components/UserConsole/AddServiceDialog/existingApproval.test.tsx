@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("wagmi", () => ({
-  useAccount: () => ({ address: "0x3333333333333333333333333333333333333333" }),
+  useAccount: () => ({ address: OWNER }),
   useReadContract: (config: unknown) => {
     mocks.readContract(config);
     return { ...mocks.read, refetch: mocks.refetch };

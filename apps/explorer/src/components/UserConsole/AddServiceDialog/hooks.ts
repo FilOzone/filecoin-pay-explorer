@@ -288,10 +288,10 @@ export function useExistingApproval(
     if (isFetching && data === undefined) return "loading";
     return existingApprovalStatus(data?.[0], isError);
   })();
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     const result = await refetch();
     return existingApprovalStatus(result.data?.[0], result.isError);
-  }, [refetch]);
+  };
   return { status, refresh };
 }
 
@@ -330,7 +330,6 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
     lockupInWei,
     rateInWei,
   }: SubmitArgs) => {
-    const tokenAddress = token.address;
     setIsSubmitting(true);
     try {
       if (parsedDeposit !== null && parsedDeposit > 0n) {
@@ -346,7 +345,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
         try {
           permitSignature = await getPermitSignature(
             {
-              tokenAddress,
+              tokenAddress: token.address,
               tokenName: token.name,
               ownerAddress: userAddress,
               spenderAddress: chain.contracts.payments.address,
@@ -372,7 +371,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
         await execute({
           functionName: "depositWithPermitAndApproveOperator",
           args: [
-            tokenAddress,
+            token.address,
             userAddress,
             parsedDeposit,
             permitSignature.deadline,
@@ -391,12 +390,12 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
             operator: operatorAddress,
           },
           onSubmitOnChain,
-          onConfirmed: () => trackDepositConfirmed(chain.id, tokenAddress, parsedDeposit),
+          onConfirmed: () => trackDepositConfirmed(chain.id, token.address, parsedDeposit),
         });
       } else {
         await execute({
           functionName: "setOperatorApproval",
-          args: [tokenAddress, operatorAddress, true, rateInWei, lockupInWei, DEFAULT_MAX_LOCKUP_PERIOD],
+          args: [token.address, operatorAddress, true, rateInWei, lockupInWei, DEFAULT_MAX_LOCKUP_PERIOD],
           metadata: {
             type: "approveOperator",
             operator: operatorAddress,

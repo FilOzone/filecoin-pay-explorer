@@ -7,30 +7,24 @@ test.use({ bypassCSP: true });
 
 const CUSTOM_SERVICE = "0x4444444444444444444444444444444444444444";
 
-function answerConsoleQueries(page: Page) {
-  return Promise.all([
-    page.route(
-      // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
-      (url) => url.hostname === "api.goldsky.com" || url.hostname === "placeholder.invalid",
-      (route) => {
-        const query = route.request().postData() ?? "";
-        if (query.includes("GetAccountOperators")) return route.fulfill({ status: 500, body: "boom" });
-        if (query.includes("GetAccountDetails")) {
-          const account = { id: "0x1", address: "0x1", totalRails: "0", totalTokens: "0", totalApprovals: "0" };
-          return route.fulfill({ json: { data: { accounts: [account] } } });
-        }
-        return route.fulfill({ json: { data: { accounts: [], userTokens: [], operatorApprovals: [] } } });
-      },
-    ),
-    page.route(
-      (url) => url.hostname === "notification-api-production.filoz.workers.dev",
-      (route) => route.fulfill({ json: { subscribed: false } }),
-    ),
-  ]);
-}
-
 async function openDialog(page: Page, email: string) {
-  await answerConsoleQueries(page);
+  await page.route(
+    // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
+    (url) => url.hostname === "api.goldsky.com" || url.hostname === "placeholder.invalid",
+    (route) => {
+      const query = route.request().postData() ?? "";
+      if (query.includes("GetAccountOperators")) return route.fulfill({ status: 500, body: "boom" });
+      if (query.includes("GetAccountDetails")) {
+        const account = { id: "0x1", address: "0x1", totalRails: "0", totalTokens: "0", totalApprovals: "0" };
+        return route.fulfill({ json: { data: { accounts: [account] } } });
+      }
+      return route.fulfill({ json: { data: { accounts: [], userTokens: [], operatorApprovals: [] } } });
+    },
+  );
+  await page.route(
+    (url) => url.hostname === "notification-api-production.filoz.workers.dev",
+    (route) => route.fulfill({ json: { subscribed: false } }),
+  );
   await page.goto("/console");
   await loginWithTestAccount(page, { email });
   await expect(page.getByText("Failed to load services")).toBeVisible({ timeout: 30_000 });
