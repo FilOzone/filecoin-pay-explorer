@@ -1,8 +1,9 @@
 import { ErrorStateCard } from "@filecoin-foundation/ui-filecoin/ErrorStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { createColumnHelper, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Info } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
@@ -19,6 +20,20 @@ import { buildServiceMetricsRows, type ServiceMetricsRow } from "../utils/buildS
 
 const columnHelper = createColumnHelper<ServiceMetricsRow>();
 
+const HeaderWithHint = ({ label, hint }: { label: string; hint: string }) => (
+  <div className='flex items-center gap-1.5'>
+    {label}
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger className='inline-flex items-center cursor-help' aria-label={`Explain ${label.toLowerCase()}`}>
+        <Info className='h-3.5 w-3.5 text-muted-foreground' />
+      </TooltipTrigger>
+      <TooltipContent side='top' className='max-w-xs'>
+        {hint}
+      </TooltipContent>
+    </Tooltip>
+  </div>
+);
+
 const columns = [
   columnHelper.display({
     id: "token",
@@ -27,7 +42,12 @@ const columns = [
   }),
   columnHelper.display({
     id: "recurring",
-    header: "Recurring / month",
+    header: () => (
+      <HeaderWithHint
+        label='Recurring / month'
+        hint="What this service's active rails charge over 30 days at their current rates. Rails in their notice period are not included."
+      />
+    ),
     cell: ({ row }) => {
       const { recurringPerMonth, token } = row.original;
       return <span className='tabular-nums'>{formatTokenAmount(recurringPerMonth, token.decimals)}</span>;
@@ -35,7 +55,12 @@ const columns = [
   }),
   columnHelper.display({
     id: "oneTime",
-    header: "One-time, this month",
+    header: () => (
+      <HeaderWithHint
+        label='One-time, this month'
+        hint='One-off charges from this service since the start of this month in your local time, including fees.'
+      />
+    ),
     cell: ({ row }) => {
       const { oneTimeThisMonth, token } = row.original;
       if (oneTimeThisMonth === "loading") return "Loading...";
@@ -45,7 +70,12 @@ const columns = [
   }),
   columnHelper.display({
     id: "locked",
-    header: "Locked deposit",
+    header: () => (
+      <HeaderWithHint
+        label='Locked deposit'
+        hint="The part of your deposit reserved for this service, which you can't withdraw. A terminated rail's deposit stays here until the rail finalizes."
+      />
+    ),
     cell: ({ row }) => {
       const { lockedDeposit, noticeCopy, token } = row.original;
 

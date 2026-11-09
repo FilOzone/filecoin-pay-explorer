@@ -83,6 +83,14 @@ describe("ServiceMetrics", () => {
     expect(cellsOf("axlUSDC")).toEqual(["axlUSDC", "0.864", "0", `0.864${NOTICE}`, "—"]);
   });
 
+  it("explains the three columns whose figures follow a rule", () => {
+    renderMetrics();
+
+    expect(screen.getAllByRole("button", { name: /^Explain / }).map((hint) => hint.getAttribute("aria-label"))).toEqual(
+      ["Explain recurring / month", "Explain one-time, this month", "Explain locked deposit"],
+    );
+  });
+
   it("leaves out an approved token the pair has no rail in", () => {
     mocks.railTokens = { data: [USDFC.id] };
 

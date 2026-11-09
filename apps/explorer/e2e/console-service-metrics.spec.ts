@@ -124,6 +124,31 @@ test("the service page shows each token its rails are in on its own row", async 
   expect(metricsRequests[0]?.operator).toBe(OPERATOR);
 });
 
+test("the figures that follow a rule explain it on their column header", async ({ page }) => {
+  await stubServicePage(page, ({ query }) => {
+    if (!query.includes("GetServiceMetrics")) return undefined;
+    return {
+      account: {
+        operatorApprovals: [{ lockupUsage: "8640000000000000000", token: USDFC }],
+        userTokens: [userToken(USDFC, "11664000000000000000", "100000000000000")],
+      },
+      rails: [rail(USDFC, "100000000000000")],
+      oneTimePayments: [],
+    };
+  });
+
+  await openServicePage(page, "service-metrics-hints@fake-privy.test");
+
+  for (const [column, hint] of [
+    ["recurring / month", "Rails in their notice period are not included."],
+    ["one-time, this month", "since the start of this month in your local time, including fees."],
+    ["locked deposit", "A terminated rail's deposit stays here until the rail finalizes."],
+  ]) {
+    await page.getByRole("button", { name: `Explain ${column}` }).hover();
+    await expect(page.locator('[data-slot="tooltip-content"]', { hasText: hint })).toBeVisible();
+  }
+});
+
 test("a busy pair sees its figures before its one-time total finishes loading", async ({ page }) => {
   let finishWalk = () => {};
   const walkFinished = new Promise<void>((resolve) => {
