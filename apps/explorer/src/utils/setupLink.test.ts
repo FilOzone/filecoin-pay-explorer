@@ -315,7 +315,21 @@ describe("parseSetupLink: pubkey and pubkeysig", () => {
   it("refuses an encryption request for a session key without addPieces", () => {
     const query = `authorize=${SESSION.address}&scopes=createDataSet&network=calibration&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}&node=keyspace`;
     assert.deepEqual(link(query), { error: "pubkey-without-add-pieces" });
-    assert.ok(!("error" in link(query.replace("scopes=createDataSet", "scopes=createDataSet,addPieces"))));
+  });
+
+  it("reads the same encryption request once the session key has addPieces", () => {
+    const result = link(
+      `authorize=${SESSION.address}&scopes=createDataSet,addPieces&network=calibration&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}&node=keyspace`,
+    );
+    assert.ok(!("error" in result));
+    assert.equal(result.keyAgreement?.node, "keyspace");
+  });
+
+  it("refuses a group or depth request for a session key without addPieces, even with no pubkey", () => {
+    const noAddPieces = (extra: string) =>
+      link(`authorize=${SESSION.address}&scopes=createDataSet&network=calibration${extra}`);
+    assert.deepEqual(noAddPieces("&node=scope:photos"), { error: "pubkey-without-add-pieces" });
+    assert.deepEqual(noAddPieces("&maxdepth=3"), { error: "pubkey-without-add-pieces" });
   });
 
   it("refuses any node but the whole group key or a group", () => {

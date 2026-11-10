@@ -194,8 +194,13 @@ describe("issueGroupKeyGrant", () => {
     assert.equal(reaches(claim.node, piece("photos")), false);
   });
 
-  it("allows onward delegation up to the chain limit by default", () => {
-    assert.equal(MAX_GRANT_DEPTH, 7);
+  it("signs maxDepth 0 when the link allows no onward delegation", async () => {
+    const text = await issueGroupKeyGrant(OWNER, { ...input, commitment: null, maxDepth: 0 });
+    const { chain } = await openDelivery(SESSION_KEY, decode(text), { now: 1_800_000_000 });
+    assert.deepEqual(
+      chain.links.map((link) => link.maxDepth),
+      [0],
+    );
   });
 
   it("encodes the Grant without padding whatever its length, as on mainnet", async () => {

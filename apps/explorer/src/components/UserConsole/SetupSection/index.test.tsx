@@ -4,7 +4,6 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { getAddress, maxUint256 } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChain } from "@/constants/chains";
-import { MAX_GRANT_DEPTH } from "@/utils/groupKeyGrant";
 import SetupSection from ".";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -260,7 +259,7 @@ describe("SetupSection", () => {
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
       sessionKey: KEY,
       expires: null,
-      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace", maxDepth: MAX_GRANT_DEPTH },
+      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace", maxDepth: 7 },
     });
     cleanup();
 

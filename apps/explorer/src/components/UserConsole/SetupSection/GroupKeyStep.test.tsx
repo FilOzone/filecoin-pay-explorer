@@ -388,6 +388,17 @@ describe("GroupKeyStep", () => {
     expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
   });
 
+  it("signs a group request as the link asked, node and depth, when the owner does not narrow it", async () => {
+    await renderStep({ node: "scope:photos/2026", maxDepth: 2 });
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+
+    await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026", maxDepth: 2, bearer: SESSION.address });
+    expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(GRANT);
+  });
+
   const option = (name: string) => screen.getByRole("radio", { name }) as HTMLInputElement;
   const options = () => screen.queryAllByRole("radio").map((radio) => (radio as HTMLInputElement).value);
   /** Opens the inline input under `under` (its accessible name) and types `name` into it. */
