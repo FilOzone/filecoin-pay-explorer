@@ -13,6 +13,7 @@ import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatAddress } from "@/utils/formatter";
+import { MAX_GRANT_DEPTH } from "@/utils/groupKeyGrant";
 import { parseSetupLink, type SetupLinkError, type SetupRequest } from "@/utils/setupLink";
 import { type AvailableFunds, DepositServiceStep, useSetupFunds, useWarmStorageApproval } from "./DepositServiceStep";
 import {
@@ -38,7 +39,12 @@ const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
   "pubkey-without-key": "The encryption request does not identify a recipient session key.",
   "bad-pubkey": "The recipient’s encryption public key is invalid.",
   "bad-pubkeysig": "The signature binding the encryption public key to the session key is missing or invalid.",
-  "bad-node": "This request asks for partial encryption access. This page supports only whole group keys.",
+  "pubkey-without-add-pieces":
+    "The encryption request is for a session key that cannot add pieces. Encryption needs the addPieces scope.",
+  "bad-node": "The encryption request does not name a supported group: it must be the whole group key or one group.",
+  "bad-group":
+    'The requested encryption group is not a valid group name: use names separated by "/", none empty and none starting or ending with a space.',
+  "bad-maxdepth": `The requested onward delegation depth is invalid: it must be a whole number from 0 to ${MAX_GRANT_DEPTH}.`,
 };
 
 const NetworkName = ({ network }: { network: Network }) => <span className='capitalize'>{network}</span>;

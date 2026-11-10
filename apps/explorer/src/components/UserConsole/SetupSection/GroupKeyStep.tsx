@@ -2,6 +2,7 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
+import { cn } from "@filecoin-pay/ui/lib/utils";
 import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
 import { paginate } from "@filoz/synapse-core";
 import { dataSetLiveCall } from "@filoz/synapse-core/pdp-verifier";
@@ -11,21 +12,40 @@ import {
   parseAllDataSetMetadata,
 } from "@filoz/synapse-core/warm-storage";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CircleHelp } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleHelp, Plus } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
 import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
-import { type ChosenGroupKey, chooseGroupKey, type GroupKeyDataSet, issueGroupKeyGrant } from "@/utils/groupKeyGrant";
+import {
+  type ChosenGroupKey,
+  chooseGroupKey,
+  type GroupGrantNode,
+  type GroupKeyDataSet,
+  groupPath,
+  issueGroupKeyGrant,
+} from "@/utils/groupKeyGrant";
 import { waitForPrivyModalToClose } from "@/utils/privy-modal";
 import { type KeyAgreementRequest, verifyKeyAgreementKey } from "@/utils/setupLink";
 import { type GroupKeyPhase, groupKeyPhase } from "./data/setupStatus";
 import { Detail, SetupStep, type StepTone } from "./SetupStep";
 
-export const GROUP_KEY_WARNING =
-  "Only continue if you trust this tool with every data set created and every piece uploaded under this group key. Revoking the session key or letting it expire only ends its scopes — it does not take back the encryption key: anyone who obtained it keeps decrypting everything under this group key, existing and future uploads, and can share the contents or the key with others.";
+/** The group a node names, or null for the whole group key. */
+const groupOf = (node: GroupGrantNode) => (node === "keyspace" ? null : node.slice("scope:".length));
+
+/** What signing gives away, for the node it signs for. */
+export function groupKeyWarning(node: GroupGrantNode): string {
+  const group = groupOf(node);
+  const what =
+    group === null
+      ? "every data set created and every piece uploaded under this group key"
+      : `every piece uploaded under the group "${group}" and the groups beneath it`;
+  const under = group === null ? "this group key" : "this group";
+  return `Only continue if you trust this tool with ${what}. Revoking the session key or letting it expire only ends its scopes — it does not take back the encryption key: anyone who obtained it keeps decrypting everything under ${under}, existing and future uploads, and can share the contents or the key with others.`;
+}
 
 /**
  * Which group key the owner's live data sets settle on, by the rule shared with
@@ -167,14 +187,14 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
   }
 };
 
-const GrantOutput = ({ grant }: { grant: string }) => (
+const GrantOutput = ({ id, node, grant }: { id: string; node: GroupGrantNode; grant: string }) => (
   <div className='mt-4 flex flex-col gap-2'>
-    <label htmlFor='group-key-grant' className='text-sm font-medium'>
-      Encryption Grant for this session key
+    <label htmlFor={id} className='text-sm font-medium'>
+      {node === "keyspace" ? "Encryption Grant for this session key" : `Encryption Grant for group ${groupOf(node)}`}
     </label>
     <div className='flex items-start gap-2'>
       <textarea
-        id='group-key-grant'
+        id={id}
         readOnly
         rows={4}
         value={grant}
@@ -186,28 +206,260 @@ const GrantOutput = ({ grant }: { grant: string }) => (
 );
 
 /** The chosen group key: a new one, or the one the owner's data sets record. */
-const GroupKeyDetail = ({ groupKey }: { groupKey: ChosenGroupKey | null }) => {
+const GroupKeyDetail = ({ groupKey, whole }: { groupKey: ChosenGroupKey | null; whole: boolean }) => {
   if (!groupKey) return "Not chosen yet";
   return (
     <>
       <span className='font-mono text-xs break-all'>{groupKey.groupKeyId}</span>
       <span className='mt-0.5 block text-xs text-muted-foreground'>
-        Public identifier, not the secret key. Access covers everything encrypted with this group key — existing and
-        future uploads.
+        {whole
+          ? "Public identifier, not the secret key. Access covers everything encrypted with this group key — existing and future uploads."
+          : "Public identifier, not the secret key. The group below sits inside this group key."}
       </span>
     </>
   );
 };
 
+/** The group the Grant opens, in plain words. */
+const AccessText = ({ node }: { node: GroupGrantNode }) => {
+  const group = groupOf(node);
+  if (group === null) {
+    return (
+      <span className='block'>
+        <span className='font-medium'>Whole group key.</span> This tool can read and write everything under this group
+        key.
+      </span>
+    );
+  }
+  return (
+    <span className='block'>
+      This tool can read and write <code className='font-mono'>{group}</code> only, with the groups beneath it.
+    </span>
+  );
+};
+
+/** The group a node sits under: the next group up, or the whole group key for a top-level group. */
+const parentOf = (node: GroupGrantNode): GroupGrantNode => {
+  const group = groupOf(node) ?? "";
+  const cut = group.lastIndexOf("/");
+  return cut === -1 ? "keyspace" : `scope:${group.slice(0, cut)}`;
+};
+
+/** A tree row's elbow: a short rule from its parent's guide line into the row. */
+const ELBOW =
+  "relative before:absolute before:top-4 before:-left-3 before:w-2.5 before:border-t before:border-zinc-200 dark:before:border-zinc-700";
+
+/** How a node reads in the tree: its last name, or "Whole group key". */
+const nodeLabel = (node: GroupGrantNode) => groupOf(node)?.split("/").at(-1) ?? "Whole group key";
+/** How a node reads in a label or sentence: its full path, or "the whole group key". */
+const nodeName = (node: GroupGrantNode) => groupOf(node) ?? "the whole group key";
+
+/** The groups above a requested group, outermost first: shown for context, never selectable. */
+const ancestorsOf = (node: GroupGrantNode): GroupGrantNode[] => {
+  const names = groupOf(node)?.split("/") ?? [];
+  return names.slice(0, -1).map((_, i) => `scope:${names.slice(0, i + 1).join("/")}` as const);
+};
+
+/**
+ * The requested node and the groups the owner added beneath it this visit, as
+ * a collapsible tree, one row per group name. The requested group and the
+ * groups beneath it are radio options: the selected one is what the Grant
+ * opens. The groups above a requested group are shown muted, for context
+ * only, since the owner may narrow a request but never widen it. No list of
+ * existing groups is shown: nothing on chain records them.
+ */
+const GroupTree = ({
+  root,
+  added,
+  selected,
+  onSelect,
+  onAdd,
+}: {
+  root: GroupGrantNode;
+  added: readonly GroupGrantNode[];
+  selected: GroupGrantNode;
+  onSelect: (node: GroupGrantNode) => void;
+  onAdd: (node: GroupGrantNode) => void;
+}) => {
+  const [adding, setAdding] = useState<GroupGrantNode | null>(null);
+  const [segment, setSegment] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<GroupGrantNode>>(new Set());
+  const ancestors = ancestorsOf(root);
+  const close = () => {
+    setAdding(null);
+    setSegment("");
+    setInvalid(false);
+  };
+  const add = (parent: GroupGrantNode) => {
+    const base = groupOf(parent);
+    // One name per add: a "/" would add several levels at once.
+    const path = segment.includes("/") ? null : groupPath(base === null ? segment : `${base}/${segment}`);
+    if (path === null) {
+      setInvalid(true);
+      return;
+    }
+    onAdd(`scope:${path}`);
+    close();
+  };
+  const toggle = (node: GroupGrantNode) =>
+    setCollapsed((nodes) => {
+      const next = new Set(nodes);
+      if (!next.delete(node)) next.add(node);
+      return next;
+    });
+  // An ancestor's only child is the next group down toward the request; anything else, the groups added beneath it.
+  const childrenOf = (node: GroupGrantNode): GroupGrantNode[] => {
+    const i = ancestors.indexOf(node);
+    if (i !== -1) return [ancestors[i + 1] ?? root];
+    return added.filter((child) => parentOf(child) === node);
+  };
+
+  const row = (node: GroupGrantNode, nested: boolean): ReactNode => {
+    const name = nodeName(node);
+    const kids = childrenOf(node);
+    const open = !collapsed.has(node);
+    const selectable = !ancestors.includes(node);
+    const labelClass = node === "keyspace" ? "font-medium" : "font-mono text-xs";
+    return (
+      <li key={node} className={cn(nested && ELBOW)}>
+        <div
+          className={cn(
+            "group flex items-center gap-1 rounded py-0.5 pr-1 pl-1",
+            node === selected ? "bg-blue-50 dark:bg-blue-950/40" : selectable && "hover:bg-muted/50",
+          )}
+        >
+          {kids.length > 0 ? (
+            <button
+              type='button'
+              aria-label={`${open ? "Collapse" : "Expand"} ${name}`}
+              aria-expanded={open}
+              className='rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground'
+              onClick={() => toggle(node)}
+            >
+              {open ? (
+                <ChevronDown className='size-3.5' aria-hidden='true' />
+              ) : (
+                <ChevronRight className='size-3.5' aria-hidden='true' />
+              )}
+            </button>
+          ) : (
+            <span className='size-4.5 shrink-0' aria-hidden='true' />
+          )}
+          {selectable ? (
+            <label className='flex flex-1 cursor-pointer items-center gap-2 py-1 text-sm'>
+              <input
+                type='radio'
+                name='group-key-node'
+                value={node}
+                aria-label={node === "keyspace" ? "Whole group key" : name}
+                checked={node === selected}
+                onChange={() => onSelect(node)}
+              />
+              <span className={labelClass}>{nodeLabel(node)}</span>
+            </label>
+          ) : (
+            <span className={cn("flex-1 py-1 text-muted-foreground", labelClass)}>{nodeLabel(node)}</span>
+          )}
+          {selectable && (
+            <button
+              type='button'
+              aria-label={`Add a group under ${name}`}
+              className='rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground'
+              onClick={() => {
+                close();
+                setAdding(node);
+                // A group added under a collapsed row must be visible.
+                setCollapsed((nodes) => new Set([...nodes].filter((n) => n !== node)));
+              }}
+            >
+              <Plus className='size-3.5' aria-hidden='true' />
+            </button>
+          )}
+        </div>
+        {((open && kids.length > 0) || adding === node) && (
+          // The guide line: a vertical rule down from this row, with an elbow into each child.
+          <ul className='ml-[11px] border-l border-zinc-200 pl-3 dark:border-zinc-700'>
+            {open && kids.map((child) => row(child, true))}
+            {adding === node && (
+              <li className={cn(ELBOW, "flex flex-col gap-1 py-1 pr-1 pl-1")}>
+                <input
+                  // biome-ignore lint/a11y/noAutofocus: the input opens on the owner's own click, which expects to type next
+                  autoFocus
+                  type='text'
+                  aria-label={`New group under ${name}`}
+                  aria-invalid={invalid}
+                  aria-describedby={invalid ? "group-key-new-error" : undefined}
+                  placeholder='group-name'
+                  value={segment}
+                  onChange={(event) => {
+                    setSegment(event.target.value);
+                    setInvalid(false);
+                  }}
+                  onBlur={close}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      add(node);
+                    }
+                    if (event.key === "Escape") {
+                      event.stopPropagation();
+                      close();
+                    }
+                  }}
+                  className='h-7 rounded border bg-transparent px-2 font-mono text-xs'
+                />
+                {invalid && (
+                  <span id='group-key-new-error' className='text-xs text-destructive'>
+                    Not a valid group name: it must be non-empty, with no "/" and no space at the start or end.
+                  </span>
+                )}
+              </li>
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <fieldset className='mt-2'>
+      <legend className='text-xs text-muted-foreground'>Choose the group to share, or add one beneath it</legend>
+      <ul className='mt-1 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700'>
+        {row(ancestors[0] ?? root, false)}
+      </ul>
+      {/* Collapsing a row can hide the selected one; this line always names what will be signed. */}
+      <p aria-live='polite' className='mt-2 text-xs'>
+        Selected group:{" "}
+        {selected === "keyspace" ? (
+          <span className='font-medium'>Whole group key</span>
+        ) : (
+          <code className='font-mono'>{groupOf(selected)}</code>
+        )}
+      </p>
+    </fieldset>
+  );
+};
+
 /** The warning and the sign button; nothing where the phase offers no signing. */
-const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: () => void }) => {
+const SignArea = ({
+  phase,
+  warning,
+  whole,
+  onSign,
+}: {
+  phase: GroupKeyPhase["phase"];
+  warning: string;
+  whole: boolean;
+  onSign: () => void;
+}) => {
   const { sign, button = SIGN } = GROUP_KEY_STATUS[phase];
   if (sign === "hidden") return null;
   return (
     <>
       <Notice tone='warn' title='Encryption access cannot be revoked' className='mt-4'>
         <p className='mt-1'>
-          <span>{GROUP_KEY_WARNING}</span> Read more about{" "}
+          <span>{warning}</span> Read more about{" "}
           <ExternalTextLink href='https://docs.filecoin.cloud/developer-guides/encryption/share-encrypted-data/#limits'>
             lifecycle and limits
           </ExternalTextLink>
@@ -222,7 +474,9 @@ const SignArea = ({ phase, onSign }: { phase: GroupKeyPhase["phase"]; onSign: ()
         <ol className='mt-2 list-decimal space-y-1 pl-5 text-zinc-600 dark:text-zinc-400'>
           <li>A signature that derives the group key.</li>
           <li>For a new group key, the same signature again, to check it is reproducible.</li>
-          <li>A signature that authorizes the group key's encrypted delivery to this session key.</li>
+          <li>
+            A signature that authorizes the {whole ? "group key's" : "group's"} encrypted delivery to this session key.
+          </li>
         </ol>
         <p className='mt-2 text-zinc-600 dark:text-zinc-400'>
           Encryption is optional and per-upload; it never changes files already uploaded. Read more in the{" "}
@@ -279,8 +533,23 @@ export const GroupKeyStep = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const choice = useGroupKeyChoice(network, account, bound.data === true);
+  // The owner may narrow the link's request to a group beneath it, added here this visit.
+  const [added, setAdded] = useState<GroupGrantNode[]>([]);
+  const [node, setNode] = useState<GroupGrantNode>(keyAgreement.node);
+  // Every Grant made this visit, so issuing another keeps the earlier ones on screen to copy.
+  const [grants, setGrants] = useState<{ node: GroupGrantNode; grant: string }[]>([]);
   const issue = useMutation({
-    mutationFn: ({ wallet, chosen, expires }: { wallet: WalletClient; chosen: ChosenGroupKey; expires: bigint }) =>
+    mutationFn: ({
+      wallet,
+      chosen,
+      expires,
+      node,
+    }: {
+      wallet: WalletClient;
+      chosen: ChosenGroupKey;
+      expires: bigint;
+      node: GroupGrantNode;
+    }) =>
       issueGroupKeyGrant(
         {
           // Privy resolves a request while its dialog is still animating closed; the next one
@@ -297,11 +566,15 @@ export const GroupKeyStep = ({
           chainId,
           bearer: sessionKey,
           pubkey: keyAgreement.pubkey,
-          node: keyAgreement.node,
+          node,
+          maxDepth: keyAgreement.maxDepth,
           expires,
         },
       ),
-    onSuccess: () => onIssued(),
+    onSuccess: (grant, { node }) => {
+      setGrants((issued) => [...issued, { node, grant }]);
+      onIssued();
+    },
   });
   const phase = groupKeyPhase({
     signatureValid: bound.data,
@@ -315,19 +588,34 @@ export const GroupKeyStep = ({
   });
   const groupKey = choice.data && !("error" in choice.data) ? choice.data : null;
   const sign = () => {
-    if (wallet && groupKey && expires !== null) issue.mutate({ wallet, chosen: groupKey, expires });
+    if (wallet && groupKey && expires !== null) issue.mutate({ wallet, chosen: groupKey, expires, node });
   };
+  const issueAnother = () => {
+    issue.reset();
+    setAdded([]);
+    setNode(keyAgreement.node);
+  };
+  const shownGroup = groupOf(node);
 
   return (
     <SetupStep
       number={number}
       title='Give this tool an encryption key'
       description={
-        <p>
-          This shares a group key: a secret that can decrypt every upload encrypted under the group ID below — existing
-          and future uploads, across every data set that uses this group key. Access is granted per group, not per file
-          or per data set.
-        </p>
+        shownGroup === null ? (
+          <p>
+            This shares a group key: a secret that can decrypt every upload encrypted under the group ID below —
+            existing and future uploads, across every data set that uses this group key. Access is granted per group,
+            not per file or per data set.
+          </p>
+        ) : (
+          <p>
+            This shares the key to one group: a secret that can decrypt every upload written under{" "}
+            <code className='font-mono'>{shownGroup}</code> and the groups beneath it — existing and future uploads,
+            across every data set that uses the group key below. Access is granted per group, not per file or per data
+            set.
+          </p>
+        )
       }
       status={{ tone: GROUP_KEY_STATUS[phase.phase].tone, label: GROUP_KEY_STATUS[phase.phase].label }}
     >
@@ -380,12 +668,38 @@ export const GroupKeyStep = ({
             </span>
           }
         >
-          <GroupKeyDetail groupKey={groupKey} />
+          <GroupKeyDetail groupKey={groupKey} whole={keyAgreement.node === "keyspace"} />
+        </Detail>
+        <Detail term='Access'>
+          <AccessText node={node} />
+          {GROUP_KEY_STATUS[phase.phase].sign !== "hidden" && !issue.isPending && (
+            <GroupTree
+              root={keyAgreement.node}
+              added={added}
+              selected={node}
+              onSelect={setNode}
+              onAdd={(group) => {
+                setAdded((groups) => (groups.includes(group) ? groups : [...groups, group]));
+                setNode(group);
+              }}
+            />
+          )}
         </Detail>
       </dl>
 
       <GroupKeyNotice phase={phase} onRetryRead={() => void choice.refetch()} />
-      {phase.phase === "issued" ? <GrantOutput grant={phase.grant} /> : <SignArea phase={phase.phase} onSign={sign} />}
+      {grants.map(({ node, grant }, i) => (
+        <GrantOutput key={grant} id={`group-key-grant-${i}`} node={node} grant={grant} />
+      ))}
+      {phase.phase === "issued" ? (
+        <div className='mt-4'>
+          <Button variant='ghost' size='compact' onClick={issueAnother}>
+            Issue another Grant
+          </Button>
+        </div>
+      ) : (
+        <SignArea phase={phase.phase} warning={groupKeyWarning(node)} whole={shownGroup === null} onSign={sign} />
+      )}
     </SetupStep>
   );
 };

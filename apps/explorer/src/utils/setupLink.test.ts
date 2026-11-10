@@ -241,6 +241,7 @@ describe("parseSetupLink: pubkey and pubkeysig", () => {
       pubkey: PUBKEY.toLowerCase(),
       pubkeysig: PUBKEYSIG.toLowerCase(),
       node: "keyspace",
+      maxDepth: 7,
     });
     assert.equal(result.sessionKey?.address, SESSION.address);
   });
@@ -267,8 +268,58 @@ describe("parseSetupLink: pubkey and pubkeysig", () => {
     }
   });
 
-  it("refuses any node but the whole group key, so a narrower request never gets the whole keyspace", () => {
-    for (const node of ["", "&node=", "&node=scope", "&node=KEYSPACE", "&node=keyspace/a"]) {
+  const keyLink = (extra: string) => sessionLink(`&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}${extra}`);
+  const keyAgreementOf = (extra: string) => {
+    const result = keyLink(extra);
+    return "error" in result ? result : result.keyAgreement;
+  };
+
+  it("reads a group request, URL-encoded, in Keysmith's canonical form", () => {
+    assert.deepEqual(keyAgreementOf(`&node=${encodeURIComponent("scope:photos/2026")}`), {
+      pubkey: PUBKEY.toLowerCase(),
+      pubkeysig: PUBKEYSIG.toLowerCase(),
+      node: "scope:photos/2026",
+      maxDepth: 7,
+    });
+    // An unencoded path reads the same; a decomposed name is stored composed (NFC), as Keysmith derives it.
+    assert.equal((keyAgreementOf("&node=scope:photos/2026") as { node: string }).node, "scope:photos/2026");
+    const decomposed = encodeURIComponent("scope:cafe\u0301");
+    assert.equal((keyAgreementOf(`&node=${decomposed}`) as { node: string }).node, "scope:caf\u00e9");
+  });
+
+  it("refuses a malformed group path", () => {
+    for (const path of ["", "/", "a/", "/a", "a//b", " a", "a /b", "a%2F%2Fb", "+a"]) {
+      assert.deepEqual(keyLink(`&node=scope:${path}`), { error: "bad-group" }, path);
+    }
+  });
+
+  it("reads maxdepth from 0 to 7, and refuses anything else", () => {
+    for (const depth of [0, 3, 7]) {
+      assert.equal(
+        (keyAgreementOf(`&node=keyspace&maxdepth=${depth}`) as { maxDepth: number }).maxDepth,
+        depth,
+        String(depth),
+      );
+    }
+    for (const depth of ["", "8", "-1", "07", "7.0", " 7", "x", "1e0"]) {
+      assert.deepEqual(
+        keyLink(`&node=keyspace&maxdepth=${encodeURIComponent(depth)}`),
+        { error: "bad-maxdepth" },
+        depth,
+      );
+    }
+    // maxdepth alone is still an encryption request, and names no key.
+    assert.deepEqual(sessionLink("&maxdepth=3"), { error: "bad-pubkey" });
+  });
+
+  it("refuses an encryption request for a session key without addPieces", () => {
+    const query = `authorize=${SESSION.address}&scopes=createDataSet&network=calibration&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}&node=keyspace`;
+    assert.deepEqual(link(query), { error: "pubkey-without-add-pieces" });
+    assert.ok(!("error" in link(query.replace("scopes=createDataSet", "scopes=createDataSet,addPieces"))));
+  });
+
+  it("refuses any node but the whole group key or a group", () => {
+    for (const node of ["", "&node=", "&node=scope", "&node=KEYSPACE", "&node=keyspace/a", "&node=piece:0x01"]) {
       assert.deepEqual(sessionLink(`&pubkey=${PUBKEY}&pubkeysig=${PUBKEYSIG}${node}`), { error: "bad-node" }, node);
     }
     // A node alone still names no key to wrap the Grant to.

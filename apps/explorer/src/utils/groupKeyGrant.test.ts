@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { commitment as commitmentOf, keyspaceKeys, openDelivery, publicKeyOf } from "@filoz/keysmith";
+import {
+  commitment as commitmentOf,
+  keyspaceKeys,
+  openDelivery,
+  publicKeyOf,
+  reaches,
+  scopeKey,
+} from "@filoz/keysmith";
 import { bytesToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, it, vi } from "vitest";
@@ -18,7 +25,15 @@ vi.mock("@filoz/keysmith", async (importOriginal) => {
   };
 });
 
-import { chooseGroupKey, defaultGroupKeyId, type GroupKeyDataSet, issueGroupKeyGrant } from "./groupKeyGrant";
+import {
+  chooseGroupKey,
+  defaultGroupKeyId,
+  type GroupGrantNode,
+  type GroupKeyDataSet,
+  groupPath,
+  issueGroupKeyGrant,
+  MAX_GRANT_DEPTH,
+} from "./groupKeyGrant";
 
 // Test keys only: Anvil #0 owns the data, Anvil #1 is the session key.
 const OWNER = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
@@ -111,7 +126,8 @@ describe("issueGroupKeyGrant", () => {
     chainId: 314159,
     bearer: SESSION.address,
     pubkey: publicKeyOf(SESSION_KEY),
-    node: "keyspace" as const,
+    node: "keyspace" as GroupGrantNode,
+    maxDepth: MAX_GRANT_DEPTH,
     expires: EXPIRES,
   };
   const decode = (text: string) => {
@@ -148,10 +164,38 @@ describe("issueGroupKeyGrant", () => {
         chainId: 314159n,
         expires: Number(EXPIRES),
         node: "keyspace",
-        maxDepth: [0],
+        maxDepth: [7],
       },
     );
     assert.equal(grant.node, "keyspace");
+  });
+
+  it("issues a group Grant that opens only that group, with the depth the link asked for", async () => {
+    const text = await issueGroupKeyGrant(OWNER, {
+      ...input,
+      commitment: null,
+      node: "scope:photos/2026",
+      maxDepth: 2,
+    });
+    const { key, claim, grant, chain } = await openDelivery(SESSION_KEY, decode(text), { now: 1_800_000_000 });
+    const { kk } = await keyspaceKeys(OWNER, { owner: OWNER.address, keyspace: DEFAULT_ID });
+    // The group's key, not the group key: what filecoin-pin derives for pieces under photos/2026.
+    assert.equal(bytesToHex(key), bytesToHex(scopeKey(kk, "photos/2026")));
+    assert.notEqual(bytesToHex(key), bytesToHex(kk));
+    assert.equal(claim.node, "scope:photos/2026");
+    assert.equal(grant.node, "scope:photos/2026");
+    assert.deepEqual(
+      chain.links.map((link) => link.maxDepth),
+      [2],
+    );
+    const piece = (scope: string) => ({ "foc/ks": DEFAULT_ID, "foc/scope": scope, "foc/salt": "0x01" });
+    assert.equal(reaches(claim.node, piece("photos/2026/may")), true);
+    assert.equal(reaches(claim.node, piece("photos/2025")), false);
+    assert.equal(reaches(claim.node, piece("photos")), false);
+  });
+
+  it("allows onward delegation up to the chain limit by default", () => {
+    assert.equal(MAX_GRANT_DEPTH, 7);
   });
 
   it("encodes the Grant without padding whatever its length, as on mainnet", async () => {
@@ -183,5 +227,18 @@ describe("issueGroupKeyGrant", () => {
     await issueGroupKeyGrant(OWNER, { ...input, commitment: null });
     assert.equal(held.length, 2);
     for (const key of held) assert.ok(key.every((byte) => byte === 0));
+  });
+});
+
+describe("groupPath", () => {
+  it("keeps a valid path, in Keysmith's canonical form", () => {
+    assert.equal(groupPath("photos/2026"), "photos/2026");
+    assert.equal(groupPath("caf\u0065\u0301"), "caf\u00e9");
+  });
+
+  it("refuses what Keysmith would, without throwing", () => {
+    for (const path of ["", "/", "a/", "/a", "a//b", " a", "a /b", "\ud800"]) {
+      assert.equal(groupPath(path), null, JSON.stringify(path));
+    }
   });
 });

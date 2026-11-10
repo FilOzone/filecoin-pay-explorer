@@ -14,7 +14,9 @@ import {
   grantDescriptor,
   KEYSPACE_ID_KEY,
   keyspaceKeys,
+  MAX_CHAIN_LENGTH,
   rootClaim,
+  scopePath,
   type TypedDataSigner,
   wrapTo,
 } from "@filoz/keysmith";
@@ -26,6 +28,28 @@ const ENCRYPTION_VERSION = "1";
 
 /** What the console text calls the Grant: a prefix the CLI checks, then base64url without padding. */
 export const GRANT_PREFIX = "fgr1_";
+
+/** What a Grant opens: the whole group key, or one group (a Keysmith scope) and everything beneath it. */
+export type GroupGrantNode = "keyspace" | `scope:${string}`;
+
+/**
+ * The most onward delegation a Grant can allow: Keysmith caps a claim chain at
+ * {@link MAX_CHAIN_LENGTH} links, root included, so a higher `maxDepth` allows nothing more.
+ */
+export const MAX_GRANT_DEPTH = MAX_CHAIN_LENGTH - 1;
+
+/**
+ * A group path in Keysmith's canonical form (NFC names joined by "/"), or null
+ * when Keysmith would refuse it: an empty name, a name with leading or trailing
+ * whitespace, or a lone surrogate. Never throws.
+ */
+export function groupPath(path: string): string | null {
+  try {
+    return scopePath(path);
+  } catch {
+    return null;
+  }
+}
 
 /** A live data set that records a group key; others never take part in the choice. */
 export interface GroupKeyDataSet {
@@ -93,8 +117,10 @@ export interface GroupKeyGrantInput {
   bearer: Address;
   /** The session key's key-agreement key, which the Grant is wrapped to. */
   pubkey: Hex;
-  /** The Keysmith node the Grant opens, as the link asked for it. Only whole group keys for now. */
-  node: "keyspace";
+  /** The Keysmith node the Grant opens: the link's, or a group beneath it the owner narrowed to. */
+  node: GroupGrantNode;
+  /** How many links the session key may add below the root claim, 0 to {@link MAX_GRANT_DEPTH}. */
+  maxDepth: number;
   /** Unix seconds: the session key's authorization expiry. Revoking the key does not end the claim sooner. */
   expires: bigint;
 }
@@ -117,7 +143,7 @@ export async function issueGroupKeyGrant(wallet: TypedDataSigner, input: GroupKe
       kk,
       node: input.node,
       bearer: input.bearer,
-      maxDepth: 0,
+      maxDepth: input.maxDepth,
       expires: Number(input.expires),
     });
     try {

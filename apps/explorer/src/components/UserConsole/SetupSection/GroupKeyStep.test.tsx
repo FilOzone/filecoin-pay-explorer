@@ -6,8 +6,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { BaseError, UserRejectedRequestError } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GroupGrantNode } from "@/utils/groupKeyGrant";
 import { keyAgreementMessage } from "@/utils/setupLink";
-import { GROUP_KEY_WARNING, GroupKeyStep } from "./GroupKeyStep";
+import { GroupKeyStep, groupKeyWarning } from "./GroupKeyStep";
 
 // Test keys only: Anvil #0 is the owner's wallet, Anvil #1 the session key.
 const OWNER = privateKeyToAccount("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
@@ -86,10 +87,16 @@ vi.mock("@/utils/groupKeyGrant", async (importOriginal) => ({
   issueGroupKeyGrant: issue,
 }));
 const GRANT = "fgr1_o2EBYmtzWBAC-_9";
+const GROUP_KEY_WARNING = groupKeyWarning("keyspace");
 
 const onIssued = vi.fn();
 
-async function renderStep({ expires = EXPIRES as bigint | null, pubkeysig = PUBKEYSIG } = {}) {
+async function renderStep({
+  expires = EXPIRES as bigint | null,
+  pubkeysig = PUBKEYSIG,
+  node = "keyspace" as GroupGrantNode,
+  maxDepth = 7,
+} = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     render(
@@ -100,7 +107,7 @@ async function renderStep({ expires = EXPIRES as bigint | null, pubkeysig = PUBK
             network='calibration'
             account={OWNER.address}
             sessionKey={SESSION.address}
-            keyAgreement={{ pubkey: PUBKEY, pubkeysig, node: "keyspace" }}
+            keyAgreement={{ pubkey: PUBKEY, pubkeysig, node, maxDepth }}
             expires={expires}
             onIssued={onIssued}
           />
@@ -348,6 +355,7 @@ describe("GroupKeyStep", () => {
       bearer: SESSION.address,
       pubkey: PUBKEY,
       node: "keyspace",
+      maxDepth: 7,
       expires: EXPIRES,
     });
     expect(state.events).toEqual(["wait", "sign KeyspaceKey", "wait", "sign KeyspaceKey", "wait", "sign ReadGrant"]);
@@ -361,5 +369,221 @@ describe("GroupKeyStep", () => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy Grant" })));
     expect(writeText).toHaveBeenCalledWith(GRANT);
+  });
+
+  it("says what is granted: the whole group key, or one group", () => {
+    expect(GROUP_KEY_WARNING).toContain("under this group key");
+    const group = groupKeyWarning("scope:photos/2026");
+    expect(group).toContain('every piece uploaded under the group "photos/2026" and the groups beneath it');
+    expect(group).toContain("everything under this group,");
+  });
+
+  const accessRow = () => screen.getByText("Access").closest("dt")?.nextElementSibling?.textContent ?? "";
+
+  it("names a requested group in plain words, with its warning", async () => {
+    await renderStep({ node: "scope:photos/2026", maxDepth: 2 });
+
+    expect(accessRow()).toContain("This tool can read and write photos/2026 only, with the groups beneath it.");
+    expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
+    expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
+  });
+
+  const option = (name: string) => screen.getByRole("radio", { name }) as HTMLInputElement;
+  const options = () => screen.queryAllByRole("radio").map((radio) => (radio as HTMLInputElement).value);
+  /** Opens the inline input under `under` (its accessible name) and types `name` into it. */
+  const typeGroup = (under: string, name: string) => {
+    fireEvent.click(screen.getByRole("button", { name: `Add a group under ${under}` }));
+    const input = screen.getByLabelText(`New group under ${under}`);
+    fireEvent.change(input, { target: { value: name } });
+    return input;
+  };
+  const addGroup = (under: string, name: string) => fireEvent.keyDown(typeGroup(under, name), { key: "Enter" });
+
+  /** The text of each tree row, in order, indented two spaces per level. */
+  const treeRows = () =>
+    Array.from(document.querySelectorAll("fieldset li"), (li) => {
+      let depth = 0;
+      // Count only the tree's own levels, not the setup step's list item around it.
+      for (let up = li.parentElement?.closest("fieldset li"); up; up = up.parentElement?.closest("fieldset li")) {
+        depth += 1;
+      }
+      const own = li.firstElementChild?.textContent ?? "";
+      return `${"  ".repeat(depth)}${own}`;
+    });
+
+  it("shows a whole group key request as one selected root", async () => {
+    await renderStep();
+    expect(accessRow()).toContain("Whole group key.");
+    expect(treeRows()).toEqual(["Whole group key"]);
+    expect(options()).toEqual(["keyspace"]);
+    expect(option("Whole group key").checked).toBe(true);
+    expect(screen.getByRole("button", { name: "Add a group under the whole group key" })).toBeTruthy();
+    // A row with no children has no chevron.
+    expect(screen.queryByRole("button", { name: /^(Collapse|Expand) / })).toBeNull();
+  });
+
+  it("splits a group request into one row per name, with only the requested group selectable", async () => {
+    await renderStep({ node: "scope:photos/2026" });
+    expect(treeRows()).toEqual(["photos", "  2026"]);
+    // The group above the request is context: no radio and no "+", so the owner can never widen the Grant.
+    expect(options()).toEqual(["scope:photos/2026"]);
+    expect(option("photos/2026").checked).toBe(true);
+    expect(screen.queryByRole("button", { name: "Add a group under photos" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Add a group under photos/2026" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse photos" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("collapses a row's children and expands them again", async () => {
+    await renderStep({ node: "scope:photos/2026" });
+    addGroup("photos/2026", "may");
+    expect(treeRows()).toEqual(["photos", "  2026", "    may"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse photos/2026" }));
+    expect(treeRows()).toEqual(["photos", "  2026"]);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse photos" }));
+    expect(treeRows()).toEqual(["photos"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand photos" }));
+    expect(treeRows()).toEqual(["photos", "  2026"]);
+    fireEvent.click(screen.getByRole("button", { name: "Expand photos/2026" }));
+    expect(treeRows()).toEqual(["photos", "  2026", "    may"]);
+    // The collapsed state did not change what is selected.
+    expect(option("photos/2026/may").checked).toBe(true);
+  });
+
+  const selectedLine = () => screen.getByText(/^Selected group:/);
+
+  it("names the selected group's full path below the tree, following every selection", async () => {
+    await renderStep({ node: "scope:photos/2026" });
+    expect(selectedLine().textContent).toBe("Selected group: photos/2026");
+    expect(selectedLine().getAttribute("aria-live")).toBe("polite");
+
+    addGroup("photos/2026", "may");
+    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
+    fireEvent.click(option("photos/2026"));
+    expect(selectedLine().textContent).toBe("Selected group: photos/2026");
+    fireEvent.click(option("photos/2026/may"));
+    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
+  });
+
+  it("keeps the selection, and names it, when collapsing hides it", async () => {
+    await renderStep({ node: "scope:photos/2026" });
+    addGroup("photos/2026", "may");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse photos" }));
+
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
+    expect(screen.getByText(groupKeyWarning("scope:photos/2026/may"))).toBeTruthy();
+  });
+
+  it("names the whole group key when its row is selected", async () => {
+    await renderStep();
+    expect(selectedLine().textContent).toBe("Selected group: Whole group key");
+    addGroup("the whole group key", "docs");
+    expect(selectedLine().textContent).toBe("Selected group: docs");
+    fireEvent.click(option("Whole group key"));
+    expect(selectedLine().textContent).toBe("Selected group: Whole group key");
+  });
+
+  it("nests groups added under the requested group, and signs for the one selected", async () => {
+    await renderStep({ node: "scope:photos/2026" });
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    addGroup("photos/2026", "may");
+    addGroup("photos/2026/may", "raw");
+    addGroup("photos/2026", "june");
+    expect(treeRows()).toEqual(["photos", "  2026", "    may", "      raw", "    june"]);
+    expect(option("photos/2026/june").checked).toBe(true);
+
+    fireEvent.click(option("photos/2026/may/raw"));
+    expect(accessRow()).toContain("This tool can read and write photos/2026/may/raw only");
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026/may/raw" });
+  });
+
+  it("signs for a group the owner adds beneath the request and selects", async () => {
+    await renderStep({ node: "scope:photos", maxDepth: 3 });
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+
+    addGroup("photos", "2026");
+    expect(options()).toEqual(["scope:photos", "scope:photos/2026"]);
+    // The root stays selectable; selecting the new group is what narrows the Grant.
+    fireEvent.click(option("photos"));
+    expect(accessRow()).toContain("This tool can read and write photos only");
+    fireEvent.click(option("photos/2026"));
+    expect(option("photos/2026").checked).toBe(true);
+    expect(accessRow()).toContain("This tool can read and write photos/2026 only");
+    expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
+
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026", maxDepth: 3 });
+    expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(GRANT);
+  });
+
+  it("refuses an invalid group name with an error, and adds nothing", async () => {
+    await renderStep({ node: "scope:photos" });
+    for (const name of ["", " 2026", "2026 ", "a/b"]) {
+      const input = typeGroup("photos", name);
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(screen.getByText(/Not a valid group name/), JSON.stringify(name)).toBeTruthy();
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      fireEvent.keyDown(input, { key: "Escape" });
+    }
+    expect(options()).toEqual(["scope:photos"]);
+    expect(screen.queryByLabelText("New group under photos")).toBeNull();
+  });
+
+  it("cancels an add on blur", async () => {
+    await renderStep();
+    fireEvent.blur(typeGroup("the whole group key", "docs"));
+    expect(screen.queryByLabelText("New group under the whole group key")).toBeNull();
+    expect(options()).toEqual(["keyspace"]);
+  });
+
+  it("adds groups under added groups, nested, and under the whole group key", async () => {
+    await renderStep();
+    addGroup("the whole group key", "docs");
+    addGroup("docs", "2026");
+    addGroup("docs/2026", "may");
+    addGroup("the whole group key", "photos");
+    expect(options()).toEqual(["keyspace", "scope:docs", "scope:docs/2026", "scope:docs/2026/may", "scope:photos"]);
+    // Each level sits one list deeper than its parent.
+    expect(option("docs/2026/may").closest("ul")?.parentElement?.closest("li")?.querySelector("input")?.value).toBe(
+      "scope:docs/2026",
+    );
+    expect(option("photos").checked).toBe(true);
+
+    fireEvent.click(option("docs/2026/may"));
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:docs/2026/may" });
+  });
+
+  it("issues several Grants to the same session key, resetting the tree for each", async () => {
+    issue.mockResolvedValueOnce(`${GRANT}a`).mockResolvedValueOnce(`${GRANT}b`);
+    await renderStep({ node: "scope:photos" });
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    addGroup("photos", "2025");
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
+    expect(options()).toEqual([]);
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue another Grant" })));
+    expect(options()).toEqual(["scope:photos"]);
+    expect(option("photos").checked).toBe(true);
+    addGroup("photos", "2026");
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledTimes(2));
+
+    expect(issue.mock.calls.map(([, input]) => input.node)).toEqual(["scope:photos/2025", "scope:photos/2026"]);
+    expect(issue.mock.calls.map(([, input]) => input.bearer)).toEqual([SESSION.address, SESSION.address]);
+    expect((screen.getByLabelText("Encryption Grant for group photos/2025") as HTMLTextAreaElement).value).toBe(
+      `${GRANT}a`,
+    );
+    expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(
+      `${GRANT}b`,
+    );
   });
 });
