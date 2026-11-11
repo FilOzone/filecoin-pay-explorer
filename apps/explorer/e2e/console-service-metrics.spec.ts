@@ -73,7 +73,7 @@ const cellsOf = (page: Page, symbol: string) =>
     .filter({ has: page.getByRole("cell", { name: symbol, exact: true }) })
     .getByRole("cell");
 
-test("the service page shows each token its rails are in on its own row", async ({ page }) => {
+test("the service page shows each token with something to show on its own row", async ({ page }) => {
   const metricsRequests: Record<string, string>[] = [];
 
   await stubServicePage(page, ({ query, variables }) => {
@@ -96,9 +96,6 @@ test("the service page shows each token its rails are in on its own row", async 
         rails: [rail(USDFC, "100000000000000"), rail(AXL_USDC, "10")],
         oneTimePayments: [payment("0x01", "420000000000000000")],
       };
-    }
-    if (query.includes("GetServiceTokenRail")) {
-      return { rails: variables.token === APPROVED_ONLY.id ? [] : [{ id: "0x01" }] };
     }
     return undefined;
   });

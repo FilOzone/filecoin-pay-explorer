@@ -19,10 +19,9 @@ export type ServiceMetricsRow = {
   accountRunwayText: string;
 };
 
-type ServiceMetricsRowsInput = Pick<ServiceMetricsResponse, "account" | "rails"> & {
-  oneTimePayments: ServiceOneTimePayment[] | OneTimeUnavailableReason;
-  /** Undefined when every approved token counts: the pair has only one, or the check has not answered. */
-  tokenIdsWithRails: string[] | undefined;
+type ServiceMetricsRowsInput = Pick<ServiceMetricsResponse, "account" | "rails" | "oneTimePayments"> & {
+  /** Every payment once `oneTimePayments`, the first page, overflowed. Undefined when that page holds them all. */
+  allOneTimePayments?: ServiceOneTimePayment[] | OneTimeUnavailableReason;
 };
 
 const formatNoticeCopy = (noticePeriods: ReadonlySet<bigint>): string | null => {
@@ -49,15 +48,22 @@ const formatAccountRunway = (
   return `${formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp)} (${detail})`;
 };
 
-/** One row per token the pair has rails in. Amounts are never summed across tokens. */
+/**
+ * One row per approved token with a locked deposit, a paying rail or a payment this month. Amounts are never summed
+ * across tokens.
+ */
 export const buildServiceMetricsRows = (
-  { account, rails, oneTimePayments, tokenIdsWithRails }: ServiceMetricsRowsInput,
+  { account, rails, oneTimePayments, allOneTimePayments }: ServiceMetricsRowsInput,
   currentTimestamp: bigint,
 ): ServiceMetricsRow[] => {
   if (!account) return [];
+  const paymentsToTotal = allOneTimePayments ?? oneTimePayments;
 
   return account.operatorApprovals
-    .filter(({ token }) => tokenIdsWithRails?.includes(token.id) ?? true)
+    .filter(
+      ({ lockupUsage, token }) =>
+        BigInt(lockupUsage) > 0n || [...rails, ...oneTimePayments].some((entry) => entry.token.id === token.id),
+    )
     .map(({ lockupUsage, token }) => {
       const tokenRails = rails.filter((rail) => rail.token.id === token.id);
 
@@ -68,9 +74,9 @@ export const buildServiceMetricsRows = (
           0n,
         ),
         oneTimeThisMonth:
-          typeof oneTimePayments === "string"
-            ? oneTimePayments
-            : oneTimePayments
+          typeof paymentsToTotal === "string"
+            ? paymentsToTotal
+            : paymentsToTotal
                 .filter((payment) => payment.token.id === token.id)
                 .reduce((total, payment) => total + BigInt(payment.totalAmount), 0n),
         lockedDeposit: BigInt(lockupUsage),

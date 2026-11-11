@@ -14,7 +14,6 @@ import {
   GET_ACCOUNT_OPERATORS,
   GET_SERVICE_METRICS,
   GET_SERVICE_ONE_TIME_PAYMENTS,
-  GET_SERVICE_TOKEN_RAIL,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
 import { fetchAllPages, fetchSubgraphMeta, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
@@ -257,37 +256,5 @@ export const useAccountServiceOneTimePayments = (
     },
     enabled: options.enabled && !!accountId && !!operatorId,
     staleTime: SERVICE_ONE_TIME_PAYMENTS_STALE_MS,
-  });
-};
-
-/**
- * Which of a pair's approved tokens it has rails in. An approval can exist with no rail, and only a pair with more
- * than one approved token needs asking: a rail requires an approval, so a pair's only approved token holds its rails.
- */
-export const useAccountServiceRailTokens = (
-  address: string,
-  operatorAddress: string,
-  approvedTokenIds: string[],
-  options?: AccountServicesOptions,
-) => {
-  const accountId = toAccountId(address);
-  const operatorId = toAccountId(operatorAddress);
-  const { executeQuery, network } = useGraphQLClient({ networkOverride: options?.networkOverride });
-
-  return useQuery({
-    queryKey: ["account", accountId, "services", operatorId, "rail-tokens", approvedTokenIds, network],
-    queryFn: async ({ signal }) => {
-      const pages = await Promise.all(
-        approvedTokenIds.map((token) =>
-          executeQuery<{ rails: { id: string }[] }>(
-            GET_SERVICE_TOKEN_RAIL,
-            { payer: accountId, operator: operatorId, token },
-            signal,
-          ),
-        ),
-      );
-      return approvedTokenIds.filter((_, index) => pages[index]?.rails.length);
-    },
-    enabled: approvedTokenIds.length > 1 && !!accountId && !!operatorId,
   });
 };

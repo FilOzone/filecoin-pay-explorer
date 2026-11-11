@@ -689,14 +689,6 @@ export const GET_SERVICE_ONE_TIME_PAYMENTS = gql`
   }
 `;
 
-export const GET_SERVICE_TOKEN_RAIL = gql`
-  query GetServiceTokenRail($payer: String!, $operator: String!, $token: String!) {
-    rails(where: { payer: $payer, operator: $operator, token: $token }, first: 1) {
-      id
-    }
-  }
-`;
-
 const DATA_SET_ROW_FIELDS = `
   fragment DataSetRowFields on DataSet {
     id

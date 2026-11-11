@@ -14,7 +14,6 @@ import {
   useAccountServiceMetrics,
   useAccountServiceOneTimePayments,
   useAccountServiceRails,
-  useAccountServiceRailTokens,
   useAccountServices,
 } from "./useAccountServices";
 
@@ -63,7 +62,6 @@ describe("account query ids", () => {
     useAccountServiceMetrics: (address) => useAccountServiceMetrics(address, "0xoperator", 1n),
     useAccountServiceOneTimePayments: (address) =>
       useAccountServiceOneTimePayments(address, "0xoperator", 1n, { enabled: true }),
-    useAccountServiceRailTokens: (address) => useAccountServiceRailTokens(address, "0xoperator", ["0xa", "0xb"]),
   };
 
   const readWith = (read: (address: string) => void, address: string) => {
@@ -86,7 +84,6 @@ describe("account query ids", () => {
       useAccountServiceMetrics: (operator: string) => useAccountServiceMetrics(LOWERCASE, operator, 1n),
       useAccountServiceOneTimePayments: (operator: string) =>
         useAccountServiceOneTimePayments(LOWERCASE, operator, 1n, { enabled: true }),
-      useAccountServiceRailTokens: (operator: string) => useAccountServiceRailTokens(LOWERCASE, operator, ["0xa"]),
     }),
   )("%s shares one cache entry between checksummed and lowercase operators", (_, read) => {
     expect(readWith(read, CHECKSUMMED)).toEqual(readWith(read, LOWERCASE));

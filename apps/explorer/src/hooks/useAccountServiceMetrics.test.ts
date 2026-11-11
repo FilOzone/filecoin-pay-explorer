@@ -1,16 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  GET_SERVICE_METRICS,
-  GET_SERVICE_ONE_TIME_PAYMENTS,
-  GET_SERVICE_TOKEN_RAIL,
-  GET_SUBGRAPH_BLOCK,
-} from "@/services/grapql/queries";
+import { GET_SERVICE_METRICS, GET_SERVICE_ONE_TIME_PAYMENTS, GET_SUBGRAPH_BLOCK } from "@/services/grapql/queries";
 import { SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
-import {
-  useAccountServiceMetrics,
-  useAccountServiceOneTimePayments,
-  useAccountServiceRailTokens,
-} from "./useAccountServices";
+import { useAccountServiceMetrics, useAccountServiceOneTimePayments } from "./useAccountServices";
 
 const mocks = vi.hoisted(() => ({
   executeQuery: vi.fn(),
@@ -135,36 +126,5 @@ describe("useAccountServiceOneTimePayments", () => {
     useAccountServiceOneTimePayments(PAYER, OPERATOR, 100n, { enabled: false });
 
     expect(lastQueryOptions().enabled).toBe(false);
-  });
-});
-
-describe("useAccountServiceRailTokens", () => {
-  it("keeps only the tokens the pair has a rail in", async () => {
-    mocks.executeQuery.mockImplementation(async (query: string, variables: { token: string }) => {
-      if (query !== GET_SERVICE_TOKEN_RAIL) throw new Error("Unexpected query");
-      return { rails: variables.token === "0xused" ? [{ id: "0x01" }] : [] };
-    });
-
-    useAccountServiceRailTokens(PAYER, OPERATOR, ["0xused", "0xunused"]);
-
-    await expect(lastQueryOptions().queryFn({})).resolves.toEqual(["0xused"]);
-    expect(mocks.executeQuery.mock.calls.map(([, variables]) => variables)).toEqual([
-      { payer: PAYER, operator: OPERATOR, token: "0xused" },
-      { payer: PAYER, operator: OPERATOR, token: "0xunused" },
-    ]);
-  });
-
-  it.each([
-    [0, false],
-    [1, false],
-    [2, true],
-  ])("with %i approved tokens, asks: %s", (count, enabled) => {
-    useAccountServiceRailTokens(
-      PAYER,
-      OPERATOR,
-      Array.from({ length: count }, (_, index) => `0x${index}`),
-    );
-
-    expect(lastQueryOptions().enabled).toBe(enabled);
   });
 });

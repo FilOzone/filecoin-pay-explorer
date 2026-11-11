@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
     data?: { items: { totalAmount: bigint; token: { id: `0x${string}` } }[]; reachedPageLimit: boolean };
     isError?: boolean;
   },
-  railTokens: {} as { data?: string[] },
   useAccountServiceMetrics: vi.fn(),
   useAccountServiceOneTimePayments: vi.fn(),
 }));
@@ -19,7 +18,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/hooks/useAccountServices", () => ({
   useAccountServiceMetrics: mocks.useAccountServiceMetrics,
   useAccountServiceOneTimePayments: mocks.useAccountServiceOneTimePayments,
-  useAccountServiceRailTokens: () => mocks.railTokens,
 }));
 
 const OPERATOR = "0x2222222222222222222222222222222222222222";
@@ -64,7 +62,6 @@ const cellsOf = (symbol: string) => {
 beforeEach(() => {
   mocks.metrics = { data };
   mocks.allPayments = {};
-  mocks.railTokens = {};
   mocks.useAccountServiceMetrics.mockImplementation(() => mocks.metrics);
   mocks.useAccountServiceOneTimePayments.mockImplementation(() => mocks.allPayments);
 });
@@ -91,8 +88,21 @@ describe("ServiceMetrics", () => {
     );
   });
 
-  it("leaves out an approved token the pair has no rail in", () => {
-    mocks.railTokens = { data: [USDFC.id] };
+  it("leaves out an approved token with nothing to show", () => {
+    mocks.metrics = {
+      data: {
+        account: {
+          operatorApprovals: [
+            { lockupUsage: 9_640_000_000_000_000_000n, token: USDFC },
+            // Every rail in this token has finalized: nothing locked, paying or paid this month.
+            { lockupUsage: 0n, token: AXL_USDC },
+          ],
+          userTokens: [],
+        },
+        rails: [{ paymentRate: 100_000_000_000_000n, lockupPeriod: 86_400n, token: USDFC }],
+        oneTimePayments: [],
+      },
+    };
 
     renderMetrics();
 

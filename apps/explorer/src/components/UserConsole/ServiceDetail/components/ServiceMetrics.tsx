@@ -5,15 +5,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/compon
 import { createColumnHelper, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { AlertCircle, Info } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
-import {
-  useAccountServiceMetrics,
-  useAccountServiceOneTimePayments,
-  useAccountServiceRailTokens,
-} from "@/hooks/useAccountServices";
+import { useAccountServiceMetrics, useAccountServiceOneTimePayments } from "@/hooks/useAccountServices";
+import { useCurrentTimestamp } from "@/hooks/useCurrentTimestamp";
 import type { Network } from "@/types";
-import { EPOCH_DURATION } from "@/utils/constants";
 import { SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 import { buildServiceMetricsRows, type ServiceMetricsRow } from "../utils/buildServiceMetricsRows";
@@ -118,15 +114,7 @@ type ServiceMetricsProps = {
 };
 
 const ServiceMetrics = ({ accountId, network, operatorId }: ServiceMetricsProps) => {
-  const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
-    }, EPOCH_DURATION * 1_000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
+  const currentTimestamp = useCurrentTimestamp();
 
   // The viewer's local month, as on the spend chart.
   const now = new Date(Number(currentTimestamp) * 1_000);
@@ -142,18 +130,13 @@ const ServiceMetrics = ({ accountId, network, operatorId }: ServiceMetricsProps)
     networkOverride: network,
   });
 
-  const approvedTokenIds = data?.account?.operatorApprovals.map(({ token }) => token.id) ?? [];
-  const { data: tokenIdsWithRails } = useAccountServiceRailTokens(accountId, operatorId, approvedTokenIds, {
-    networkOverride: network,
-  });
-
   const rows = useMemo(() => {
     if (!data) return [];
     const unreadPayments = allPayments.isError ? "unavailable" : "loading";
-    const oneTimePayments = paymentsOverflowPage ? (allPayments.data?.items ?? unreadPayments) : data.oneTimePayments;
+    const allOneTimePayments = paymentsOverflowPage ? (allPayments.data?.items ?? unreadPayments) : undefined;
 
-    return buildServiceMetricsRows({ ...data, oneTimePayments, tokenIdsWithRails }, currentTimestamp);
-  }, [data, paymentsOverflowPage, allPayments.data, allPayments.isError, tokenIdsWithRails, currentTimestamp]);
+    return buildServiceMetricsRows({ ...data, allOneTimePayments }, currentTimestamp);
+  }, [data, paymentsOverflowPage, allPayments.data, allPayments.isError, currentTimestamp]);
 
   if (isLoading) {
     return (

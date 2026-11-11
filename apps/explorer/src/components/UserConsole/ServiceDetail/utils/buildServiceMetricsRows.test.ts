@@ -21,12 +21,11 @@ const userToken = (token: { id: `0x${string}` }, funds = 0n, lockupRate = 0n, la
 
 const input = (overrides: Partial<RowsInput> = {}): RowsInput => ({
   account: {
-    operatorApprovals: [{ lockupUsage: 0n, token: USDFC }],
+    operatorApprovals: [{ lockupUsage: 1n, token: USDFC }],
     userTokens: [userToken(USDFC)],
   },
   rails: [],
   oneTimePayments: [],
-  tokenIdsWithRails: undefined,
   ...overrides,
 });
 
@@ -101,24 +100,55 @@ describe("buildServiceMetricsRows", () => {
   });
 
   describe("which tokens get a row", () => {
-    const symbols = (tokenIdsWithRails: string[] | undefined) =>
-      buildServiceMetricsRows(input({ account: twoApprovedTokens, tokenIdsWithRails }), NOW).map(
-        (row) => row.token.symbol,
-      );
+    const nothingLocked = {
+      operatorApprovals: [
+        { lockupUsage: 0n, token: USDFC },
+        { lockupUsage: 0n, token: AXL_USDC },
+      ],
+      userTokens: [],
+    };
+    const symbols = (overrides: Partial<RowsInput>) =>
+      buildServiceMetricsRows(input({ account: nothingLocked, ...overrides }), NOW).map((row) => row.token.symbol);
 
-    it("leaves out an approved token the pair has no rail in", () => {
-      expect(symbols([AXL_USDC.id])).toEqual(["axlUSDC"]);
+    it("leaves out an approved token with nothing locked, paying or paid this month", () => {
+      expect(symbols({})).toEqual([]);
     });
 
-    it("keeps every approved token until the check has answered", () => {
-      expect(symbols(undefined)).toEqual(["axlUSDC", "USDFC"]);
+    it.each([
+      [
+        "a locked deposit",
+        { account: { ...nothingLocked, operatorApprovals: [{ lockupUsage: 1n, token: AXL_USDC }] } },
+      ],
+      ["a paying rail", { rails: [rail(1n, 30n * DAY, AXL_USDC)] }],
+      ["a payment this month", { oneTimePayments: [{ totalAmount: 1n, token: AXL_USDC }] }],
+    ])("keeps a token with %s", (_, overrides) => {
+      expect(symbols(overrides)).toEqual(["axlUSDC"]);
     });
+
+    // A busy pair's row must not flicker while the rest of its payments load.
+    it("keeps a token with a payment on the first page while the rest load", () => {
+      expect(
+        symbols({ oneTimePayments: [{ totalAmount: 1n, token: AXL_USDC }], allOneTimePayments: "loading" }),
+      ).toEqual(["axlUSDC"]);
+    });
+  });
+
+  it("totals every payment once the first page overflowed", () => {
+    const row = buildOne({
+      oneTimePayments: [{ totalAmount: 1n, token: USDFC }],
+      allOneTimePayments: [
+        { totalAmount: 1n, token: USDFC },
+        { totalAmount: 2n, token: USDFC },
+      ],
+    });
+
+    expect(row?.oneTimeThisMonth).toBe(3n);
   });
 
   it.each(["loading", "unavailable"] as const)("carries %s one-time payments beside the other figures", (reason) => {
     const row = buildOne({
       account: { operatorApprovals: [{ lockupUsage: 7n, token: USDFC }], userTokens: [] },
-      oneTimePayments: reason,
+      allOneTimePayments: reason,
     });
 
     expect(row).toMatchObject({ oneTimeThisMonth: reason, lockedDeposit: 7n });
@@ -144,7 +174,7 @@ describe("buildServiceMetricsRows", () => {
 
   describe("account runway", () => {
     const withToken = (token: ReturnType<typeof userToken>) =>
-      buildOne({ account: { operatorApprovals: [{ lockupUsage: 0n, token: USDFC }], userTokens: [token] } });
+      buildOne({ account: { operatorApprovals: [{ lockupUsage: 1n, token: USDFC }], userTokens: [token] } });
 
     it("gives the date and the days left", () => {
       // 12.5 days at 10 per epoch.
@@ -158,7 +188,7 @@ describe("buildServiceMetricsRows", () => {
     it("reads the runway of the row's own token", () => {
       const row = buildOne({
         account: {
-          operatorApprovals: [{ lockupUsage: 0n, token: USDFC }],
+          operatorApprovals: [{ lockupUsage: 1n, token: USDFC }],
           userTokens: [userToken(AXL_USDC, 100n, 100n, NOW - 86_400n), userToken(USDFC)],
         },
       });
