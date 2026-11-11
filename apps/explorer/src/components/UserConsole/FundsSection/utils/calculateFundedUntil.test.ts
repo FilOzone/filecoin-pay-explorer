@@ -17,11 +17,11 @@ const SETTLED_TIMESTAMP = 1_700_000_000n;
 /** Only the five fields the derivation reads; the rest of UserToken is irrelevant here. */
 const userToken = (fields: { funds: bigint; lockupCurrent: bigint; lockupRate: bigint }): UserToken =>
   ({
-    funds: fields.funds,
-    lockupCurrent: fields.lockupCurrent,
-    lockupRate: fields.lockupRate,
-    lockupLastSettledUntilEpoch: SETTLED_EPOCH,
-    lockupLastSettledUntilTimestamp: SETTLED_TIMESTAMP,
+    funds: fields.funds.toString(),
+    lockupCurrent: fields.lockupCurrent.toString(),
+    lockupRate: fields.lockupRate.toString(),
+    lockupLastSettledUntilEpoch: SETTLED_EPOCH.toString(),
+    lockupLastSettledUntilTimestamp: SETTLED_TIMESTAMP.toString(),
   }) as UserToken;
 
 /** Timestamp `epochs` after the last settled point. */

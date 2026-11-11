@@ -4,11 +4,11 @@ import { isUnlimitedValue } from "@/utils/formatter";
 
 interface AllowanceDisplayProps {
   value: number | string | bigint;
-  tokenDecimals: number | bigint;
+  tokenDecimals: number | string | bigint;
   symbol: string;
   formatValue: (
     value: number | string | bigint,
-    decimals: number | bigint,
+    decimals: number | string | bigint,
     symbol: string,
     precision: number,
   ) => string;

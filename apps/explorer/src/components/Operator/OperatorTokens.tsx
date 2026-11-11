@@ -85,7 +85,7 @@ export const OperatorTokens: React.FC<OperatorTokensProps> = ({ operator }) => {
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-2xl font-semibold'>Operator Tokens</h2>
-        <span className='text-sm text-muted-foreground'>{operator.totalTokens.toString()} total</span>
+        <span className='text-sm text-muted-foreground'>{operator.totalTokens} total</span>
       </div>
 
       <Card>
