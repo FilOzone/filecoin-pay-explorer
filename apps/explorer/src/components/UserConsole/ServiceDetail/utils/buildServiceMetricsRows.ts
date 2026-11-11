@@ -16,7 +16,8 @@ export type ServiceMetricsRow = {
   /** Holds a terminated rail's whole deposit until it finalizes, even as settlement pays it out. */
   lockedDeposit: bigint;
   noticeCopy: string | null;
-  accountRunwayText: string;
+  /** `date` is null when there is no date to show: no runway data, no recurring charges or funding expired. */
+  accountRunway: { date: string | null; detail: string };
 };
 
 type ServiceMetricsRowsInput = Pick<ServiceMetricsResponse, "account" | "rails" | "oneTimePayments"> & {
@@ -37,15 +38,15 @@ const formatNoticeCopy = (noticePeriods: ReadonlySet<bigint>): string | null => 
 const formatAccountRunway = (
   userToken: ServiceMetricsAccount["userTokens"][number] | undefined,
   currentTimestamp: bigint,
-): string => {
-  if (!userToken) return "—";
+): ServiceMetricsRow["accountRunway"] => {
+  if (!userToken) return { date: null, detail: "—" };
 
   const { fundedUntilTimestamp } = calculateFundedUntil(userToken, currentTimestamp);
   const { daysRemaining, isExpired } = deriveFundsHealth(fundedUntilTimestamp, currentTimestamp);
   const detail = formatRunwayDetail(daysRemaining, isExpired);
 
-  if (isExpired || daysRemaining === null) return detail;
-  return `${formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp)} (${detail})`;
+  if (isExpired || daysRemaining === null) return { date: null, detail };
+  return { date: formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp), detail };
 };
 
 /**
@@ -83,7 +84,7 @@ export const buildServiceMetricsRows = (
         noticeCopy: formatNoticeCopy(
           new Set(tokenRails.map((rail) => BigInt(rail.lockupPeriod)).filter((period) => period > 0n)),
         ),
-        accountRunwayText: formatAccountRunway(
+        accountRunway: formatAccountRunway(
           account.userTokens.find((userToken) => userToken.token.id === token.id),
           currentTimestamp,
         ),

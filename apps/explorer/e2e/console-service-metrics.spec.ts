@@ -107,14 +107,14 @@ test("the service page shows each token with something to show on its own row", 
     "0.864",
     "0",
     /^0\.864\s*Pays the 30-day notice after you terminate$/,
-    /\(in 12 days\)$/,
+    /in 12 days$/,
   ]);
   await expect(cellsOf(page, "USDFC")).toHaveText([
     "USDFC",
     "8.640",
     "0.420",
     /^9\.640\s*Pays the 30-day notice after you terminate$/,
-    /\(in 40 days\)$/,
+    /in 40 days$/,
   ]);
   await expect(page.getByRole("cell", { name: APPROVED_ONLY.symbol, exact: true })).toHaveCount(0);
 
@@ -144,6 +144,31 @@ test("the figures that follow a rule explain it on their column header", async (
     await page.getByRole("button", { name: `Explain ${column}` }).hover();
     await expect(page.locator('[data-slot="tooltip-content"]', { hasText: hint })).toBeVisible();
   }
+});
+
+// Regression: at 1200px the console's content column is narrower than the table, which scrolled sideways.
+test("the table fits a 1200px window without scrolling sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await stubServicePage(page, ({ query }) => {
+    if (!query.includes("GetServiceMetrics")) return undefined;
+    return {
+      account: {
+        operatorApprovals: [{ lockupUsage: "2292000000000000000", token: USDFC }],
+        // A runway of about 108 days, so the date and its countdown are at their usual widest.
+        userTokens: [userToken(USDFC, "31200000000000000000", "100000000000000")],
+      },
+      rails: [rail(USDFC, "100000000000000")],
+      oneTimePayments: [payment("0x01", "420000000000000000")],
+    };
+  });
+
+  await openServicePage(page, "service-metrics-width@fake-privy.test");
+  await expect(cellsOf(page, "USDFC").nth(4)).toHaveText(/in 108 days$/);
+
+  const container = page.locator('[data-slot="table-container"]', {
+    has: page.getByRole("columnheader", { name: /Locked deposit/ }),
+  });
+  expect(await container.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
 });
 
 test("a busy pair sees its figures before its one-time total finishes loading", async ({ page }) => {

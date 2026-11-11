@@ -78,7 +78,10 @@ const columns = [
       return (
         <div className='flex flex-col'>
           <span className='tabular-nums'>{formatTokenAmount(lockedDeposit, token.decimals)}</span>
-          {noticeCopy ? <span className='text-xs text-muted-foreground'>{noticeCopy}</span> : null}
+          {noticeCopy ? (
+            // Table cells don't wrap, and this line alone pushed the table past a 1200px window.
+            <span className='text-xs text-muted-foreground whitespace-normal'>{noticeCopy}</span>
+          ) : null}
         </div>
       );
     },
@@ -86,7 +89,17 @@ const columns = [
   columnHelper.display({
     id: "runway",
     header: "Account runway",
-    cell: ({ row }) => row.original.accountRunwayText,
+    cell: ({ row }) => {
+      const { date, detail } = row.original.accountRunway;
+      if (!date) return detail;
+
+      return (
+        <div className='flex flex-col'>
+          <span>{date}</span>
+          <span className='text-xs text-muted-foreground'>{detail}</span>
+        </div>
+      );
+    },
   }),
 ];
 

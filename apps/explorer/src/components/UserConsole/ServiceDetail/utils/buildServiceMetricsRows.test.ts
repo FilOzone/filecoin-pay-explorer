@@ -71,7 +71,7 @@ describe("buildServiceMetricsRows", () => {
         oneTimeThisMonth: 4n,
         lockedDeposit: 7n,
         noticeCopy: notice,
-        accountRunwayText: "No recurring charges",
+        accountRunway: { date: null, detail: "No recurring charges" },
       },
       {
         token: USDFC,
@@ -79,7 +79,7 @@ describe("buildServiceMetricsRows", () => {
         oneTimeThisMonth: 3n,
         lockedDeposit: 9n,
         noticeCopy: notice,
-        accountRunwayText: "No recurring charges",
+        accountRunway: { date: null, detail: "No recurring charges" },
       },
     ]);
   });
@@ -91,7 +91,7 @@ describe("buildServiceMetricsRows", () => {
       oneTimeThisMonth: 0n,
       lockedDeposit: 7n,
       noticeCopy: null,
-      accountRunwayText: "—",
+      accountRunway: { date: null, detail: "—" },
     });
   });
 
@@ -178,11 +178,17 @@ describe("buildServiceMetricsRows", () => {
 
     it("gives the date and the days left", () => {
       // 12.5 days at 10 per epoch.
-      expect(withToken(userToken(USDFC, 360_000n, 10n))?.accountRunwayText).toMatch(/^\w+ \d+(, \d+)? \(in 12 days\)$/);
+      expect(withToken(userToken(USDFC, 360_000n, 10n))?.accountRunway).toEqual({
+        date: expect.stringMatching(/^\w+ \d+(, \d+)?$/),
+        detail: "in 12 days",
+      });
     });
 
     it("says funding expired once the account has run out", () => {
-      expect(withToken(userToken(USDFC, 100n, 100n, NOW - 86_400n))?.accountRunwayText).toBe("Funding expired");
+      expect(withToken(userToken(USDFC, 100n, 100n, NOW - 86_400n))?.accountRunway).toEqual({
+        date: null,
+        detail: "Funding expired",
+      });
     });
 
     it("reads the runway of the row's own token", () => {
@@ -193,7 +199,7 @@ describe("buildServiceMetricsRows", () => {
         },
       });
 
-      expect(row?.accountRunwayText).toBe("No recurring charges");
+      expect(row?.accountRunway).toEqual({ date: null, detail: "No recurring charges" });
     });
   });
 });
