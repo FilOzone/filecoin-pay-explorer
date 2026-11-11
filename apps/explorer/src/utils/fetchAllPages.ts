@@ -1,5 +1,21 @@
+import type { useGraphQLClient } from "@/hooks/useGraphQLQuery";
+import { GET_SUBGRAPH_BLOCK } from "@/services/grapql/queries";
+
 /** graph-node's per-request maximum. Every page `fetchAllPages` reads must ask for this many rows. */
 export const SUBGRAPH_PAGE_SIZE = 1_000;
+
+type SubgraphMeta = { block: { number: number } };
+
+/** The indexed block to pin a walk's pages to, since a walk must never run unpinned. */
+export async function fetchSubgraphMeta(
+  executeQuery: ReturnType<typeof useGraphQLClient>["executeQuery"],
+  signal: AbortSignal,
+): Promise<SubgraphMeta> {
+  // Nullable here and only here: the subgraph omits `_meta` while a deployment is starting up. Throwing lets Query retry.
+  const { _meta } = await executeQuery<{ _meta: SubgraphMeta | null }>(GET_SUBGRAPH_BLOCK, undefined, signal);
+  if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
+  return _meta;
+}
 
 /**
  * Walks a cursor-paged collection until it is exhausted or `maxPages` is hit.

@@ -14,6 +14,7 @@ import {
   type SessionKeyRecord,
   sanitizeRecords,
 } from "@/utils/sessionKeys";
+import { useCurrentTimestamp } from "./useCurrentTimestamp";
 
 export type { SessionKeyWithStatus } from "@/utils/sessionKeys";
 
@@ -103,13 +104,9 @@ export function useSessionKeys(network: Network, account: Hex) {
     query: { enabled: records.length > 0, refetchInterval: 30_000 },
   });
 
-  // Ticks with the poll so a key that expires while the page is open flips to
-  // "expired" even when the chain reads come back unchanged.
-  const [nowSec, setNowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
-  useEffect(() => {
-    const id = window.setInterval(() => setNowSec(BigInt(Math.floor(Date.now() / 1000))), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Ticks each epoch, like the poll, so a key that expires while the page is open
+  // flips to "expired" even when the chain reads come back unchanged.
+  const nowSec = useCurrentTimestamp();
 
   const keys = useMemo(
     () => deriveSessionKeys(records, reads, nowSec, Date.now(), confirmedRef.current),
