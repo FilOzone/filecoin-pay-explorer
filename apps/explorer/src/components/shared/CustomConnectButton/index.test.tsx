@@ -45,6 +45,9 @@ vi.mock("wagmi", () => ({ useDisconnect: () => ({ mutateAsync: vi.fn(async () =>
 vi.mock("@/components/UserConsole/providers/ConsoleAccountContext", () => ({
   useConsoleAccount: () => ({ clearAccount: mocks.clearAccount, selectAccount: mocks.selectAccount }),
 }));
+vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
+  useFundingLaunch: () => ({ requestFundingAfterSignup: vi.fn() }),
+}));
 
 const render = async () => {
   let renderer!: ReturnType<typeof create>;

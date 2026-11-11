@@ -470,7 +470,9 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     const emailAccount = { type: "email", address: email };
     const newUser: User = { id: `did:privy:fake-${email}`, linkedAccounts: [emailAccount] };
     setUser(newUser);
-    for (const listener of onLogin) listener({ user: newUser, isNewUser: true, loginAccount: emailAccount });
+    // Logins return to an existing user unless a test sets `window.__fakePrivyNewUser` to sign up instead.
+    const isNewUser = (window as typeof window & { __fakePrivyNewUser?: boolean }).__fakePrivyNewUser === true;
+    for (const listener of onLogin) listener({ user: newUser, isNewUser, loginAccount: emailAccount });
     // createOnLogin: "users-without-wallets" provisions the embedded wallet after the user exists.
     setTimeout(() => {
       const wallet = createEmbeddedWallet(email);
