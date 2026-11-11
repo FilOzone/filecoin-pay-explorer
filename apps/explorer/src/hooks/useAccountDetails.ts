@@ -12,7 +12,7 @@ import {
 import type { Network } from "@/types";
 import { fetchAllPages, fetchSubgraphMeta, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { toAccountId } from "@/utils/hexUtils";
-import { useGraphQLClient, useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
+import { useGraphQLClient, useGraphQLQuery } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
 
 interface AccountDetailsResponse {
@@ -306,37 +306,6 @@ export const useAccountApprovals = (address: string, page: number = 1, options?:
       hasMore: data.operatorApprovals.length === PAGE_SIZE,
     }),
     enabled: !!accountId,
-    networkOverride: options?.networkOverride,
-  });
-};
-
-type AccountApprovalsPage = {
-  operatorApprovals: OperatorApproval[];
-  /** The `skip` of the next page, or undefined once the last page is reached. */
-  nextSkip: number | undefined;
-};
-
-/**
- * Approvals a page at a time, for a Load more list. Pages with `skip` rather
- * than an `id_gt` cursor: the list is ordered by `rateUsage`, which ids do not
- * follow, so a cursor on id would skip or repeat rows.
- */
-export const useInfiniteAccountApprovals = (address: string, options?: AccountDetailsOptions) => {
-  const accountId = toAccountId(address);
-
-  return useGraphQLInfiniteQuery<AccountApprovalsResponse, AccountApprovalsPage>({
-    queryKey: ["account", accountId, "approvals", "infinite"],
-    query: GET_ACCOUNT_APPROVALS,
-    // One more than a page: asking for exactly a page cannot tell a full last
-    // page apart from one with more behind it, which would offer a Load more
-    // that fetches nothing.
-    getVariables: (skip) => ({ accountId, first: PAGE_SIZE + 1, skip }),
-    select: (data, skip) => ({
-      operatorApprovals: data.operatorApprovals.slice(0, PAGE_SIZE),
-      nextSkip: data.operatorApprovals.length > PAGE_SIZE ? skip + PAGE_SIZE : undefined,
-    }),
-    getNextPageParam: (lastPage) => lastPage.nextSkip,
-    initialPageParam: 0,
     networkOverride: options?.networkOverride,
   });
 };

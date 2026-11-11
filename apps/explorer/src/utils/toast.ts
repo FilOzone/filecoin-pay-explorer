@@ -90,6 +90,40 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
         },
       }[status];
 
+    case "updateApproval":
+      return {
+        pending: {
+          title: "Updating Limits",
+          description: operator ? `Updating ${token} limits for ${formatAddress(operator)}...` : "Processing...",
+        },
+        success: {
+          title: "Limits Updated",
+          description: operator ? `New ${token} limits set for ${formatAddress(operator)}` : "Spending limits updated",
+        },
+        error: {
+          title: "Limit Update Failed",
+          description: operator ? `Failed to update limits for ${formatAddress(operator)}` : "Failed to update limits",
+        },
+      }[status];
+
+    case "revokeApproval":
+      return {
+        pending: {
+          title: "Revoking Service",
+          description: operator ? `Revoking ${formatAddress(operator)}...` : "Processing...",
+        },
+        success: {
+          title: "Service Revoked",
+          description: operator
+            ? `${formatAddress(operator)} can no longer open ${token} rails`
+            : "Service approval revoked",
+        },
+        error: {
+          title: "Revoke Failed",
+          description: operator ? `Failed to revoke ${formatAddress(operator)}` : "Failed to revoke service",
+        },
+      }[status];
+
     case "settleRail":
       return {
         pending: {

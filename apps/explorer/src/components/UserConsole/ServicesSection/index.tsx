@@ -1,5 +1,6 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
 import { useAccountServices } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
@@ -26,6 +27,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ accountId, net
     networkOverride: network,
   });
 
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
+
   const services = useMemo(() => data?.pages.flatMap((page) => page.services) ?? [], [data]);
 
   const profileFor = useServiceProfiles(
@@ -33,33 +36,38 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ accountId, net
     network,
   );
 
+  let content: React.ReactNode;
   if (isLoading) {
-    return <ServicesLoadingState />;
-  }
-
-  if (isError) {
-    return <ServicesErrorState />;
-  }
-
-  if (services.length === 0) {
-    return <ServicesEmptyState />;
-  }
-
-  return (
-    <ServicesSectionLayout>
-      <div className='flex flex-col gap-4'>
-        {services.map((service) => (
-          <ServiceCard key={service.id} service={service} profile={profileFor(service.operator.address)} />
-        ))}
-      </div>
-
-      {hasNextPage ? (
-        <div className='flex justify-center'>
-          <Button variant='tertiary' size='compact' onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-            {isFetchingNextPage ? "Loading..." : "Load more"}
-          </Button>
+    content = <ServicesLoadingState />;
+  } else if (isError) {
+    content = <ServicesErrorState />;
+  } else if (services.length === 0) {
+    content = <ServicesEmptyState />;
+  } else {
+    content = (
+      <>
+        <div className='flex flex-col gap-4'>
+          {services.map((service) => (
+            <ServiceCard key={service.id} service={service} profile={profileFor(service.operator.address)} />
+          ))}
         </div>
-      ) : null}
-    </ServicesSectionLayout>
+
+        {hasNextPage ? (
+          <div className='flex justify-center'>
+            <Button variant='tertiary' size='compact' onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? "Loading..." : "Load more"}
+            </Button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  // The dialog sits outside the states so Add Service works while the list is loading or failing to load.
+  return (
+    <>
+      <ServicesSectionLayout onAddService={() => setAddServiceOpen(true)}>{content}</ServicesSectionLayout>
+      <AddServiceDialog network={network} open={addServiceOpen} onOpenChange={setAddServiceOpen} />
+    </>
   );
 };

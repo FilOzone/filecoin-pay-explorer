@@ -12,6 +12,7 @@ import {
   GET_ACCOUNT_OPERATOR,
   GET_ACCOUNT_OPERATOR_RAILS,
   GET_ACCOUNT_OPERATORS,
+  GET_SERVICE_APPROVALS,
   GET_SERVICE_METRICS,
   GET_SERVICE_ONE_TIME_PAYMENTS,
 } from "@/services/grapql/queries";
@@ -108,6 +109,31 @@ export const useAccountService = (address: string, operatorAddress: string, opti
     query: GET_ACCOUNT_OPERATOR,
     variables: { id: getAccountOperatorId(accountId, operatorId) },
     select: (data) => data.accountOperator,
+    enabled: !!accountId && !!operatorId,
+    networkOverride: options?.networkOverride,
+  });
+};
+
+/** A pair's approval of one token, revoked ones included. */
+export type ServiceApproval = Pick<
+  OperatorApproval,
+  "id" | "isApproved" | "rateAllowance" | "lockupAllowance" | "maxLockupPeriod"
+> & { token: Pick<Token, "id" | "symbol" | "decimals"> };
+
+interface ServiceApprovalsResponse {
+  operatorApprovals: ServiceApproval[];
+}
+
+/** One page covers every token a pair has approved: an approval is per token, and few tokens exist. */
+export const useServiceApprovals = (address: string, operatorAddress: string, options?: AccountServicesOptions) => {
+  const accountId = toAccountId(address);
+  const operatorId = toAccountId(operatorAddress);
+
+  return useGraphQLQuery<ServiceApprovalsResponse, ServiceApproval[]>({
+    queryKey: ["account", accountId, "services", operatorId, "approvals"],
+    query: GET_SERVICE_APPROVALS,
+    variables: { client: accountId, operator: operatorId },
+    select: (data) => data.operatorApprovals,
     enabled: !!accountId && !!operatorId,
     networkOverride: options?.networkOverride,
   });

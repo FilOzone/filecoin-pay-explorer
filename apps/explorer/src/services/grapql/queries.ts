@@ -550,6 +550,23 @@ export const GET_ACCOUNT_APPROVALS = gql`
   }
 `;
 
+export const GET_SERVICE_APPROVALS = gql`
+  query GetServiceApprovals($client: String!, $operator: String!) {
+    operatorApprovals(where: { client: $client, operator: $operator }, first: 100, orderBy: id) {
+      id
+      isApproved
+      maxLockupPeriod
+      lockupAllowance
+      rateAllowance
+      token {
+        id
+        symbol
+        decimals
+      }
+    }
+  }
+`;
+
 const ACCOUNT_OPERATOR_FIELDS = `
   fragment AccountOperatorFields on AccountOperator {
     id

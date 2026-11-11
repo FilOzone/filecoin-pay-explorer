@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { type Address, getAddress } from "viem";
 import { getChain } from "@/constants/chains";
 import { useAccountService } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
@@ -13,6 +13,7 @@ import {
   ServiceMetrics,
   ServiceNotFoundState,
   ServicePricing,
+  SpendingLimits,
 } from "./components";
 
 interface ServiceDetailProps {
@@ -75,6 +76,14 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({
       {BigInt(service.totalRails) > 0n ? (
         <ServiceMetrics accountId={accountId} network={network} operatorId={operatorId} />
       ) : null}
+
+      <SpendingLimits
+        key={`${network}:${accountId}:${operatorId}:limits`}
+        accountId={accountId}
+        network={network}
+        operator={getAddress(operatorId)}
+        userAddress={userAddress}
+      />
 
       <RailsSection
         key={`${network}:${accountId}:${operatorId}`}
