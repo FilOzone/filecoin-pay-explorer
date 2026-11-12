@@ -1,16 +1,11 @@
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import AddServiceDialog from "@/components/UserConsole/AddServiceDialog";
 import { useAccountServices } from "@/hooks/useAccountServices";
 import { useServiceProfiles } from "@/hooks/useServiceProfiles";
 import type { Network } from "@/types";
-import {
-  ServiceCard,
-  ServicesEmptyState,
-  ServicesErrorState,
-  ServicesLoadingState,
-  ServicesSectionLayout,
-} from "./components";
+import { ServiceCard, ServicesEmptyState, ServicesErrorState, ServicesLoadingState } from "./components";
 
 interface ServicesSectionProps {
   accountId: string;
@@ -66,7 +61,18 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ accountId, net
   // The dialog sits outside the states so Add Service works while the list is loading or failing to load.
   return (
     <>
-      <ServicesSectionLayout onAddService={() => setAddServiceOpen(true)}>{content}</ServicesSectionLayout>
+      <div className='flex flex-col gap-4'>
+        <div className='flex items-center justify-between'>
+          <h3 className='text-2xl font-medium'>Your Services</h3>
+          <Button variant='primary' onClick={() => setAddServiceOpen(true)} className='py-2'>
+            <span className='flex items-center gap-2'>
+              <Plus className='h-4 w-4' />
+              Add Service
+            </span>
+          </Button>
+        </div>
+        {content}
+      </div>
       <AddServiceDialog network={network} open={addServiceOpen} onOpenChange={setAddServiceOpen} />
     </>
   );

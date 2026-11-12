@@ -74,21 +74,20 @@ const SpendingLimitsLayout = ({ children }: { children: ReactNode }) => (
 );
 
 type SpendingLimitsProps = {
-  accountId: string;
   network: Network;
   operator: Address;
   userAddress: Address;
 };
 
-const SpendingLimits = ({ accountId, network, operator, userAddress }: SpendingLimitsProps) => {
+const SpendingLimits = ({ network, operator, userAddress }: SpendingLimitsProps) => {
   const {
     data: approvals,
     isLoading,
     isError,
-  } = useServiceApprovals(accountId, operator, {
+  } = useServiceApprovals(userAddress, operator, {
     networkOverride: network,
   });
-  const [editing, setEditing] = useState<ServiceApproval | null>(null);
+  const [editing, setEditing] = useState<ServiceApproval["token"] | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const queryClient = useQueryClient();
@@ -97,12 +96,13 @@ const SpendingLimits = ({ accountId, network, operator, userAddress }: SpendingL
   const refreshOnceIndexed = async ({ blockNumber }: TransactionReceipt) => {
     setIsIndexing(true);
     try {
-      // Past the timeout the request throws, which leaves the refresh to the timed passes every write already gets.
+      // Past the timeout the request throws and the notice clears; the table catches up on its next refetch.
       const signal = AbortSignal.timeout(INDEXING_TIMEOUT_MS);
       while (BigInt((await fetchSubgraphMeta(executeQuery, signal)).block.number) < blockNumber) {
         await new Promise((resolve) => setTimeout(resolve, INDEXING_POLL_MS));
       }
-      await invalidateAccountQueries(queryClient, userAddress);
+      // The index has the block, so the timed passes the receipt scheduled have nothing left to catch.
+      await invalidateAccountQueries(queryClient, userAddress, { repeatAfterMs: [] });
     } catch (error) {
       console.error("Waiting for the subgraph to index the limits update failed:", error);
     } finally {
@@ -113,7 +113,7 @@ const SpendingLimits = ({ accountId, network, operator, userAddress }: SpendingL
   const columns = useMemo(
     () =>
       createColumns((approval) => {
-        setEditing(approval);
+        setEditing(approval.token);
         setDialogOpen(true);
       }),
     [],
@@ -160,13 +160,13 @@ const SpendingLimits = ({ accountId, network, operator, userAddress }: SpendingL
         <p className='text-sm text-muted-foreground'>This service has no spending limits yet.</p>
       )}
 
-      {/* Kept mounted after closing so the panel can finish its leave transition with the same token. */}
+      {/* Kept mounted after closing: the dialog tracks its receipt, and the panel leaves with the same token. */}
       {editing ? (
         <EditLimitsDialog
           network={network}
           owner={userAddress}
           operator={operator}
-          token={editing.token}
+          token={editing}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           onConfirmed={(receipt) => void refreshOnceIndexed(receipt)}

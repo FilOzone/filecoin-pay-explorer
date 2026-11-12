@@ -1,7 +1,7 @@
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import type { OperatorApprovalState } from "@/hooks/useOperatorApproval";
-import { isUnlimitedValue } from "@/utils/formatter";
+import { formatTokenTruncated, isUnlimitedValue } from "@/utils/formatter";
 import { formatTokenAmount } from "../../FundsSection/utils/formatTokenAmount";
 
 const { EPOCHS_PER_DAY, EPOCHS_PER_MONTH } = TIME_CONSTANTS;
@@ -14,7 +14,7 @@ export type LimitField = { text: string; unlimited: boolean };
 /** The rate is per month, the lockup in tokens, and the lockup period in whole days. */
 export type LimitsForm = Record<"rate" | "lockup" | "period", LimitField>;
 
-export type LimitsUpdate =
+type LimitsUpdate =
   | { status: "invalid" }
   | { status: "unchanged" }
   | { status: "ready"; terms: ApprovalTerms; belowUsage: boolean };
@@ -22,14 +22,10 @@ export type LimitsUpdate =
 /** Synapse revokes with zeroed limits; re-approving asks for new ones anyway. */
 export const REVOKED_TERMS: ApprovalTerms = { rateAllowance: 0n, lockupAllowance: 0n, maxLockupPeriod: 0n };
 
-const PREFILL_FRACTION_DIGITS = 6;
-
 // A per-epoch rate rarely converts back to a round monthly figure, so the form starts from a readable one.
-const toPrefillText = (value: bigint, decimals: number) => {
-  const [unit, fraction = ""] = formatUnits(value, decimals).split(".");
-  const shown = fraction.slice(0, PREFILL_FRACTION_DIGITS).replace(/0+$/, "");
-  return shown ? `${unit}.${shown}` : unit;
-};
+const toPrefillText = (value: bigint, decimals: number) => formatTokenTruncated(value, decimals, "", 6);
+
+const toDays = (period: bigint) => formatUnits((period * 100n) / EPOCHS_PER_DAY, 2);
 
 const field = (value: bigint, toText: (value: bigint) => string): LimitField =>
   isUnlimitedValue(value) ? { text: "", unlimited: true } : { text: toText(value), unlimited: false };
@@ -37,7 +33,7 @@ const field = (value: bigint, toText: (value: bigint) => string): LimitField =>
 export const limitsForm = (current: ApprovalTerms, decimals: number): LimitsForm => ({
   rate: field(current.rateAllowance, (rate) => toPrefillText(rate * EPOCHS_PER_MONTH, decimals)),
   lockup: field(current.lockupAllowance, (lockup) => toPrefillText(lockup, decimals)),
-  period: field(current.maxLockupPeriod, (period) => formatUnits((period * 100n) / EPOCHS_PER_DAY, 2)),
+  period: field(current.maxLockupPeriod, toDays),
 });
 
 const parseAmount = (text: string, decimals: number): bigint | null =>
@@ -89,6 +85,6 @@ export const formatLockupLimit = (lockup: bigint, decimals: number, symbol: stri
 
 export const formatPeriodLimit = (period: bigint) => {
   if (isUnlimitedValue(period)) return "Unlimited";
-  const days = formatUnits((period * 100n) / EPOCHS_PER_DAY, 2);
+  const days = toDays(period);
   return `${days} ${days === "1" ? "day" : "days"}`;
 };

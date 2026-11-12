@@ -3,7 +3,7 @@ import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OperatorApprovalState } from "@/hooks/useOperatorApproval";
-import { EditLimitsDialog } from "./EditLimitsDialog";
+import EditLimitsDialog from "./EditLimitsDialog";
 
 const TOKEN = 10n ** 18n;
 const { EPOCHS_PER_DAY } = TIME_CONSTANTS;

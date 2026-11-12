@@ -79,7 +79,6 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({
 
       <SpendingLimits
         key={`${network}:${accountId}:${operatorId}:limits`}
-        accountId={accountId}
         network={network}
         operator={getAddress(operatorId)}
         userAddress={userAddress}

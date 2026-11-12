@@ -185,6 +185,16 @@ const RevokeConfirmation = ({
   </>
 );
 
+const WaitingBody = ({ children }: { children: string }) => (
+  <>
+    <DialogHeader>
+      <DialogTitle>Edit spending limits</DialogTitle>
+      <DialogDescription>{children}</DialogDescription>
+    </DialogHeader>
+    <Loader2 aria-hidden='true' className='mx-auto my-6 h-6 w-6 animate-spin text-muted-foreground' />
+  </>
+);
+
 /** Mounted once the fresh read lands, so the form starts from the chain's values. */
 const EditLimitsForm = (props: FormProps) => {
   const { operator, token, current, isSubmitting, onSubmit, onCancel } = props;
@@ -295,15 +305,7 @@ const EditLimitsBody = ({
 
   // A cached read from an earlier opening may be stale; the form waits for this mount's own.
   if (!approval.isFetchedAfterMount) {
-    return (
-      <>
-        <DialogHeader>
-          <DialogTitle>Edit spending limits</DialogTitle>
-          <DialogDescription>Reading your current limits from the chain...</DialogDescription>
-        </DialogHeader>
-        <Loader2 aria-hidden='true' className='mx-auto my-6 h-6 w-6 animate-spin text-muted-foreground' />
-      </>
-    );
+    return <WaitingBody>Reading your current limits from the chain...</WaitingBody>;
   }
 
   if (approval.isError || !approval.data) {
@@ -333,7 +335,7 @@ const EditLimitsBody = ({
   return <EditLimitsForm {...formProps} current={approval.data} />;
 };
 
-export const EditLimitsDialog = ({
+const EditLimitsDialog = ({
   network,
   owner,
   operator,
@@ -384,13 +386,7 @@ export const EditLimitsDialog = ({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-500px' showCloseButton={!isSubmitting}>
         {isConfirming ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Edit spending limits</DialogTitle>
-              <DialogDescription>Waiting for your last update to confirm...</DialogDescription>
-            </DialogHeader>
-            <Loader2 aria-hidden='true' className='mx-auto my-6 h-6 w-6 animate-spin text-muted-foreground' />
-          </>
+          <WaitingBody>Waiting for your last update to confirm...</WaitingBody>
         ) : (
           <EditLimitsBody
             network={network}

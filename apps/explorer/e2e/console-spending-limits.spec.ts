@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { decodeFunctionData, type Hex, maxUint256, parseAbi } from "viem";
+import { decodeFunctionData, type Hex, maxUint256 } from "viem";
 import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
@@ -12,9 +12,6 @@ const USDFC = { id: "0x3333333333333333333333333333333333333333", symbol: "USDFC
 const OLD_TOKEN = { id: "0x6666666666666666666666666666666666666666", symbol: "OLD", decimals: "18" };
 const THIRTY_DAYS_IN_EPOCHS = "86400";
 const TOKEN = 10n ** 18n;
-const setOperatorApprovalAbi = parseAbi([
-  "function setOperatorApproval(address token, address operator, bool approved, uint256 rateAllowance, uint256 lockupAllowance, uint256 maxLockupPeriod)",
-]);
 
 /**
  * The index says the lockup limit is 5 USDFC; the fake chain (fake-chain.ts) holds 1 USDFC with a 1 USDFC per epoch
@@ -88,8 +85,11 @@ async function approveAndReadTransaction(page: Page) {
   const tx = await sent.jsonValue();
   if (!tx) throw new Error("No transaction was sent");
   const { mainnet } = await import("@filoz/synapse-sdk");
-  expect(tx.to.toLowerCase()).toBe(mainnet.contracts.filecoinPay.address.toLowerCase());
-  return decodeFunctionData({ abi: setOperatorApprovalAbi, data: tx.data }).args;
+  const payments = mainnet.contracts.filecoinPay;
+  expect(tx.to.toLowerCase()).toBe(payments.address.toLowerCase());
+  const { functionName, args } = decodeFunctionData({ abi: payments.abi, data: tx.data });
+  expect(functionName).toBe("setOperatorApproval");
+  return args;
 }
 
 const cellsOf = (page: Page, symbol: string) =>
