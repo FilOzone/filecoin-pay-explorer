@@ -28,8 +28,13 @@ const createColumns = (onEdit: (approval: ServiceApproval) => void) => [
   columnHelper.display({
     id: "status",
     header: "Status",
-    cell: ({ row }) =>
-      row.original.isApproved ? <Badge variant='primary'>Active</Badge> : <Badge variant='tertiary'>Revoked</Badge>,
+    cell: ({ row }) => (
+      <div className='flex justify-start'>
+        <Badge variant={row.original.isApproved ? "primary" : "tertiary"}>
+          {row.original.isApproved ? "Active" : "Revoked"}
+        </Badge>
+      </div>
+    ),
   }),
   columnHelper.display({
     id: "rate",
