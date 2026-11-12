@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
+import { getAddress } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getChain } from "@/constants/chains";
 import { ServiceDetail } from ".";
@@ -28,6 +29,9 @@ vi.mock("@/components/shared", () => ({
 
 vi.mock("./components/ServiceMetrics", () => ({
   default: () => <div>Spend and funding</div>,
+}));
+vi.mock("./components/SpendingLimits", () => ({
+  default: ({ operator }: { operator: string }) => <div data-testid='limits' data-operator={operator} />,
 }));
 vi.mock("../RailsSection", () => ({
   RailsSection: () => <div>Payment rails</div>,
@@ -72,6 +76,18 @@ describe("ServiceDetail", () => {
     const metrics = screen.getByText("Spend and funding");
     const rails = screen.getByText("Payment rails");
     expect(metrics.compareDocumentPosition(rails) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // An approval with no rails yet is still a service whose limits the payer may want to change.
+  it("shows spending limits above the rails for a pair with no rails", () => {
+    mocks.service = { totalRails: "0" };
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+
+    const limits = screen.getByTestId("limits");
+    expect(limits.dataset.operator).toBe(getAddress(OPERATOR));
+    expect(
+      limits.compareDocumentPosition(screen.getByText("Payment rails")) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // An approval alone would otherwise show a row of zeros for a service never used.

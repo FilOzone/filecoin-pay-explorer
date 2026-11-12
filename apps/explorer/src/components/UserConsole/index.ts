@@ -4,8 +4,6 @@ export { AlertsBanner } from "./AlertsBanner";
 export { BetaWarning } from "./BetaWarning";
 export { DepositDialog } from "./DepositDialog";
 export { FundsSection } from "./FundsSection";
-export { IncreaseApprovalDialog } from "./IncreaseApprovalDialog";
-export { OperatorApprovalsSection } from "./OperatorApprovalsSection";
 export { RailsSection } from "./RailsSection";
 export { ServiceDetail } from "./ServiceDetail";
 export { ServicesSection } from "./ServicesSection";

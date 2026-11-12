@@ -19,7 +19,6 @@ const topUpState = vi.hoisted(() => ({
   isTopUpActive: false,
 }));
 const sectionNetworks = vi.hoisted(() => ({
-  approvals: "" as string,
   funds: "" as string,
   services: "" as string,
 }));
@@ -55,10 +54,6 @@ vi.mock("@/components/UserConsole", () => ({
     sectionNetworks.funds = network;
     return <div data-account-id={account.id}>Funds</div>;
   },
-  OperatorApprovalsSection: ({ network }: { network: string }) => {
-    sectionNetworks.approvals = network;
-    return <div>Approvals</div>;
-  },
   ServicesSection: ({ network }: { network: string }) => {
     sectionNetworks.services = network;
     return <div>Services</div>;
@@ -86,7 +81,6 @@ describe("UserConsole", () => {
     accountState.requestedAddress = "";
     accountState.requestedNetwork = "";
     topUpState.isTopUpActive = false;
-    sectionNetworks.approvals = "";
     sectionNetworks.funds = "";
     sectionNetworks.services = "";
   });
@@ -97,7 +91,6 @@ describe("UserConsole", () => {
     expect(markup).toContain("Unsupported network");
     expect(markup).not.toContain("Funds");
     expect(markup).not.toContain("Filecoin balance");
-    expect(markup).not.toContain("Approvals");
     expect(markup).not.toContain("Services");
   });
 
@@ -106,7 +99,6 @@ describe("UserConsole", () => {
     const markup = renderToStaticMarkup(<UserConsole />);
 
     expect(markup).toContain("Funds");
-    expect(markup).toContain("Approvals");
     expect(markup).toContain("Services");
   });
 
@@ -138,12 +130,11 @@ describe("UserConsole", () => {
     wallet.chainId = 8453;
     const sourceMarkup = renderToStaticMarkup(<UserConsole />);
     expect(sourceMarkup).toContain("Funds");
-    expect(sourceMarkup).toContain("Approvals");
     expect(sourceMarkup).toContain("Services");
     expect(sourceMarkup).not.toContain("Unsupported network");
     expect(accountState.requestedAddress).toBe(wallet.address);
     expect(accountState.requestedNetwork).toBe("mainnet");
-    expect(sectionNetworks).toEqual({ approvals: "mainnet", funds: "mainnet", services: "mainnet" });
+    expect(sectionNetworks).toEqual({ funds: "mainnet", services: "mainnet" });
   });
 
   it("does not let an active flag bypass an unrelated unsupported chain", () => {

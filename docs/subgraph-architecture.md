@@ -278,9 +278,9 @@ The console first queries `Account`. A missing indexed account prevents the fund
 | Account gate | `Account` identity and counters | Wallet connection supplies the address and network |
 | Funds | Up to 100 `UserToken` rows ordered by funds, with nested `Token` metadata | Withdrawal dialog polls `getAccountInfoIfSettled`; deposit dialogs read wallet balances and allowances |
 | Rails | Ten `Rail` rows per page with participants, token, current state, rates, totals, and the latest positive `RateChangeQueue` interval | Current block is watched; settlement amounts come from Synapse SDK contract reads |
-| Authorized Services (current UI) | First ten `OperatorApproval` rows ordered by `rateUsage`, with nested `Operator` and `Token` | Approval writes call `setOperatorApproval` |
+| Spending limits (service page) | Up to 100 `OperatorApproval` rows for the payer and operator, revoked ones included, with nested `Token` | The edit dialog reads `operatorApprovals` from the Payments contract before building the absolute `setOperatorApproval` call |
 
-The subgraph now exposes `AccountOperator` for the service-list work in #340, but the current Explorer has not switched to it yet. The existing console fetches `UserToken.payout` and `fundsCollected`, but the active funds overview does not render them. It fetches `OperatorApproval.lockupUsage` and `rateUsage`, but the table renders allowances rather than usage; `rateUsage` still controls ordering.
+The subgraph now exposes `AccountOperator` for the service-list work in #340, but the current Explorer has not switched to it yet. The existing console fetches `UserToken.payout` and `fundsCollected`, but the active funds overview does not render them. The spending-limits table renders allowances, not `rateUsage`, which the subgraph does not lower when a rail terminates; the edit dialog shows usage from the contract.
 
 `OperatorToken`, `Settlement`, `OneTimePayment`, `FeeAuctionPurchase`, and metrics entities are not used by the active user-console sections. They serve operator pages, rail-detail history, leaderboards, dashboards, or future views.
 
@@ -294,7 +294,7 @@ The console deliberately mixes indexed and live sources:
 - The withdrawal dialog polls settled account information from the Payments contract every ten seconds while open.
 - Transaction hooks submit writes and watch receipts through the connected RPC.
 
-An indexed value should not be treated as transaction-authoritative without a fresh contract read. The current Increase Approval dialog violates this boundary: it adds the requested increase to indexed allowance values, then submits those calculated totals to the absolute `setOperatorApproval` setter. Indexer lag can turn an apparent increase into a lower on-chain value.
+An indexed value should not be treated as transaction-authoritative without a fresh contract read. The spending-limits dialog follows this boundary: `setOperatorApproval` takes absolute values, so it builds them from a contract read made when it opens, never from indexed allowances.
 
 ## Freshness boundary
 

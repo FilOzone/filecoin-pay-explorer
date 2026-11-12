@@ -30,6 +30,9 @@ vi.mock("@/hooks/useServiceMetadata", () => ({
 vi.mock("@filecoin-foundation/ui-filecoin/Button", () => ({
   Button: ({ children, href }: { children: React.ReactNode; href?: string }) => <a href={href}>{children}</a>,
 }));
+vi.mock("@/components/UserConsole/AddServiceDialog", () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>Add a Service</div> : null),
+}));
 vi.mock("@/components/shared", () => ({
   CopyableText: ({ value }: { value: string }) => <span>{value}</span>,
 }));
@@ -81,5 +84,22 @@ describe("ServicesSection", () => {
     render();
 
     expect(observed.accountId).toBe(ACCOUNT_ID);
+  });
+
+  it.each([
+    ["loading", () => Object.assign(servicesQuery, { data: undefined, isLoading: true }), "Loading your services..."],
+    [
+      "failing to load",
+      () => Object.assign(servicesQuery, { data: undefined, isError: true }),
+      "Failed to load services",
+    ],
+    ["empty", () => Object.assign(servicesQuery, { data: { pages: [{ services: [] }] } }), "No services yet"],
+  ])("keeps Add Service in the heading while the list is %s", (_state, setState, stateText) => {
+    setState();
+
+    const markup = render();
+
+    expect(markup).toContain(stateText);
+    expect(markup).toContain("Add Service");
   });
 });
