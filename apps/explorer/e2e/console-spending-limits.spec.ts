@@ -29,7 +29,7 @@ const approvals = [
   { id: "old", isApproved: false, rateAllowance: "0", lockupAllowance: "0", maxLockupPeriod: "0", token: OLD_TOKEN },
 ];
 
-async function stubServicePage(page: Page, index = { block: 1, approvals }) {
+async function stubServicePage(page: Page) {
   await page.addInitScript((operator) => {
     (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [operator];
   }, OPERATOR);
@@ -50,10 +50,7 @@ async function stubServicePage(page: Page, index = { block: 1, approvals }) {
         return route.fulfill({ json: { data: { accountOperator } } });
       }
       if (query.includes("GetServiceApprovals")) {
-        return route.fulfill({ json: { data: { operatorApprovals: index.approvals } } });
-      }
-      if (query.includes("GetSubgraphBlock")) {
-        return route.fulfill({ json: { data: { _meta: { block: { number: index.block } } } } });
+        return route.fulfill({ json: { data: { operatorApprovals: approvals } } });
       }
       return route.fulfill({ json: { data: { accounts: [], userTokens: [], rails: [], dataSets: [] } } });
     },
@@ -65,8 +62,8 @@ async function stubServicePage(page: Page, index = { block: 1, approvals }) {
   );
 }
 
-async function openLimitsDialog(page: Page, email: string, index?: Parameters<typeof stubServicePage>[1]) {
-  await stubServicePage(page, index);
+async function openLimitsDialog(page: Page, email: string) {
+  await stubServicePage(page);
   await page.goto(`/console/services/${OPERATOR}`);
   await loginWithTestAccount(page, { email });
   await page.getByRole("button", { name: "Edit USDFC limits" }).click({ timeout: 30_000 });
@@ -164,27 +161,6 @@ test.describe("spending limits on the service page", () => {
     await unlimited.uncheck();
     await expect(lockup).toHaveValue("2");
     await expect(lockup).toBeFocused();
-  });
-
-  // Regression: after the receipt the table kept the old indexed limits, with nothing saying an update was coming.
-  test("says a confirmed update is being indexed, then shows the new limit", async ({ page }) => {
-    const index = { block: 0, approvals };
-    const dialog = await openLimitsDialog(page, "spending-limits-indexing@fake-privy.test", index);
-    await dialog.getByLabel("Lockup limit (USDFC)").fill("0.5");
-    await dialog.getByRole("button", { name: "Update limits" }).click();
-    const wallet = page.getByRole("dialog", { name: "approve transaction" });
-    await wallet.getByRole("button", { name: "Approve" }).click();
-    await wallet.getByRole("button", { name: "All Done" }).click();
-
-    const indexing = page.getByText("These limits refresh once it is indexed.");
-    await expect(indexing).toBeVisible();
-    await expect(cellsOf(page, "USDFC").nth(3)).toHaveText("5.000 USDFC");
-
-    // The fake chain confirms every transaction in block 1.
-    index.approvals = [{ ...approvals[0], lockupAllowance: (TOKEN / 2n).toString() }, approvals[1]];
-    index.block = 1;
-    await expect(cellsOf(page, "USDFC").nth(3)).toHaveText("0.500 USDFC");
-    await expect(indexing).toBeHidden();
   });
 
   test("stays open while the wallet request is pending", async ({ page }) => {

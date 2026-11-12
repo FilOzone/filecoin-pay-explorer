@@ -86,7 +86,6 @@ function renderDialog(onOpenChange = vi.fn()) {
       token={token}
       open
       onOpenChange={onOpenChange}
-      onConfirmed={vi.fn()}
     />,
   );
   const button = (name: string) => screen.getByRole("button", { name });

@@ -11,7 +11,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
-import { type Address, getAddress, type TransactionReceipt } from "viem";
+import { type Address, getAddress } from "viem";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { ServiceApproval } from "@/hooks/useAccountServices";
@@ -40,7 +40,6 @@ interface EditLimitsDialogProps {
   token: LimitToken;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirmed: (receipt: TransactionReceipt) => void;
 }
 
 type SubmitLimits = (approve: boolean, terms: ApprovalTerms) => Promise<void>;
@@ -348,15 +347,7 @@ const EditLimitsBody = ({
   return <EditLimitsForm {...formProps} current={approval.data} />;
 };
 
-const EditLimitsDialog = ({
-  network,
-  owner,
-  operator,
-  token,
-  open,
-  onOpenChange,
-  onConfirmed,
-}: EditLimitsDialogProps) => {
+const EditLimitsDialog = ({ network, owner, operator, token, open, onOpenChange }: EditLimitsDialogProps) => {
   const chain = getChain(network);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { execute, isExecuting } = useContractTransaction({
@@ -381,7 +372,6 @@ const EditLimitsDialog = ({
         args: [token.id, operator, approve, terms.rateAllowance, terms.lockupAllowance, terms.maxLockupPeriod],
         metadata: { type: approve ? "updateApproval" : "revokeApproval", operator, token: token.symbol },
         onSubmitOnChain: () => onOpenChange(false),
-        onConfirmed,
       });
     } catch (error) {
       // execute() already toasted; the form stays as it was so the owner can try again.
