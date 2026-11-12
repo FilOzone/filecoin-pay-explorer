@@ -49,7 +49,9 @@ export const parseLimitsForm = (form: LimitsForm, current: OperatorApprovalState
   const prefill = limitsForm(current, decimals);
   const read = (key: keyof LimitsForm, kept: bigint, parse: (text: string) => bigint | null) => {
     const { text, unlimited } = form[key];
-    if (unlimited === prefill[key].unlimited && text === prefill[key].text) return kept;
+    // Text typed and then hidden by Unlimited is a draft, not an edit.
+    const untouched = unlimited ? prefill[key].unlimited : !prefill[key].unlimited && text === prefill[key].text;
+    if (untouched) return kept;
     return unlimited ? maxUint256 : parse(text.trim());
   };
 

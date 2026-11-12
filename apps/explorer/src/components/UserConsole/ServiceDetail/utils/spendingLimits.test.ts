@@ -108,6 +108,15 @@ describe("parseLimitsForm", () => {
     expect(parseLimitsForm(edit({}), current, DECIMALS)).toEqual({ status: "unchanged" });
   });
 
+  // Regression: a draft amount left behind an Unlimited box counted as an edit and offered to sign the maximum.
+  it("reports a limit that is still unlimited as unchanged, whatever was typed in between", () => {
+    const unlimited = { ...current, rateAllowance: maxUint256 - 1n };
+
+    expect(parseLimitsForm(edit({ rate: { text: "5", unlimited: true } }, unlimited), unlimited, DECIMALS)).toEqual({
+      status: "unchanged",
+    });
+  });
+
   it("approves a revoked service again even with its old limits", () => {
     const revoked = { ...current, isApproved: false };
 

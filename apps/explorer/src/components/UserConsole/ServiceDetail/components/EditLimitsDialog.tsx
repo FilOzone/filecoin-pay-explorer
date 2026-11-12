@@ -54,6 +54,8 @@ interface FormProps {
   onCancel: () => void;
 }
 
+const isEmptyLimit = ({ text, unlimited }: LimitField) => !unlimited && text.trim() === "";
+
 const LimitInput = ({
   id,
   label,
@@ -79,7 +81,10 @@ const LimitInput = ({
           type='checkbox'
           aria-label={unlimitedLabel}
           checked={value.unlimited}
-          onChange={(event) => onChange({ ...value, unlimited: event.target.checked })}
+          onChange={(event) => {
+            onChange({ ...value, unlimited: event.target.checked });
+            if (!event.target.checked) document.getElementById(id)?.focus();
+          }}
           disabled={disabled}
           className='rounded'
         />
@@ -89,11 +94,16 @@ const LimitInput = ({
     <Input
       id={id}
       inputMode='decimal'
-      placeholder={value.unlimited ? "Unlimited" : "0"}
+      placeholder={value.unlimited ? "No limit. Type an amount to set one." : "0"}
       value={value.unlimited ? "" : value.text}
-      onChange={(text) => onChange({ ...value, text })}
-      disabled={value.unlimited || disabled}
+      onChange={(text) => onChange({ text, unlimited: false })}
+      disabled={disabled}
     />
+    {isEmptyLimit(value) ? (
+      <p role='alert' className='text-sm text-destructive'>
+        Enter a limit, or choose Unlimited.
+      </p>
+    ) : null}
     {hint ? <p className='text-xs text-muted-foreground'>{hint}</p> : null}
   </div>
 );
@@ -247,7 +257,7 @@ const EditLimitsForm = (props: FormProps) => {
           disabled={isSubmitting}
         />
 
-        {update.status === "invalid" ? (
+        {update.status === "invalid" && !Object.values(form).some(isEmptyLimit) ? (
           <p role='alert' className='text-sm text-destructive'>
             Enter plain decimal amounts and a whole number of days.
           </p>

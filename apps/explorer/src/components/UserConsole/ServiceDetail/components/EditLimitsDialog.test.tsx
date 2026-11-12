@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { maxUint256 } from "viem";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OperatorApprovalState } from "@/hooks/useOperatorApproval";
 import EditLimitsDialog from "./EditLimitsDialog";
@@ -130,6 +131,44 @@ describe("EditLimitsDialog", () => {
       "Unlimited lockup",
       "Unlimited lockup period",
     ]);
+  });
+
+  it("sets a limit when an amount is typed into an unlimited field", async () => {
+    mocks.read = fresh({ ...onChain, lockupAllowance: maxUint256 });
+    const { button, type } = renderDialog();
+    const unlimited = screen.getByRole<HTMLInputElement>("checkbox", { name: "Unlimited lockup" });
+    expect(unlimited.checked).toBe(true);
+
+    type("Lockup limit (USDFC)", "5");
+    expect(unlimited.checked).toBe(false);
+
+    await act(async () => fireEvent.click(button("Update limits")));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ args: [TOKEN_ADDRESS, OPERATOR, true, 0n, 5n * TOKEN, 30n * EPOCHS_PER_DAY] }),
+    );
+  });
+
+  it("hides the amount behind Unlimited and brings it back, focused, when unchecked", () => {
+    const { type } = renderDialog();
+    const lockup = screen.getByLabelText<HTMLInputElement>("Lockup limit (USDFC)");
+    const unlimited = screen.getByRole("checkbox", { name: "Unlimited lockup" });
+    type("Lockup limit (USDFC)", "20");
+
+    fireEvent.click(unlimited);
+    expect(lockup.value).toBe("");
+    expect(lockup.disabled).toBe(false);
+
+    fireEvent.click(unlimited);
+    expect(lockup.value).toBe("20");
+    expect(document.activeElement).toBe(lockup);
+  });
+
+  it("asks for a limit or Unlimited when a field is emptied", () => {
+    const { button, type } = renderDialog();
+    type("Lockup limit (USDFC)", "");
+
+    expect(screen.getByRole("alert").textContent).toBe("Enter a limit, or choose Unlimited.");
+    expect(button("Update limits").hasAttribute("disabled")).toBe(true);
   });
 
   it("starts from the chain's values", () => {

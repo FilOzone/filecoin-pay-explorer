@@ -145,6 +145,27 @@ test.describe("spending limits on the service page", () => {
     expect(await approveAndReadTransaction(page)).toEqual([USDFC.id, OPERATOR, false, 0n, 0n, 0n]);
   });
 
+  // Regression: an unlimited field was disabled without looking it, so clicking in and typing did nothing.
+  test("typing into an unlimited field sets a limit, and Unlimited keeps the draft", async ({ page }) => {
+    const dialog = await openLimitsDialog(page, "spending-limits-unlimited@fake-privy.test");
+    const lockup = dialog.getByLabel("Lockup limit (USDFC)");
+    const unlimited = dialog.getByRole("checkbox", { name: "Unlimited lockup", exact: true });
+    const comparison = dialog.getByRole("table", { name: "Current and new limits" });
+
+    await unlimited.check();
+    await expect(lockup).toHaveValue("");
+    await expect(comparison).toContainText("Lockup1.000 USDFCUnlimited");
+
+    await lockup.pressSequentially("2");
+    await expect(unlimited).not.toBeChecked();
+    await expect(comparison).toContainText("Lockup1.000 USDFC2.000 USDFC");
+
+    await unlimited.check();
+    await unlimited.uncheck();
+    await expect(lockup).toHaveValue("2");
+    await expect(lockup).toBeFocused();
+  });
+
   // Regression: after the receipt the table kept the old indexed limits, with nothing saying an update was coming.
   test("says a confirmed update is being indexed, then shows the new limit", async ({ page }) => {
     const index = { block: 0, approvals };
