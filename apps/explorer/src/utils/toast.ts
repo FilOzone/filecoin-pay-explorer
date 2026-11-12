@@ -109,11 +109,11 @@ export const getToastContent = (metadata: TransactionMetadata, status: "pending"
     case "revokeApproval":
       return {
         pending: {
-          title: "Revoking Service",
+          title: "Revoking Approval",
           description: operator ? `Revoking ${formatAddress(operator)}...` : "Processing...",
         },
         success: {
-          title: "Service Revoked",
+          title: "Approval Revoked",
           description: operator
             ? `${formatAddress(operator)} can no longer open ${token} rails`
             : "Service approval revoked",

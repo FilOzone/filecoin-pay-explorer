@@ -23,6 +23,8 @@ export const useOperatorApproval = (network: Network, token: Address, owner: Add
     functionName: "operatorApprovals",
     args: [token, owner, operator],
     query: {
+      // The approval is the base of an absolute write, so a cached read is never good enough.
+      refetchOnMount: "always",
       select: ([isApproved, rateAllowance, lockupAllowance, rateUsage, lockupUsage, maxLockupPeriod]) =>
         ({
           isApproved,

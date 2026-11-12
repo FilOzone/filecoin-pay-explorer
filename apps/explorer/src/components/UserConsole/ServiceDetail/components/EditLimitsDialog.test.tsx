@@ -85,6 +85,7 @@ function renderDialog(onOpenChange = vi.fn()) {
       token={token}
       open
       onOpenChange={onOpenChange}
+      onConfirmed={vi.fn()}
     />,
   );
   const button = (name: string) => screen.getByRole("button", { name });
@@ -112,6 +113,23 @@ describe("EditLimitsDialog", () => {
     mocks.read = { data: onChain, isFetchedAfterMount: false, isError: false, isFetching: true };
     renderDialog();
     expect(screen.queryByLabelText("Lockup limit (USDFC)")).toBeNull();
+  });
+
+  // Regression: a form opened before the last update confirmed kept that update's old value and signed it back.
+  it("waits for the last update to confirm before offering the form", () => {
+    mocks.isExecuting = true;
+    renderDialog();
+    expect(screen.getByText("Waiting for your last update to confirm...")).toBeTruthy();
+    expect(screen.queryByLabelText("Lockup limit (USDFC)")).toBeNull();
+  });
+
+  it("names each Unlimited checkbox after its limit", () => {
+    renderDialog();
+    expect(screen.getAllByRole("checkbox").map((box) => box.getAttribute("aria-label"))).toEqual([
+      "Unlimited rate",
+      "Unlimited lockup",
+      "Unlimited lockup period",
+    ]);
   });
 
   it("starts from the chain's values", () => {
@@ -175,7 +193,7 @@ describe("EditLimitsDialog", () => {
   it("revokes after a confirmation", async () => {
     const { button } = renderDialog();
     fireEvent.click(button("Revoke"));
-    expect(screen.getByRole("heading", { name: "Revoke this service?" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Revoke USDFC approval?" })).toBeTruthy();
 
     await act(async () => fireEvent.click(button("Revoke")));
     expect(mocks.execute).toHaveBeenCalledWith(

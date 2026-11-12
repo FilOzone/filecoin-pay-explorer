@@ -11,7 +11,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
-import { type Address, getAddress } from "viem";
+import { type Address, getAddress, type TransactionReceipt } from "viem";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { ServiceApproval } from "@/hooks/useAccountServices";
@@ -40,6 +40,7 @@ interface EditLimitsDialogProps {
   token: LimitToken;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConfirmed: (receipt: TransactionReceipt) => void;
 }
 
 type SubmitLimits = (approve: boolean, terms: ApprovalTerms) => Promise<void>;
@@ -48,7 +49,6 @@ interface FormProps {
   operator: Address;
   token: LimitToken;
   current: OperatorApprovalState;
-  isBusy: boolean;
   isSubmitting: boolean;
   onSubmit: SubmitLimits;
   onCancel: () => void;
@@ -57,6 +57,7 @@ interface FormProps {
 const LimitInput = ({
   id,
   label,
+  unlimitedLabel,
   hint,
   value,
   onChange,
@@ -64,6 +65,7 @@ const LimitInput = ({
 }: {
   id: string;
   label: string;
+  unlimitedLabel: string;
   hint?: string;
   value: LimitField;
   onChange: (value: LimitField) => void;
@@ -75,6 +77,7 @@ const LimitInput = ({
       <label className='flex cursor-pointer items-center gap-2 text-sm'>
         <input
           type='checkbox'
+          aria-label={unlimitedLabel}
           checked={value.unlimited}
           onChange={(event) => onChange({ ...value, unlimited: event.target.checked })}
           disabled={disabled}
@@ -148,14 +151,13 @@ const RevokeConfirmation = ({
   operator,
   token,
   current,
-  isBusy,
   isSubmitting,
   onSubmit,
   onBack,
 }: Omit<FormProps, "onCancel"> & { onBack: () => void }) => (
   <>
     <DialogHeader>
-      <DialogTitle>Revoke this service?</DialogTitle>
+      <DialogTitle>Revoke {token.symbol} approval?</DialogTitle>
       <DialogDescription>
         {formatAddress(operator)} will no longer be able to open payment rails or raise rates in {token.symbol}.
       </DialogDescription>
@@ -171,8 +173,13 @@ const RevokeConfirmation = ({
       <Button variant='ghost' onClick={onBack} disabled={isSubmitting} className='py-2'>
         Back
       </Button>
-      <Button variant='primary' onClick={() => void onSubmit(false, REVOKED_TERMS)} disabled={isBusy} className='py-2'>
-        <SubmitLabel isBusy={isBusy}>Revoke</SubmitLabel>
+      <Button
+        variant='primary'
+        onClick={() => void onSubmit(false, REVOKED_TERMS)}
+        disabled={isSubmitting}
+        className='py-2'
+      >
+        <SubmitLabel isBusy={isSubmitting}>Revoke</SubmitLabel>
       </Button>
     </DialogFooter>
   </>
@@ -180,7 +187,7 @@ const RevokeConfirmation = ({
 
 /** Mounted once the fresh read lands, so the form starts from the chain's values. */
 const EditLimitsForm = (props: FormProps) => {
-  const { operator, token, current, isBusy, isSubmitting, onSubmit, onCancel } = props;
+  const { operator, token, current, isSubmitting, onSubmit, onCancel } = props;
   const decimals = Number(token.decimals);
   const [form, setForm] = useState<LimitsForm>(() => limitsForm(current, decimals));
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
@@ -192,7 +199,6 @@ const EditLimitsForm = (props: FormProps) => {
   const update = parseLimitsForm(form, current, decimals);
   const setField = (key: keyof LimitsForm) => (value: LimitField) =>
     setForm((previous) => ({ ...previous, [key]: value }));
-  const fieldsDisabled = isSubmitting;
 
   return (
     <>
@@ -207,25 +213,28 @@ const EditLimitsForm = (props: FormProps) => {
         <LimitInput
           id='rateLimit'
           label={`Rate limit (${token.symbol} per month)`}
+          unlimitedLabel='Unlimited rate'
           hint={`In use: ${formatRateLimit(current.rateUsage, decimals, token.symbol)}`}
           value={form.rate}
           onChange={setField("rate")}
-          disabled={fieldsDisabled}
+          disabled={isSubmitting}
         />
         <LimitInput
           id='lockupLimit'
           label={`Lockup limit (${token.symbol})`}
+          unlimitedLabel='Unlimited lockup'
           hint={`In use: ${formatLockupLimit(current.lockupUsage, decimals, token.symbol)}`}
           value={form.lockup}
           onChange={setField("lockup")}
-          disabled={fieldsDisabled}
+          disabled={isSubmitting}
         />
         <LimitInput
           id='periodLimit'
           label='Max lockup period (days)'
+          unlimitedLabel='Unlimited lockup period'
           value={form.period}
           onChange={setField("period")}
-          disabled={fieldsDisabled}
+          disabled={isSubmitting}
         />
 
         {update.status === "invalid" ? (
@@ -252,7 +261,7 @@ const EditLimitsForm = (props: FormProps) => {
           <Button
             variant='tertiary'
             onClick={() => setConfirmingRevoke(true)}
-            disabled={isBusy}
+            disabled={isSubmitting}
             className='py-2 sm:mr-auto'
           >
             Revoke
@@ -266,10 +275,10 @@ const EditLimitsForm = (props: FormProps) => {
           onClick={() => {
             if (update.status === "ready") void onSubmit(true, update.terms);
           }}
-          disabled={isBusy || update.status !== "ready"}
+          disabled={isSubmitting || update.status !== "ready"}
           className='py-2'
         >
-          <SubmitLabel isBusy={isBusy}>{current.isApproved ? "Update limits" : "Approve"}</SubmitLabel>
+          <SubmitLabel isBusy={isSubmitting}>{current.isApproved ? "Update limits" : "Approve"}</SubmitLabel>
         </Button>
       </DialogFooter>
     </>
@@ -324,7 +333,15 @@ const EditLimitsBody = ({
   return <EditLimitsForm {...formProps} current={approval.data} />;
 };
 
-export const EditLimitsDialog = ({ network, owner, operator, token, open, onOpenChange }: EditLimitsDialogProps) => {
+export const EditLimitsDialog = ({
+  network,
+  owner,
+  operator,
+  token,
+  open,
+  onOpenChange,
+  onConfirmed,
+}: EditLimitsDialogProps) => {
   const chain = getChain(network);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { execute, isExecuting } = useContractTransaction({
@@ -349,6 +366,7 @@ export const EditLimitsDialog = ({ network, owner, operator, token, open, onOpen
         args: [token.id, operator, approve, terms.rateAllowance, terms.lockupAllowance, terms.maxLockupPeriod],
         metadata: { type: approve ? "updateApproval" : "revokeApproval", operator, token: token.symbol },
         onSubmitOnChain: () => onOpenChange(false),
+        onConfirmed,
       });
     } catch (error) {
       // execute() already toasted; the form stays as it was so the owner can try again.
@@ -358,19 +376,32 @@ export const EditLimitsDialog = ({ network, owner, operator, token, open, onOpen
     }
   };
 
+  // A form opened before the last update confirms would start from limits that update is about to replace.
+  // Only while open: the panel that just submitted keeps its form through the leave transition.
+  const isConfirming = open && isExecuting && !isSubmitting;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-500px' showCloseButton={!isSubmitting}>
-        <EditLimitsBody
-          network={network}
-          owner={owner}
-          operator={operator}
-          token={token}
-          isBusy={isSubmitting || isExecuting}
-          isSubmitting={isSubmitting}
-          onSubmit={submit}
-          onCancel={() => handleOpenChange(false)}
-        />
+        {isConfirming ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Edit spending limits</DialogTitle>
+              <DialogDescription>Waiting for your last update to confirm...</DialogDescription>
+            </DialogHeader>
+            <Loader2 aria-hidden='true' className='mx-auto my-6 h-6 w-6 animate-spin text-muted-foreground' />
+          </>
+        ) : (
+          <EditLimitsBody
+            network={network}
+            owner={owner}
+            operator={operator}
+            token={token}
+            isSubmitting={isSubmitting}
+            onSubmit={submit}
+            onCancel={() => handleOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

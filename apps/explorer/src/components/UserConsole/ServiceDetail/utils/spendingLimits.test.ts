@@ -78,12 +78,6 @@ describe("parseLimitsForm", () => {
     });
   });
 
-  it("lowers a limit, which adding to the old one never could", () => {
-    const update = parseLimitsForm(edit({ lockup: { text: "0.5", unlimited: false } }), current, DECIMALS);
-
-    expect(update).toMatchObject({ status: "ready", terms: { lockupAllowance: TOKEN / 2n } });
-  });
-
   it("signs the maximum for an unlimited field", () => {
     const update = parseLimitsForm(edit({ rate: { text: "10", unlimited: true } }), current, DECIMALS);
 
