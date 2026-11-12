@@ -94,11 +94,14 @@ const LimitInput = ({
     <Input
       id={id}
       inputMode='decimal'
-      placeholder={value.unlimited ? "No limit. Type an amount to set one." : "0"}
+      placeholder={value.unlimited ? "Unlimited" : "0"}
       value={value.unlimited ? "" : value.text}
       onChange={(text) => onChange({ text, unlimited: false })}
       disabled={disabled}
     />
+    {value.unlimited ? (
+      <p className='text-xs text-muted-foreground'>This limit is set to unlimited. Type a value to cap it instead.</p>
+    ) : null}
     {isEmptyLimit(value) ? (
       <p role='alert' className='text-sm text-destructive'>
         Enter a limit, or choose Unlimited.
