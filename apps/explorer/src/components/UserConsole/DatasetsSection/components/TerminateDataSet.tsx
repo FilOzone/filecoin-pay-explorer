@@ -11,6 +11,7 @@ import {
 import { fwss } from "@filoz/synapse-core/abis";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { useMutation, useMutationState } from "@tanstack/react-query";
+import clsx from "clsx";
 import { useState } from "react";
 import { useConnection } from "wagmi";
 import InlineTextLoader from "@/components/shared/InlineTextLoader";
@@ -29,10 +30,11 @@ const TRIGGER_LABEL = {
 interface TerminateDataSetProps {
   dataSetId: DataSet["dataSetId"];
   network: Network;
+  className?: string;
 }
 
 /** Terminate button and confirmation for one Warm Storage data set. */
-export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetProps) {
+export function TerminateDataSet({ dataSetId: id, network, className }: TerminateDataSetProps) {
   const { address } = useConnection();
   const [isOpen, setIsOpen] = useState(false);
   const chain = getChain(network);
@@ -74,7 +76,12 @@ export function TerminateDataSet({ dataSetId: id, network }: TerminateDataSetPro
 
   return (
     <>
-      <Button variant='ghost' disabled={!canTerminate} onClick={() => setIsOpen(true)} className='text-destructive'>
+      <Button
+        variant='ghost'
+        disabled={!canTerminate}
+        onClick={() => setIsOpen(true)}
+        className={clsx("text-destructive", className)}
+      >
         {TRIGGER_LABEL[status]}
       </Button>
 
