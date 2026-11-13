@@ -108,7 +108,7 @@ export const getDatasetColumns = (network: Network) => [
       const dataSet = info.row.original;
       const { state } = dataSet.pdpRail;
       if (state === "TERMINATED" || state === "FINALIZED") return null;
-      return <TerminateDataSet dataSetId={dataSet.dataSetId} network={network} />;
+      return <TerminateDataSet dataSetId={dataSet.dataSetId} network={network} className='px-4 py-2 my-4' />;
     },
   }),
 ];
