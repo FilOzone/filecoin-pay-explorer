@@ -467,7 +467,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
           {alreadyAdded ? (
             <Notice tone='info' role='status' title='You already have this service'>
               <p>It can already charge your Filecoin Pay account in {token?.symbol}, so there is nothing to approve.</p>
-              <p>Change its spending limits on the service page.</p>
+              {!serviceLocked && <p>Change its spending limits on the service page.</p>}
             </Notice>
           ) : (
             <>

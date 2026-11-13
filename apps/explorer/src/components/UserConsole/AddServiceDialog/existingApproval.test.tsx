@@ -136,6 +136,7 @@ describe("AddServiceDialog with an existing approval", () => {
 
     expect(screen.getByText(NOTICE)).toBeTruthy();
     expect(screen.queryByText("Deposit amount")).toBeNull();
+    expect(screen.getByText(/service page/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Add Service" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Go to service" }));
@@ -151,6 +152,7 @@ describe("AddServiceDialog with an existing approval", () => {
 
     expect(screen.getByText(NOTICE)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Go to service" })).toBeNull();
+    expect(screen.queryByText(/service page/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Add Service" })).toBeNull();
   });
 
