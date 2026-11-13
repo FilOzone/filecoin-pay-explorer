@@ -15,6 +15,7 @@ import { getChain } from "@/constants/chains";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
+import { useOperatorApproval } from "@/hooks/useOperatorApproval";
 import type { Network } from "@/types";
 import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
 import { trackDepositConfirmed } from "@/utils/funnel-analytics";
@@ -270,27 +271,18 @@ export function useExistingApproval(
   token: Hex | undefined,
   open: boolean,
 ) {
-  const chain = getChain(network);
   const { address: owner } = useAccount();
-  const args = owner && operator && token ? ([token, owner, operator] as const) : undefined;
-  const enabled = !!args && open;
+  const enabled = !!(owner && operator && token) && open;
   // From the chain, not the subgraph: a removed service keeps its AccountOperator row, and indexing lags.
-  const { data, isError, isFetching, refetch } = useReadContract({
-    address: chain.contracts.payments.address,
-    abi: chain.contracts.payments.abi,
-    chainId: chain.id,
-    functionName: "operatorApprovals",
-    args,
-    query: { enabled },
-  });
+  const { data, isError, isFetching, refetch } = useOperatorApproval(network, token, owner, operator, open);
   const status: ExistingApprovalStatus = (() => {
     if (!enabled) return "idle";
     if (isFetching && data === undefined) return "loading";
-    return existingApprovalStatus(data?.[0], isError);
+    return existingApprovalStatus(data?.isApproved, isError);
   })();
   const refresh = async () => {
     const result = await refetch();
-    return existingApprovalStatus(result.data?.[0], result.isError);
+    return existingApprovalStatus(result.data?.isApproved, result.isError);
   };
   return { status, refresh };
 }

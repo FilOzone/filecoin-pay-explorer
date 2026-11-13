@@ -9,8 +9,15 @@ const OPERATOR = "0x2222222222222222222222222222222222222222" as const;
 const OWNER = "0x3333333333333333333333333333333333333333" as const;
 const NOTICE = "You already have this service";
 
-/** The contract's `operatorApprovals` tuple; only the first field decides anything here. */
-const approval = (isApproved: boolean) => [isApproved, 1n, 1n, 0n, 0n, 86400n] as const;
+/** The approval as `useOperatorApproval` selects it; only `isApproved` decides anything here. */
+const approval = (isApproved: boolean) => ({
+  isApproved,
+  rateAllowance: 1n,
+  lockupAllowance: 1n,
+  rateUsage: 0n,
+  lockupUsage: 0n,
+  maxLockupPeriod: 86400n,
+});
 
 const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
