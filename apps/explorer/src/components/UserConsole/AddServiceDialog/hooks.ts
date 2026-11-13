@@ -15,6 +15,7 @@ import { getChain } from "@/constants/chains";
 import { paymentTokensByChainId } from "@/constants/payment-tokens";
 import { type ApprovableService, useApprovableServices } from "@/hooks/useApprovableServices";
 import { useContractTransaction } from "@/hooks/useContractTransaction";
+import { useOperatorApproval } from "@/hooks/useOperatorApproval";
 import type { Network } from "@/types";
 import { DEFAULT_MAX_LOCKUP_PERIOD } from "@/utils/constants";
 import { trackDepositConfirmed } from "@/utils/funnel-analytics";
@@ -78,7 +79,7 @@ export function useServiceSelection(network: Network): ServiceSelection {
 
 /** A payment token the dialog can act on, curated or resolved from chain reads. */
 export interface PaymentTokenDetails {
-  address: string;
+  address: Hex;
   symbol: string;
   decimals: number;
   name?: string;
@@ -197,7 +198,7 @@ export function useTokenSelection(network: Network, open: boolean): TokenSelecti
   })();
 
   const { data: balance, isLoading: isLoadingBalance } = useReadContract({
-    address: (token?.address as Hex | undefined) ?? undefined,
+    address: token?.address,
     abi: erc20Abi,
     chainId,
     functionName: "balanceOf",
@@ -256,6 +257,34 @@ export function useFilecoinGasBalance(network: Network, open: boolean) {
   };
 }
 
+/** Where the selected service and token stand: an approval is per token, so another token can still be added. */
+type ExistingApprovalStatus = "idle" | "loading" | "unreadable" | "approved" | "not-approved";
+
+function existingApprovalStatus(isApproved: boolean | undefined, isError: boolean): ExistingApprovalStatus {
+  if (isError || isApproved === undefined) return "unreadable";
+  return isApproved ? "approved" : "not-approved";
+}
+
+export function useExistingApproval(
+  network: Network,
+  operator: Hex | undefined,
+  token: Hex | undefined,
+  open: boolean,
+) {
+  const { address: owner } = useAccount();
+  // From the chain, not the subgraph: a removed service keeps its AccountOperator row, and indexing lags.
+  const { data, isError, isFetching, refetch } = useOperatorApproval(network, token, owner, operator, open);
+  const status: ExistingApprovalStatus = (() => {
+    if (data === undefined && !isError) return isFetching ? "loading" : "idle";
+    return existingApprovalStatus(data?.isApproved, isError);
+  })();
+  const refresh = async () => {
+    const result = await refetch();
+    return existingApprovalStatus(result.data?.isApproved, result.isError);
+  };
+  return { status, refresh };
+}
+
 export interface SubmitArgs {
   operatorAddress: `0x${string}`;
   token: PaymentTokenDetails;
@@ -291,7 +320,6 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
     lockupInWei,
     rateInWei,
   }: SubmitArgs) => {
-    const tokenAddress = token.address as `0x${string}`;
     setIsSubmitting(true);
     try {
       if (parsedDeposit !== null && parsedDeposit > 0n) {
@@ -307,7 +335,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
         try {
           permitSignature = await getPermitSignature(
             {
-              tokenAddress,
+              tokenAddress: token.address,
               tokenName: token.name,
               ownerAddress: userAddress,
               spenderAddress: chain.contracts.payments.address,
@@ -333,7 +361,7 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
         await execute({
           functionName: "depositWithPermitAndApproveOperator",
           args: [
-            tokenAddress,
+            token.address,
             userAddress,
             parsedDeposit,
             permitSignature.deadline,
@@ -352,12 +380,12 @@ export function useAddServiceSubmit(network: Network, onSubmitOnChain: () => voi
             operator: operatorAddress,
           },
           onSubmitOnChain,
-          onConfirmed: () => trackDepositConfirmed(chain.id, tokenAddress, parsedDeposit),
+          onConfirmed: () => trackDepositConfirmed(chain.id, token.address, parsedDeposit),
         });
       } else {
         await execute({
           functionName: "setOperatorApproval",
-          args: [tokenAddress, operatorAddress, true, rateInWei, lockupInWei, DEFAULT_MAX_LOCKUP_PERIOD],
+          args: [token.address, operatorAddress, true, rateInWei, lockupInWei, DEFAULT_MAX_LOCKUP_PERIOD],
           metadata: {
             type: "approveOperator",
             operator: operatorAddress,

@@ -19,9 +19,11 @@ import {
   SelectValue,
 } from "@filecoin-pay/ui/components/select";
 import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatUnits, type Hex, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
+import { Notice } from "@/components/shared/Notice";
 import TokenIcon from "@/components/shared/TokenIcon";
 import { FIL_TRANSACTION_FEE_RESERVE } from "@/components/UserConsole/FundsSection/data/filecoin-gas-balance";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
@@ -32,6 +34,7 @@ import { formatAddress } from "@/utils/formatter";
 import {
   CUSTOM_OPTION,
   useAddServiceSubmit,
+  useExistingApproval,
   useFilecoinGasBalance,
   useServiceSelection,
   useTokenSelection,
@@ -115,14 +118,15 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
   prefill,
   withoutDeposit = false,
 }) => {
+  const router = useRouter();
   const serviceSelection = useServiceSelection(network);
   // Only the setup step passes a prefill, and it must approve that service, not another.
   const serviceLocked = !!prefill;
   const tokenSelection = useTokenSelection(network, open);
-  const [isCheckingGas, setIsCheckingGas] = useState(false);
-  const isGasCheckInFlight = useRef(false);
+  const [isCheckingPreconditions, setIsCheckingPreconditions] = useState(false);
+  const isPreconditionCheckInFlight = useRef(false);
   const { submit, isSubmitting, isExecuting } = useAddServiceSubmit(network, () => onOpenChange(false));
-  const isBusy = isCheckingGas || isSubmitting || isExecuting;
+  const isBusy = isCheckingPreconditions || isSubmitting || isExecuting;
   const gasBalance = useFilecoinGasBalance(network, open);
   const funding = useFundingLaunch();
   const formOwner = useRef(gasBalance.owner);
@@ -163,6 +167,8 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
 
   const { services, isLoadingServices, serviceChoice, selectedService, operatorAddress } = serviceSelection;
   const { token, supportsPermit, balance, isLoadingBalance } = tokenSelection;
+  const existingApproval = useExistingApproval(network, operatorAddress, token?.address, open);
+  const alreadyAdded = existingApproval.status === "approved";
 
   // A funding link fills the form once per opening, after the service list has
   // loaded so a known service is picked by name rather than as a custom address.
@@ -247,6 +253,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
     isDepositValid &&
     hasSufficientBalance &&
     areLimitsValid &&
+    existingApproval.status === "not-approved" &&
     gasBalance.status === "funded" &&
     gasBalance.isCorrectChain &&
     formOwner.current === gasBalance.owner &&
@@ -258,12 +265,15 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (isGasCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null) return;
-    isGasCheckInFlight.current = true;
-    setIsCheckingGas(true);
+    if (isPreconditionCheckInFlight.current || !operatorAddress || !token || lockupInWei === null || rateInWei === null)
+      return;
+    isPreconditionCheckInFlight.current = true;
+    setIsCheckingPreconditions(true);
     try {
+      const [approvalStatus, gasStatus] = await Promise.all([existingApproval.refresh(), gasBalance.refresh()]);
+      // The cached approval can be stale, and a second grant would replace the owner's limits.
+      if (approvalStatus !== "not-approved" || gasStatus !== "funded") return;
       // A wallet or network change after this point is refused by the pinned write itself.
-      if ((await gasBalance.refresh()) !== "funded") return;
       await submit({
         operatorAddress,
         token,
@@ -273,9 +283,15 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
         rateInWei,
       });
     } finally {
-      isGasCheckInFlight.current = false;
-      setIsCheckingGas(false);
+      isPreconditionCheckInFlight.current = false;
+      setIsCheckingPreconditions(false);
     }
+  };
+
+  // A plain button: the shared Button drops onClick when given an href, and this may be the page already open.
+  const goToService = () => {
+    router.push(`/console/services/${operatorAddress}`);
+    onOpenChange(false);
   };
 
   return (
@@ -434,207 +450,239 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
             )}
           </div>
 
-          {/* Deposit amount */}
-          {!withoutDeposit && token && !supportsPermit && (
-            <p className='flex items-center gap-2 text-xs text-muted-foreground'>
-              <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
-              This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
-              separately.
+          {existingApproval.status === "loading" && (
+            <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
+              <Loader2 className='h-4 w-4 animate-spin' /> Checking your existing services…
             </p>
           )}
-          {!withoutDeposit && token && supportsPermit && (
-            <div className='grid gap-2'>
-              <div className='flex items-center justify-between'>
-                <Label htmlFor='amount'>Deposit amount</Label>
-                {(balance !== undefined || isLoadingBalance) && (
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Wallet className='h-3 w-3' />
-                    <span>
-                      Balance:{" "}
-                      {isLoadingBalance || balance === undefined ? (
-                        <Loader2 className='h-3 w-3 animate-spin inline' />
-                      ) : (
-                        <span className='font-medium text-foreground'>
-                          {Number(formatUnits(balance, token.decimals)).toLocaleString(undefined, {
-                            maximumFractionDigits: 6,
-                          })}{" "}
-                          {token.symbol}
+          {existingApproval.status === "unreadable" && (
+            <Notice tone='error' role='alert'>
+              <p>Could not check whether you already have this service. Retry before adding it.</p>
+              <Button variant='ghost' size='compact' type='button' onClick={() => void existingApproval.refresh()}>
+                Retry
+              </Button>
+            </Notice>
+          )}
+
+          {alreadyAdded ? (
+            <Notice tone='info' role='status' title='You already have this service'>
+              <p>It can already charge your Filecoin Pay account in {token?.symbol}, so there is nothing to approve.</p>
+              {!serviceLocked && <p>Change its spending limits on the service page.</p>}
+            </Notice>
+          ) : (
+            <>
+              {/* Deposit amount */}
+              {!withoutDeposit && token && !supportsPermit && (
+                <p className='flex items-center gap-2 text-xs text-muted-foreground'>
+                  <AlertCircle className='h-4 w-4 shrink-0 text-amber-500' />
+                  This token doesn't support gasless deposits (EIP-2612). Add the service now and deposit this token
+                  separately.
+                </p>
+              )}
+              {!withoutDeposit && token && supportsPermit && (
+                <div className='grid gap-2'>
+                  <div className='flex items-center justify-between'>
+                    <Label htmlFor='amount'>Deposit amount</Label>
+                    {(balance !== undefined || isLoadingBalance) && (
+                      <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                        <Wallet className='h-3 w-3' />
+                        <span>
+                          Balance:{" "}
+                          {isLoadingBalance || balance === undefined ? (
+                            <Loader2 className='h-3 w-3 animate-spin inline' />
+                          ) : (
+                            <span className='font-medium text-foreground'>
+                              {Number(formatUnits(balance, token.decimals)).toLocaleString(undefined, {
+                                maximumFractionDigits: 6,
+                              })}{" "}
+                              {token.symbol}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className='relative'>
+                    <Input
+                      id='amount'
+                      type='number'
+                      placeholder='0.0'
+                      value={depositAmount}
+                      onChange={setDepositAmount}
+                      min='0'
+                      step='any'
+                      disabled={isBusy}
+                      className='text-lg pr-16'
+                    />
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
+                      onClick={() => {
+                        if (balance !== undefined) setDepositAmount(formatUnits(balance, token.decimals));
+                      }}
+                      disabled={isBusy || balance === undefined || isLoadingBalance}
+                    >
+                      MAX
+                    </Button>
+                  </div>
+                  {isDepositing && balance !== undefined && !hasSufficientBalance && (
+                    <p className='flex items-center gap-2 text-xs text-destructive'>
+                      <AlertCircle className='h-3.5 w-3.5 shrink-0' />
+                      Insufficient balance for this deposit.
+                    </p>
+                  )}
+                  {!!depositAmount.trim() && !isDepositing && (
+                    <p className='flex items-center gap-2 text-xs text-destructive'>
+                      <AlertCircle className='h-3.5 w-3.5 shrink-0' />
+                      Enter a valid amount.
+                    </p>
+                  )}
+                  <p className='text-xs text-muted-foreground'>
+                    Funds stay in your account and the service bills them as you use it. Leave empty to add the service
+                    without depositing.
+                  </p>
+                </div>
+              )}
+
+              {/* Spending limits (advanced) */}
+              <div className='grid gap-3'>
+                <button
+                  type='button'
+                  onClick={() => setShowLimits(!showLimits)}
+                  disabled={isBusy}
+                  className='text-sm text-primary text-left w-fit hover:underline'
+                >
+                  {showLimits ? "Hide spending limits" : "Set spending limits (optional)"}
+                </button>
+                {showLimits && (
+                  <div className='grid gap-3 rounded-lg border p-3'>
+                    <label className='flex items-center gap-2 text-sm cursor-pointer'>
+                      <input
+                        type='checkbox'
+                        checked={isUnlimited}
+                        onChange={(e) => setIsUnlimited(e.target.checked)}
+                        className='rounded'
+                        disabled={isBusy}
+                      />
+                      No spending limit (default)
+                    </label>
+                    <div className='grid grid-cols-2 gap-3'>
+                      <div className='grid gap-2'>
+                        <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
+                          Reserve limit{token ? ` (${token.symbol})` : ""}
+                        </Label>
+                        <Input
+                          id='lockupAllowance'
+                          type='number'
+                          placeholder='0.0'
+                          value={lockupAllowance}
+                          onChange={setLockupAllowance}
+                          min='0'
+                          disabled={isUnlimited || isBusy}
+                        />
+                      </div>
+                      <div className='grid gap-2'>
+                        <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
+                          Rate limit{token ? ` (${token.symbol} per epoch)` : ""}
+                        </Label>
+                        <Input
+                          id='rateAllowance'
+                          type='number'
+                          placeholder='0.0'
+                          value={rateAllowance}
+                          onChange={setRateAllowance}
+                          min='0'
+                          disabled={isUnlimited || isBusy}
+                        />
+                      </div>
+                    </div>
+                    <p className='text-xs text-muted-foreground'>
+                      Advanced. Limits cap how much the service can reserve and charge; most users keep this unlimited
+                      and rely on removing the service instead.
+                    </p>
                   </div>
                 )}
               </div>
-              <div className='relative'>
-                <Input
-                  id='amount'
-                  type='number'
-                  placeholder='0.0'
-                  value={depositAmount}
-                  onChange={setDepositAmount}
-                  min='0'
-                  step='any'
-                  disabled={isBusy}
-                  className='text-lg pr-16'
-                />
-                <Button
-                  type='button'
-                  variant='ghost'
-                  className='absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2 text-xs font-semibold'
-                  onClick={() => {
-                    if (balance !== undefined) setDepositAmount(formatUnits(balance, token.decimals));
-                  }}
-                  disabled={isBusy || balance === undefined || isLoadingBalance}
+
+              {!gasBalance.isCorrectChain ? (
+                <GasNotice
+                  action={
+                    <Button
+                      disabled={gasBalance.isSwitchingNetwork}
+                      onClick={gasBalance.switchToFilecoin}
+                      size='compact'
+                      type='button'
+                      variant='primary'
+                    >
+                      {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${chain.label}`}
+                    </Button>
+                  }
                 >
-                  MAX
-                </Button>
-              </div>
-              {isDepositing && balance !== undefined && !hasSufficientBalance && (
-                <p className='flex items-center gap-2 text-xs text-destructive'>
-                  <AlertCircle className='h-3.5 w-3.5 shrink-0' />
-                  Insufficient balance for this deposit.
+                  Switch back to {chain.label} before adding this service.
+                </GasNotice>
+              ) : gasBalance.status === "loading" ? (
+                <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
+                  <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
                 </p>
-              )}
-              {!!depositAmount.trim() && !isDepositing && (
-                <p className='flex items-center gap-2 text-xs text-destructive'>
-                  <AlertCircle className='h-3.5 w-3.5 shrink-0' />
-                  Enter a valid amount.
-                </p>
-              )}
+              ) : gasBalance.status === "unavailable" ? (
+                <GasNotice
+                  action={
+                    <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
+                      Retry
+                    </Button>
+                  }
+                >
+                  Your FIL balance could not be loaded. Retry before adding the service.
+                </GasNotice>
+              ) : gasBalance.status === "insufficient" ? (
+                <GasNotice
+                  action={
+                    chain.slug === "mainnet" ? (
+                      <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
+                        Add FIL
+                      </Button>
+                    ) : filFaucet ? (
+                      <ExternalTextLink href={filFaucet.url}>Get testnet FIL</ExternalTextLink>
+                    ) : null
+                  }
+                >
+                  Add at least {requiredFil} FIL for transaction fees before adding this service.
+                </GasNotice>
+              ) : null}
+
               <p className='text-xs text-muted-foreground'>
-                Funds stay in your account and the service bills them as you use it. Leave empty to add the service
-                without depositing.
+                The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any
+                time.
               </p>
-            </div>
+            </>
           )}
-
-          {/* Spending limits (advanced) */}
-          <div className='grid gap-3'>
-            <button
-              type='button'
-              onClick={() => setShowLimits(!showLimits)}
-              disabled={isBusy}
-              className='text-sm text-primary text-left w-fit hover:underline'
-            >
-              {showLimits ? "Hide spending limits" : "Set spending limits (optional)"}
-            </button>
-            {showLimits && (
-              <div className='grid gap-3 rounded-lg border p-3'>
-                <label className='flex items-center gap-2 text-sm cursor-pointer'>
-                  <input
-                    type='checkbox'
-                    checked={isUnlimited}
-                    onChange={(e) => setIsUnlimited(e.target.checked)}
-                    className='rounded'
-                    disabled={isBusy}
-                  />
-                  No spending limit (default)
-                </label>
-                <div className='grid grid-cols-2 gap-3'>
-                  <div className='grid gap-2'>
-                    <Label htmlFor='lockupAllowance' className='text-xs text-muted-foreground'>
-                      Reserve limit{token ? ` (${token.symbol})` : ""}
-                    </Label>
-                    <Input
-                      id='lockupAllowance'
-                      type='number'
-                      placeholder='0.0'
-                      value={lockupAllowance}
-                      onChange={setLockupAllowance}
-                      min='0'
-                      disabled={isUnlimited || isBusy}
-                    />
-                  </div>
-                  <div className='grid gap-2'>
-                    <Label htmlFor='rateAllowance' className='text-xs text-muted-foreground'>
-                      Rate limit{token ? ` (${token.symbol} per epoch)` : ""}
-                    </Label>
-                    <Input
-                      id='rateAllowance'
-                      type='number'
-                      placeholder='0.0'
-                      value={rateAllowance}
-                      onChange={setRateAllowance}
-                      min='0'
-                      disabled={isUnlimited || isBusy}
-                    />
-                  </div>
-                </div>
-                <p className='text-xs text-muted-foreground'>
-                  Advanced. Limits cap how much the service can reserve and charge; most users keep this unlimited and
-                  rely on removing the service instead.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {!gasBalance.isCorrectChain ? (
-            <GasNotice
-              action={
-                <Button
-                  disabled={gasBalance.isSwitchingNetwork}
-                  onClick={gasBalance.switchToFilecoin}
-                  size='compact'
-                  type='button'
-                  variant='primary'
-                >
-                  {gasBalance.isSwitchingNetwork ? "Switching…" : `Switch to ${chain.label}`}
-                </Button>
-              }
-            >
-              Switch back to {chain.label} before adding this service.
-            </GasNotice>
-          ) : gasBalance.status === "loading" ? (
-            <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
-              <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
-            </p>
-          ) : gasBalance.status === "unavailable" ? (
-            <GasNotice
-              action={
-                <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
-                  Retry
-                </Button>
-              }
-            >
-              Your FIL balance could not be loaded. Retry before adding the service.
-            </GasNotice>
-          ) : gasBalance.status === "insufficient" ? (
-            <GasNotice
-              action={
-                chain.slug === "mainnet" ? (
-                  <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
-                    Add FIL
-                  </Button>
-                ) : filFaucet ? (
-                  <ExternalTextLink href={filFaucet.url}>Get testnet FIL</ExternalTextLink>
-                ) : null
-              }
-            >
-              Add at least {requiredFil} FIL for transaction fees before adding this service.
-            </GasNotice>
-          ) : null}
-
-          <p className='text-xs text-muted-foreground'>
-            The service may reserve up to 30 days of upcoming charges from your deposit. You can remove it at any time.
-          </p>
         </div>
 
         <DialogFooter>
           <Button variant='ghost' onClick={() => handleDialogOpenChange(false)} disabled={isBusy} size='compact'>
             Cancel
           </Button>
-          <Button variant='primary' onClick={() => void handleSubmit()} disabled={!canSubmit} size='compact'>
-            {isBusy ? (
-              <span className='flex items-center gap-2'>
-                <Loader2 className='h-4 w-4 animate-spin mr-2' />
-                Processing…
-              </span>
-            ) : isDepositing ? (
-              "Deposit and Add Service"
-            ) : (
-              "Add Service"
-            )}
-          </Button>
+          {/* A setup link stays on its page: it still has steps to finish. */}
+          {alreadyAdded && !serviceLocked && (
+            <Button variant='primary' onClick={goToService} disabled={isBusy} size='compact'>
+              Go to service
+            </Button>
+          )}
+          {!alreadyAdded && (
+            <Button variant='primary' onClick={() => void handleSubmit()} disabled={!canSubmit} size='compact'>
+              {isBusy ? (
+                <span className='flex items-center gap-2'>
+                  <Loader2 className='h-4 w-4 animate-spin mr-2' />
+                  Processing…
+                </span>
+              ) : isDepositing ? (
+                "Deposit and Add Service"
+              ) : (
+                "Add Service"
+              )}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
