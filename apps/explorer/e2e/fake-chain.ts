@@ -12,6 +12,26 @@ import {
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
 
+/**
+ * Answers a request from state read off the page. A reload mid-answer destroys the page being read, and the request
+ * with it, so that request is aborted instead of failing the test.
+ */
+export async function answerFromPage(
+  route: Route,
+  answer: () => Promise<{ json: unknown } | undefined>,
+): Promise<void> {
+  let reply: { json: unknown } | undefined;
+  try {
+    reply = await answer();
+  } catch (error) {
+    await route.abort();
+    if (String(error).includes("Execution context was destroyed")) return;
+    throw error;
+  }
+  if (reply === undefined) return route.fallback();
+  return route.fulfill(reply);
+}
+
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
 // The setup page reads the epoch with Filecoin Pay's account, to roll its lockup forward.
@@ -207,15 +227,16 @@ export async function installFakeChain(page: Page): Promise<void> {
 
   await page.route(
     (url) => url.hostname.endsWith("glif.io") || url.hostname === BASE_RPC_HOST,
-    async (route: Route) => {
-      const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
-      if (!body) return route.fallback();
-      const calls = Array.isArray(body) ? body : [body];
-      const results = await Promise.all(calls.map(answer));
-      if (results.some((r) => r === undefined)) return route.fallback();
-      const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
-      return route.fulfill({ json: Array.isArray(body) ? replies : replies[0] });
-    },
+    (route: Route) =>
+      answerFromPage(route, async () => {
+        const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
+        if (!body) return undefined;
+        const calls = Array.isArray(body) ? body : [body];
+        const results = await Promise.all(calls.map(answer));
+        if (results.some((r) => r === undefined)) return undefined;
+        const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
+        return { json: Array.isArray(body) ? replies : replies[0] };
+      }),
   );
 }
 
