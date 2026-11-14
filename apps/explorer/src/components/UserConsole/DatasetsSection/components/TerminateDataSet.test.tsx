@@ -39,7 +39,7 @@ afterEach(cleanup);
 
 let queryClient: QueryClient;
 
-const renderButton = (dataSetId = 7n, network: Network = "mainnet") =>
+const renderButton = (dataSetId = "7", network: Network = "mainnet") =>
   render(
     <QueryClientProvider client={queryClient}>
       <TerminateDataSet dataSetId={dataSetId} network={network} />
@@ -67,7 +67,7 @@ describe("TerminateDataSet", () => {
   });
 
   it("sends the payer's terminateService for the dataset to the network's Warm Storage contract", async () => {
-    renderButton(7n, "calibration");
+    renderButton("7", "calibration");
     openAndConfirm();
 
     const chain = getChain("calibration");
@@ -105,8 +105,8 @@ describe("TerminateDataSet", () => {
   it("marks every button for the data set, and no other data set or network", async () => {
     const opened = renderButton();
     const sameDataSet = renderButton();
-    const otherDataSet = renderButton(8n);
-    const otherNetwork = renderButton(7n, "calibration");
+    const otherDataSet = renderButton("8");
+    const otherNetwork = renderButton("7", "calibration");
 
     openAndConfirm(opened.container);
 

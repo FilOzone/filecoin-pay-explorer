@@ -7,21 +7,21 @@ type RowsInput = Parameters<typeof buildServiceMetricsRows>[0];
 const MONTH = TIME_CONSTANTS.EPOCHS_PER_MONTH;
 const DAY = TIME_CONSTANTS.EPOCHS_PER_DAY;
 const NOW = 1_700_000_000n;
-const USDFC = { id: "0xusdfc" as const, symbol: "USDFC", decimals: 18n };
-const AXL_USDC = { id: "0xaxl" as const, symbol: "axlUSDC", decimals: 6n };
+const USDFC = { id: "0xusdfc" as const, symbol: "USDFC", decimals: "18" };
+const AXL_USDC = { id: "0xaxl" as const, symbol: "axlUSDC", decimals: "6" };
 
 const userToken = (token: { id: `0x${string}` }, funds = 0n, lockupRate = 0n, lastSettledTimestamp = NOW) => ({
-  funds,
-  lockupCurrent: 0n,
-  lockupRate,
-  lockupLastSettledUntilEpoch: 1n,
-  lockupLastSettledUntilTimestamp: lastSettledTimestamp,
+  funds: funds.toString(),
+  lockupCurrent: "0",
+  lockupRate: lockupRate.toString(),
+  lockupLastSettledUntilEpoch: "1",
+  lockupLastSettledUntilTimestamp: lastSettledTimestamp.toString(),
   token,
 });
 
 const input = (overrides: Partial<RowsInput> = {}): RowsInput => ({
   account: {
-    operatorApprovals: [{ lockupUsage: 1n, token: USDFC }],
+    operatorApprovals: [{ lockupUsage: "1", token: USDFC }],
     userTokens: [userToken(USDFC)],
   },
   rails: [],
@@ -31,15 +31,15 @@ const input = (overrides: Partial<RowsInput> = {}): RowsInput => ({
 
 const twoApprovedTokens = {
   operatorApprovals: [
-    { lockupUsage: 9n, token: USDFC },
-    { lockupUsage: 7n, token: AXL_USDC },
+    { lockupUsage: "9", token: USDFC },
+    { lockupUsage: "7", token: AXL_USDC },
   ],
   userTokens: [userToken(USDFC), userToken(AXL_USDC)],
 };
 
 const rail = (paymentRate: bigint, lockupPeriod: bigint = 30n * DAY, token: { id: `0x${string}` } = USDFC) => ({
-  paymentRate,
-  lockupPeriod,
+  paymentRate: paymentRate.toString(),
+  lockupPeriod: lockupPeriod.toString(),
   token,
 });
 
@@ -55,9 +55,9 @@ describe("buildServiceMetricsRows", () => {
         account: twoApprovedTokens,
         rails: [rail(10n), rail(20n), rail(5n, 30n * DAY, AXL_USDC)],
         oneTimePayments: [
-          { totalAmount: 1n, token: USDFC },
-          { totalAmount: 2n, token: USDFC },
-          { totalAmount: 4n, token: AXL_USDC },
+          { totalAmount: "1", token: USDFC },
+          { totalAmount: "2", token: USDFC },
+          { totalAmount: "4", token: AXL_USDC },
         ],
       }),
       NOW,
@@ -85,7 +85,7 @@ describe("buildServiceMetricsRows", () => {
   });
 
   it("shows a deposit with no recurring spend or notice when no rail is paying", () => {
-    expect(buildOne({ account: { operatorApprovals: [{ lockupUsage: 7n, token: USDFC }], userTokens: [] } })).toEqual({
+    expect(buildOne({ account: { operatorApprovals: [{ lockupUsage: "7", token: USDFC }], userTokens: [] } })).toEqual({
       token: USDFC,
       recurringPerMonth: 0n,
       oneTimeThisMonth: 0n,
@@ -102,8 +102,8 @@ describe("buildServiceMetricsRows", () => {
   describe("which tokens get a row", () => {
     const nothingLocked = {
       operatorApprovals: [
-        { lockupUsage: 0n, token: USDFC },
-        { lockupUsage: 0n, token: AXL_USDC },
+        { lockupUsage: "0", token: USDFC },
+        { lockupUsage: "0", token: AXL_USDC },
       ],
       userTokens: [],
     };
@@ -117,10 +117,10 @@ describe("buildServiceMetricsRows", () => {
     it.each([
       [
         "a locked deposit",
-        { account: { ...nothingLocked, operatorApprovals: [{ lockupUsage: 1n, token: AXL_USDC }] } },
+        { account: { ...nothingLocked, operatorApprovals: [{ lockupUsage: "1", token: AXL_USDC }] } },
       ],
       ["a paying rail", { rails: [rail(1n, 30n * DAY, AXL_USDC)] }],
-      ["a payment this month", { oneTimePayments: [{ totalAmount: 1n, token: AXL_USDC }] }],
+      ["a payment this month", { oneTimePayments: [{ totalAmount: "1", token: AXL_USDC }] }],
     ])("keeps a token with %s", (_, overrides) => {
       expect(symbols(overrides)).toEqual(["axlUSDC"]);
     });
@@ -128,17 +128,17 @@ describe("buildServiceMetricsRows", () => {
     // A busy pair's row must not flicker while the rest of its payments load.
     it("keeps a token with a payment on the first page while the rest load", () => {
       expect(
-        symbols({ oneTimePayments: [{ totalAmount: 1n, token: AXL_USDC }], allOneTimePayments: "loading" }),
+        symbols({ oneTimePayments: [{ totalAmount: "1", token: AXL_USDC }], allOneTimePayments: "loading" }),
       ).toEqual(["axlUSDC"]);
     });
   });
 
   it("totals every payment once the first page overflowed", () => {
     const row = buildOne({
-      oneTimePayments: [{ totalAmount: 1n, token: USDFC }],
+      oneTimePayments: [{ totalAmount: "1", token: USDFC }],
       allOneTimePayments: [
-        { totalAmount: 1n, token: USDFC },
-        { totalAmount: 2n, token: USDFC },
+        { totalAmount: "1", token: USDFC },
+        { totalAmount: "2", token: USDFC },
       ],
     });
 
@@ -147,7 +147,7 @@ describe("buildServiceMetricsRows", () => {
 
   it.each(["loading", "unavailable"] as const)("carries %s one-time payments beside the other figures", (reason) => {
     const row = buildOne({
-      account: { operatorApprovals: [{ lockupUsage: 7n, token: USDFC }], userTokens: [] },
+      account: { operatorApprovals: [{ lockupUsage: "7", token: USDFC }], userTokens: [] },
       allOneTimePayments: reason,
     });
 
@@ -174,7 +174,7 @@ describe("buildServiceMetricsRows", () => {
 
   describe("account runway", () => {
     const withToken = (token: ReturnType<typeof userToken>) =>
-      buildOne({ account: { operatorApprovals: [{ lockupUsage: 1n, token: USDFC }], userTokens: [token] } });
+      buildOne({ account: { operatorApprovals: [{ lockupUsage: "1", token: USDFC }], userTokens: [token] } });
 
     it("gives the date and the days left", () => {
       // 12.5 days at 10 per epoch.
@@ -194,7 +194,7 @@ describe("buildServiceMetricsRows", () => {
     it("reads the runway of the row's own token", () => {
       const row = buildOne({
         account: {
-          operatorApprovals: [{ lockupUsage: 1n, token: USDFC }],
+          operatorApprovals: [{ lockupUsage: "1", token: USDFC }],
           userTokens: [userToken(AXL_USDC, 100n, 100n, NOW - 86_400n), userToken(USDFC)],
         },
       });
