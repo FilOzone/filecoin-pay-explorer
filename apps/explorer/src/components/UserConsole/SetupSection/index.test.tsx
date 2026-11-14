@@ -144,7 +144,7 @@ vi.mock("./GroupKeyStep", () => ({
     return (
       <li>
         <h2>
-          <span className='sr-only'>Step {props.number}: </span>Give this tool an encryption key
+          <span className='sr-only'>Step {props.number}: </span>Share encryption access with this key
         </h2>
         <button type='button' onClick={props.onIssued}>
           Issue
@@ -253,7 +253,7 @@ describe("SetupSection", () => {
     expect(stepTitles()).toEqual([
       "Step 1: Deposit and add Warm Storage",
       "Step 2: Authorize a session key",
-      "Step 3: Give this tool an encryption key",
+      "Step 3: Share encryption access with this key",
     ]);
     const before = dialogs.groupKey.at(-1);
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({

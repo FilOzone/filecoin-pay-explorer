@@ -383,7 +383,7 @@ describe("GroupKeyStep", () => {
   it("names a requested group in plain words, with its warning", async () => {
     await renderStep({ node: "scope:photos/2026", maxDepth: 2 });
 
-    expect(accessRow()).toContain("This tool can read and write photos/2026 only, with the groups beneath it.");
+    expect(accessRow()).toContain("This key can read and write photos/2026 only, with the groups beneath it.");
     expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
     expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
   });
@@ -429,8 +429,6 @@ describe("GroupKeyStep", () => {
     expect(options()).toEqual(["keyspace"]);
     expect(option("Whole group key").checked).toBe(true);
     expect(screen.getByRole("button", { name: "Add a group under the whole group key" })).toBeTruthy();
-    // A row with no children has no chevron.
-    expect(screen.queryByRole("button", { name: /^(Collapse|Expand) / })).toBeNull();
   });
 
   it("splits a group request into one row per name, with only the requested group selectable", async () => {
@@ -441,59 +439,23 @@ describe("GroupKeyStep", () => {
     expect(option("photos/2026").checked).toBe(true);
     expect(screen.queryByRole("button", { name: "Add a group under photos" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add a group under photos/2026" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse photos" }).getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("collapses a row's children and expands them again", async () => {
-    await renderStep({ node: "scope:photos/2026" });
-    addGroup("photos/2026", "may");
-    expect(treeRows()).toEqual(["photos", "  2026", "    may"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse photos/2026" }));
-    expect(treeRows()).toEqual(["photos", "  2026"]);
-    fireEvent.click(screen.getByRole("button", { name: "Collapse photos" }));
-    expect(treeRows()).toEqual(["photos"]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Expand photos" }));
-    expect(treeRows()).toEqual(["photos", "  2026"]);
-    fireEvent.click(screen.getByRole("button", { name: "Expand photos/2026" }));
-    expect(treeRows()).toEqual(["photos", "  2026", "    may"]);
-    // The collapsed state did not change what is selected.
-    expect(option("photos/2026/may").checked).toBe(true);
-  });
-
-  const selectedLine = () => screen.getByText(/^Selected group:/);
-
-  it("names the selected group's full path below the tree, following every selection", async () => {
-    await renderStep({ node: "scope:photos/2026" });
-    expect(selectedLine().textContent).toBe("Selected group: photos/2026");
-    expect(selectedLine().getAttribute("aria-live")).toBe("polite");
-
-    addGroup("photos/2026", "may");
-    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
-    fireEvent.click(option("photos/2026"));
-    expect(selectedLine().textContent).toBe("Selected group: photos/2026");
-    fireEvent.click(option("photos/2026/may"));
-    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
-  });
-
-  it("keeps the selection, and names it, when collapsing hides it", async () => {
-    await renderStep({ node: "scope:photos/2026" });
-    addGroup("photos/2026", "may");
-    fireEvent.click(screen.getByRole("button", { name: "Collapse photos" }));
-
-    expect(screen.queryByRole("radio")).toBeNull();
-    expect(selectedLine().textContent).toBe("Selected group: photos/2026/may");
-    expect(screen.getByText(groupKeyWarning("scope:photos/2026/may"))).toBeTruthy();
-  });
-
-  it("names the whole group key when its row is selected", async () => {
+  it("says a whole group key link narrowed to a group covers only that group", async () => {
+    const groupKeyRow = () => screen.getByText("Group key ID").closest("dt")?.nextElementSibling?.textContent;
     await renderStep();
-    expect(selectedLine().textContent).toBe("Selected group: Whole group key");
+    await waitFor(() => expect(groupKeyRow()).toContain("Access covers everything encrypted with this group key"));
+
     addGroup("the whole group key", "docs");
-    expect(selectedLine().textContent).toBe("Selected group: docs");
-    fireEvent.click(option("Whole group key"));
-    expect(selectedLine().textContent).toBe("Selected group: Whole group key");
+    expect(groupKeyRow()).toContain("The group below sits inside this group key.");
+    expect(groupKeyRow()).not.toContain("Access covers everything");
+    expect(accessRow()).toContain("The group name is visible in every encrypted piece written under it.");
+  });
+
+  it("adds a typed group name in its normalized form", async () => {
+    await renderStep({ node: "scope:photos" });
+    addGroup("photos", "cafe\u0301");
+    expect(options()).toEqual(["scope:photos", "scope:photos/caf\u00e9"]);
   });
 
   it("nests groups added under the requested group, and signs for the one selected", async () => {
@@ -506,7 +468,7 @@ describe("GroupKeyStep", () => {
     expect(option("photos/2026/june").checked).toBe(true);
 
     fireEvent.click(option("photos/2026/may/raw"));
-    expect(accessRow()).toContain("This tool can read and write photos/2026/may/raw only");
+    expect(accessRow()).toContain("This key can read and write photos/2026/may/raw only");
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
     expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026/may/raw" });
@@ -520,10 +482,10 @@ describe("GroupKeyStep", () => {
     expect(options()).toEqual(["scope:photos", "scope:photos/2026"]);
     // The root stays selectable; selecting the new group is what narrows the Grant.
     fireEvent.click(option("photos"));
-    expect(accessRow()).toContain("This tool can read and write photos only");
+    expect(accessRow()).toContain("This key can read and write photos only");
     fireEvent.click(option("photos/2026"));
     expect(option("photos/2026").checked).toBe(true);
-    expect(accessRow()).toContain("This tool can read and write photos/2026 only");
+    expect(accessRow()).toContain("This key can read and write photos/2026 only");
     expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
 
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
@@ -596,5 +558,47 @@ describe("GroupKeyStep", () => {
     expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(
       `${GRANT}b`,
     );
+  });
+
+  const onwardSwitch = () => screen.getByRole("switch", { name: "Let this key share onward" }) as HTMLButtonElement;
+  const signedDepth = async () => {
+    const before = onIssued.mock.calls.length;
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
+    await waitFor(() => expect(onIssued).toHaveBeenCalledTimes(before + 1));
+    return issue.mock.calls.at(-1)?.[1].maxDepth;
+  };
+
+  it.each([
+    { link: "no maxdepth", maxDepth: undefined, expected: 7 },
+    { link: "maxdepth=3", maxDepth: 3, expected: 3 },
+  ])("lets the key share onward by default, signing the link's depth for $link", async ({ maxDepth, expected }) => {
+    await renderStep({ maxDepth });
+    expect(onwardSwitch().getAttribute("aria-checked")).toBe("true");
+    expect(onwardSwitch().disabled).toBe(false);
+    expect(screen.queryByText("The link asked for no onward sharing.")).toBeNull();
+    expect(await signedDepth()).toBe(expected);
+  });
+
+  it("signs maxDepth 0 when the owner turns onward sharing off, and keeps it off for the next Grant", async () => {
+    await renderStep({ maxDepth: 3 });
+    fireEvent.click(onwardSwitch());
+    expect(onwardSwitch().getAttribute("aria-checked")).toBe("false");
+    expect(await signedDepth()).toBe(0);
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue another Grant" })));
+    expect(onwardSwitch().getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(onwardSwitch());
+    expect(await signedDepth()).toBe(3);
+  });
+
+  it("keeps onward sharing off and disabled when the link asks for maxdepth=0", async () => {
+    await renderStep({ maxDepth: 0 });
+    expect(onwardSwitch().getAttribute("aria-checked")).toBe("false");
+    expect(onwardSwitch().disabled).toBe(true);
+    expect(screen.getByText("The link asked for no onward sharing.")).toBeTruthy();
+    fireEvent.click(onwardSwitch());
+    expect(onwardSwitch().getAttribute("aria-checked")).toBe("false");
+    expect(await signedDepth()).toBe(0);
   });
 });

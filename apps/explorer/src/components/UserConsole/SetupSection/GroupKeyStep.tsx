@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
+import { Switch } from "@filecoin-pay/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
@@ -12,7 +13,7 @@ import {
   parseAllDataSetMetadata,
 } from "@filoz/synapse-core/warm-storage";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleHelp, Plus } from "lucide-react";
+import { CircleHelp, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { Hex, WalletClient } from "viem";
 import { usePublicClient, useWalletClient } from "wagmi";
@@ -44,7 +45,7 @@ export function groupKeyWarning(node: GroupGrantNode): string {
       ? "every data set created and every piece uploaded under this group key"
       : `every piece uploaded under the group "${group}" and the groups beneath it`;
   const under = group === null ? "this group key" : "this group";
-  return `Only continue if you trust this tool with ${what}. Revoking the session key or letting it expire only ends its scopes — it does not take back the encryption key: anyone who obtained it keeps decrypting everything under ${under}, existing and future uploads, and can share the contents or the key with others.`;
+  return `Only continue if you trust this key with ${what}. Revoking the session key or letting it expire only ends its scopes — it does not take back the encryption key: anyone who obtained it keeps decrypting everything under ${under}, existing and future uploads, and can share the contents or the key with others.`;
 }
 
 /**
@@ -226,14 +227,15 @@ const AccessText = ({ node }: { node: GroupGrantNode }) => {
   if (group === null) {
     return (
       <span className='block'>
-        <span className='font-medium'>Whole group key.</span> This tool can read and write everything under this group
+        <span className='font-medium'>Whole group key.</span> This key can read and write everything under this group
         key.
       </span>
     );
   }
   return (
     <span className='block'>
-      This tool can read and write <code className='font-mono'>{group}</code> only, with the groups beneath it.
+      This key can read and write <code className='font-mono'>{group}</code> only, with the groups beneath it. The group
+      name is visible in every encrypted piece written under it.
     </span>
   );
 };
@@ -262,7 +264,7 @@ const ancestorsOf = (node: GroupGrantNode): GroupGrantNode[] => {
 
 /**
  * The requested node and the groups the owner added beneath it this visit, as
- * a collapsible tree, one row per group name. The requested group and the
+ * a tree, one row per group name. The requested group and the
  * groups beneath it are radio options: the selected one is what the Grant
  * opens. The groups above a requested group are shown muted, for context
  * only, since the owner may narrow a request but never widen it. No list of
@@ -284,7 +286,6 @@ const GroupTree = ({
   const [adding, setAdding] = useState<GroupGrantNode | null>(null);
   const [segment, setSegment] = useState("");
   const [invalid, setInvalid] = useState(false);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<GroupGrantNode>>(new Set());
   const ancestors = ancestorsOf(root);
   const close = () => {
     setAdding(null);
@@ -302,12 +303,6 @@ const GroupTree = ({
     onAdd(`scope:${path}`);
     close();
   };
-  const toggle = (node: GroupGrantNode) =>
-    setCollapsed((nodes) => {
-      const next = new Set(nodes);
-      if (!next.delete(node)) next.add(node);
-      return next;
-    });
   // An ancestor's only child is the next group down toward the request; anything else, the groups added beneath it.
   const childrenOf = (node: GroupGrantNode): GroupGrantNode[] => {
     const i = ancestors.indexOf(node);
@@ -318,7 +313,6 @@ const GroupTree = ({
   const row = (node: GroupGrantNode, nested: boolean): ReactNode => {
     const name = nodeName(node);
     const kids = childrenOf(node);
-    const open = !collapsed.has(node);
     const selectable = !ancestors.includes(node);
     const labelClass = node === "keyspace" ? "font-medium" : "font-mono text-xs";
     return (
@@ -329,23 +323,6 @@ const GroupTree = ({
             node === selected ? "bg-blue-50 dark:bg-blue-950/40" : selectable && "hover:bg-muted/50",
           )}
         >
-          {kids.length > 0 ? (
-            <button
-              type='button'
-              aria-label={`${open ? "Collapse" : "Expand"} ${name}`}
-              aria-expanded={open}
-              className='rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground'
-              onClick={() => toggle(node)}
-            >
-              {open ? (
-                <ChevronDown className='size-3.5' aria-hidden='true' />
-              ) : (
-                <ChevronRight className='size-3.5' aria-hidden='true' />
-              )}
-            </button>
-          ) : (
-            <span className='size-4.5 shrink-0' aria-hidden='true' />
-          )}
           {selectable ? (
             <label className='flex flex-1 cursor-pointer items-center gap-2 py-1 text-sm'>
               <input
@@ -369,18 +346,16 @@ const GroupTree = ({
               onClick={() => {
                 close();
                 setAdding(node);
-                // A group added under a collapsed row must be visible.
-                setCollapsed((nodes) => new Set([...nodes].filter((n) => n !== node)));
               }}
             >
               <Plus className='size-3.5' aria-hidden='true' />
             </button>
           )}
         </div>
-        {((open && kids.length > 0) || adding === node) && (
+        {(kids.length > 0 || adding === node) && (
           // The guide line: a vertical rule down from this row, with an elbow into each child.
           <ul className='ml-[11px] border-l border-zinc-200 pl-3 dark:border-zinc-700'>
-            {open && kids.map((child) => row(child, true))}
+            {kids.map((child) => row(child, true))}
             {adding === node && (
               <li className={cn(ELBOW, "flex flex-col gap-1 py-1 pr-1 pl-1")}>
                 <input
@@ -428,15 +403,6 @@ const GroupTree = ({
       <ul className='mt-1 rounded-lg border border-zinc-200 p-2 dark:border-zinc-700'>
         {row(ancestors[0] ?? root, false)}
       </ul>
-      {/* Collapsing a row can hide the selected one; this line always names what will be signed. */}
-      <p aria-live='polite' className='mt-2 text-xs'>
-        Selected group:{" "}
-        {selected === "keyspace" ? (
-          <span className='font-medium'>Whole group key</span>
-        ) : (
-          <code className='font-mono'>{groupOf(selected)}</code>
-        )}
-      </p>
     </fieldset>
   );
 };
@@ -508,7 +474,7 @@ interface GroupKeyStepProps {
 }
 
 /**
- * Give the session key the owner's group key, so the tool can encrypt and
+ * Give the session key the owner's group key, so its holder can encrypt and
  * decrypt without the wallet. The wallet signs for the group key (twice for a
  * new one, to check it signs deterministically), then signs the claim that
  * sets the date the CLI accepts the Grant until. Nothing
@@ -538,17 +504,23 @@ export const GroupKeyStep = ({
   const [node, setNode] = useState<GroupGrantNode>(keyAgreement.node);
   // Every Grant made this visit, so issuing another keeps the earlier ones on screen to copy.
   const [grants, setGrants] = useState<{ node: GroupGrantNode; grant: string }[]>([]);
+  // Narrow only: a link that asks for no onward delegation keeps the switch off.
+  const canShareOnward = keyAgreement.maxDepth > 0;
+  const [onward, setOnward] = useState(true);
+  const shareOnward = canShareOnward && onward;
   const issue = useMutation({
     mutationFn: ({
       wallet,
       chosen,
       expires,
       node,
+      maxDepth,
     }: {
       wallet: WalletClient;
       chosen: ChosenGroupKey;
       expires: bigint;
       node: GroupGrantNode;
+      maxDepth: number;
     }) =>
       issueGroupKeyGrant(
         {
@@ -567,7 +539,7 @@ export const GroupKeyStep = ({
           bearer: sessionKey,
           pubkey: keyAgreement.pubkey,
           node,
-          maxDepth: keyAgreement.maxDepth,
+          maxDepth,
           expires,
         },
       ),
@@ -588,7 +560,9 @@ export const GroupKeyStep = ({
   });
   const groupKey = choice.data && !("error" in choice.data) ? choice.data : null;
   const sign = () => {
-    if (wallet && groupKey && expires !== null) issue.mutate({ wallet, chosen: groupKey, expires, node });
+    if (wallet && groupKey && expires !== null) {
+      issue.mutate({ wallet, chosen: groupKey, expires, node, maxDepth: shareOnward ? keyAgreement.maxDepth : 0 });
+    }
   };
   const issueAnother = () => {
     issue.reset();
@@ -600,7 +574,7 @@ export const GroupKeyStep = ({
   return (
     <SetupStep
       number={number}
-      title='Give this tool an encryption key'
+      title='Share encryption access with this key'
       description={
         shownGroup === null ? (
           <p>
@@ -668,21 +642,52 @@ export const GroupKeyStep = ({
             </span>
           }
         >
-          <GroupKeyDetail groupKey={groupKey} whole={keyAgreement.node === "keyspace"} />
+          <GroupKeyDetail groupKey={groupKey} whole={shownGroup === null} />
         </Detail>
         <Detail term='Access'>
           <AccessText node={node} />
           {GROUP_KEY_STATUS[phase.phase].sign !== "hidden" && !issue.isPending && (
-            <GroupTree
-              root={keyAgreement.node}
-              added={added}
-              selected={node}
-              onSelect={setNode}
-              onAdd={(group) => {
-                setAdded((groups) => (groups.includes(group) ? groups : [...groups, group]));
-                setNode(group);
-              }}
-            />
+            <>
+              <GroupTree
+                root={keyAgreement.node}
+                added={added}
+                selected={node}
+                onSelect={setNode}
+                onAdd={(group) => {
+                  setAdded((groups) => (groups.includes(group) ? groups : [...groups, group]));
+                  setNode(group);
+                }}
+              />
+              <div className='mt-3 flex items-start gap-2'>
+                <Switch
+                  id='group-key-onward'
+                  // Sized to the xs label beside it; the thumb is the Switch's only child span.
+                  className='mt-px h-3.5 w-6 [&>span]:size-3'
+                  checked={shareOnward}
+                  disabled={!canShareOnward}
+                  onCheckedChange={setOnward}
+                />
+                <div className='text-xs text-muted-foreground'>
+                  <label htmlFor='group-key-onward'>Let this key share onward</label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type='button'
+                        aria-label='What is sharing onward?'
+                        className='ml-1 inline-flex align-text-top text-muted-foreground hover:text-foreground'
+                      >
+                        <CircleHelp className='size-3.5' />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className='max-w-xs'>
+                      Lets this key pass on access to what it holds, or part of it, to other keys, such as sub-agents or
+                      share links for private uploads. Off keeps access to this key only.
+                    </TooltipContent>
+                  </Tooltip>
+                  {!canShareOnward && <p>The link asked for no onward sharing.</p>}
+                </div>
+              </div>
+            </>
           )}
         </Detail>
       </dl>
