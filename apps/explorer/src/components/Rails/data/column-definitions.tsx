@@ -3,6 +3,7 @@ import type { Rail } from "@filecoin-pay/types";
 import { TIME_CONSTANTS } from "@filoz/synapse-sdk";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyableText, NetworkLink, RailStateBadge, StyledLink } from "@/components/shared";
+import ServiceAddress from "@/components/shared/ServiceAddress";
 import { formatDate, formatToken } from "@/utils/formatter";
 
 const columnHelper = createColumnHelper<Rail>();
@@ -55,7 +56,7 @@ export const columns = [
     cell: (info) => {
       const operator = info.getValue();
       return (
-        <CopyableText
+        <ServiceAddress
           value={operator.address}
           // to={`/operator/${operator.address}`}
           monospace={true}

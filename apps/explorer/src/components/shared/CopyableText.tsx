@@ -1,7 +1,7 @@
 import { cn } from "@filecoin-pay/ui/lib/utils";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { knownAddresses } from "@/constants/known-addresses";
+import { resolveAddressName } from "@/constants/known-addresses";
 import useNetwork from "@/hooks/useNetwork";
 import type { Network } from "@/types";
 import CopyButton from "./CopyButton";
@@ -19,6 +19,10 @@ interface CopyableTextProps {
   lookupName?: boolean;
   /** Overrides the shared network context, which /console pages never sync to the wallet's chain. */
   networkOverride?: Network;
+  /** Tooltip; defaults to `value`. */
+  title?: string;
+  /** Replaces the computed display (name or truncated value). */
+  children?: React.ReactNode;
 }
 
 const CopyableText = ({
@@ -33,12 +37,15 @@ const CopyableText = ({
   monospace = true,
   lookupName = true,
   networkOverride,
+  title = value,
+  children,
 }: CopyableTextProps) => {
   const displayValue =
-    (lookupName && knownAddresses[value.toLowerCase()]) ||
-    (truncate && value.length > truncateLength * 2
-      ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
-      : value);
+    children ??
+    ((lookupName && resolveAddressName(value)?.name) ||
+      (truncate && value.length > truncateLength * 2
+        ? `${value.substring(0, truncateLength)}...${value.substring(value.length - truncateLength)}`
+        : value));
   const { network: contextNetwork } = useNetwork();
   const network = networkOverride ?? contextNetwork;
 
@@ -53,7 +60,7 @@ const CopyableText = ({
             "text-link inline-flex items-center text-pretty whitespace-nowrap pointer-coarse:min-h-11",
             linkClassName,
           )}
-          title={value}
+          title={title}
           target={external ? "_blank" : "_self"}
           rel={external ? "noopener noreferrer" : undefined}
         >
@@ -61,7 +68,7 @@ const CopyableText = ({
           {external && <ExternalLink className='ml-1 h-4 w-4 inline-block' />}
         </Link>
       ) : (
-        <span className='whitespace-nowrap' title={value}>
+        <span className='inline-flex items-center whitespace-nowrap' title={title}>
           {displayValue}
         </span>
       )}
