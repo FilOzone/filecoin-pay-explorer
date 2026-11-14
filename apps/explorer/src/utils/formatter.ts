@@ -98,7 +98,8 @@ const BYTE_UNITS = [
   { unit: "KiB", size: SIZE_CONSTANTS.KiB },
 ] as const;
 
-export function formatBytes(bytes: bigint): string {
+export function formatBytes(value: bigint | string): string {
+  const bytes = BigInt(value);
   if (bytes <= 0n) return "0 B";
   for (const { unit, size } of BYTE_UNITS) {
     const value = (Number(bytes) / Number(size)).toFixed(2);
