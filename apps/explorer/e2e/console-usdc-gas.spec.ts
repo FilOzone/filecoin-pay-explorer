@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import { decodeFunctionData, erc20Abi, type Hex, parseAbi } from "viem";
 import { installFakeSquid } from "./fake-squid";
 import { type FakeUsdcGasOptions, installFakeUsdcGas } from "./fake-usdc-gas";
@@ -19,25 +19,31 @@ test.skip(process.env.E2E_MODE === "real", "needs the fake bundler");
 
 // These tests end right after a deposit settles or fails, when the dialog and console refetch quotes and balances;
 // the no-network fixture must not tear down while one of those is still being answered.
-const inFlight = new WeakMap<Page, { count: number; lastStart: number }>();
+const inFlight = new WeakMap<Page, { requests: Set<Request>; lastStart: number }>();
 test.beforeEach(({ page }) => {
-  const traffic = { count: 0, lastStart: Date.now() };
+  const traffic = { requests: new Set<Request>(), lastStart: Date.now() };
   inFlight.set(page, traffic);
-  page.on("request", () => {
-    traffic.count += 1;
+  let loadingDocument = false;
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) loadingDocument = true;
+    traffic.requests.add(request);
     traffic.lastStart = Date.now();
   });
-  const done = () => {
-    traffic.count -= 1;
-  };
+  const done = (request: Request) => traffic.requests.delete(request);
   page.on("requestfinished", done);
   page.on("requestfailed", done);
+  // A reload drops the old document's requests that a route was still answering, and they never report finishing.
+  page.on("framenavigated", (frame) => {
+    if (frame !== page.mainFrame() || !loadingDocument) return;
+    loadingDocument = false;
+    for (const request of traffic.requests) if (!request.isNavigationRequest()) traffic.requests.delete(request);
+  });
 });
 test.afterEach(async ({ page }) => {
   const traffic = inFlight.get(page);
   if (!traffic) return;
   await expect
-    .poll(() => traffic.count === 0 && Date.now() - traffic.lastStart > 1_000, { timeout: 15_000 })
+    .poll(() => traffic.requests.size === 0 && Date.now() - traffic.lastStart > 1_000, { timeout: 15_000 })
     .toBe(true);
 });
 
