@@ -65,3 +65,16 @@ export const deriveFundsHealth = (fundedUntilTimestamp: bigint, currentTimestamp
 
   return { tier: "healthy", daysRemaining, isExpired: false };
 };
+
+export const formatRunwayDetail = (daysRemaining: number | null, isExpired: boolean) => {
+  if (isExpired) return "Funding expired";
+  // Infinite runway means no rate is charging the account — it does not mean nothing
+  // is locked. Fixed lockup (a CDN rail, say) still shows on the Locked card, so this
+  // must not read as "no lockup". Scoped to *recurring* so it stays true if a fixed
+  // lockup is later settled as a one-off payment. Avoid "burn": in this product that
+  // already means FIL destroyed for fees (`filBurned`), not paid to a provider.
+  if (daysRemaining === null) return "No recurring charges";
+  if (daysRemaining === 0) return "in less than a day";
+  if (daysRemaining === 1) return "in 1 day";
+  return `in ${daysRemaining} days`;
+};

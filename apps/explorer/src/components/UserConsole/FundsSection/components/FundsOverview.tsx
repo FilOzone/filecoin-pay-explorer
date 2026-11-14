@@ -5,7 +5,7 @@ import { maxUint256 } from "viem";
 import { formatFutureTimestamp } from "@/utils/formatter";
 import { calculateFundedUntil } from "../utils/calculateFundedUntil";
 import { formatTokenAmount } from "../utils/formatTokenAmount";
-import { deriveFundsHealth, type HealthTier } from "../utils/fundsHealth";
+import { deriveFundsHealth, formatRunwayDetail, type HealthTier } from "../utils/fundsHealth";
 import { TIER_CARD_CLASSNAME, TIER_VALUE_CLASSNAME } from "../utils/tierStyles";
 import FundsMeters from "./FundsMeters";
 import FundsMetricCard from "./FundsMetricCard";
@@ -20,19 +20,6 @@ const TIERS_WITH_ICON: ReadonlySet<HealthTier> = new Set<HealthTier>(["warning",
 const formatFundedUntil = (fundedUntilTimestamp: bigint, currentTimestamp: bigint) => {
   if (fundedUntilTimestamp === maxUint256) return "Infinity";
   return formatFutureTimestamp(fundedUntilTimestamp, currentTimestamp);
-};
-
-const formatRunwayDetail = (daysRemaining: number | null, isExpired: boolean) => {
-  if (isExpired) return "Funding expired";
-  // Infinite runway means no rate is charging the account — it does not mean nothing
-  // is locked. Fixed lockup (a CDN rail, say) still shows on the Locked card, so this
-  // must not read as "no lockup". Scoped to *recurring* so it stays true if a fixed
-  // lockup is later settled as a one-off payment. Avoid "burn": in this product that
-  // already means FIL destroyed for fees (`filBurned`), not paid to a provider.
-  if (daysRemaining === null) return "No recurring charges";
-  if (daysRemaining === 0) return "in less than a day";
-  if (daysRemaining === 1) return "in 1 day";
-  return `in ${daysRemaining} days`;
 };
 
 const FundsOverview = ({ userToken, currentTimestamp }: FundsOverviewProps) => {
