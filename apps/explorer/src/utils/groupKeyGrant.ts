@@ -51,6 +51,9 @@ export function groupPath(path: string): string | null {
   }
 }
 
+/** The group a node names, or null for the whole group key. */
+export const groupOf = (node: GroupGrantNode) => (node === "keyspace" ? null : node.slice("scope:".length));
+
 /** A live data set that records a group key; others never take part in the choice. */
 export interface GroupKeyDataSet {
   dataSetId: bigint;
