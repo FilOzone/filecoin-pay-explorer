@@ -3,7 +3,12 @@
  * wallet. Every value is untrusted URL input and parsing never throws. The
  * parameter names are a contract shared with the CLIs:
  *
- * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=][&pubkey=<0x04…>&pubkeysig=<0x…>]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
+ * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=][&pubkey=<0x04…>&pubkeysig=<0x…>&node=<keyspace|scope:<path>>[&maxdepth=<0-7>]]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
+ *
+ * A `pubkey` asks for a group key Grant, and needs `addPieces` in `scopes`: a
+ * key that cannot add pieces has nothing to encrypt for. `node=keyspace` asks
+ * for the whole group key, `node=scope:<path>` for one group (URL-encoded).
+ * `maxdepth` caps the Grant's onward delegation; without it, the chain limit.
  *
  * `signer` is read as `authorize`, as the `fil` CLI names it. Older links to
  * `/console/session-keys?authorize=` and `/console?deposit=` are redirected
@@ -19,6 +24,7 @@ import {
   parseScopesParam,
 } from "./authorizeParam";
 import { parseDepositParam, parseOperatorParam } from "./depositParam";
+import { type GroupGrantNode, groupPath, MAX_GRANT_DEPTH } from "./groupKeyGrant";
 import { normalizeKeyName, type ScopeId } from "./sessionKeys";
 
 export const SETUP_PATH = "/console/setup";
@@ -31,9 +37,12 @@ export type SetupLinkError =
   | "bad-operator"
   | "bad-approval"
   | "pubkey-without-key"
+  | "pubkey-without-add-pieces"
   | "bad-pubkey"
   | "bad-pubkeysig"
-  | "bad-node";
+  | "bad-node"
+  | "bad-group"
+  | "bad-maxdepth";
 
 export interface SessionKeyRequest {
   address: `0x${string}`;
@@ -55,8 +64,10 @@ export interface KeyAgreementRequest {
   pubkey: Hex;
   /** The session key's EIP-191 signature over {@link keyAgreementMessage}, lowercase. */
   pubkeysig: Hex;
-  /** The Keysmith node the Grant opens. This page issues whole group keys only. */
-  node: "keyspace";
+  /** The Keysmith node the link asks for: the whole group key, or a group in canonical form. */
+  node: GroupGrantNode;
+  /** The Grant's `maxDepth`: the link's `maxdepth`, else {@link MAX_GRANT_DEPTH}. */
+  maxDepth: number;
 }
 
 export interface SetupRequest {
@@ -99,6 +110,7 @@ const REQUEST_PARAMS = [
   "pubkey",
   "pubkeysig",
   "node",
+  "maxdepth",
 ] as const;
 
 /**
@@ -161,18 +173,37 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
   if (approval !== null && approval.trim().toLowerCase() !== "unlimited") return { error: "bad-approval" };
 
   let keyAgreement: KeyAgreementRequest | null = null;
-  if (params.has("pubkey") || params.has("pubkeysig") || params.has("node")) {
+  if (params.has("pubkey") || params.has("pubkeysig") || params.has("node") || params.has("maxdepth")) {
     // The Grant goes to the session key the link authorizes; there is nothing to give it to otherwise.
     if (!sessionKey) return { error: "pubkey-without-key" };
+    // A Grant is for writing encrypted pieces; a key that cannot add them never gets one.
+    if (!sessionKey.scopes.includes("addPieces")) return { error: "pubkey-without-add-pieces" };
     const pubkey = params.get("pubkey")?.trim().toLowerCase() ?? "";
     // Format only: Keysmith rejects a point off the curve when it wraps the Grant.
     if (!/^0x04[0-9a-f]{128}$/.test(pubkey)) return { error: "bad-pubkey" };
     const pubkeysig = params.get("pubkeysig")?.trim().toLowerCase() ?? "";
     if (!/^0x[0-9a-f]{130}$/.test(pubkeysig)) return { error: "bad-pubkeysig" };
-    // This version issues whole group keys only. Anything else is refused, so a tool asking for
-    // a narrower part of the keyspace never gets the whole group key from an older console.
-    if (params.get("node") !== "keyspace") return { error: "bad-node" };
-    keyAgreement = { pubkey: pubkey as Hex, pubkeysig: pubkeysig as Hex, node: "keyspace" };
+    const nodeParam = params.get("node");
+    let node: GroupGrantNode;
+    const groupPrefix = "scope:";
+    if (nodeParam === "keyspace") node = "keyspace";
+    else if (nodeParam?.startsWith(groupPrefix)) {
+      // Keysmith's own rules, so a group the CLI cannot write under is never granted.
+      const path = groupPath(nodeParam.slice(groupPrefix.length));
+      if (path === null) return { error: "bad-group" };
+      node = `${groupPrefix}${path}`;
+    } else return { error: "bad-node" };
+    // Exactly one digit in range: "07", "7.0" or " 7" are refused, not read as 7.
+    const maxdepth = params.get("maxdepth");
+    if (maxdepth !== null && !(/^\d$/.test(maxdepth) && Number(maxdepth) <= MAX_GRANT_DEPTH)) {
+      return { error: "bad-maxdepth" };
+    }
+    keyAgreement = {
+      pubkey: pubkey as Hex,
+      pubkeysig: pubkeysig as Hex,
+      node,
+      maxDepth: maxdepth === null ? MAX_GRANT_DEPTH : Number(maxdepth),
+    };
   }
 
   return {
