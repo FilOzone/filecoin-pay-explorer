@@ -625,6 +625,70 @@ export const GET_ACCOUNT_OPERATOR_RAILS = gql`
   }
 `;
 
+export const GET_SERVICE_METRICS = gql`
+  query GetServiceMetrics($accountId: ID!, $payer: String!, $operator: String!, $monthStart: BigInt!, $first: Int!) {
+    account(id: $accountId) {
+      operatorApprovals(where: { operator: $operator }, first: 100) {
+        lockupUsage
+        token {
+          id
+          symbol
+          decimals
+        }
+      }
+      userTokens(first: 100) {
+        funds
+        lockupCurrent
+        lockupRate
+        lockupLastSettledUntilEpoch
+        lockupLastSettledUntilTimestamp
+        token {
+          id
+        }
+      }
+    }
+    # Not OperatorApproval.rateUsage: the subgraph does not lower it when a rail terminates.
+    rails(where: { payer: $payer, operator: $operator, state: ACTIVE, paymentRate_gt: 0 }, first: $first) {
+      paymentRate
+      lockupPeriod
+      token {
+        id
+      }
+    }
+    oneTimePayments(where: { payer: $payer, operator: $operator, createdAt_gte: $monthStart }, first: $first) {
+      totalAmount
+      token {
+        id
+      }
+    }
+  }
+`;
+
+export const GET_SERVICE_ONE_TIME_PAYMENTS = gql`
+  query GetServiceOneTimePayments(
+    $payer: String!
+    $operator: String!
+    $monthStart: BigInt!
+    $first: Int!
+    $cursor: Bytes!
+    $block: Int!
+  ) {
+    oneTimePayments(
+      block: { number: $block }
+      where: { payer: $payer, operator: $operator, createdAt_gte: $monthStart, id_gt: $cursor }
+      first: $first
+      orderBy: id
+      orderDirection: asc
+    ) {
+      id
+      totalAmount
+      token {
+        id
+      }
+    }
+  }
+`;
+
 const DATA_SET_ROW_FIELDS = `
   fragment DataSetRowFields on DataSet {
     id

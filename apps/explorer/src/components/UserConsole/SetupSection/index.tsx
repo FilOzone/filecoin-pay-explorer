@@ -1,15 +1,20 @@
 "use client";
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
 import { ShieldAlert } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Hex } from "viem";
 import { useConnection, useSwitchChain } from "wagmi";
+import CopyButton from "@/components/shared/CopyButton";
 import { Notice } from "@/components/shared/Notice";
 import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
 import { getChain } from "@/constants/chains";
 import type { Network } from "@/types";
 import { formatAddress } from "@/utils/formatter";
 import { parseSetupLink, type SetupLinkError, type SetupRequest } from "@/utils/setupLink";
+import { type AvailableFunds, DepositServiceStep, useSetupFunds, useWarmStorageApproval } from "./DepositServiceStep";
 import {
   fundsOffer,
   isSetupComplete,
@@ -18,44 +23,72 @@ import {
   shortfall,
   writeDepositBaseline,
 } from "./data/setupStatus";
-import { type AvailableFunds, FundsStep, useSetupFunds } from "./FundsStep";
 import { GroupKeyStep } from "./GroupKeyStep";
 import { SessionKeyStep, useKeyGrant } from "./SessionKeyStep";
-import { useWarmStorageApproval, WarmStorageStep } from "./WarmStorageStep";
 
 const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
-  "bad-checksum": "The session key address in it is misspelled.",
-  "not-an-address": "It does not contain a valid session key address.",
-  "no-network": "It does not say which network it is for.",
-  "no-scopes": "It does not say what the session key may do.",
-  "bad-deposit": "Its deposit amount cannot be read.",
-  "bad-balance": "The balance it asks for cannot be read.",
-  "bad-operator": "It names a service this page does not set up.",
-  "bad-approval": "It asks for a kind of Warm Storage approval this page does not know.",
-  "pubkey-without-key": "It asks for access to encrypted uploads but names no session key to give it to.",
-  "bad-pubkey": "The session key's encryption key in it cannot be read.",
-  "bad-pubkeysig": "The session key's signature over its encryption key is missing or cannot be read.",
-  "bad-node": "It asks for a part of a group key, and this page only gives whole group keys.",
+  "bad-checksum": "The session key address has an invalid checksum.",
+  "not-an-address": "The request does not contain a valid session key address.",
+  "no-network": "The request does not specify a supported network.",
+  "no-scopes": "The request does not specify supported scopes.",
+  "bad-deposit": "The requested deposit amount is invalid.",
+  "bad-balance": "The requested balance is invalid.",
+  "bad-operator": "This page cannot configure the requested storage service.",
+  "bad-approval": "This page does not support the requested storage approval.",
+  "pubkey-without-key": "The encryption request does not identify a recipient session key.",
+  "bad-pubkey": "The recipient’s encryption public key is invalid.",
+  "bad-pubkeysig": "The signature binding the encryption public key to the session key is missing or invalid.",
+  "bad-node": "This request asks for partial encryption access. This page supports only whole group keys.",
 };
 
 const NetworkName = ({ network }: { network: Network }) => <span className='capitalize'>{network}</span>;
 
-const Header = ({ network, account, caution }: { network: Network; account: Hex | undefined; caution?: boolean }) => (
+const Header = ({
+  network,
+  account,
+  caution,
+  sessionKey,
+}: {
+  network: Network;
+  account: Hex | undefined;
+  caution?: boolean;
+  sessionKey?: boolean;
+}) => (
   <header className='flex flex-col gap-3'>
-    <h1 className='text-3xl font-medium tracking-tight text-balance'>Set up your wallet for storage</h1>
+    <h1 className='text-3xl font-medium tracking-tight text-balance'>Set up your Filecoin Storage</h1>
     <p className='max-w-prose text-muted-foreground'>
-      A command-line tool asked to set up{" "}
-      {account ? <span className='font-mono'>{formatAddress(account)}</span> : "this wallet"} on{" "}
-      <NetworkName network={network} />. Each step is its own wallet transaction, and you can change what it asked for
-      before you approve.
+      Review this tool’s request for wallet{" "}
+      {account ? (
+        <span className='inline-flex items-baseline gap-0.5'>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex makes the tooltip trigger keyboard-focusable */}
+              <span tabIndex={0} className='cursor-help font-mono'>
+                {formatAddress(account)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side='top' className='font-mono'>
+              {account}
+            </TooltipContent>
+          </Tooltip>
+          <CopyButton value={account} tooltipText='Copy wallet address' successMessage='Address copied' />
+        </span>
+      ) : (
+        "this wallet"
+      )}{" "}
+      on <NetworkName network={network} />.
     </p>
     {caution && (
       <p className='flex max-w-prose items-start gap-2 text-sm text-amber-800 dark:text-amber-300'>
         <ShieldAlert aria-hidden className='mt-0.5 size-4 shrink-0' />
-        Only continue if you started this yourself, for example by running a login command on your own computer. This
-        page cannot tell who sent the link.
+        Continue only if you started this request and trust the tool.
+        {sessionKey && " Compare the session key address below with the address in your terminal."} This page cannot
+        verify who sent you this link.
       </p>
     )}
+    <Link href='/console' className='text-sm underline'>
+      Go to console
+    </Link>
   </header>
 );
 
@@ -67,14 +100,13 @@ const SwitchNetwork = ({ requested, current }: { requested: Network; current: Ne
       role='alert'
       title={
         <>
-          This request is for <NetworkName network={requested} />
+          Switch to <NetworkName network={requested} /> to continue
         </>
       }
       className='p-4'
     >
       <p className='mt-1'>
-        Your wallet is on <NetworkName network={current} />. Nothing here applies until you switch: approving on the
-        wrong network would set up a different account.
+        Your wallet is on <NetworkName network={current} />. Permissions and balances are separate on each network.
       </p>
       <Button
         variant='primary'
@@ -84,7 +116,7 @@ const SwitchNetwork = ({ requested, current }: { requested: Network; current: Ne
         onClick={() => switchChain({ chainId: getChain(requested).id })}
       >
         {isPending ? (
-          "Switching…"
+          "Switching network…"
         ) : (
           <>
             Switch to <NetworkName network={requested} />
@@ -181,44 +213,35 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
     });
   // The steps keep one order, whatever the reads say; only what each one offers changes.
   const offer = fundsOffer({ missing, walletUsdfc, approval: approval.state });
-  // Warm Storage is step 1; the key steps follow Funds when it is shown.
-  const keyStep = request.approvalOnly ? 2 : 3;
+  // Deposit and Warm Storage are one step; the key steps follow it.
 
   return (
     <>
       <ol className='flex flex-col'>
-        <WarmStorageStep
+        <DepositServiceStep
           number={1}
           network={network}
           account={account}
           approval={approval}
-          // An approval-only link never deposits.
-          deposit={!request.approvalOnly && offer === "with-approval" ? missing : null}
+          // An approval-only link never shows funds or deposits.
+          funds={request.approvalOnly ? null : funds}
+          missing={missing}
+          offer={offer}
         />
-        {!request.approvalOnly && (
-          <FundsStep
+        {request.sessionKey && (
+          <SessionKeyStep
             number={2}
             network={network}
             account={account}
-            deposit={request.deposit}
-            funds={funds}
-            missing={missing}
-            offer={offer}
-          />
-        )}
-        {request.sessionKey && (
-          <SessionKeyStep
-            number={keyStep}
-            network={network}
-            account={account}
             request={request.sessionKey}
+            encryption={!!request.keyAgreement}
             grant={grant}
             onGranted={() => void refetchGrant()}
           />
         )}
         {request.sessionKey && request.keyAgreement && (
           <GroupKeyStep
-            number={keyStep + 1}
+            number={3}
             network={network}
             account={account}
             sessionKey={request.sessionKey.address}
@@ -233,12 +256,30 @@ const SetupSteps = ({ network, account, request }: { network: Network; account: 
       {/* Mounted empty so screen readers announce the moment it fills. */}
       <div aria-live='polite'>
         {complete && (
-          <section className='rounded-xl bg-zinc-950 px-5 py-4 font-mono text-sm text-zinc-100 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 dark:bg-zinc-900'>
-            <h2 className='text-green-400'>✓ Setup complete</h2>
-            <p className='mt-2 text-zinc-300'>
-              Go back to your terminal. A command that is still waiting carries on by itself; otherwise run it again.
+          <Notice
+            tone='ok'
+            role='status'
+            title={request.keyAgreement ? "Console steps complete — finish in your terminal" : "Console setup complete"}
+            className='motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500'
+          >
+            <p className='mt-1'>
+              {request.keyAgreement ? (
+                <>
+                  This package contains the group key encrypted for this session key; it starts with fgr1_. Import it
+                  with your tool or set it as an environment variable for it. This user console does not save it: copy
+                  it before leaving this page. It reveals the wallet address, session key address, group ID and expiry —
+                  send it only where you intend to share those details. Read how to make encrypted uploads with the CLI
+                  and SDK in the{" "}
+                  <ExternalTextLink href='https://docs.filecoin.cloud/developer-guides/encryption/keysmith-encryption-keys/'>
+                    encryption guide
+                  </ExternalTextLink>
+                  . Once you have imported it, you can close this window.
+                </>
+              ) : (
+                "Return to your terminal; the command continues on its own. If it already exited, run it again. You can close this window."
+              )}
             </p>
-          </section>
+          </Notice>
         )}
       </div>
     </>
@@ -262,7 +303,8 @@ const SetupSection = ({ query }: { query: string }) => {
         <Header network={network} account={address} />
         <Notice tone='error' role='alert' title='This setup link cannot be used' className='p-4'>
           <p className='mt-1'>
-            {LINK_ERROR_COPY[request.error]} Nothing was changed. Run the command again for a new link.
+            {LINK_ERROR_COPY[request.error]} This page has not submitted an approval for this request. Run the command
+            again for a new link.
           </p>
         </Notice>
       </div>
@@ -272,7 +314,7 @@ const SetupSection = ({ query }: { query: string }) => {
   const requested = request.network ?? network;
   return (
     <div className='flex flex-col gap-8'>
-      <Header network={requested} account={address} caution={requested === network} />
+      <Header network={requested} account={address} caution sessionKey={!!request.sessionKey} />
       {requested !== network ? (
         <SwitchNetwork requested={requested} current={network} />
       ) : (

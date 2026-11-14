@@ -65,13 +65,13 @@ const GRANT_STATUS: Record<KeyGrant["state"], StepTone> = {
 function grantLabel(grant: KeyGrant) {
   switch (grant.state) {
     case "loading":
-      return "Checking";
+      return "Checking authorization…";
     case "unreadable":
       return "Could not read its status";
     case "none":
       return "Not authorized";
     case "partial":
-      return "Partly authorized";
+      return "Some requested actions are missing";
     case "authorized":
       return `Authorized until ${formatDateTime(Number(grant.expiresAt) * 1000)}`;
   }
@@ -83,9 +83,8 @@ function grantLabel(grant: KeyGrant) {
  * link's days, which it does.
  */
 function expiryText(existing: ExistingKeyPrefill | null, days: number) {
-  if (existing?.expirySec != null)
-    return `Keeps its current expiry, ${formatDateTime(Number(existing.expirySec) * 1000)}`;
-  return `After ${days} ${days === 1 ? "day" : "days"}, unless you change it`;
+  if (existing?.expirySec != null) return formatDateTime(Number(existing.expirySec) * 1000);
+  return `${days} ${days === 1 ? "day" : "days"} from submission`;
 }
 
 interface SessionKeyStepProps {
@@ -95,6 +94,7 @@ interface SessionKeyStepProps {
   request: SessionKeyRequest;
   grant: KeyGrant;
   onGranted: () => void;
+  encryption?: boolean;
 }
 
 /**
@@ -102,7 +102,15 @@ interface SessionKeyStepProps {
  * signing: it opens with the link's address, scopes, name and days, and the
  * owner can still narrow the scopes or change the name and expiry.
  */
-export const SessionKeyStep = ({ number, network, account, request, grant, onGranted }: SessionKeyStepProps) => {
+export const SessionKeyStep = ({
+  number,
+  network,
+  account,
+  request,
+  grant,
+  onGranted,
+  encryption,
+}: SessionKeyStepProps) => {
   const [open, setOpen] = useState(false);
   const { keys, addKey, removeKey, refetchStatuses, statusReadsPending, markConfirmed, registry } = useSessionKeys(
     network,
@@ -122,13 +130,13 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
     if (listedUnreadable) {
       return (
         <Button variant='ghost' size='compact' onClick={() => refetchStatuses()}>
-          Could not read this key's status. Retry
+          Retry status check
         </Button>
       );
     }
     return (
       <Button variant='primary' size='compact' disabled={listedPending} onClick={() => setOpen(true)}>
-        {listedPending ? "Checking key status…" : "Review and authorize"}
+        {listedPending ? "Checking key status…" : "Review permissions"}
       </Button>
     );
   })();
@@ -137,7 +145,7 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
     <SetupStep
       number={number}
       title='Authorize a session key'
-      description='Lets the tool sign storage actions for this wallet until it expires. It can never move your funds, and you can revoke it from Session keys.'
+      description='A session key is a separate credential held by this tool. It can perform the storage actions you allow without asking your wallet each time. It cannot withdraw funds, but its storage actions can incur charges under your Warm Storage approval.'
       status={{ tone: GRANT_STATUS[grant.state], label: grantLabel(grant) }}
     >
       <dl className='divide-y rounded-lg border px-4 text-sm'>
@@ -151,7 +159,7 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
             />
           </span>
           <span className='mt-0.5 block text-xs text-muted-foreground'>
-            Check it matches the address your terminal printed.
+            Public address of the tool’s credential. Check it matches your terminal.
           </span>
         </Detail>
         {request.name && <Detail term='Name'>{request.name}</Detail>}
@@ -163,18 +171,27 @@ export const SessionKeyStep = ({ number, network, account, request, grant, onGra
                 {/* The badge the New session key dialog puts on the same scopes. */}
                 {SCOPE_BY_ID[id].destructive && (
                   <span className='ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'>
-                    destructive
+                    Can remove stored data
                   </span>
                 )}
               </li>
             ))}
           </ul>
         </Detail>
-        <Detail term='Expiration'>{expiryText(existing, request.days ?? DEFAULT_EXPIRY_DAYS)}</Detail>
+        <Detail term='Expiration'>
+          {expiryText(existing, request.days ?? DEFAULT_EXPIRY_DAYS)}
+          {encryption && (
+            <p className='mt-1 text-xs text-muted-foreground'>
+              This expiry does not take back an encryption key you share in the next step.
+            </p>
+          )}
+        </Detail>
       </dl>
       {isSelf ? (
-        <Notice tone='error' role='alert' title='This is your wallet address' className='mt-4'>
-          <p className='text-xs mt-1'>A session key must be a separate address. Run the command again for a new key.</p>
+        <Notice tone='error' role='alert' title='Use a separate session key' className='mt-4'>
+          <p className='text-xs mt-1'>
+            This is your connected wallet’s address. Run the command again to create a separate credential for the tool.
+          </p>
         </Notice>
       ) : (
         action && <div className='mt-4'>{action}</div>

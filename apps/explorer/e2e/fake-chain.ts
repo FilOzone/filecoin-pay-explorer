@@ -218,3 +218,29 @@ export async function installFakeChain(page: Page): Promise<void> {
     },
   );
 }
+
+/**
+ * Answers the service page's RPC reads: it watches the block number, and its header reads the service's on-chain
+ * name, which `operator` (lowercase) does not have.
+ */
+export async function answerServicePageRpc(page: Page, operator: string): Promise<void> {
+  await page.route(
+    (url) => url.hostname.endsWith("glif.io"),
+    (route) => {
+      const call = route.request().postDataJSON();
+      if (call?.method === "eth_blockNumber")
+        return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result: "0x1" } });
+      const { to, data } = call?.params?.[0] ?? {};
+      if (call?.method !== "eth_call" || to?.toLowerCase() !== MULTICALL3) return route.fallback();
+      const { args } = decodeFunctionData({ abi: multicall3Abi, data });
+      const calls = args[0] as readonly { target: string }[];
+      if (!calls.every((c) => c.target.toLowerCase() === operator)) return route.fallback();
+      const result = encodeFunctionResult({
+        abi: multicall3Abi,
+        functionName: "aggregate3",
+        result: calls.map(() => ({ success: false, returnData: "0x" }) as const),
+      });
+      return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result } });
+    },
+  );
+}

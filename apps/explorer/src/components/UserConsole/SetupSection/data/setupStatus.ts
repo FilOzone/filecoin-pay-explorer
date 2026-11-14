@@ -208,14 +208,14 @@ export function shortfallLabel(missing: Shortfall): string {
 export type Read<T> = { state: "loading" } | { state: "unreadable" } | ({ state: "ready" } & T);
 
 /**
- * What the Fund Filecoin Pay step offers. The steps keep a fixed order
- * (key, approval, funds) and only this changes as the reads come in:
+ * What the Deposit and add Warm Storage step offers for funds. The steps keep
+ * a fixed order (deposit-and-service, key) and only this changes as the reads come in:
  * - "checking": a read it depends on is still loading.
  * - "done": Filecoin Pay holds what the request asks for.
- * - "with-approval": the approval above deposits it in the same transaction,
+ * - "with-approval": the approval deposits it in the same transaction,
  *   because Warm Storage still needs approving and the wallet holds enough.
  *   An approval that could not be read waits here like one still loading:
- *   the approve step offers a Retry, not Add a Service, until it answers.
+ *   the step offers a Retry, not Add a Service, until it answers.
  * - "deposit": the wallet holds enough; the Deposit dialog moves it in.
  * - "add-funds": it does not, so the usual Add funds flow, which deposits
  *   into Filecoin Pay. An unreadable wallet counts as not holding enough.
@@ -237,11 +237,11 @@ export function fundsOffer({
   if (walletUsdfc.state === "loading") return "checking";
   if (walletUsdfc.state !== "ready" || !walletCovers(missing, walletUsdfc.balance)) return "add-funds";
   if (approval === "loading" || approval === "unreadable") return "checking";
-  // The approve step offers Add a Service exactly while Warm Storage is not approved.
+  // The step offers Add a Service exactly while Warm Storage is not approved.
   return approval === "not-approved" ? "with-approval" : "deposit";
 }
 
-/** The request is set up once every step it asked for is done; the funds step only counts when it named an amount. */
+/** The request is set up once every step it asked for is done; the funds only count when the link named an amount. */
 export function isSetupComplete({
   keyRequested,
   grant,

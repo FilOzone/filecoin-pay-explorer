@@ -71,19 +71,19 @@ export const RemoveLimitsDialog = ({ network, account, current, open, onOpenChan
     >
       <DialogContent className='sm:max-w-md' showCloseButton={!isSubmitting}>
         <DialogHeader>
-          <DialogTitle>Remove Warm Storage spending limits</DialogTitle>
+          <DialogTitle>Remove Warm Storage spending limits?</DialogTitle>
           <DialogDescription>
-            Warm Storage will be able to charge for storage without a cap on its rate or reserve. It still only charges
-            for data sets you or your session keys create, and you can set limits again from the dashboard.
+            This transaction removes the cap on the storage charge rate and reserved funds. Warm Storage can charge for
+            data sets created by you or your session keys under this approval. Review the requested reservation period
+            above.
           </DialogDescription>
         </DialogHeader>
         <p className='text-sm text-muted-foreground'>
-          The tool that sent this link needs this before it can upload. Set limits again later and it will ask for this
-          step again.
+          You can set limits again from the console. Changing limits does not erase charges already incurred.
         </p>
         <DialogFooter>
           <Button variant='ghost' size='compact' disabled={isSubmitting} onClick={() => onOpenChange(false)}>
-            Cancel
+            Keep current limits
           </Button>
           <Button variant='primary' size='compact' disabled={isBusy} onClick={handleRemove}>
             <span className='inline-flex items-center gap-2'>
