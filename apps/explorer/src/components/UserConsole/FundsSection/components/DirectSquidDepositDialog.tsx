@@ -32,7 +32,7 @@ import { trackDepositConfirmed } from "@/utils/funnel-analytics";
 import { ensureWalletChain } from "@/utils/wallet-chain";
 import { isUserRejectedRequest, walletErrorMessage } from "@/utils/walletErrors";
 import { isPrivyEmbeddedWallet } from "../../console-wallet";
-import { getFilecoinGasBalanceStatus } from "../data/filecoin-gas-balance";
+import { FIL_TRANSACTION_FEE_RESERVE } from "../data/filecoin-gas-balance";
 import { invalidateTopUpQueries } from "../data/guided-top-up";
 import { PaymasterReviewError } from "../data/paymaster-deposit-execution";
 import {
@@ -103,6 +103,11 @@ import { SquidDepositProgress } from "./SquidDepositProgress";
 
 const DEFAULT_SOURCE_CHAIN = 8453;
 const FIL_GAS_TOP_UP_LABEL = `${formatUnits(FIL_GAS_TOP_UP_AMOUNT, 18)} FIL`;
+const FIL_FUNDED_NOTICE = {
+  kind: "fil",
+  title: "FIL top-up removed",
+  description: "This wallet now has FIL for fees. Review the updated quote without a FIL top-up.",
+} as const;
 const DEPOSIT_TARGET = {
   payments: mainnet.contracts.payments.address,
   usdfc: mainnet.contracts.usdfc.address,
@@ -200,7 +205,9 @@ export function DirectSquidDepositDialog({
   const [sourceChainId, setSourceChainId] = useState(DEFAULT_SOURCE_CHAIN);
   const [sourceTokenAddress, setSourceTokenAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [isFilGasTopUpEnabled, setFilGasTopUpEnabled] = useState(true);
+  const [openCount, setOpenCount] = useState(0);
+  // The user's FIL checkbox choice, kept only for the open and recipient it was made for.
+  const [filChoice, setFilChoice] = useState<{ scope: string; enabled: boolean } | null>(null);
   const [reviewed, setReviewed] = useState<ReviewedDeposit | UsdcGasReviewedDeposit | null>(null);
   const [stage, setStage] = useState<SquidDepositUiStage | null>(null);
   // The signature execution is waiting for, so the instruction reads as one of this run's signatures.
@@ -208,8 +215,9 @@ export function DirectSquidDepositDialog({
   const [transactionHash, setTransactionHash] = useState<Hash | null>(null);
   const [pending, setPending] = useState<PendingSquidDeposit | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Why the review card came back after a confirmation: a fresh gas maximum or quote to accept.
-  const [notice, setNotice] = useState<{ title: string; description: string } | null>(null);
+  // Why the dialog changed after a confirmation: a fresh gas maximum or quote to accept on the review card,
+  // or a FIL top-up dropped from the form because the recipient now holds the fee reserve.
+  const [notice, setNotice] = useState<{ kind: "review" | "fil"; title: string; description: string } | null>(null);
   const isSubmitting = useRef(false);
   const isMounted = useRef(true);
   const initializedSelectionScope = useRef("");
@@ -221,6 +229,7 @@ export function DirectSquidDepositDialog({
   });
 
   const recipient = connectedRecipient ? getAddress(connectedRecipient) : undefined;
+  const filChoiceScope = `${openCount}:${recipient ?? ""}`;
   const initialSourceAmount = initialSource?.amount;
   const initialSourceChainId = initialSource?.chainId;
   const initialSourceDecimals = initialSource?.decimals;
@@ -349,19 +358,19 @@ export function DirectSquidDepositDialog({
       if (!recipient || !destinationClient) throw new Error("Filecoin balance is unavailable");
       return destinationClient.getBalance({ address: recipient });
     },
-    queryKey: ["direct-squid-destination-fil", recipient],
+    queryKey: ["direct-squid-destination-fil", recipient, openCount],
+    // A remounted dialog must not reuse a prior mount's balance when its fresh read fails.
+    gcTime: 0,
     refetchInterval: 30_000,
     refetchOnMount: "always",
     retry: 1,
   });
-  // Only drives the explanatory copy under the FIL option; the default itself is set below.
-  // A background refetch of a known balance is not loading, or the hint would tell a
-  // funded wallet it has no FIL every 30 s.
-  const recipientFilStatus = getFilecoinGasBalanceStatus({
-    balance: recipientFilQuery.data,
-    isError: recipientFilQuery.isError,
-    isLoading: recipientFilQuery.isFetching && recipientFilQuery.data === undefined,
-  });
+  // Each open and recipient has its own cache entry, so pending means this open's first read has not settled.
+  const isFilBalancePending = recipientFilQuery.isPending;
+  // Keep a successfully observed funded balance through a failed background refetch.
+  const hasRecipientFil = (recipientFilQuery.data ?? 0n) >= FIL_TRANSACTION_FEE_RESERVE;
+  const includeFilGasTopUp =
+    !isFilBalancePending && !hasRecipientFil && (filChoice?.scope === filChoiceScope ? filChoice.enabled : true);
   const quoteQuery = useQuery({
     enabled:
       open &&
@@ -370,6 +379,7 @@ export function DirectSquidDepositDialog({
       !!recipient &&
       !!owner &&
       !!sourceToken &&
+      !isFilBalancePending &&
       parsedAmount !== null &&
       !balancesQuery.isError &&
       (balancesQuery.data?.token ?? 0n) >= parsedAmount + feeReserve,
@@ -383,7 +393,7 @@ export function DirectSquidDepositDialog({
         sourceChainId,
         sourceToken: sourceToken.token,
       };
-      if (!isFilGasTopUpEnabled) return requestSquidDepositRoute(request, squid, { quoteOnly: true });
+      if (!includeFilGasTopUp) return requestSquidDepositRoute(request, squid, { quoteOnly: true });
       if (!destinationClient) throw new Error("Filecoin network is unavailable");
       const filGasTopUp = await planFilGasTopUp(destinationClient, request.usdfc, squid.now ?? Date.now);
       return requestSquidDepositRoute({ ...request, filGasTopUp }, squid, { quoteOnly: true });
@@ -395,12 +405,12 @@ export function DirectSquidDepositDialog({
       sourceChainId,
       sourceToken?.token,
       parsedAmount?.toString(),
-      isFilGasTopUpEnabled,
+      includeFilGasTopUp,
     ],
     retry: false,
   });
 
-  const quote = quoteQuery.data;
+  const quote = isFilBalancePending ? undefined : quoteQuery.data;
   const budgetQuery = useQuery({
     // Only the form needs a live budget; a review keeps the figure it showed and the run prices itself.
     enabled:
@@ -449,13 +459,8 @@ export function DirectSquidDepositDialog({
     amount: parsedAmount ?? undefined,
   };
 
-  // Decision (#444 over #377): the FIL top-up is on for every fresh open, including a wallet
-  // that already holds the fee reserve. Costs accepted for now: a funded wallet buys 0.05 FIL it
-  // may not need, and a deposit under about 0.5 USDFC cannot be quoted while the FIL leg exceeds
-  // Squid's 10% cap; both are one untick away. Still open for discussion on PR #430.
-  // The reset runs while the dialog is closed, so a reopen never shows the previous opt-out.
   useEffect(() => {
-    if (!open) setFilGasTopUpEnabled(true);
+    if (!open) setOpenCount((count) => count + 1);
   }, [open]);
 
   useEffect(() => {
@@ -573,6 +578,12 @@ export function DirectSquidDepositDialog({
       setReviewed(null);
     }
   }, [owner, parsedAmount, recipient, reviewed, sourceChainId, sourceToken]);
+
+  useEffect(() => {
+    if (stage !== null || isSubmitting.current || !hasRecipientFil || !reviewed?.quote.filGasTopUp) return;
+    setReviewed(null);
+    setNotice(FIL_FUNDED_NOTICE);
+  }, [hasRecipientFil, reviewed, stage]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -847,6 +858,7 @@ export function DirectSquidDepositDialog({
     });
     const transactions = listTransactionLabels(budget.transactions.map(({ kind }) => kind));
     setNotice({
+      kind: "review",
       title: isGasBreach ? "Review the updated gas maximum" : "Review the updated quote",
       description: `${change.message} Check the updated ${isGasBreach ? "maximum" : "quote"} and confirm to send the ${transactions}.`,
     });
@@ -1011,13 +1023,15 @@ export function DirectSquidDepositDialog({
     balancesFailed: balancesQuery.isError,
     feesFailed: budgetQuery.isError,
     feesLoading: budgetQuery.isFetching,
+    filBalanceLoading: isFilBalancePending && recipientFilQuery.isFetching,
     isNativeSource: isSourceNative,
     nativeSymbol: sourceChain?.nativeCurrency.symbol ?? "native token",
     parsedAmount,
     payerLabel: owner ? formatAddress(owner) : "The paying wallet",
-    quoteFailed: !!quoteQuery.error,
+    quoteFailed: !isFilBalancePending && !!quoteQuery.error,
     quoteLoading: quoteQuery.isFetching,
-    quoteReady: !!quote,
+    // A refetching quote may be stale, and a FIL quote for a recipient that now holds FIL needs replacing.
+    quoteReady: !!quote && !quoteQuery.isFetching && !(hasRecipientFil && !!quote.filGasTopUp),
     requiredNative,
     sourceSymbol: sourceToken?.symbol,
     usdcGas: usdcGas.check,
@@ -1047,7 +1061,6 @@ export function DirectSquidDepositDialog({
     };
   });
   const isBusy = stage !== null;
-  const hasRecipientFil = recipientFilStatus === "funded";
   const explorerUrl = sourceChain?.blockExplorers?.default.url;
   const reviewedSourceChain = reviewed
     ? SQUID_SOURCE_CHAINS.find((chain) => chain.id === reviewed.context.sourceChainId)
@@ -1140,7 +1153,7 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!stage && !pending && reviewed && reviewedSourceChain ? (
             <section className='grid gap-3 rounded-md border p-3' aria-label='Reviewed Squid deposit'>
-              {notice ? <Alert title={notice.title} description={notice.description} /> : null}
+              {notice?.kind === "review" ? <Alert title={notice.title} description={notice.description} /> : null}
               <p>
                 <span className='text-muted-foreground'>Spend:</span> {reviewed.amount} {reviewed.sourceSymbol}
               </p>
@@ -1208,6 +1221,10 @@ export function DirectSquidDepositDialog({
           ) : null}
           {!stage && !pending && (!reviewed || !reviewedSourceChain) ? (
             <>
+              {/* Gated on the live balance, so the notice cannot sit beside a FIL option that came back. */}
+              {notice?.kind === "fil" && hasRecipientFil ? (
+                <Alert title={notice.title} description={notice.description} />
+              ) : null}
               <PayingAccountField
                 disabled={isBusy}
                 onConnectWallet={connectPayerWallet}
@@ -1311,34 +1328,37 @@ export function DirectSquidDepositDialog({
                   </div>
                 ) : null}
               </div>
-              <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
-                <Checkbox
-                  aria-labelledby='direct-squid-fil-gas-label'
-                  checked={isFilGasTopUpEnabled}
-                  disabled={isBusy}
-                  id='direct-squid-fil-gas'
-                  onChange={(checked) => {
-                    setFilGasTopUpEnabled(checked);
-                    setReviewed(null);
-                  }}
-                />
-                <div className='grid gap-1'>
-                  <Label htmlFor='direct-squid-fil-gas' id='direct-squid-fil-gas-label'>
-                    {`Include ${FIL_GAS_TOP_UP_LABEL} for transaction fees`}
-                  </Label>
-                  <p className='text-xs text-muted-foreground'>
-                    {hasRecipientFil
-                      ? "You already have FIL for fees. "
-                      : "Your wallet does not have enough FIL for fees. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
-                    The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.
-                  </p>
-                  {quote?.filGasTopUp ? (
-                    <p className='text-xs text-muted-foreground'>
-                      {`+ ${formatUnits(quote.filGasTopUp.minimumFil, 18)} FIL for network fees, using ${formatUnits(quote.filGasTopUp.spendUsdfc, 18)} USDFC from the amount received.`}
+              {!isFilBalancePending && !hasRecipientFil ? (
+                <div className='flex items-start gap-3 rounded-md bg-muted/50 p-3'>
+                  <Checkbox
+                    aria-describedby='direct-squid-fil-gas-description'
+                    aria-labelledby='direct-squid-fil-gas-label'
+                    checked={includeFilGasTopUp}
+                    disabled={isBusy}
+                    id='direct-squid-fil-gas'
+                    onChange={(checked) => {
+                      setFilChoice({ scope: filChoiceScope, enabled: checked });
+                      setReviewed(null);
+                    }}
+                  />
+                  <div className='grid gap-1'>
+                    <Label htmlFor='direct-squid-fil-gas' id='direct-squid-fil-gas-label'>
+                      {`Include ${FIL_GAS_TOP_UP_LABEL} for transaction fees`}
+                    </Label>
+                    <p className='text-xs text-muted-foreground' id='direct-squid-fil-gas-description'>
+                      {recipientFilQuery.data === undefined
+                        ? "Your FIL balance could not be loaded. "
+                        : "Your wallet does not have enough FIL for fees. Filecoin transactions (like depositing USDFC) need a small amount of FIL, and this covers about a month of typical activity. "}
+                      The FIL goes to your wallet to pay network fees, not to your Filecoin Pay balance.
                     </p>
-                  ) : null}
+                    {quote?.filGasTopUp ? (
+                      <p className='text-xs text-muted-foreground'>
+                        {`+ ${formatUnits(quote.filGasTopUp.minimumFil, 18)} FIL for network fees, using ${formatUnits(quote.filGasTopUp.spendUsdfc, 18)} USDFC from the amount received.`}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
               {quote && rate && sourceToken && !quoteQuery.isFetching ? (
                 <div className='grid gap-1'>
                   <p>
@@ -1348,7 +1368,7 @@ export function DirectSquidDepositDialog({
                   <DepositRate rate={rate} sourceSymbol={sourceToken.symbol} />
                 </div>
               ) : null}
-              {quoteQuery.error ? (
+              {!isFilBalancePending && quoteQuery.error ? (
                 <p className='text-destructive'>
                   {walletErrorMessage(quoteQuery.error, "Squid could not quote this amount.")}
                 </p>

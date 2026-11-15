@@ -18,6 +18,7 @@ export function getSquidReviewBlocker({
   balancesFailed,
   feesFailed,
   feesLoading,
+  filBalanceLoading,
   isNativeSource,
   nativeSymbol,
   parsedAmount,
@@ -34,6 +35,8 @@ export function getSquidReviewBlocker({
   balancesFailed: boolean;
   feesFailed: boolean;
   feesLoading: boolean;
+  /** The recipient's FIL balance decides whether the quote includes a FIL top-up. */
+  filBalanceLoading: boolean;
   isNativeSource: boolean;
   nativeSymbol: string;
   parsedAmount: bigint | null;
@@ -71,6 +74,7 @@ export function getSquidReviewBlocker({
       };
     }
   }
+  if (filBalanceLoading) return { kind: "waiting", message: "Checking your FIL balance…" };
   if (quoteFailed) return { kind: "failed", message: "Squid could not quote this amount." };
   if (!quoteReady) {
     return quoteLoading
