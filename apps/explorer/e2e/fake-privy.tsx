@@ -432,6 +432,15 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("fake-privy:switch-chain", onSwitchChain);
   }, [extension]);
   useEffect(() => {
+    // Like Privy moving a new embedded wallet between chains while it settles in.
+    const onSwitchChain = (event: Event) =>
+      void wallets
+        .find((wallet) => wallet.connectorType === "embedded")
+        ?.switchChain((event as CustomEvent<number>).detail);
+    window.addEventListener("fake-privy:switch-embedded-chain", onSwitchChain);
+    return () => window.removeEventListener("fake-privy:switch-embedded-chain", onSwitchChain);
+  }, [wallets]);
+  useEffect(() => {
     // With no accounts left, Privy drops the extension's wallet.
     const onRevoke = () => {
       extension.revoke();
@@ -470,7 +479,9 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     const emailAccount = { type: "email", address: email };
     const newUser: User = { id: `did:privy:fake-${email}`, linkedAccounts: [emailAccount] };
     setUser(newUser);
-    for (const listener of onLogin) listener({ user: newUser, isNewUser: true, loginAccount: emailAccount });
+    // Logins return to an existing user unless a test sets `window.__fakePrivyNewUser` to sign up instead.
+    const isNewUser = (window as typeof window & { __fakePrivyNewUser?: boolean }).__fakePrivyNewUser === true;
+    for (const listener of onLogin) listener({ user: newUser, isNewUser, loginAccount: emailAccount });
     // createOnLogin: "users-without-wallets" provisions the embedded wallet after the user exists.
     setTimeout(() => {
       const wallet = createEmbeddedWallet(email);

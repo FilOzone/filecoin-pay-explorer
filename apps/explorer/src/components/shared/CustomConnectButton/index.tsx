@@ -4,6 +4,7 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
 import { toast } from "sonner";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
+import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { trackWalletConnected } from "@/utils/funnel-analytics";
 import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
@@ -14,10 +15,14 @@ const CustomConnectButton = () => {
   const { ready, authenticated, error } = usePrivy();
   const { ready: walletsReady } = useWallets();
   const { selectAccount } = useConsoleAccount();
+  const { requestFundingAfterSignup } = useFundingLaunch();
   // An email or Google login needs no callback: the console account follows the Privy session.
   const { login } = useLogin({
-    onComplete: ({ isNewUser, wasAlreadyAuthenticated }) => {
-      if (!wasAlreadyAuthenticated) trackWalletConnected("embedded", isNewUser);
+    onComplete: ({ user, isNewUser, wasAlreadyAuthenticated }) => {
+      if (wasAlreadyAuthenticated) return;
+      trackWalletConnected("embedded", isNewUser);
+      // The funding dialogs mount only after the new wallet connects, so AccountNotFound opens Add funds.
+      if (isNewUser) requestFundingAfterSignup(user.id);
     },
     onError: (code) => {
       if (isUserCancelledFlow(code)) return;
