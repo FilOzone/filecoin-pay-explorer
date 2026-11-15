@@ -12,6 +12,7 @@ import {
   parseAbi,
   toFunctionSelector,
 } from "viem";
+import { answerFromPage } from "./fake-chain";
 import { quoterAbi } from "./fake-usdc-gas";
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
@@ -233,15 +234,16 @@ export async function installFakeSquid(
     });
   };
 
-  const answerRpc = (answer: (call: RpcCall) => unknown) => async (route: Route) => {
-    const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
-    if (!body) return route.fallback();
-    const calls = Array.isArray(body) ? body : [body];
-    const results = await Promise.all(calls.map(answer));
-    if (results.some((r) => r === undefined)) return route.fallback();
-    const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
-    return route.fulfill({ json: Array.isArray(body) ? replies : replies[0] });
-  };
+  const answerRpc = (answer: (call: RpcCall) => unknown) => (route: Route) =>
+    answerFromPage(route, async () => {
+      const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
+      if (!body) return undefined;
+      const calls = Array.isArray(body) ? body : [body];
+      const results = await Promise.all(calls.map(answer));
+      if (results.some((r) => r === undefined)) return undefined;
+      const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
+      return { json: Array.isArray(body) ? replies : replies[0] };
+    });
   await page.route((url) => url.hostname === BASE_RPC_HOST, answerRpc(answerBase));
   await page.route((url) => url.hostname.endsWith("glif.io"), answerRpc(answerFilecoin));
 

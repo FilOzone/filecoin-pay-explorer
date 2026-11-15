@@ -5,7 +5,7 @@ export type TransactionType =
   | "approveOperator"
   | "increaseApproval"
   | "settleRail"
-  | "terminateRail"
+  | "terminateDataSet"
   | "createSessionKey"
   | "authorizeSessionKey"
   | "revokeSessionKey";

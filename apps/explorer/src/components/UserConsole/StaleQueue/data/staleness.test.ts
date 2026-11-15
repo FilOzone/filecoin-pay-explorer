@@ -29,7 +29,7 @@ describe("daysInactive", () => {
   });
 
   it("converts a wire-format string lastWriteAt before subtracting", () => {
-    expect(daysInactive(String(NOW - 5n * DAY) as unknown as bigint, NOW)).toBe(5n);
+    expect(daysInactive(String(NOW - 5n * DAY), NOW)).toBe(5n);
   });
 });
 

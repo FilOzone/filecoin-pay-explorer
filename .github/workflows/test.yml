@@ -26,7 +26,8 @@ concurrency:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    # graph-cli 0.98.1 has no Matchstick binary mapping for Ubuntu 26.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read

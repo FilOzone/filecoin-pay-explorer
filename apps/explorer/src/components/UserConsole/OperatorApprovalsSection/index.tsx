@@ -60,7 +60,7 @@ export const OperatorApprovalsSection: React.FC<OperatorApprovalsSectionProps> =
           </Button>
         </div>
 
-        <ApprovalsTable data={approvals} onIncrease={handleIncrease} />
+        <ApprovalsTable data={approvals} onIncrease={handleIncrease} network={network} />
 
         {hasNextPage ? (
           <div className='flex flex-col items-center gap-2'>
