@@ -30,6 +30,17 @@ test("a new email signup with no Filecoin Pay account lands in Add funds, once",
   const addFunds = page.getByRole("dialog", { name: "Add funds" });
   const addFundsHeading = addFunds.getByRole("heading", { name: "Add funds" });
   await expect(addFundsHeading).toBeVisible({ timeout: 30_000 });
+
+  // A chain change closes Add funds; the user has not dismissed it, so it comes back.
+  const switchChain = (chainId: number) =>
+    page.evaluate(
+      (id) => window.dispatchEvent(new CustomEvent("fake-privy:switch-embedded-chain", { detail: id })),
+      chainId,
+    );
+  await switchChain(1);
+  await expect(addFundsHeading).toBeHidden();
+  await switchChain(314);
+  await expect(addFundsHeading).toBeVisible();
   await addFunds.getByRole("button", { name: "Close" }).click();
   await expect(addFundsHeading).toBeHidden();
 

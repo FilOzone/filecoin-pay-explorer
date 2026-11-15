@@ -432,6 +432,15 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("fake-privy:switch-chain", onSwitchChain);
   }, [extension]);
   useEffect(() => {
+    // Like Privy moving a new embedded wallet between chains while it settles in.
+    const onSwitchChain = (event: Event) =>
+      void wallets
+        .find((wallet) => wallet.connectorType === "embedded")
+        ?.switchChain((event as CustomEvent<number>).detail);
+    window.addEventListener("fake-privy:switch-embedded-chain", onSwitchChain);
+    return () => window.removeEventListener("fake-privy:switch-embedded-chain", onSwitchChain);
+  }, [wallets]);
+  useEffect(() => {
     // With no accounts left, Privy drops the extension's wallet.
     const onRevoke = () => {
       extension.revoke();

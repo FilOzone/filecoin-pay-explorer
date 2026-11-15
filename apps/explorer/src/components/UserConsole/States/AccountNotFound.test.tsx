@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import AccountNotFound from "./AccountNotFound";
@@ -26,31 +25,40 @@ afterEach(cleanup);
 
 // Stands in for FundingHost, which shows Add funds from the shared launch state.
 function AddFundsHost() {
-  const { closeAddFunds, isAddFundsOpen } = useFundingLaunch();
-  if (!isAddFundsOpen) return null;
+  const { closeAddFunds, closeAddFundsForChainChange, isAddFundsOpen, openAddFunds, requestFundingAfterSignup } =
+    useFundingLaunch();
   return (
-    <button onClick={closeAddFunds} type='button'>
-      Close Add funds
-    </button>
+    <>
+      <button onClick={() => requestFundingAfterSignup("did:privy:new")} type='button'>
+        Sign up
+      </button>
+      <button onClick={() => openAddFunds()} type='button'>
+        Wallet menu Add funds
+      </button>
+      {isAddFundsOpen && (
+        <>
+          <button onClick={closeAddFunds} type='button'>
+            Close Add funds
+          </button>
+          <button onClick={closeAddFundsForChainChange} type='button'>
+            Change chain
+          </button>
+        </>
+      )}
+    </>
   );
 }
 
-function Signup({ userId }: { userId: string }) {
-  const { requestFundingAfterSignup } = useFundingLaunch();
-  useEffect(() => requestFundingAfterSignup(userId), [requestFundingAfterSignup, userId]);
-  return null;
-}
-
-function Console({ card = true, signup }: { card?: boolean; signup?: string }) {
+function Console({ card = true }: { card?: boolean }) {
   return (
     <FundingLaunchProvider>
-      {signup && <Signup userId={signup} />}
       {card && <AccountNotFound network='mainnet' />}
       <AddFundsHost />
     </FundingLaunchProvider>
   );
 }
 
+const click = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
 const isAddFundsOpen = () => screen.queryByRole("button", { name: "Close Add funds" }) !== null;
 
 describe("AccountNotFound", () => {
@@ -59,7 +67,7 @@ describe("AccountNotFound", () => {
     render(<Console />);
     expect(isAddFundsOpen()).toBe(false);
 
-    const service = screen.getByRole("button", { name: "Add a service" });
+    const service = screen.getByRole("button", { name: "Add service" });
     expect(service.dataset.variant).toBe("ghost");
     fireEvent.click(service);
     expect(screen.getByText("Add a Service dialog")).toBeTruthy();
@@ -70,30 +78,61 @@ describe("AccountNotFound", () => {
     expect(isAddFundsOpen()).toBe(true);
   });
 
-  it("opens Add funds once for the user that just signed up", () => {
+  it("opens Add funds for a new user until they close it", () => {
     privy.user = { id: "did:privy:new" };
-    const { rerender } = render(<Console signup='did:privy:new' />);
+    const { rerender } = render(<Console />);
+    click("Sign up");
     expect(isAddFundsOpen()).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Close Add funds" }));
-    rerender(<Console card={false} signup='did:privy:new' />);
-    rerender(<Console signup='did:privy:new' />);
+    click("Close Add funds");
+    rerender(<Console card={false} />);
+    rerender(<Console />);
     expect(screen.getByRole("button", { name: "Add funds" })).toBeTruthy();
     expect(isAddFundsOpen()).toBe(false);
   });
 
-  it.each([
-    ["another user", { id: "did:privy:returning" }],
-    ["a wallet with no Privy session", null],
-  ])("drops a signup left behind when %s lands here", (_, user) => {
-    privy.user = user;
-    const { rerender } = render(<Console signup='did:privy:new' />);
-    expect(isAddFundsOpen()).toBe(false);
-
-    // Dropped, not deferred: the user who signed up arriving later is not interrupted either.
+  it("opens Add funds again after a chain change closes it", () => {
     privy.user = { id: "did:privy:new" };
-    rerender(<Console card={false} signup='did:privy:new' />);
-    rerender(<Console signup='did:privy:new' />);
+    render(<Console />);
+    click("Sign up");
+    click("Change chain");
+    expect(isAddFundsOpen()).toBe(true);
+  });
+
+  it("keeps a signup made before Privy reports the new user", () => {
+    privy.user = null;
+    const { rerender } = render(<Console card={false} />);
+    click("Sign up");
+    privy.user = { id: "did:privy:new" };
+    rerender(<Console card={false} />);
+    rerender(<Console />);
+    expect(isAddFundsOpen()).toBe(true);
+  });
+
+  it.each([
+    ["the user logs out", null],
+    ["another user signs in", { id: "did:privy:returning" }],
+  ])("drops a signup made off the overview once %s", (_, user) => {
+    privy.user = { id: "did:privy:new" };
+    const { rerender } = render(<Console card={false} />);
+    click("Sign up");
+    privy.user = user;
+    rerender(<Console card={false} />);
+
+    // Dropped, not deferred: the user who signed up returning later is not interrupted.
+    privy.user = { id: "did:privy:new" };
+    rerender(<Console card={false} />);
+    rerender(<Console />);
+    expect(isAddFundsOpen()).toBe(false);
+  });
+
+  it("drops a signup once the user funds elsewhere before the deposit is indexed", () => {
+    privy.user = { id: "did:privy:new" };
+    const { rerender } = render(<Console card={false} />);
+    click("Sign up");
+    click("Wallet menu Add funds");
+    click("Close Add funds");
+    rerender(<Console />);
     expect(isAddFundsOpen()).toBe(false);
   });
 });
