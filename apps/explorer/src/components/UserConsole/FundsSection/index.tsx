@@ -1,12 +1,12 @@
 import type { Account, UserToken } from "@filecoin-pay/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { SpendChart } from "@/components/UserConsole/SpendChart";
 import { WithdrawDialog } from "@/components/UserConsole/WithdrawDialog";
 import { getChain } from "@/constants/chains";
 import { CONSOLE_TOKEN_PAGE_SIZE, useAccountTokens } from "@/hooks/useAccountDetails";
+import { useCurrentTimestamp } from "@/hooks/useCurrentTimestamp";
 import type { Network } from "@/types";
-import { EPOCH_DURATION } from "@/utils/constants";
 import {
   FundsEmptyState,
   FundsErrorState,
@@ -37,17 +37,9 @@ export const FundsSection = ({ account, network }: FundsSectionProps) => {
   const [withdrawToken, setWithdrawToken] = useState<UserToken | null>(null);
 
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
-  const [currentTimestamp, setCurrentTimestamp] = useState(() => BigInt(Math.floor(Date.now() / 1_000)));
+  const currentTimestamp = useCurrentTimestamp();
 
   const usdfcAddress = getChain(network).contracts.usdfc.address;
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setCurrentTimestamp(BigInt(Math.floor(Date.now() / 1_000)));
-    }, EPOCH_DURATION * 1_000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
 
   const { data, isLoading, isError } = useAccountTokens(account.id, 1, {
     networkOverride: network,

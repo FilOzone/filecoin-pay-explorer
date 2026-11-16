@@ -42,11 +42,13 @@ vi.mock("./components", () => ({
   ApprovalsTable: ({
     data,
     onIncrease,
+    network,
   }: {
     data: { id: string }[];
     onIncrease: (approval: { id: string }) => void;
+    network: string;
   }) => (
-    <ul>
+    <ul data-network={network}>
       {data.map((approval) => (
         <li key={approval.id}>
           <button type='button' onClick={() => onIncrease(approval)}>
@@ -150,6 +152,14 @@ describe("OperatorApprovalsSection paging", () => {
     expect(screen.getByRole("alert").textContent).toBe("Couldn't load more approvals. Try again.");
     fireEvent.click(screen.getByRole("button", { name: "Load more" }));
     expect(query.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists approvals for the console network", () => {
+    query.data = { pages: [{ operatorApprovals: [{ id: "1" }] }] };
+    query.hasNextPage = false;
+    render(<OperatorApprovalsSection account={account} network='calibration' />);
+
+    expect(screen.getByRole("list").dataset.network).toBe("calibration");
   });
 
   it("offers no Load more once the last page is loaded", () => {

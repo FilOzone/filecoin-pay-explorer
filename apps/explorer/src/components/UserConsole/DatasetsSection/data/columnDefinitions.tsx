@@ -15,7 +15,7 @@ import { monthlyDataSetSpend } from "./monthlySpend";
 const columnHelper = createColumnHelper<DataSet>();
 
 /** PDP Explorer indexes datasets by the same id FWSS assigns, under the same network names this app uses. */
-const pdpExplorerUrl = (network: Network, dataSetId: bigint) =>
+const pdpExplorerUrl = (network: Network, dataSetId: string) =>
   `https://pdp.filecoin.cloud/${network}/dataset/${dataSetId}`;
 
 // Reads the epoch itself so a new block re-renders only this cell; columns built from it would remount every cell.

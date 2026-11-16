@@ -26,6 +26,7 @@ import { useMemo } from "react";
 import { useBlockNumber } from "@/hooks/useBlockNumber";
 import { formatDate, formatEpochDuration, formatToken } from "@/utils/formatter";
 import { CopyableText, EpochTime, MetricItem, RailStateBadge } from "../../shared";
+import ServiceAddress from "../../shared/ServiceAddress";
 
 interface StatsLayoutProps {
   children: React.ReactNode;
@@ -84,7 +85,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
   const { data: currentBlock, isLoading, isError, refetch, error } = useBlockNumber();
 
   return (
-    <StatsLayout railId={String(rail.railId)} state={rail.state}>
+    <StatsLayout railId={rail.railId} state={rail.state}>
       {isLoading && <LoadingStateCard message='Loading Stats...' />}
 
       {isError && <ErrorState refetch={refetch} error={error} />}
@@ -122,7 +123,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
           <MetricItem
             title='Operator'
             value={
-              <CopyableText
+              <ServiceAddress
                 value={rail.operator.address}
                 to={`/accounts/${rail.operator.address}`}
                 monospace={true}
@@ -240,7 +241,7 @@ export const Stats: React.FC<StatsProps> = ({ rail }) => {
             <MetricItem
               title='Validator'
               value={
-                <CopyableText
+                <ServiceAddress
                   value={rail.validator}
                   monospace={true}
                   label='Validator address'

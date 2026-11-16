@@ -22,7 +22,7 @@ vi.mock("@/hooks/useAccountServices", () => ({
           operator: { address: "0x2222222222222222222222222222222222222222" },
           payee: { address: "0x3333333333333333333333333333333333333333" },
           payer: { address: "0x1111111111111111111111111111111111111111" },
-          railId: 1n,
+          railId: "1",
         },
       ],
     },
@@ -126,7 +126,7 @@ describe("RailsSection pagination", () => {
 });
 
 describe("RailsSection settle dialog", () => {
-  const rail = { railId: 7n } as unknown as Rail;
+  const rail = { railId: "7" } as unknown as Rail;
 
   it("opens for the chosen rail with the epoch read at that moment, and closes without unmounting", () => {
     renderDom(section());
@@ -141,7 +141,7 @@ describe("RailsSection settle dialog", () => {
     // Still mounted with the same rail, so the dialog can play its leave transition.
     expect(observed.dialog).toMatchObject({ rail, open: false });
 
-    const next = { railId: 8n } as unknown as Rail;
+    const next = { railId: "8" } as unknown as Rail;
     act(() => observed.onSettle?.(next, 456n));
     expect(screen.getByRole("dialog", { name: "Settle rail 8" })).toBeTruthy();
     expect(observed.dialog).toMatchObject({ rail: next, currentEpoch: 456n });
