@@ -4,6 +4,8 @@ export type TransactionType =
   | "withdraw"
   | "approveOperator"
   | "increaseApproval"
+  | "updateApproval"
+  | "revokeApproval"
   | "settleRail"
   | "terminateDataSet"
   | "createSessionKey"

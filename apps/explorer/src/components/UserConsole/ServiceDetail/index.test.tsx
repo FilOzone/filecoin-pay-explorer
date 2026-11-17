@@ -1,17 +1,19 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { getAddress } from "viem";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChain } from "@/constants/chains";
 import { ServiceDetail } from ".";
 
 const mocks = vi.hoisted(() => ({
   service: null as { totalRails: string } | null,
   datasetMounts: 0,
+  isError: false,
 }));
 
 vi.mock("@/hooks/useAccountServices", () => ({
-  useAccountService: () => ({ data: mocks.service, isLoading: false, isError: false }),
+  useAccountService: () => ({ data: mocks.service, isLoading: false, isError: mocks.isError }),
 }));
 
 vi.mock("@/hooks/useServiceProfiles", () => ({
@@ -29,6 +31,9 @@ vi.mock("@/components/shared", () => ({
 vi.mock("./components/ServiceMetrics", () => ({
   default: () => <div>Spend and funding</div>,
 }));
+vi.mock("./components/SpendingLimits", () => ({
+  default: ({ operator }: { operator: string }) => <div data-testid='limits' data-operator={operator} />,
+}));
 vi.mock("../RailsSection", () => ({
   RailsSection: () => <div>Payment rails</div>,
 }));
@@ -43,12 +48,26 @@ vi.mock("../StaleQueue", () => ({
 }));
 
 afterEach(cleanup);
+beforeEach(() => {
+  mocks.isError = false;
+});
 
 const PAYER = "0x1111111111111111111111111111111111111111";
 const OPERATOR = "0x2222222222222222222222222222222222222222";
 const FWSS = getChain("mainnet").contracts.fwss.address;
 
 describe("ServiceDetail", () => {
+  it("keeps service controls mounted when a background refresh fails", () => {
+    mocks.service = { totalRails: "1" };
+    const view = (
+      <ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />
+    );
+    const { rerender } = render(view);
+    const limits = screen.getByTestId("limits");
+    mocks.isError = true;
+    rerender(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+    expect(screen.getByTestId("limits")).toBe(limits);
+  });
   it("shows not found when the payer has no relationship with the operator", () => {
     mocks.service = null;
     render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
@@ -72,6 +91,18 @@ describe("ServiceDetail", () => {
     const metrics = screen.getByText("Spend and funding");
     const rails = screen.getByText("Payment rails");
     expect(metrics.compareDocumentPosition(rails) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // An approval with no rails yet is still a service whose limits the payer may want to change.
+  it("shows spending limits above the rails for a pair with no rails", () => {
+    mocks.service = { totalRails: "0" };
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+
+    const limits = screen.getByTestId("limits");
+    expect(limits.dataset.operator).toBe(getAddress(OPERATOR));
+    expect(
+      limits.compareDocumentPosition(screen.getByText("Payment rails")) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   // An approval alone would otherwise show a row of zeros for a service never used.

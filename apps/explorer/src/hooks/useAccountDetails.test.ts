@@ -7,7 +7,6 @@ import {
   useAccountSpendHistory,
   useAccountToken,
   useAccountTokens,
-  useInfiniteAccountApprovals,
 } from "./useAccountDetails";
 import {
   useAccountService,
@@ -15,6 +14,7 @@ import {
   useAccountServiceOneTimePayments,
   useAccountServiceRails,
   useAccountServices,
+  useServiceApprovals,
 } from "./useAccountServices";
 
 type ObservedQuery = {
@@ -55,13 +55,13 @@ describe("account query ids", () => {
     useAccountRails: (address) => useAccountRails(address),
     useAccountSpendHistory: (address) => useAccountSpendHistory(address, "0xtoken", 1n, 2n),
     useAccountApprovals: (address) => useAccountApprovals(address),
-    useInfiniteAccountApprovals: (address) => useInfiniteAccountApprovals(address),
     useAccountServices: (address) => useAccountServices(address),
     useAccountService: (address) => useAccountService(address, "0xoperator"),
     useAccountServiceRails: (address) => useAccountServiceRails(address, "0xoperator"),
     useAccountServiceMetrics: (address) => useAccountServiceMetrics(address, "0xoperator", 1n),
     useAccountServiceOneTimePayments: (address) =>
       useAccountServiceOneTimePayments(address, "0xoperator", 1n, { enabled: true }),
+    useServiceApprovals: (address) => useServiceApprovals(address, "0xoperator"),
   };
 
   const readWith = (read: (address: string) => void, address: string) => {
@@ -84,38 +84,9 @@ describe("account query ids", () => {
       useAccountServiceMetrics: (operator: string) => useAccountServiceMetrics(LOWERCASE, operator, 1n),
       useAccountServiceOneTimePayments: (operator: string) =>
         useAccountServiceOneTimePayments(LOWERCASE, operator, 1n, { enabled: true }),
+      useServiceApprovals: (operator: string) => useServiceApprovals(LOWERCASE, operator),
     }),
   )("%s shares one cache entry between checksummed and lowercase operators", (_, read) => {
     expect(readWith(read, CHECKSUMMED)).toEqual(readWith(read, LOWERCASE));
-  });
-});
-
-describe("useInfiniteAccountApprovals", () => {
-  const approvals = (from: number, count: number) => ({
-    operatorApprovals: Array.from({ length: count }, (_, i) => ({ id: `approval-${from + i}` })),
-  });
-
-  it("asks for one row past each page", () => {
-    useInfiniteAccountApprovals(LOWERCASE);
-    const { getVariables, initialPageParam } = lastQuery();
-
-    expect(initialPageParam).toBe(0);
-    expect(getVariables?.(10)).toEqual({ accountId: LOWERCASE, first: 11, skip: 10 });
-  });
-
-  it("shows a page and resumes after it when a row came back past it", () => {
-    useInfiniteAccountApprovals(LOWERCASE);
-
-    expect(lastQuery().select?.(approvals(10, 11), 10)).toEqual({
-      operatorApprovals: approvals(10, 10).operatorApprovals,
-      nextSkip: 20,
-    });
-  });
-
-  // Exactly a page used to offer a Load more that fetched nothing.
-  it("offers no next page when the last page is exactly full", () => {
-    useInfiniteAccountApprovals(LOWERCASE);
-
-    expect(lastQuery().select?.(approvals(10, 10), 10)).toEqual({ ...approvals(10, 10), nextSkip: undefined });
   });
 });
