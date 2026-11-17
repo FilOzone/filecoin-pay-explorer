@@ -100,8 +100,7 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
   </div>
 );
 
-/** Inline warning with the action that resolves it; used for every FIL fee precondition. */
-const GasNotice = ({ action, children }: { action: ReactNode; children: ReactNode }) => (
+const PreconditionNotice = ({ action, children }: { action: ReactNode; children: ReactNode }) => (
   <div className='flex items-center justify-between gap-3 rounded-lg border p-3 text-sm' role='alert'>
     <span className='inline-flex items-start gap-2'>
       <AlertCircle className='mt-0.5 h-4 w-4 shrink-0 text-amber-500' />
@@ -456,12 +455,15 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
             </p>
           )}
           {existingApproval.status === "unreadable" && (
-            <Notice tone='error' role='alert'>
-              <p>Could not check whether you already have this service. Retry before adding it.</p>
-              <Button variant='ghost' size='compact' type='button' onClick={() => void existingApproval.refresh()}>
-                Retry
-              </Button>
-            </Notice>
+            <PreconditionNotice
+              action={
+                <Button variant='tertiary' size='compact' type='button' onClick={() => void existingApproval.refresh()}>
+                  Retry
+                </Button>
+              }
+            >
+              Could not check whether you already have this service. Retry before adding it.
+            </PreconditionNotice>
           )}
 
           {alreadyAdded ? (
@@ -606,7 +608,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
               </div>
 
               {!gasBalance.isCorrectChain ? (
-                <GasNotice
+                <PreconditionNotice
                   action={
                     <Button
                       disabled={gasBalance.isSwitchingNetwork}
@@ -620,13 +622,13 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
                   }
                 >
                   Switch back to {chain.label} before adding this service.
-                </GasNotice>
+                </PreconditionNotice>
               ) : gasBalance.status === "loading" ? (
                 <p className='inline-flex items-center gap-2 text-sm text-muted-foreground' role='status'>
                   <Loader2 className='h-4 w-4 animate-spin' /> Checking FIL balance…
                 </p>
               ) : gasBalance.status === "unavailable" ? (
-                <GasNotice
+                <PreconditionNotice
                   action={
                     <Button onClick={() => void gasBalance.refresh()} size='compact' type='button' variant='tertiary'>
                       Retry
@@ -634,9 +636,9 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
                   }
                 >
                   Your FIL balance could not be loaded. Retry before adding the service.
-                </GasNotice>
+                </PreconditionNotice>
               ) : gasBalance.status === "insufficient" ? (
-                <GasNotice
+                <PreconditionNotice
                   action={
                     chain.slug === "mainnet" ? (
                       <Button onClick={funding.openSquid} size='compact' type='button' variant='primary'>
@@ -648,7 +650,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
                   }
                 >
                   Add at least {requiredFil} FIL for transaction fees before adding this service.
-                </GasNotice>
+                </PreconditionNotice>
               ) : null}
 
               <p className='text-xs text-muted-foreground'>

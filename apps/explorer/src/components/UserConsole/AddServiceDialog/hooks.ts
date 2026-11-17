@@ -275,6 +275,7 @@ export function useExistingApproval(
   // From the chain, not the subgraph: a removed service keeps its AccountOperator row, and indexing lags.
   const { data, isError, isFetching, refetch } = useOperatorApproval(network, token, owner, operator, open);
   const status: ExistingApprovalStatus = (() => {
+    if (isError && isFetching) return "loading";
     if (data === undefined && !isError) return isFetching ? "loading" : "idle";
     return existingApprovalStatus(data?.isApproved, isError);
   })();

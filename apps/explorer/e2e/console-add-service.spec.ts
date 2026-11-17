@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { toFunctionSelector } from "viem";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -51,6 +52,45 @@ test("Add Service opens the dialog when the services query fails", async ({ page
 
 test.describe("adding a service", () => {
   test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");
+
+  test("shows progress when retrying an approval read that failed with cached data", async ({ page }) => {
+    test.setTimeout(60_000);
+    const selector = toFunctionSelector("operatorApprovals(address,address,address)").slice(2);
+    const dialog = await openDialog(page, "add-service-retry@fake-privy.test");
+    const initialRead = page.waitForResponse((response) => response.request().postData()?.includes(selector) === true);
+    await chooseCustomServiceInUsdfc(page, dialog);
+    await initialRead;
+    await expect(dialog.getByText("Checking your existing services…")).toBeHidden();
+
+    let holdRead = false;
+    await page.route(
+      (url) => url.hostname.endsWith("glif.io"),
+      async (route) => {
+        if (!route.request().postData()?.includes(selector)) return route.fallback();
+        if (holdRead) return;
+        const body = route.request().postDataJSON();
+        const calls = Array.isArray(body) ? body : [body];
+        const replies = calls.map((call) => ({
+          jsonrpc: "2.0",
+          id: call.id,
+          error: { code: -32603, message: "Approval read unavailable" },
+        }));
+        await route.fulfill({ json: Array.isArray(body) ? replies : replies[0] });
+      },
+    );
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("main").getByRole("button", { name: "Add Service", exact: true }).click();
+    await chooseCustomServiceInUsdfc(page, dialog);
+    const error = dialog.getByRole("alert").filter({ hasText: "Could not check" });
+    await expect(error).toBeVisible({ timeout: 20_000 });
+    holdRead = true;
+    await error.getByRole("button", { name: "Retry" }).click();
+
+    await expect(dialog.getByRole("status")).toHaveText("Checking your existing services…");
+    await expect(error).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Add Service", exact: true })).toBeDisabled();
+  });
 
   test("leads to a service the account already has", async ({ page }) => {
     await page.addInitScript((operator) => {

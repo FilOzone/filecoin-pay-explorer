@@ -198,6 +198,15 @@ describe("AddServiceDialog with an existing approval", () => {
     expect(mocks.refetch).toHaveBeenCalledTimes(1);
   });
 
+  it("shows progress while retrying a failed read with cached approval data", () => {
+    mocks.read = { data: approval(false), isError: true, isFetching: true };
+    renderDialog();
+
+    expect(screen.getByRole("status").textContent).toContain("Checking your existing services");
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(addServiceButton().disabled).toBe(true);
+  });
+
   it("does not submit over an approval the cached read had not seen", async () => {
     mocks.refetch.mockResolvedValue({ data: approval(true), isError: false });
     renderDialog();
