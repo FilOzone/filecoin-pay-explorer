@@ -22,6 +22,7 @@ import { AlertCircle, CheckCircle2, Loader2, Users, Wallet } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatUnits, type Hex, maxUint256, parseUnits } from "viem";
 import CopyButton from "@/components/shared/CopyButton";
+import OnchainNameMarker from "@/components/shared/OnchainNameMarker";
 import TokenIcon from "@/components/shared/TokenIcon";
 import { FIL_TRANSACTION_FEE_RESERVE } from "@/components/UserConsole/FundsSection/data/filecoin-gas-balance";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
@@ -61,7 +62,10 @@ const ServiceDetailsCard: React.FC<{ service: ApprovableService; explorerUrl?: s
 }) => (
   <div className='rounded-lg bg-primary/10 p-3 space-y-1.5 text-xs'>
     <div className='flex items-center justify-between'>
-      <span className='font-medium text-sm'>{service.name}</span>
+      <span className='flex items-center gap-1 font-medium text-sm'>
+        {service.name}
+        {service.nameSource === "onchain" && <OnchainNameMarker />}
+      </span>
       <span className='flex items-center gap-1 text-muted-foreground'>
         <Users className='h-3 w-3' />
         {service.payerCount} users
@@ -306,6 +310,7 @@ const AddServiceDialog: React.FC<AddServiceDialogProps> = ({
                   <SelectItem key={service.address} value={service.address}>
                     <span className='flex items-center gap-2'>
                       <span>{service.name}</span>
+                      {service.nameSource === "onchain" && <OnchainNameMarker />}
                       <span className='font-mono text-xs text-muted-foreground'>
                         ({formatAddress(service.address)})
                       </span>

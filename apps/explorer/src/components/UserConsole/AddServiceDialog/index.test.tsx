@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   setServiceChoice: vi.fn(),
   setCustomServiceInput: vi.fn(),
   setTokenChoice: vi.fn(),
-  services: [] as { address: string; name: string; payerCount: number }[],
+  services: [] as { address: string; name: string; nameSource: "known" | "onchain"; payerCount: number }[],
   knownTokens: [] as { address: string; symbol: string; decimals: number }[],
   filBalanceStatus: "funded" as "loading" | "unavailable" | "insufficient" | "funded",
   filBalanceOwner: "0xABCDEF0000000000000000000000000000000001",
@@ -175,7 +175,7 @@ beforeEach(() => {
 
 describe("AddServiceDialog", () => {
   it("fills service, token, and amount from a funding link, picking known entries by address", () => {
-    mocks.services = [{ address: OPERATOR, name: "Warm Storage", payerCount: 3 }];
+    mocks.services = [{ address: OPERATOR, name: "Warm Storage", nameSource: "known", payerCount: 3 }];
     mocks.knownTokens = [{ address: TOKEN, symbol: "USDFC", decimals: 18 }];
     const { renderer } = renderDialog(vi.fn(), {
       operator: OPERATOR.toUpperCase().replace("0X", "0x") as `0x${string}`,
@@ -187,6 +187,22 @@ describe("AddServiceDialog", () => {
     expect(mocks.setTokenChoice).toHaveBeenCalledWith(TOKEN);
     expect(mocks.setCustomServiceInput).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ id: "amount" }).props.value).toBe("2");
+  });
+
+  it("marks a self-reported on-chain name in the service list, but not a curated one", () => {
+    const other = "0x3333333333333333333333333333333333333333";
+    mocks.services = [
+      { address: OPERATOR, name: "Warm Storage", nameSource: "known", payerCount: 3 },
+      { address: other, name: "Acme Storage", nameSource: "onchain", payerCount: 3 },
+    ];
+    const { renderer } = renderDialog();
+
+    const marked = (name: string) =>
+      renderer.root
+        .find((node) => node.type === "span" && node.children.includes(name))
+        .parent?.findAllByProps({ "aria-label": "Self-reported on-chain name" }).length;
+    expect(marked("Acme Storage")).toBe(1);
+    expect(marked("Warm Storage")).toBe(0);
   });
 
   it("locks the service choice when a prefill names it, and leaves it open otherwise", () => {

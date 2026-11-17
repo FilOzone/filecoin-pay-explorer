@@ -32,4 +32,11 @@ describe("resolveAddressName", () => {
     expect(resolveAddressName(UNKNOWN, "Storacha")).toEqual({ source: "rejected" });
     expect(resolveAddressName(UNKNOWN, "  sToRaChA ")).toEqual({ source: "rejected" });
   });
+
+  it("rejects a copied label disguised with invisible or full-width characters", () => {
+    expect(resolveAddressName(UNKNOWN, "Storacha\u200b")).toEqual({ source: "rejected" });
+    expect(resolveAddressName(UNKNOWN, "Stor\u202eacha")).toEqual({ source: "rejected" });
+    expect(resolveAddressName(UNKNOWN, "Ｓｔｏｒａｃｈａ")).toEqual({ source: "rejected" });
+    expect(resolveAddressName(UNKNOWN, "Filecoin\u00a0Warm  Storage Service")).toEqual({ source: "rejected" });
+  });
 });

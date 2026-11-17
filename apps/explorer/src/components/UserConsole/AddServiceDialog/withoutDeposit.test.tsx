@@ -32,7 +32,7 @@ vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
   useServiceSelection: () => ({
-    services: [{ address: OPERATOR, name: "Warm Storage", payerCount: 3 }],
+    services: [{ address: OPERATOR, name: "Warm Storage", nameSource: "known" as const, payerCount: 3 }],
     isLoadingServices: false,
     serviceChoice: OPERATOR,
     setServiceChoice: vi.fn(),
