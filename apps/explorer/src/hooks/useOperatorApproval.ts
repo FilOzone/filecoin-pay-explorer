@@ -14,15 +14,23 @@ export type OperatorApprovalState = {
 };
 
 /** The approval from the chain, not the subgraph: `setOperatorApproval` takes absolute values, and indexing lags. */
-export const useOperatorApproval = (network: Network, token: Address, owner: Address, operator: Address) => {
+export const useOperatorApproval = (
+  network: Network,
+  token: Address | undefined,
+  owner: Address | undefined,
+  operator: Address | undefined,
+  enabled = true,
+) => {
   const chain = getChain(network);
+  const args = token && owner && operator ? ([token, owner, operator] as const) : undefined;
   return useReadContract({
     address: chain.contracts.payments.address,
     abi: chain.contracts.payments.abi,
     chainId: chain.id,
     functionName: "operatorApprovals",
-    args: [token, owner, operator],
+    args,
     query: {
+      enabled: !!args && enabled,
       // The approval is the base of an absolute write, so a cached read is never good enough.
       refetchOnMount: "always",
       select: ([isApproved, rateAllowance, lockupAllowance, rateUsage, lockupUsage, maxLockupPeriod]) =>

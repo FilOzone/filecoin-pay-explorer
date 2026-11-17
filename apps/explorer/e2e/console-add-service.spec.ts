@@ -1,12 +1,14 @@
+import type { Locator, Page } from "@playwright/test";
+import { toFunctionSelector } from "viem";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
 // CI points the subgraph at placeholder.invalid, which the page's connect-src CSP refuses before any route can answer.
 test.use({ bypassCSP: true });
 
-// Regression: Add Service did nothing while its section's query was failing, because the dialog was only mounted
-// once the list had loaded.
-test("Add Service opens the dialog when the services query fails", async ({ page }) => {
+const CUSTOM_SERVICE = "0x4444444444444444444444444444444444444444";
+
+async function openDialog(page: Page, email: string) {
   await page.route(
     // CI points the subgraph at placeholder.invalid; a local .env points it at Goldsky.
     (url) => url.hostname === "api.goldsky.com" || url.hostname === "placeholder.invalid",
@@ -24,11 +26,95 @@ test("Add Service opens the dialog when the services query fails", async ({ page
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),
   );
-
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "add-service@fake-privy.test" });
+  await loginWithTestAccount(page, { email });
   await expect(page.getByText("Failed to load services")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Add Service", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Add a Service" })).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "Add a Service" });
+  await expect(dialog.getByRole("heading", { name: "Add a Service" })).toBeVisible();
+  return dialog;
+}
+
+async function chooseCustomServiceInUsdfc(page: Page, dialog: Locator) {
+  await dialog.locator("#service").click();
+  await page.getByRole("option", { name: "Custom service address…" }).click();
+  await dialog.locator("#customService").fill(CUSTOM_SERVICE);
+  await dialog.locator("#paymentToken").click();
+  await page.getByRole("option", { name: /USDFC/ }).click();
+}
+
+// Regression: Add Service did nothing while its section's query was failing, because the dialog was only mounted
+// once the list had loaded.
+test("Add Service opens the dialog when the services query fails", async ({ page }) => {
+  await openDialog(page, "add-service@fake-privy.test");
+});
+
+test.describe("adding a service", () => {
+  test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");
+
+  test("shows progress when retrying an approval read that failed with cached data", async ({ page }) => {
+    test.setTimeout(60_000);
+    const selector = toFunctionSelector("operatorApprovals(address,address,address)").slice(2);
+    const dialog = await openDialog(page, "add-service-retry@fake-privy.test");
+    const initialRead = page.waitForResponse((response) => response.request().postData()?.includes(selector) === true);
+    await chooseCustomServiceInUsdfc(page, dialog);
+    await initialRead;
+    await expect(dialog.getByText("Checking your existing services…")).toBeHidden();
+
+    let holdRead = false;
+    await page.route(
+      (url) => url.hostname.endsWith("glif.io"),
+      async (route) => {
+        if (!route.request().postData()?.includes(selector)) return route.fallback();
+        if (holdRead) return;
+        const body = route.request().postDataJSON();
+        const calls = Array.isArray(body) ? body : [body];
+        const replies = calls.map((call) => ({
+          jsonrpc: "2.0",
+          id: call.id,
+          error: { code: -32603, message: "Approval read unavailable" },
+        }));
+        await route.fulfill({ json: Array.isArray(body) ? replies : replies[0] });
+      },
+    );
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("main").getByRole("button", { name: "Add Service", exact: true }).click();
+    await chooseCustomServiceInUsdfc(page, dialog);
+    const error = dialog.getByRole("alert").filter({ hasText: "Could not check" });
+    await expect(error).toBeVisible({ timeout: 20_000 });
+    holdRead = true;
+    await error.getByRole("button", { name: "Retry" }).click();
+
+    await expect(dialog.getByRole("status")).toHaveText("Checking your existing services…");
+    await expect(error).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Add Service", exact: true })).toBeDisabled();
+  });
+
+  test("leads to a service the account already has", async ({ page }) => {
+    await page.addInitScript((operator) => {
+      (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [operator];
+    }, CUSTOM_SERVICE);
+    const dialog = await openDialog(page, "add-service-existing@fake-privy.test");
+
+    await chooseCustomServiceInUsdfc(page, dialog);
+
+    await expect(dialog.getByText("You already have this service")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Add Service", exact: true })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Go to service" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/console/services/${CUSTOM_SERVICE}$`));
+    await expect(dialog).toBeHidden();
+  });
+
+  test("still offers a service the account does not have", async ({ page }) => {
+    const dialog = await openDialog(page, "add-service-new@fake-privy.test");
+
+    await chooseCustomServiceInUsdfc(page, dialog);
+
+    await expect(dialog.getByText("Deposit amount")).toBeVisible();
+    await expect(dialog.getByText("You already have this service")).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "Add Service", exact: true })).toBeVisible();
+  });
 });

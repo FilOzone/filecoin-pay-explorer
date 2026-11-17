@@ -29,8 +29,10 @@ vi.mock("@/components/shared/TokenIcon", () => ({ default: () => null }));
 vi.mock("@/components/UserConsole/providers/FundingLaunchContext", () => ({
   useFundingLaunch: () => ({ isSquidOpen: false, openSquid: vi.fn() }),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("./hooks", () => ({
   CUSTOM_OPTION: "custom",
+  useExistingApproval: () => ({ status: "not-approved", refresh: vi.fn().mockResolvedValue("not-approved") }),
   useServiceSelection: () => ({
     services: [{ address: OPERATOR, name: "Warm Storage", payerCount: 3 }],
     isLoadingServices: false,
