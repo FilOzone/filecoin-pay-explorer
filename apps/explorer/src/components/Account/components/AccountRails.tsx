@@ -74,7 +74,7 @@ export const AccountRails: React.FC<AccountRailsProps> = ({ account }) => {
 
       {!isLoading && !isError && data && data.rails.length > 0 && (
         <div className='flex flex-col gap-4'>
-          <span className='text-sm text-muted-foreground'>{account.totalRails.toString()} total</span>
+          <span className='text-sm text-muted-foreground'>{account.totalRails} total</span>
 
           <AccountRailsTable data={data.rails.map((rail) => ({ ...rail, account }))} />
 

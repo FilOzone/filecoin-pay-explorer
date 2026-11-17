@@ -1,17 +1,18 @@
 import useNetwork from "@/hooks/useNetwork";
 import { explorerUrls } from "@/utils/constants";
-import CopyableText from "./CopyableText";
+import ServiceAddress from "./ServiceAddress";
 
 interface ExplorerLinkProps {
   address: string;
   label?: string;
 }
 
+/** A service (operator) address linked to the network's block explorer. */
 const ExplorerLink = ({ address, label = "address" }: ExplorerLinkProps) => {
   const { network } = useNetwork();
 
   return (
-    <CopyableText
+    <ServiceAddress
       value={address}
       to={`${explorerUrls[network]}/address/${address}`}
       external

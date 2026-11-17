@@ -1,4 +1,3 @@
-import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -55,7 +54,6 @@ test("rail pagination numbers and marks pages beyond the fifth", async ({ page }
       return route.fulfill({ json: { data: { accounts: [], userTokens: [] } } });
     },
   );
-  await answerServicePageRpc(page, OPERATOR);
   await page.route(
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),

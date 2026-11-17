@@ -1,6 +1,5 @@
 import type { Page } from "@playwright/test";
 import { decodeFunctionData, type Hex, maxUint256 } from "viem";
-import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -55,7 +54,6 @@ async function stubServicePage(page: Page) {
       return route.fulfill({ json: { data: { accounts: [], userTokens: [], rails: [], dataSets: [] } } });
     },
   );
-  await answerServicePageRpc(page, OPERATOR);
   await page.route(
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),
@@ -97,6 +95,23 @@ const cellsOf = (page: Page, symbol: string) =>
 
 test.describe("spending limits on the service page", () => {
   test.skip(process.env.E2E_MODE === "real", "marks the approval in the fake chain");
+
+  test("a service with on-chain metadata shows its self-reported name", async ({ page }) => {
+    await page.addInitScript((address) => {
+      const fake = window as unknown as {
+        __fakeServiceMetadata: Record<string, { name: string; description: string }>;
+      };
+      fake.__fakeServiceMetadata = { [address]: { name: "Acme Storage", description: "Warm storage by Acme" } };
+    }, OPERATOR);
+    await stubServicePage(page);
+    await page.goto(`/console/services/${OPERATOR}`);
+    await loginWithTestAccount(page, { email: "spending-limits-metadata@fake-privy.test" });
+
+    const heading = page.getByRole("heading", { name: "Acme Storage" });
+    await expect(heading.getByRole("img", { name: "Self-reported on-chain name" })).toBeVisible();
+    await expect(page.getByText("Warm storage by Acme", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Spending limits" })).toBeVisible();
+  });
 
   test("lists active and revoked token limits, labelling unlimited ones", async ({ page }) => {
     await stubServicePage(page);

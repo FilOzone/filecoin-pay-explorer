@@ -53,7 +53,7 @@ export const SettleRailDialog: React.FC<SettleRailDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='sm:max-w-[500px] max-h-[90vh] flex flex-col'>
         <DialogHeader>
-          <DialogTitle>Settle Rail #{rail.railId.toString()}</DialogTitle>
+          <DialogTitle>Settle Rail #{rail.railId}</DialogTitle>
           <DialogDescription>Confirm settlement for all pending payments up to the selected epoch.</DialogDescription>
         </DialogHeader>
 

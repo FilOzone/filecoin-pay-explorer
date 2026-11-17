@@ -8,7 +8,7 @@ import ServiceMetrics from "./ServiceMetrics";
 const mocks = vi.hoisted(() => ({
   metrics: {} as { data?: ServiceMetricsResponse; isLoading?: boolean; isError?: boolean },
   allPayments: {} as {
-    data?: { items: { totalAmount: bigint; token: { id: `0x${string}` } }[]; reachedPageLimit: boolean };
+    data?: { items: { totalAmount: string; token: { id: `0x${string}` } }[]; reachedPageLimit: boolean };
     isError?: boolean;
   },
   useAccountServiceMetrics: vi.fn(),
@@ -21,24 +21,24 @@ vi.mock("@/hooks/useAccountServices", () => ({
 }));
 
 const OPERATOR = "0x2222222222222222222222222222222222222222";
-const USDFC = { id: "0xusdfc" as const, symbol: "USDFC", decimals: 18n };
-const AXL_USDC = { id: "0xaxl" as const, symbol: "axlUSDC", decimals: 6n };
+const USDFC = { id: "0xusdfc" as const, symbol: "USDFC", decimals: "18" };
+const AXL_USDC = { id: "0xaxl" as const, symbol: "axlUSDC", decimals: "6" };
 const NOTICE = "Pays the 30-day notice after you terminate";
-const ONE_TOKEN_THOUSANDTH = 1_000_000_000_000_000n;
+const ONE_TOKEN_THOUSANDTH = "1000000000000000";
 
 const data: ServiceMetricsResponse = {
   account: {
     operatorApprovals: [
-      { lockupUsage: 9_640_000_000_000_000_000n, token: USDFC },
-      { lockupUsage: 864_000n, token: AXL_USDC },
+      { lockupUsage: "9640000000000000000", token: USDFC },
+      { lockupUsage: "864000", token: AXL_USDC },
     ],
     userTokens: [],
   },
   rails: [
-    { paymentRate: 100_000_000_000_000n, lockupPeriod: 86_400n, token: USDFC },
-    { paymentRate: 10n, lockupPeriod: 86_400n, token: AXL_USDC },
+    { paymentRate: "100000000000000", lockupPeriod: "86400", token: USDFC },
+    { paymentRate: "10", lockupPeriod: "86400", token: AXL_USDC },
   ],
-  oneTimePayments: [{ totalAmount: 420_000_000_000_000_000n, token: USDFC }],
+  oneTimePayments: [{ totalAmount: "420000000000000000", token: USDFC }],
 };
 
 const fullFirstPage: ServiceMetricsResponse = {
@@ -93,13 +93,13 @@ describe("ServiceMetrics", () => {
       data: {
         account: {
           operatorApprovals: [
-            { lockupUsage: 9_640_000_000_000_000_000n, token: USDFC },
+            { lockupUsage: "9640000000000000000", token: USDFC },
             // Every rail in this token has finalized: nothing locked, paying or paid this month.
-            { lockupUsage: 0n, token: AXL_USDC },
+            { lockupUsage: "0", token: AXL_USDC },
           ],
           userTokens: [],
         },
-        rails: [{ paymentRate: 100_000_000_000_000n, lockupPeriod: 86_400n, token: USDFC }],
+        rails: [{ paymentRate: "100000000000000", lockupPeriod: "86400", token: USDFC }],
         oneTimePayments: [],
       },
     };
