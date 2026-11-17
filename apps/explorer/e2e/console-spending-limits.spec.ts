@@ -29,6 +29,7 @@ const approvals = [
 ];
 
 async function stubServicePage(page: Page) {
+  const state = { failRefreshes: false, failedRequests: 0, indexedBlock: 1, lockupAllowance: (5n * TOKEN).toString() };
   await page.addInitScript((operator) => {
     (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [operator];
   }, OPERATOR);
@@ -37,6 +38,13 @@ async function stubServicePage(page: Page) {
     (url) => url.hostname === "api.goldsky.com" || url.hostname === "placeholder.invalid",
     (route) => {
       const query: string = route.request().postDataJSON()?.query ?? "";
+      if (state.failRefreshes && (query.includes("GetAccountOperator(") || query.includes("GetServiceApprovals"))) {
+        state.failedRequests++;
+        return route.fulfill({ status: 500 });
+      }
+      if (query.includes("GetSubgraphBlock")) {
+        return route.fulfill({ json: { data: { _meta: { block: { number: state.indexedBlock } } } } });
+      }
       if (query.includes("GetAccountOperator(")) {
         const accountOperator = {
           id: "service",
@@ -49,7 +57,11 @@ async function stubServicePage(page: Page) {
         return route.fulfill({ json: { data: { accountOperator } } });
       }
       if (query.includes("GetServiceApprovals")) {
-        return route.fulfill({ json: { data: { operatorApprovals: approvals } } });
+        return route.fulfill({
+          json: {
+            data: { operatorApprovals: [{ ...approvals[0], lockupAllowance: state.lockupAllowance }, approvals[1]] },
+          },
+        });
       }
       return route.fulfill({ json: { data: { accounts: [], userTokens: [], rails: [], dataSets: [] } } });
     },
@@ -58,6 +70,7 @@ async function stubServicePage(page: Page) {
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),
   );
+  return state;
 }
 
 async function openLimitsDialog(page: Page, email: string) {
@@ -155,6 +168,64 @@ test.describe("spending limits on the service page", () => {
     await confirmation.getByRole("button", { name: "Revoke" }).click();
 
     expect(await approveAndReadTransaction(page)).toEqual([USDFC.id, OPERATOR, false, 0n, 0n, 0n]);
+  });
+
+  test("refuses a draft when the approval changed on chain before submission", async ({ page }) => {
+    const dialog = await openLimitsDialog(page, "spending-limits-changed@fake-privy.test");
+    await dialog.getByLabel("Lockup limit (USDFC)").fill("2");
+    await page.evaluate(() => {
+      (window as unknown as { __fakeApprovedOperators: string[] }).__fakeApprovedOperators = [];
+    });
+    await dialog.getByRole("button", { name: "Update limits" }).click();
+
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Your limits changed on chain, review again" }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Approve service again" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "approve transaction" })).toHaveCount(0);
+    await expect(page.getByLabel("Lockup limit (USDFC)")).toHaveValue("0");
+  });
+
+  test("keeps the pending wallet request mounted when service and approvals refreshes fail", async ({ page }) => {
+    const state = await stubServicePage(page);
+    await page.goto(`/console/services/${OPERATOR}`);
+    await loginWithTestAccount(page, { email: "spending-limits-refresh-error@fake-privy.test" });
+    await page.getByRole("button", { name: "Edit USDFC limits" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit spending limits" });
+    await dialog.getByLabel("Lockup limit (USDFC)").fill("2");
+    await dialog.getByRole("button", { name: "Update limits" }).click();
+    const wallet = page.getByRole("dialog", { name: "approve transaction" });
+    await expect(wallet).toBeVisible();
+
+    state.failRefreshes = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+    await expect.poll(() => state.failedRequests, { timeout: 15_000 }).toBeGreaterThanOrEqual(8);
+
+    await expect(dialog).toContainText("Processing...");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    await expect(wallet).toBeVisible();
+  });
+
+  test("refreshes the limits when the index reaches the confirmed transaction's block", async ({ page }) => {
+    const state = await stubServicePage(page);
+    state.indexedBlock = 0;
+    await page.goto(`/console/services/${OPERATOR}`);
+    await loginWithTestAccount(page, { email: "spending-limits-indexing@fake-privy.test" });
+    await page.getByRole("button", { name: "Edit USDFC limits" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit spending limits" });
+    await dialog.getByLabel("Lockup limit (USDFC)").fill("0.5");
+    await dialog.getByRole("button", { name: "Update limits" }).click();
+    await approveAndReadTransaction(page);
+    await page.getByRole("dialog", { name: "approve transaction" }).getByRole("button", { name: "All Done" }).click();
+
+    const notice = page.getByRole("status").filter({ hasText: "These limits refresh once it is indexed" });
+    await expect(notice).toBeVisible();
+    await expect(cellsOf(page, "USDFC").nth(3)).toHaveText("5.000 USDFC");
+    state.lockupAllowance = (TOKEN / 2n).toString();
+    state.indexedBlock = 1;
+
+    await expect(cellsOf(page, "USDFC").nth(3)).toHaveText("0.500 USDFC");
+    await expect(notice).toBeHidden();
   });
 
   // Regression: an unlimited field was disabled without looking it, so clicking in and typing did nothing.

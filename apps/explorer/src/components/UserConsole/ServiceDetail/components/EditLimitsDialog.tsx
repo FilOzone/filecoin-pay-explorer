@@ -11,7 +11,7 @@ import {
 import { Label } from "@filecoin-pay/ui/components/label";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
-import { type Address, getAddress } from "viem";
+import { type Address, getAddress, type TransactionReceipt } from "viem";
 import { Notice } from "@/components/shared/Notice";
 import { getChain } from "@/constants/chains";
 import type { ServiceApproval } from "@/hooks/useAccountServices";
@@ -40,9 +40,11 @@ interface EditLimitsDialogProps {
   token: LimitToken;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConfirmed: (receipt: TransactionReceipt) => void;
 }
 
-type SubmitLimits = (approve: boolean, terms: ApprovalTerms) => Promise<void>;
+type SubmitLimits = (approve: boolean, terms: ApprovalTerms, current: OperatorApprovalState) => Promise<void>;
+type ReadApproval = () => Promise<{ data?: OperatorApprovalState; isError: boolean }>;
 
 interface FormProps {
   operator: Address;
@@ -187,7 +189,7 @@ const RevokeConfirmation = ({
       </Button>
       <Button
         variant='primary'
-        onClick={() => void onSubmit(false, REVOKED_TERMS)}
+        onClick={() => void onSubmit(false, REVOKED_TERMS, current)}
         disabled={isSubmitting}
         className='py-2'
       >
@@ -209,13 +211,14 @@ const WaitingBody = ({ children }: { children: string }) => (
 
 /** Mounted once the fresh read lands, so the form starts from the chain's values. */
 const EditLimitsForm = (props: FormProps) => {
-  const { operator, token, current, isSubmitting, onSubmit, onCancel } = props;
+  const { operator, token, isSubmitting, onSubmit, onCancel } = props;
+  const [current] = useState(props.current);
   const decimals = Number(token.decimals);
   const [form, setForm] = useState<LimitsForm>(() => limitsForm(current, decimals));
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
   if (confirmingRevoke) {
-    return <RevokeConfirmation {...props} onBack={() => setConfirmingRevoke(false)} />;
+    return <RevokeConfirmation {...props} current={current} onBack={() => setConfirmingRevoke(false)} />;
   }
 
   const update = parseLimitsForm(form, current, decimals);
@@ -295,7 +298,7 @@ const EditLimitsForm = (props: FormProps) => {
         <Button
           variant='primary'
           onClick={() => {
-            if (update.status === "ready") void onSubmit(true, update.terms);
+            if (update.status === "ready") void onSubmit(true, update.terms, current);
           }}
           disabled={isSubmitting || update.status !== "ready"}
           className='py-2'
@@ -311,8 +314,18 @@ const EditLimitsForm = (props: FormProps) => {
 const EditLimitsBody = ({
   network,
   owner,
+  onSubmit,
   ...formProps
-}: Omit<FormProps, "current"> & { network: Network; owner: Address }) => {
+}: Omit<FormProps, "current" | "onSubmit"> & {
+  network: Network;
+  owner: Address;
+  onSubmit: (
+    approve: boolean,
+    terms: ApprovalTerms,
+    current: OperatorApprovalState,
+    read: ReadApproval,
+  ) => Promise<void>;
+}) => {
   const approval = useOperatorApproval(network, getAddress(formProps.token.id), owner, formProps.operator);
 
   // A cached read from an earlier opening may be stale; the form waits for this mount's own.
@@ -320,7 +333,7 @@ const EditLimitsBody = ({
     return <WaitingBody>Reading your current limits from the chain...</WaitingBody>;
   }
 
-  if (approval.isError || !approval.data) {
+  if (!approval.data) {
     return (
       <>
         <DialogHeader>
@@ -344,12 +357,28 @@ const EditLimitsBody = ({
     );
   }
 
-  return <EditLimitsForm {...formProps} current={approval.data} />;
+  return (
+    <EditLimitsForm
+      {...formProps}
+      current={approval.data}
+      onSubmit={(approve, terms, current) => onSubmit(approve, terms, current, approval.refetch)}
+    />
+  );
 };
 
-const EditLimitsDialog = ({ network, owner, operator, token, open, onOpenChange }: EditLimitsDialogProps) => {
+const EditLimitsDialog = ({
+  network,
+  owner,
+  operator,
+  token,
+  open,
+  onOpenChange,
+  onConfirmed,
+}: EditLimitsDialogProps) => {
   const chain = getChain(network);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reviewVersion, setReviewVersion] = useState(0);
   const { execute, isExecuting } = useContractTransaction({
     account: owner,
     contractAddress: chain.contracts.payments.address,
@@ -361,17 +390,38 @@ const EditLimitsDialog = ({ network, owner, operator, token, open, onOpenChange 
   // Closing while the wallet has the request would abandon it.
   const handleOpenChange = (next: boolean) => {
     if (!next && isSubmitting) return;
+    if (!next) setSubmitError(null);
     onOpenChange(next);
   };
 
-  const submit: SubmitLimits = async (approve, terms) => {
+  const submit = async (approve: boolean, terms: ApprovalTerms, current: OperatorApprovalState, read: ReadApproval) => {
+    if (isSubmitting || isExecuting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
+      const fresh = await read().catch(() => undefined);
+      if (!fresh || fresh.isError || !fresh.data) {
+        setSubmitError("Your current limits could not be read from the chain. Please try again.");
+        return;
+      }
+      if (
+        fresh.data.isApproved !== current.isApproved ||
+        fresh.data.rateAllowance !== current.rateAllowance ||
+        fresh.data.lockupAllowance !== current.lockupAllowance ||
+        fresh.data.maxLockupPeriod !== current.maxLockupPeriod ||
+        fresh.data.rateUsage !== current.rateUsage ||
+        fresh.data.lockupUsage !== current.lockupUsage
+      ) {
+        setSubmitError("Your limits changed on chain, review again");
+        setReviewVersion((version) => version + 1);
+        return;
+      }
       await execute({
         functionName: "setOperatorApproval",
         args: [token.id, operator, approve, terms.rateAllowance, terms.lockupAllowance, terms.maxLockupPeriod],
         metadata: { type: approve ? "updateApproval" : "revokeApproval", operator, token: token.symbol },
         onSubmitOnChain: () => onOpenChange(false),
+        onConfirmed,
       });
     } catch (error) {
       // execute() already toasted; the form stays as it was so the owner can try again.
@@ -388,10 +438,16 @@ const EditLimitsDialog = ({ network, owner, operator, token, open, onOpenChange 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className='sm:max-w-500px' showCloseButton={!isSubmitting}>
+        {submitError ? (
+          <Notice tone='warn' role='alert'>
+            {submitError}
+          </Notice>
+        ) : null}
         {isConfirming ? (
           <WaitingBody>Waiting for your last update to confirm...</WaitingBody>
         ) : (
           <EditLimitsBody
+            key={reviewVersion}
             network={network}
             owner={owner}
             operator={operator}

@@ -55,7 +55,7 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({
     return <ServiceLoadingState />;
   }
 
-  if (isError) {
+  if (isError && !service) {
     return <ServiceErrorState />;
   }
 

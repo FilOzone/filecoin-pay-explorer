@@ -3,12 +3,16 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ErrorStateCard } from "@filecoin-foundation/ui-filecoin/ErrorStateCard";
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import { TanstackTable } from "@filecoin-foundation/ui-filecoin/Table/TanstackTable";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { type ReactNode, useMemo, useState } from "react";
-import type { Address } from "viem";
+import type { Address, TransactionReceipt } from "viem";
 import { ResponsiveTable } from "@/components/shared/ResponsiveTable";
 import { type ServiceApproval, useServiceApprovals } from "@/hooks/useAccountServices";
+import { useGraphQLClient } from "@/hooks/useGraphQLQuery";
 import type { Network } from "@/types";
+import { fetchSubgraphMeta } from "@/utils/fetchAllPages";
+import { invalidateAccountQueries } from "@/utils/query-invalidation";
 import { formatLockupLimit, formatPeriodLimit, formatRateLimit } from "../utils/spendingLimits";
 import EditLimitsDialog from "./EditLimitsDialog";
 
@@ -87,6 +91,21 @@ const SpendingLimits = ({ network, operator, userAddress }: SpendingLimitsProps)
   });
   const [editing, setEditing] = useState<ServiceApproval["token"] | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [receipt, setReceipt] = useState<TransactionReceipt | null>(null);
+  const queryClient = useQueryClient();
+  const { executeQuery } = useGraphQLClient({ networkOverride: network });
+  const { data: indexed } = useQuery({
+    queryKey: ["service-limits-indexing", network, userAddress, operator, receipt?.transactionHash],
+    enabled: receipt !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async ({ signal }) => {
+      const { block } = await fetchSubgraphMeta(executeQuery, signal);
+      if (!receipt || BigInt(block.number) < receipt.blockNumber) return false;
+      await invalidateAccountQueries(queryClient, userAddress, { repeatAfterMs: [] });
+      return true;
+    },
+    refetchInterval: (query) => (query.state.data ? false : 2_000),
+  });
 
   const columns = useMemo(
     () =>
@@ -103,35 +122,35 @@ const SpendingLimits = ({ network, operator, userAddress }: SpendingLimitsProps)
     enableSorting: false,
   });
 
+  let content: ReactNode;
   if (isLoading) {
-    return (
-      <SpendingLimitsLayout>
-        <LoadingStateCard message='Loading spending limits...' />
-      </SpendingLimitsLayout>
+    content = <LoadingStateCard message='Loading spending limits...' />;
+  } else if (isError && !approvals) {
+    content = (
+      <ErrorStateCard
+        titleTag='h2'
+        title='Failed to load spending limits'
+        description='Unable to fetch the limits for this service. Please try again.'
+      />
     );
-  }
-
-  if (isError) {
-    return (
-      <SpendingLimitsLayout>
-        <ErrorStateCard
-          titleTag='h2'
-          title='Failed to load spending limits'
-          description='Unable to fetch the limits for this service. Please try again.'
-        />
-      </SpendingLimitsLayout>
+  } else {
+    content = approvals?.length ? (
+      <ResponsiveTable>
+        <TanstackTable table={table} />
+      </ResponsiveTable>
+    ) : (
+      <p className='text-sm text-muted-foreground'>This service has no spending limits yet.</p>
     );
   }
 
   return (
     <SpendingLimitsLayout>
-      {approvals?.length ? (
-        <ResponsiveTable>
-          <TanstackTable table={table} />
-        </ResponsiveTable>
-      ) : (
-        <p className='text-sm text-muted-foreground'>This service has no spending limits yet.</p>
-      )}
+      {receipt && !indexed ? (
+        <p role='status' className='text-sm text-muted-foreground'>
+          Your update is confirmed. These limits refresh once it is indexed.
+        </p>
+      ) : null}
+      {content}
 
       {/* Kept mounted after closing: the dialog tracks its receipt, and the panel leaves with the same token. */}
       {editing ? (
@@ -142,6 +161,9 @@ const SpendingLimits = ({ network, operator, userAddress }: SpendingLimitsProps)
           token={editing}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
+          onConfirmed={(confirmed) =>
+            setReceipt((previous) => (previous && previous.blockNumber > confirmed.blockNumber ? previous : confirmed))
+          }
         />
       ) : null}
     </SpendingLimitsLayout>

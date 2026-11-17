@@ -78,7 +78,7 @@ const onChain: OperatorApprovalState = {
 const fresh = (data: OperatorApprovalState) => ({ data, isFetchedAfterMount: true, isError: false, isFetching: false });
 
 function renderDialog(onOpenChange = vi.fn()) {
-  render(
+  const view = render(
     <EditLimitsDialog
       network='mainnet'
       owner={OWNER}
@@ -86,11 +86,12 @@ function renderDialog(onOpenChange = vi.fn()) {
       token={token}
       open
       onOpenChange={onOpenChange}
+      onConfirmed={vi.fn()}
     />,
   );
   const button = (name: string) => screen.getByRole("button", { name });
   const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-  return { button, type };
+  return { button, type, ...view };
 }
 
 afterEach(cleanup);
@@ -101,6 +102,7 @@ describe("EditLimitsDialog", () => {
     mocks.refetch.mockReset();
     mocks.isExecuting = false;
     mocks.read = fresh(onChain);
+    mocks.refetch.mockImplementation(async () => mocks.read);
   });
 
   it("reads the approval for this token, owner and operator", () => {
@@ -200,6 +202,60 @@ describe("EditLimitsDialog", () => {
     );
   });
 
+  it.each([
+    { lockupAllowance: 45n * TOKEN },
+    { rateAllowance: 1n },
+    { maxLockupPeriod: EPOCHS_PER_DAY },
+    { isApproved: false },
+    { rateUsage: 1n },
+    { lockupUsage: 1n },
+  ])("refuses to sign when the chain's approval changes: %o", async (change) => {
+    const { button, type } = renderDialog();
+    type("Rate limit (USDFC per month)", "5");
+    mocks.refetch.mockResolvedValue(fresh({ ...onChain, ...change }));
+
+    await act(async () => fireEvent.click(button("Update limits")));
+
+    expect(mocks.refetch).toHaveBeenCalledTimes(1);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("Your limits changed on chain, review again");
+  });
+
+  it("keeps the draft's original exact limits across background reads", () => {
+    const exact = { ...onChain, lockupAllowance: 50n * TOKEN + 123n };
+    mocks.read = fresh(exact);
+    const { type, rerender } = renderDialog();
+    type("Rate limit (USDFC per month)", "5");
+    mocks.read = fresh({ ...exact, lockupAllowance: 45n * TOKEN });
+    rerender(
+      <EditLimitsDialog
+        network='mainnet'
+        owner={OWNER}
+        operator={OPERATOR}
+        token={token}
+        open
+        onOpenChange={vi.fn()}
+        onConfirmed={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("table", { name: "Current and new limits" }).textContent).toContain(
+      "Lockup50.000 USDFC50.000 USDFC",
+    );
+  });
+
+  it("keeps the draft and refuses to sign when the pre-submit read fails", async () => {
+    const { button, type } = renderDialog();
+    type("Lockup limit (USDFC)", "20");
+    mocks.refetch.mockResolvedValue({ ...fresh(onChain), isError: true });
+
+    await act(async () => fireEvent.click(button("Update limits")));
+
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(screen.getByLabelText<HTMLInputElement>("Lockup limit (USDFC)").value).toBe("20");
+    expect(screen.getByRole("alert").textContent).toContain("could not be read");
+  });
+
   it("warns before setting a limit below what the service uses", () => {
     mocks.read = fresh({ ...onChain, lockupUsage: 40n * TOKEN });
     const { type } = renderDialog();
@@ -273,7 +329,7 @@ describe("EditLimitsDialog", () => {
     mocks.execute.mockReturnValue(new Promise<void>((resolve) => (submit = resolve)));
     const { button, type } = renderDialog(onOpenChange);
     type("Lockup limit (USDFC)", "20");
-    fireEvent.click(button("Update limits"));
+    await act(async () => fireEvent.click(button("Update limits")));
 
     act(() => mocks.dialogOnOpenChange?.(false));
     expect(onOpenChange).not.toHaveBeenCalled();

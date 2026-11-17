@@ -2,17 +2,18 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { getAddress } from "viem";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getChain } from "@/constants/chains";
 import { ServiceDetail } from ".";
 
 const mocks = vi.hoisted(() => ({
   service: null as { totalRails: string } | null,
   datasetMounts: 0,
+  isError: false,
 }));
 
 vi.mock("@/hooks/useAccountServices", () => ({
-  useAccountService: () => ({ data: mocks.service, isLoading: false, isError: false }),
+  useAccountService: () => ({ data: mocks.service, isLoading: false, isError: mocks.isError }),
 }));
 
 vi.mock("@/hooks/useServiceProfiles", () => ({
@@ -47,12 +48,26 @@ vi.mock("../StaleQueue", () => ({
 }));
 
 afterEach(cleanup);
+beforeEach(() => {
+  mocks.isError = false;
+});
 
 const PAYER = "0x1111111111111111111111111111111111111111";
 const OPERATOR = "0x2222222222222222222222222222222222222222";
 const FWSS = getChain("mainnet").contracts.fwss.address;
 
 describe("ServiceDetail", () => {
+  it("keeps service controls mounted when a background refresh fails", () => {
+    mocks.service = { totalRails: "1" };
+    const view = (
+      <ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />
+    );
+    const { rerender } = render(view);
+    const limits = screen.getByTestId("limits");
+    mocks.isError = true;
+    rerender(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+    expect(screen.getByTestId("limits")).toBe(limits);
+  });
   it("shows not found when the payer has no relationship with the operator", () => {
     mocks.service = null;
     render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
