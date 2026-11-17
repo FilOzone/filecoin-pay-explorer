@@ -1,4 +1,5 @@
 import { CopyableText } from "@/components/shared";
+import OnchainNameMarker from "@/components/shared/OnchainNameMarker";
 import type { ServiceProfile } from "@/constants/service-metadata";
 
 type ServiceHeaderProps = {
@@ -8,7 +9,10 @@ type ServiceHeaderProps = {
 
 export const ServiceHeader = ({ operatorAddress, profile }: ServiceHeaderProps) => (
   <div className='flex flex-col gap-3'>
-    <h2 className='text-3xl font-medium'>{profile.name}</h2>
+    <h2 className='text-3xl font-medium'>
+      {profile.name}
+      {profile.nameSource === "onchain" ? <OnchainNameMarker className='ml-2 align-middle' /> : null}
+    </h2>
 
     {profile.description ? <p className='max-w-3xl text-muted-foreground'>{profile.description}</p> : null}
 

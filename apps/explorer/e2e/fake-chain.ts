@@ -1,7 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import {
   decodeFunctionData,
-  encodeAbiParameters,
   encodeFunctionResult,
   erc20Abi,
   type Hex,
@@ -12,6 +11,26 @@ import {
 
 type RpcCall = { id: number; jsonrpc: "2.0"; method: string; params: unknown[] };
 type SentTransaction = { from: Hex; to: Hex; data: Hex; hash: Hex };
+
+/**
+ * Answers a request from state read off the page. A reload mid-answer destroys the page being read, and the request
+ * with it, so that request is aborted instead of failing the test.
+ */
+export async function answerFromPage(
+  route: Route,
+  answer: () => Promise<{ json: unknown } | undefined>,
+): Promise<void> {
+  let reply: { json: unknown } | undefined;
+  try {
+    reply = await answer();
+  } catch (error) {
+    await route.abort();
+    if (String(error).includes("Execution context was destroyed")) return;
+    throw error;
+  }
+  if (reply === undefined) return route.fallback();
+  return route.fulfill(reply);
+}
 
 const MULTICALL3 = "0xca11bde05977b3631167028862be2a173976ca11";
 const GET_ETH_BALANCE = toFunctionSelector("getEthBalance(address)");
@@ -33,19 +52,28 @@ const operatorApprovalsAbi = parseAbi([
   "function operatorApprovals(address token, address client, address operator) view returns (bool isApproved, uint256 rateAllowance, uint256 lockupAllowance, uint256 rateUsage, uint256 lockupUsage, uint256 maxLockupPeriod)",
 ]);
 const OPERATOR_APPROVALS = toFunctionSelector(operatorApprovalsAbi[0]);
-// The service page reads an approved service's onchain identity; empty strings leave its local label.
-const SERVICE_METADATA = ["name()", "description()", "homepage()"].map((signature) => toFunctionSelector(signature));
 // The card purchase checks the recipient's USDC on Base before and after buying.
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const BASE_RPC_HOST = "base-rpc.publicnode.com";
+// IFilecoinServiceMetadata, which the explorer reads from operators and validators.
+const serviceMetadataAbi = parseAbi([
+  "function name() view returns (string)",
+  "function description() view returns (string)",
+  "function homepage() view returns (string)",
+]);
+const SERVICE_METADATA = serviceMetadataAbi.map((fn) => toFunctionSelector(fn));
+type ServiceMetadata = Partial<Record<(typeof serviceMetadataAbi)[number]["name"], string>>;
+// A reverted call inside aggregate3, as from a contract without the interface.
+const REVERTED = null;
 
 /**
  * Answers the console's SessionKeyRegistry reads and transaction receipts from what the fake Privy wallet
  * sent (window.__fakePrivyTransactions), so a login approved in the fake dialog shows up "on chain", and reports
  * zero FIL, USDFC, Base USDC, and Filecoin Pay funds for every wallet; a spec can set the wallet's USDFC in
  * window.__fakeUsdfcBalance (base units, as a decimal string). Filecoin Pay reports no operator approved
- * unless a spec lists the operator in window.__fakeApprovedOperators. Any other RPC call falls through to the route
- * that blocks it (fixtures.ts).
+ * unless a spec lists the operator in window.__fakeApprovedOperators. Batched IFilecoinServiceMetadata reads revert,
+ * so a service renders as its address, unless a spec sets that field in window.__fakeServiceMetadata (keyed by
+ * lowercase address). Any other RPC call falls through to the route that blocks it (fixtures.ts).
  */
 export async function installFakeChain(page: Page): Promise<void> {
   // Imported dynamically: the SDK is ESM-only and Playwright loads specs as CommonJS.
@@ -70,6 +98,16 @@ export async function installFakeChain(page: Page): Promise<void> {
       ),
     );
 
+  // Read on every batch, so a reload mid-read must not leave the request unanswered: a page that is gone has none.
+  const serviceMetadata = () =>
+    page
+      .evaluate(
+        () =>
+          (window as unknown as { __fakeServiceMetadata?: Record<string, ServiceMetadata> }).__fakeServiceMetadata ??
+          {},
+      )
+      .catch((): Record<string, ServiceMetadata> => ({}));
+
   const readApproval = (approved: string[], target: string, data: Hex): Hex | undefined => {
     if (!paymentsContracts.includes(target.toLowerCase()) || !data.startsWith(OPERATOR_APPROVALS)) return undefined;
     const { args } = decodeFunctionData({ abi: operatorApprovalsAbi, data });
@@ -81,11 +119,6 @@ export async function installFakeChain(page: Page): Promise<void> {
       result: [isApproved, limit, limit, 0n, 0n, isApproved ? 86400n : 0n],
     });
   };
-
-  const readServiceMetadata = (approved: string[], target: string, data: Hex): Hex | undefined =>
-    approved.includes(target.toLowerCase()) && SERVICE_METADATA.some((selector) => data.startsWith(selector))
-      ? encodeAbiParameters([{ type: "string" }], [""])
-      : undefined;
 
   const sent = () =>
     page.evaluate(
@@ -140,6 +173,7 @@ export async function installFakeChain(page: Page): Promise<void> {
   };
 
   const answer = async (call: RpcCall): Promise<unknown> => {
+    if (call.method === "eth_blockNumber") return "0x1";
     if (call.method === "eth_getTransactionReceipt") {
       const tx = (await sent()).find((t) => t.hash === call.params[0]);
       if (!tx) return undefined;
@@ -170,55 +204,39 @@ export async function installFakeChain(page: Page): Promise<void> {
     const txs = await sent();
     const approved = await approvedOperators();
     const usdfc = await usdfcBalance();
+    const metadata = await serviceMetadata();
     const results = (args[0] as readonly { target: Hex; callData: Hex }[]).map((c) => {
       if (registryAt(c.target)) return readRegistry(txs, c.callData);
       if (c.callData.startsWith(OPERATOR_APPROVALS)) return readApproval(approved, c.target, c.callData);
-      return readBalance(c.target, c.callData, usdfc) ?? readServiceMetadata(approved, c.target, c.callData);
+      const balance = readBalance(c.target, c.callData, usdfc);
+      // Token metadata (USDFC's name()) is answered above; any other service has only what a spec gave it.
+      const field = serviceMetadataAbi[SERVICE_METADATA.indexOf(c.callData.slice(0, 10) as Hex)]?.name;
+      if (balance !== undefined || !field) return balance;
+      const value = metadata[c.target.toLowerCase()]?.[field];
+      if (value === undefined) return REVERTED;
+      return encodeFunctionResult({ abi: serviceMetadataAbi, functionName: field, result: value });
     });
-    if (!results.every((r): r is Hex => r !== undefined)) return undefined;
+    if (!results.every((r) => r !== undefined)) return undefined;
     return encodeFunctionResult({
       abi: multicall3Abi,
       functionName: "aggregate3",
-      result: results.map((returnData) => ({ success: true, returnData })),
+      result: results.map((returnData) =>
+        returnData === REVERTED ? { success: false, returnData: "0x" as const } : { success: true, returnData },
+      ),
     });
   };
 
   await page.route(
     (url) => url.hostname.endsWith("glif.io") || url.hostname === BASE_RPC_HOST,
-    async (route: Route) => {
-      const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
-      if (!body) return route.fallback();
-      const calls = Array.isArray(body) ? body : [body];
-      const results = await Promise.all(calls.map(answer));
-      if (results.some((r) => r === undefined)) return route.fallback();
-      const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
-      return route.fulfill({ json: Array.isArray(body) ? replies : replies[0] });
-    },
-  );
-}
-
-/**
- * Answers the service page's RPC reads: it watches the block number, and its header reads the service's on-chain
- * name, which `operator` (lowercase) does not have.
- */
-export async function answerServicePageRpc(page: Page, operator: string): Promise<void> {
-  await page.route(
-    (url) => url.hostname.endsWith("glif.io"),
-    (route) => {
-      const call = route.request().postDataJSON();
-      if (call?.method === "eth_blockNumber")
-        return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result: "0x1" } });
-      const { to, data } = call?.params?.[0] ?? {};
-      if (call?.method !== "eth_call" || to?.toLowerCase() !== MULTICALL3) return route.fallback();
-      const { args } = decodeFunctionData({ abi: multicall3Abi, data });
-      const calls = args[0] as readonly { target: string }[];
-      if (!calls.every((c) => c.target.toLowerCase() === operator)) return route.fallback();
-      const result = encodeFunctionResult({
-        abi: multicall3Abi,
-        functionName: "aggregate3",
-        result: calls.map(() => ({ success: false, returnData: "0x" }) as const),
-      });
-      return route.fulfill({ json: { jsonrpc: "2.0", id: call.id, result } });
-    },
+    (route: Route) =>
+      answerFromPage(route, async () => {
+        const body = JSON.parse(route.request().postData() ?? "null") as RpcCall | RpcCall[] | null;
+        if (!body) return undefined;
+        const calls = Array.isArray(body) ? body : [body];
+        const results = await Promise.all(calls.map(answer));
+        if (results.some((r) => r === undefined)) return undefined;
+        const replies = calls.map((c, i) => ({ jsonrpc: "2.0", id: c.id, result: results[i] }));
+        return { json: Array.isArray(body) ? replies : replies[0] };
+      }),
   );
 }

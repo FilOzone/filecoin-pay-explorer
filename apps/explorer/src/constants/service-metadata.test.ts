@@ -28,6 +28,26 @@ describe("getServiceProfile", () => {
     expect(profile.name).toBe("Filecoin Warm Storage Service");
   });
 
+  it("shows none of an impersonating contract's text", () => {
+    expect(
+      getServiceProfile(UNKNOWN, {
+        name: "Filecoin Warm Storage Service",
+        description: "Official.",
+        homepage: "https://evil.example",
+      }),
+    ).toEqual({
+      name: "0x9999...9999",
+      description: undefined,
+      homepageUrl: undefined,
+      pricing: undefined,
+    });
+  });
+
+  it("marks only a self-reported name as onchain", () => {
+    expect(getServiceProfile(UNKNOWN, { name: "Somebody's Storage" }).nameSource).toBe("onchain");
+    expect(getServiceProfile(WARM_STORAGE, { name: "x" }).nameSource).toBe("known");
+  });
+
   it("prefers contract description and homepage over the local copy", () => {
     const profile = getServiceProfile(WARM_STORAGE, {
       description: "Published onchain.",
