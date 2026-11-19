@@ -87,14 +87,14 @@ vi.mock("@/utils/groupKeyGrant", async (importOriginal) => ({
   issueGroupKeyGrant: issue,
 }));
 const GRANT = "fgr1_o2EBYmtzWBAC-_9";
-const GROUP_KEY_WARNING = groupKeyWarning("keyspace");
+const GROUP_KEY_WARNING = groupKeyWarning("groupKey");
 
 const onIssued = vi.fn();
 
 async function renderStep({
   expires = EXPIRES as bigint | null,
   pubkeysig = PUBKEYSIG,
-  node = "keyspace" as GroupGrantNode,
+  node = "groupKey" as GroupGrantNode,
   maxDepth = 7,
 } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -128,7 +128,7 @@ describe("GroupKeyStep", () => {
     state.walletReady = true;
     onIssued.mockReset();
     issue.mockReset().mockImplementation(async (wallet: { signTypedData: (args: object) => Promise<string> }) => {
-      for (const primaryType of ["KeyspaceKey", "KeyspaceKey", "ReadGrant"]) {
+      for (const primaryType of ["GroupKey", "GroupKey", "ReadGrant"]) {
         await wallet.signTypedData({ primaryType, domain: {}, types: {}, message: {} });
       }
       return GRANT;
@@ -168,7 +168,7 @@ describe("GroupKeyStep", () => {
     {
       dataSetId: 3n,
       live: true,
-      metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
+      metadata: { "foc/gkid": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v2.aa", "foc/enc": "2" },
     },
   ];
   it.each([
@@ -259,13 +259,26 @@ describe("GroupKeyStep", () => {
       {
         dataSetId: 3n,
         live: false,
-        metadata: { "foc/ks": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v1.aa", "foc/enc": "2" },
+        metadata: { "foc/gkid": "0x02ca08cf7e0222c8432adc159232b7eb", "foc/kc": "v2.aa", "foc/enc": "2" },
       },
     ];
     await renderStep();
 
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("skips a data set whose foc/gkid is malformed instead of failing the scan", async () => {
+    const tagged = (groupKeyId: string) => ({ "foc/gkid": groupKeyId, "foc/kc": "v2.aa", "foc/enc": "1" });
+    state.dataSets = [
+      { dataSetId: 1n, live: true, metadata: tagged("0xABC") },
+      { dataSetId: 2n, live: true, metadata: tagged(`0x${"22".repeat(16)}`) },
+    ];
+    await renderStep();
+
+    await waitFor(() => expect(signButton()?.disabled).toBe(false));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(`0x${"22".repeat(16)}`)).toBeTruthy();
   });
 
   it("reads only each data set's liveness and metadata, one multicall a page, never its provider", async () => {
@@ -275,7 +288,7 @@ describe("GroupKeyStep", () => {
     expect(state.multicalls).toEqual([]);
     cleanup();
 
-    const tagged = (groupKeyId: string) => ({ "foc/ks": groupKeyId, "foc/kc": "v1.aa", "foc/enc": "1" });
+    const tagged = (groupKeyId: string) => ({ "foc/gkid": groupKeyId, "foc/kc": "v2.aa", "foc/enc": "1" });
     state.dataSets = [
       { dataSetId: 4n, live: true, metadata: tagged(`0x${"44".repeat(16)}`) },
       { dataSetId: 7n, live: true, metadata: {} },
@@ -307,7 +320,11 @@ describe("GroupKeyStep", () => {
     cleanup();
 
     state.dataSets = [
-      { dataSetId: 5n, live: true, metadata: { "foc/ks": `0x${"11".repeat(16)}`, "foc/kc": "v1.aa", "foc/enc": "1" } },
+      {
+        dataSetId: 5n,
+        live: true,
+        metadata: { "foc/gkid": `0x${"11".repeat(16)}`, "foc/kc": "v2.aa", "foc/enc": "1" },
+      },
     ];
     await renderStep();
     await waitFor(() =>
@@ -354,11 +371,11 @@ describe("GroupKeyStep", () => {
       chainId: 314159,
       bearer: SESSION.address,
       pubkey: PUBKEY,
-      node: "keyspace",
+      node: "groupKey",
       maxDepth: 7,
       expires: EXPIRES,
     });
-    expect(state.events).toEqual(["wait", "sign KeyspaceKey", "wait", "sign KeyspaceKey", "wait", "sign ReadGrant"]);
+    expect(state.events).toEqual(["wait", "sign GroupKey", "wait", "sign GroupKey", "wait", "sign ReadGrant"]);
     expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
     const output = screen.getByLabelText("Encryption Grant for this session key") as HTMLTextAreaElement;
     expect(output.readOnly).toBe(true);
@@ -373,7 +390,7 @@ describe("GroupKeyStep", () => {
 
   it("says what is granted: the whole group key, or one group", () => {
     expect(GROUP_KEY_WARNING).toContain("under this group key");
-    const group = groupKeyWarning("scope:photos/2026");
+    const group = groupKeyWarning("group:photos/2026");
     expect(group).toContain('every piece uploaded under the group "photos/2026" and the groups beneath it');
     expect(group).toContain("everything under this group,");
   });
@@ -381,21 +398,21 @@ describe("GroupKeyStep", () => {
   const accessRow = () => screen.getByText("Access").closest("dt")?.nextElementSibling?.textContent ?? "";
 
   it("names a requested group in plain words, with its warning", async () => {
-    await renderStep({ node: "scope:photos/2026", maxDepth: 2 });
+    await renderStep({ node: "group:photos/2026", maxDepth: 2 });
 
     expect(accessRow()).toContain("This key can read and write photos/2026 only, with the groups beneath it.");
-    expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
+    expect(screen.getByText(groupKeyWarning("group:photos/2026"))).toBeTruthy();
     expect(screen.queryByText(GROUP_KEY_WARNING)).toBeNull();
   });
 
   it("signs a group request as the link asked, node and depth, when the owner does not narrow it", async () => {
-    await renderStep({ node: "scope:photos/2026", maxDepth: 2 });
+    await renderStep({ node: "group:photos/2026", maxDepth: 2 });
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
 
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
 
     await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
-    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026", maxDepth: 2, bearer: SESSION.address });
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "group:photos/2026", maxDepth: 2, bearer: SESSION.address });
     expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(GRANT);
   });
 
@@ -426,16 +443,16 @@ describe("GroupKeyStep", () => {
     await renderStep();
     expect(accessRow()).toContain("Whole group key.");
     expect(treeRows()).toEqual(["Whole group key"]);
-    expect(options()).toEqual(["keyspace"]);
+    expect(options()).toEqual(["groupKey"]);
     expect(option("Whole group key").checked).toBe(true);
     expect(screen.getByRole("button", { name: "Add a group under the whole group key" })).toBeTruthy();
   });
 
   it("splits a group request into one row per name, with only the requested group selectable", async () => {
-    await renderStep({ node: "scope:photos/2026" });
+    await renderStep({ node: "group:photos/2026" });
     expect(treeRows()).toEqual(["photos", "  2026"]);
     // The group above the request is context: no radio and no "+", so the owner can never widen the Grant.
-    expect(options()).toEqual(["scope:photos/2026"]);
+    expect(options()).toEqual(["group:photos/2026"]);
     expect(option("photos/2026").checked).toBe(true);
     expect(screen.queryByRole("button", { name: "Add a group under photos" })).toBeNull();
     expect(screen.getByRole("button", { name: "Add a group under photos/2026" })).toBeTruthy();
@@ -453,13 +470,13 @@ describe("GroupKeyStep", () => {
   });
 
   it("adds a typed group name in its normalized form", async () => {
-    await renderStep({ node: "scope:photos" });
+    await renderStep({ node: "group:photos" });
     addGroup("photos", "cafe\u0301");
-    expect(options()).toEqual(["scope:photos", "scope:photos/caf\u00e9"]);
+    expect(options()).toEqual(["group:photos", "group:photos/caf\u00e9"]);
   });
 
   it("nests groups added under the requested group, and signs for the one selected", async () => {
-    await renderStep({ node: "scope:photos/2026" });
+    await renderStep({ node: "group:photos/2026" });
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     addGroup("photos/2026", "may");
     addGroup("photos/2026/may", "raw");
@@ -471,31 +488,31 @@ describe("GroupKeyStep", () => {
     expect(accessRow()).toContain("This key can read and write photos/2026/may/raw only");
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
-    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026/may/raw" });
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "group:photos/2026/may/raw" });
   });
 
   it("signs for a group the owner adds beneath the request and selects", async () => {
-    await renderStep({ node: "scope:photos", maxDepth: 3 });
+    await renderStep({ node: "group:photos", maxDepth: 3 });
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
 
     addGroup("photos", "2026");
-    expect(options()).toEqual(["scope:photos", "scope:photos/2026"]);
+    expect(options()).toEqual(["group:photos", "group:photos/2026"]);
     // The root stays selectable; selecting the new group is what narrows the Grant.
     fireEvent.click(option("photos"));
     expect(accessRow()).toContain("This key can read and write photos only");
     fireEvent.click(option("photos/2026"));
     expect(option("photos/2026").checked).toBe(true);
     expect(accessRow()).toContain("This key can read and write photos/2026 only");
-    expect(screen.getByText(groupKeyWarning("scope:photos/2026"))).toBeTruthy();
+    expect(screen.getByText(groupKeyWarning("group:photos/2026"))).toBeTruthy();
 
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
-    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:photos/2026", maxDepth: 3 });
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "group:photos/2026", maxDepth: 3 });
     expect((screen.getByLabelText("Encryption Grant for group photos/2026") as HTMLTextAreaElement).value).toBe(GRANT);
   });
 
   it("refuses an invalid group name with an error, and adds nothing", async () => {
-    await renderStep({ node: "scope:photos" });
+    await renderStep({ node: "group:photos" });
     for (const name of ["", " 2026", "2026 ", "a/b"]) {
       const input = typeGroup("photos", name);
       fireEvent.keyDown(input, { key: "Enter" });
@@ -503,7 +520,7 @@ describe("GroupKeyStep", () => {
       expect(input.getAttribute("aria-invalid")).toBe("true");
       fireEvent.keyDown(input, { key: "Escape" });
     }
-    expect(options()).toEqual(["scope:photos"]);
+    expect(options()).toEqual(["group:photos"]);
     expect(screen.queryByLabelText("New group under photos")).toBeNull();
   });
 
@@ -511,7 +528,7 @@ describe("GroupKeyStep", () => {
     await renderStep();
     fireEvent.blur(typeGroup("the whole group key", "docs"));
     expect(screen.queryByLabelText("New group under the whole group key")).toBeNull();
-    expect(options()).toEqual(["keyspace"]);
+    expect(options()).toEqual(["groupKey"]);
   });
 
   it("adds groups under added groups, nested, and under the whole group key", async () => {
@@ -520,10 +537,10 @@ describe("GroupKeyStep", () => {
     addGroup("docs", "2026");
     addGroup("docs/2026", "may");
     addGroup("the whole group key", "photos");
-    expect(options()).toEqual(["keyspace", "scope:docs", "scope:docs/2026", "scope:docs/2026/may", "scope:photos"]);
+    expect(options()).toEqual(["groupKey", "group:docs", "group:docs/2026", "group:docs/2026/may", "group:photos"]);
     // Each level sits one list deeper than its parent.
     expect(option("docs/2026/may").closest("ul")?.parentElement?.closest("li")?.querySelector("input")?.value).toBe(
-      "scope:docs/2026",
+      "group:docs/2026",
     );
     expect(option("photos").checked).toBe(true);
 
@@ -531,12 +548,12 @@ describe("GroupKeyStep", () => {
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() => expect(onIssued).toHaveBeenCalledOnce());
-    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "scope:docs/2026/may" });
+    expect(issue.mock.calls[0]?.[1]).toMatchObject({ node: "group:docs/2026/may" });
   });
 
   it("issues several Grants to the same session key, resetting the tree for each", async () => {
     issue.mockResolvedValueOnce(`${GRANT}a`).mockResolvedValueOnce(`${GRANT}b`);
-    await renderStep({ node: "scope:photos" });
+    await renderStep({ node: "group:photos" });
     await waitFor(() => expect(signButton()?.disabled).toBe(false));
     addGroup("photos", "2025");
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
@@ -544,13 +561,13 @@ describe("GroupKeyStep", () => {
     expect(options()).toEqual([]);
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue another Grant" })));
-    expect(options()).toEqual(["scope:photos"]);
+    expect(options()).toEqual(["group:photos"]);
     expect(option("photos").checked).toBe(true);
     addGroup("photos", "2026");
     await act(async () => fireEvent.click(signButton() as HTMLButtonElement));
     await waitFor(() => expect(onIssued).toHaveBeenCalledTimes(2));
 
-    expect(issue.mock.calls.map(([, input]) => input.node)).toEqual(["scope:photos/2025", "scope:photos/2026"]);
+    expect(issue.mock.calls.map(([, input]) => input.node)).toEqual(["group:photos/2025", "group:photos/2026"]);
     expect(issue.mock.calls.map(([, input]) => input.bearer)).toEqual([SESSION.address, SESSION.address]);
     expect((screen.getByLabelText("Encryption Grant for group photos/2025") as HTMLTextAreaElement).value).toBe(
       `${GRANT}a`,

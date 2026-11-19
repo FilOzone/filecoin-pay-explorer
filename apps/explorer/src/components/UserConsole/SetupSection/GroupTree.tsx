@@ -8,7 +8,7 @@ import { type GroupGrantNode, groupOf, groupPath } from "@/utils/groupKeyGrant";
 const parentOf = (node: GroupGrantNode): GroupGrantNode => {
   const group = groupOf(node) ?? "";
   const cut = group.lastIndexOf("/");
-  return cut === -1 ? "keyspace" : `scope:${group.slice(0, cut)}`;
+  return cut === -1 ? "groupKey" : `group:${group.slice(0, cut)}`;
 };
 
 /** A tree row's elbow: a short rule from its parent's guide line into the row. */
@@ -23,7 +23,7 @@ const nodeName = (node: GroupGrantNode) => groupOf(node) ?? "the whole group key
 /** The groups above a requested group, outermost first: shown for context, never selectable. */
 const ancestorsOf = (node: GroupGrantNode): GroupGrantNode[] => {
   const names = groupOf(node)?.split("/") ?? [];
-  return names.slice(0, -1).map((_, i) => `scope:${names.slice(0, i + 1).join("/")}` as const);
+  return names.slice(0, -1).map((_, i) => `group:${names.slice(0, i + 1).join("/")}` as const);
 };
 
 /**
@@ -64,7 +64,7 @@ export const GroupTree = ({
       setInvalid(true);
       return;
     }
-    onAdd(`scope:${path}`);
+    onAdd(`group:${path}`);
     close();
   };
   // An ancestor's only child is the next group down toward the request; anything else, the groups added beneath it.
@@ -78,7 +78,7 @@ export const GroupTree = ({
     const name = nodeName(node);
     const kids = childrenOf(node);
     const selectable = !ancestors.includes(node);
-    const labelClass = node === "keyspace" ? "font-medium" : "font-mono text-xs";
+    const labelClass = node === "groupKey" ? "font-medium" : "font-mono text-xs";
     return (
       <li key={node} className={cn(nested && ELBOW)}>
         <div
@@ -93,7 +93,7 @@ export const GroupTree = ({
                 type='radio'
                 name='group-key-node'
                 value={node}
-                aria-label={node === "keyspace" ? "Whole group key" : name}
+                aria-label={node === "groupKey" ? "Whole group key" : name}
                 checked={node === selected}
                 onChange={() => onSelect(node)}
               />

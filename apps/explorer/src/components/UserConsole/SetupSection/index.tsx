@@ -41,6 +41,8 @@ const LINK_ERROR_COPY: Record<SetupLinkError, string> = {
   "bad-pubkeysig": "The signature binding the encryption public key to the session key is missing or invalid.",
   "pubkey-without-add-pieces":
     "The encryption request is for a session key that cannot add pieces. Encryption needs the addPieces scope.",
+  "old-cli":
+    "This request comes from an older filecoin-pin that cannot open the Grant this page issues. Update filecoin-pin first.",
   "bad-node": "The encryption request does not name a supported group: it must be the whole group key or one group.",
   "bad-group":
     'The requested encryption group is not a valid group name: use names separated by "/", none empty and none starting or ending with a space.',

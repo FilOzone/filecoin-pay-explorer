@@ -3,7 +3,6 @@ import { Button } from "@filecoin-foundation/ui-filecoin/Button";
 import { ExternalTextLink } from "@filecoin-foundation/ui-filecoin/TextLink/ExternalTextLink";
 import { Switch } from "@filecoin-pay/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@filecoin-pay/ui/components/tooltip";
-import { KEYSPACE_ID_KEY } from "@filoz/keysmith";
 import { paginate } from "@filoz/synapse-core";
 import { dataSetLiveCall } from "@filoz/synapse-core/pdp-verifier";
 import {
@@ -23,6 +22,7 @@ import type { Network } from "@/types";
 import {
   type ChosenGroupKey,
   chooseGroupKey,
+  GROUP_KEY_ID_KEY,
   type GroupGrantNode,
   type GroupKeyDataSet,
   groupOf,
@@ -85,7 +85,7 @@ function useGroupKeyChoice(network: Network, owner: Hex, enabled: boolean) {
       };
       const tagged: GroupKeyDataSet[] = [];
       for await (const dataSet of paginate(readPage)) {
-        if (dataSet.live && typeof dataSet.metadata[KEYSPACE_ID_KEY] === "string") {
+        if (dataSet.live && typeof dataSet.metadata[GROUP_KEY_ID_KEY] === "string") {
           tagged.push({ dataSetId: dataSet.dataSetId, metadata: dataSet.metadata });
         }
       }
@@ -188,7 +188,7 @@ const GroupKeyNotice = ({ phase, onRetryRead }: { phase: GroupKeyPhase; onRetryR
 const GrantOutput = ({ id, node, grant }: { id: string; node: GroupGrantNode; grant: string }) => (
   <div className='mt-4 flex flex-col gap-2'>
     <label htmlFor={id} className='text-sm font-medium'>
-      {node === "keyspace" ? "Encryption Grant for this session key" : `Encryption Grant for group ${groupOf(node)}`}
+      {node === "groupKey" ? "Encryption Grant for this session key" : `Encryption Grant for group ${groupOf(node)}`}
     </label>
     <div className='flex items-start gap-2'>
       <textarea

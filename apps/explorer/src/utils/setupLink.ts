@@ -3,11 +3,13 @@
  * wallet. Every value is untrusted URL input and parsing never throws. The
  * parameter names are a contract shared with the CLIs:
  *
- * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=][&pubkey=<0x04…>&pubkeysig=<0x…>&node=<keyspace|scope:<path>>[&maxdepth=<0-7>]]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
+ * `/console/setup?network=<mainnet|calibration>[&authorize=<address>&scopes=<ids>[&name=][&days=][&pubkey=<0x04…>&pubkeysig=<0x…>&node=<groupKey|group:<path>>[&maxdepth=<0-7>]]][&deposit=<amount>][&balance=<amount>][&operator=fwss][&approval=unlimited]`
  *
  * A `pubkey` asks for a group key Grant, and needs `addPieces` in `scopes`: a
- * key that cannot add pieces has nothing to encrypt for. `node=keyspace` asks
- * for the whole group key, `node=scope:<path>` for one group (URL-encoded).
+ * key that cannot add pieces has nothing to encrypt for. `node=groupKey` asks
+ * for the whole group key, `node=group:<path>` for one group (URL-encoded).
+ * `node=keyspace` and `node=scope:<path>` come from filecoin-pin 2.3.0/2.4.0,
+ * which cannot open the Grant this page issues: refused as `old-cli`.
  * `maxdepth` caps the Grant's onward delegation; without it, the chain limit.
  *
  * `signer` is read as `authorize`, as the `fil` CLI names it. Older links to
@@ -41,6 +43,7 @@ export type SetupLinkError =
   | "bad-pubkey"
   | "bad-pubkeysig"
   | "bad-node"
+  | "old-cli"
   | "bad-group"
   | "bad-maxdepth";
 
@@ -185,8 +188,9 @@ export function parseSetupLink(params: URLSearchParams): SetupRequest | { error:
     if (!/^0x[0-9a-f]{130}$/.test(pubkeysig)) return { error: "bad-pubkeysig" };
     const nodeParam = params.get("node");
     let node: GroupGrantNode;
-    const groupPrefix = "scope:";
-    if (nodeParam === "keyspace") node = "keyspace";
+    const groupPrefix = "group:";
+    if (nodeParam === "keyspace" || nodeParam?.startsWith("scope:")) return { error: "old-cli" };
+    if (nodeParam === "groupKey") node = "groupKey";
     else if (nodeParam?.startsWith(groupPrefix)) {
       // Keysmith's own rules, so a group the CLI cannot write under is never granted.
       const path = groupPath(nodeParam.slice(groupPrefix.length));
