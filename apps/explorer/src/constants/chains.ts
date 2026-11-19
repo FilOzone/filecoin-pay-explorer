@@ -1,3 +1,4 @@
+import { toChain, validateDevnetInfo } from "@filoz/synapse-core/devnet";
 import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
 import type { Address } from "viem";
 import { arbitrum, avalanche, base, bsc, mainnet as ethereum, optimism, polygon } from "viem/chains";
@@ -67,7 +68,7 @@ export const mainnet = {
   },
 } satisfies Chain;
 
-export const calibration: Chain = {
+const calibrationNet: Chain = {
   ...synapseCalibration,
   label: "Calibration",
   slug: "calibration",
@@ -112,6 +113,30 @@ export const calibration: Chain = {
     },
   ],
 };
+
+// Development against a local foc-devnet only; never deploy with it set. NEXT_PUBLIC_DEVNET_INFO (the devnet's
+// devnet-info.json) stands the devnet in for calibration, so every calibration page runs on it, and setup links
+// name it network=devnet (see parseNetworkParam). RPC goes through the /api/devnet-rpc rewrite in next.config.ts:
+// Lotus sends no CORS headers.
+// ponytail: the devnet takes calibration's place instead of being a network of its own; give it one if the console
+// ever needs both at once.
+function devnetAsCalibration(json: string): Chain {
+  const devnet = toChain(validateDevnetInfo(JSON.parse(json)));
+  const rpc = `${process.env.NEXT_PUBLIC_DEVNET_ORIGIN ?? "http://localhost:3000"}/api/devnet-rpc`;
+  return {
+    ...calibrationNet,
+    ...devnet,
+    label: "Devnet",
+    slug: "calibration",
+    rpcUrls: { default: { http: [rpc] } },
+    contracts: { ...calibrationNet.contracts, ...devnet.contracts, payments: devnet.contracts.filecoinPay },
+    faucets: undefined,
+  } as unknown as Chain; // calibration-only fields (such as sushi) come from calibrationNet
+}
+
+export const calibration: Chain = process.env.NEXT_PUBLIC_DEVNET_INFO
+  ? devnetAsCalibration(process.env.NEXT_PUBLIC_DEVNET_INFO)
+  : calibrationNet;
 
 export const SQUID_SOURCE_CHAINS = [
   mainnet,

@@ -54,6 +54,16 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.0.*"],
   headers: async () => [{ source: "/(.*)", headers: securityHeaders }],
+  // Local foc-devnet only (see devnetAsCalibration in src/constants/chains.ts): Lotus sends no CORS headers.
+  rewrites: async () =>
+    process.env.NEXT_PUBLIC_DEVNET_INFO
+      ? [
+          {
+            source: "/api/devnet-rpc",
+            destination: JSON.parse(process.env.NEXT_PUBLIC_DEVNET_INFO).info.lotus.host_rpc_url,
+          },
+        ]
+      : [],
   images: {
     qualities: [75, 100],
   },

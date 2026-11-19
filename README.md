@@ -143,6 +143,16 @@ pnpm dev --filter @filecoin-pay/explorer
 
 Open [http://localhost:3000](http://localhost:3000). A local subgraph is not required when the environment variables point to hosted Goldsky endpoints.
 
+### Run the console against a local foc-devnet
+
+For development with [foc-devnet](https://github.com/FilOzone/foc-devnet) only; never deploy with these set. `NEXT_PUBLIC_DEVNET_INFO` (the devnet's `devnet-info.json`) makes the devnet take calibration's place: calibration pages run on it, and setup links name it `network=devnet`, which is what `filecoin-pin login --network devnet` sends when `CONSOLE_URL` points here. Lotus sends no CORS headers, so RPC goes through the `/api/devnet-rpc` rewrite; `NEXT_PUBLIC_DEVNET_ORIGIN` is the console's own origin for it. foc-devnet uses port 3000, so run the console on another one:
+
+```bash
+export NEXT_PUBLIC_DEVNET_INFO="$(jq -c . ~/.foc-devnet/state/latest/devnet-info.json)"
+export NEXT_PUBLIC_DEVNET_ORIGIN=http://localhost:3100
+pnpm --filter @filecoin-pay/explorer exec next dev -p 3100
+```
+
 ### Run notifications locally
 
 For local notification development, run the API Worker with local D1 and KV storage rather than pointing localhost at a deployed notification API:

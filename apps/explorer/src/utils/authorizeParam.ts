@@ -87,6 +87,13 @@ export function presetScopeStates(
 export function parseNetworkParam(value: string | null | undefined): "mainnet" | "calibration" | null {
   if (typeof value !== "string") return null;
   const network = value.trim().toLowerCase();
+  // A console run against a local foc-devnet (NEXT_PUBLIC_DEVNET_INFO, see constants/chains.ts) serves the devnet in
+  // calibration's place: it answers to network=devnet, as filecoin-pin's login sends it, and not to calibration.
+  if (process.env.NEXT_PUBLIC_DEVNET_INFO) {
+    if (network === "devnet") return "calibration";
+    if (network === "mainnet") return "mainnet";
+    return null;
+  }
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
