@@ -63,6 +63,7 @@ import {
   FIL_GAS_TOP_UP_AMOUNT,
   getDepositExchangeRate,
   getDepositRequiredNativeBalance,
+  getSquidIntegratorId,
   isExecutableQuote,
   isNativeToken,
   listTransactionLabels,
@@ -256,8 +257,7 @@ export function DirectSquidDepositDialog({
   const squid = useMemo<SquidClient>(
     () => ({
       fetch: squidFetch,
-      integratorId:
-        process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862",
+      integratorId: getSquidIntegratorId(),
     }),
     [],
   );

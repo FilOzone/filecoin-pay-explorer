@@ -1,7 +1,9 @@
 "use client";
 
 import { useWallets } from "@privy-io/react-auth";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import type { Address } from "viem";
 import { useConnection } from "wagmi";
 import { useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
@@ -16,19 +18,23 @@ import {
 } from "./FundsSection/components/DirectSquidDepositDialog";
 import { CARD_CHAIN_ID, CARD_USDC, CARD_USDC_DECIMALS, useCardPurchase } from "./FundsSection/hooks/useCardPurchase";
 
+const GuestCheckoutDialog = dynamic(() => import("./FundsSection/components/GuestCheckoutDialog"));
+
 export function FundingHost() {
   const { address, chainId } = useConnection();
   if (!address) return null;
   return <FundingDialogs address={address} chainId={chainId} key={address} />;
 }
 
-function FundingDialogs({ address, chainId }: { address: string; chainId: number | undefined }) {
+function FundingDialogs({ address, chainId }: { address: Address; chainId: number | undefined }) {
   const launch = useFundingLaunch();
   const { wallets } = useWallets();
   // A new Filecoin Pay wallet holds nothing to swap, so card leads; other wallets swap what they hold.
   const isCardFirst = wallets.some(
     (wallet) => wallet.address.toLowerCase() === address.toLowerCase() && isPrivyEmbeddedWallet(wallet),
   );
+  const guestAvailable = isCardFirst && process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX === "true";
+  const [isGuestOpen, setGuestOpen] = useState(false);
   const [isDepositOpen, setDepositOpen] = useState(false);
   const [cardSource, setCardSource] = useState<SquidDepositInitialSource>();
   const { network, isFilecoinChain: isWalletOnFilecoin, isSquidSourceChain } = useConsoleNetwork();
@@ -60,6 +66,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   useEffect(() => {
     previousChainId.current = chainId;
     setDepositOpen(false);
+    setGuestOpen(false);
     launch.closeAddFunds();
   }, [chainId, launch.closeAddFunds]);
 
@@ -87,6 +94,13 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
   if (!isMainnet && !isSquidSourceChain) return depositDialog;
 
   const chooseMethod = (method: AddFundsMethod) => {
+    if (method === "guest") {
+      if (guestAvailable && !card.isBusy) {
+        launch.closeAddFunds();
+        setGuestOpen(true);
+      }
+      return;
+    }
     if (method === "card") {
       // The picker stays open: it shows the purchase status and Start over, and it
       // refuses to close while Privy's window is open.
@@ -103,6 +117,7 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
       {isMainnet ? (
         <AddFundsDialog
           cardFirst={isCardFirst}
+          guestAvailable={guestAvailable}
           cardLabel={card.label}
           cardStatus={card.statusMessage}
           isBusy={card.isBusy}
@@ -112,6 +127,16 @@ function FundingDialogs({ address, chainId }: { address: string; chainId: number
           onSelect={chooseMethod}
           open={!chainChanged && launch.isAddFundsOpen}
           squidAvailable
+        />
+      ) : null}
+      {isMainnet && guestAvailable && isGuestOpen && !chainChanged ? (
+        <GuestCheckoutDialog
+          address={address}
+          onClose={() => setGuestOpen(false)}
+          onOtherMethods={() => {
+            setGuestOpen(false);
+            launch.openAddFunds(launch.depositToken);
+          }}
         />
       ) : null}
       {depositDialog}

@@ -26,6 +26,9 @@ importers:
 
   apps/explorer:
     dependencies:
+      '@coinbase/cdp-sdk':
+        specifier: 1.56.0
+        version: 1.56.0(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)
       '@filecoin-foundation/ui-filecoin':
         specifier: ^0.9.0
         version: 0.9.0(6jft3g7hiyzeyff3bnte5pgh6i)
@@ -71,6 +74,9 @@ importers:
       graphql-request:
         specifier: ^7.4.0
         version: 7.4.0(graphql@16.14.2)
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       lucide-react:
         specifier: ^1.46.0
         version: 1.46.0(react@19.3.0)

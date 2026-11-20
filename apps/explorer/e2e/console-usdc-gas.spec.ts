@@ -66,9 +66,7 @@ async function stubAccountBackgroundRequests(page: Page): Promise<void> {
 const EMAIL = "usdc-gas@fake-privy.test";
 
 async function openSquidDialog(page: Page) {
-  await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
-  await page.getByRole("menuitem", { name: "Add funds" }).click();
-  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  await page.getByRole("button", { name: "Swap from another network" }).click();
   return page.getByRole("dialog", { name: "Pay with another token" });
 }
 
@@ -84,7 +82,7 @@ async function reviewDeposit(
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await loginWithTestAccount(page, { email: EMAIL });
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
   const payer = await page.evaluate(
     () => (window as unknown as { __fakePrivyEmbeddedAccount: Hex }).__fakePrivyEmbeddedAccount,
   );
@@ -343,7 +341,7 @@ test("an operation not yet included blocks another spend until Check again finds
   // The marker outlives the page: a reload and a new login find the operation again.
   await page.reload();
   await loginWithTestAccount(page, { email: EMAIL });
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
   const reopened = await openSquidDialog(page);
   await expect(reopened.getByText("waiting to be included on Base", { exact: false })).toBeVisible();
   await reopened.getByRole("button", { name: "Check again" }).click();

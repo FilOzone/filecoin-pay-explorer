@@ -41,7 +41,7 @@ async function openIncreaseDialog(page: Page, email: string) {
   );
 
   await page.goto("/console");
-  await loginWithTestAccount(page, { email });
+  await loginWithTestAccount(page, { email, dismissFundingPrompt: true });
   await page.getByRole("button", { name: "Increase", exact: true }).click({ timeout: 30_000 });
   return page.getByRole("dialog", { name: "Increase Approval" });
 }

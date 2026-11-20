@@ -46,9 +46,15 @@ describe("NotConnected", () => {
       { authenticated: true, ready: true },
       true,
       ["Preparing your wallet", "You&#x27;re signed in"],
-      ["How would you like to continue?"],
+      ["Sign in to "],
     ],
-    ["login is needed", { authenticated: false, ready: true }, true, ["How would you like to continue?"], []],
+    [
+      "login is needed",
+      { authenticated: false, ready: true },
+      true,
+      ["Sign in to ", "Filecoin Pay", "Wallet actions"],
+      [],
+    ],
   ] as const)("shows the %s copy", (_label, privy, walletsReady, expected, unexpected) => {
     mocks.privy = { ...privy, error: null };
     mocks.walletsReady = walletsReady;

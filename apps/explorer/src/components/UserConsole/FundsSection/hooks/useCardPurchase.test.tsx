@@ -379,7 +379,7 @@ describe("useCardPurchase", () => {
       rejectFunding(new Error("User exited flow"));
       await purchase;
     });
-    expect(latest.label).toBe("Buy USDC with card");
+    expect(latest.label).toBe("Buy with a card");
     expect(stored.size).toBe(0);
 
     await act(async () => renderer.unmount());
@@ -390,7 +390,7 @@ describe("useCardPurchase", () => {
     await act(async () => {
       create(<Harness />);
     });
-    expect(latest.label).toBe("Buy USDC with card");
+    expect(latest.label).toBe("Buy with a card");
     expect(toast.error).not.toHaveBeenCalled();
     expect(toast.info).not.toHaveBeenCalled();
   });
@@ -415,7 +415,7 @@ describe("useCardPurchase", () => {
     act(() => latest.startOver());
     expect(stored.size).toBe(0);
     expect(latest.canStartOver).toBe(false);
-    expect(latest.label).toBe("Buy USDC with card");
+    expect(latest.label).toBe("Buy with a card");
 
     await act(async () => {
       const purchase = latest.buyWithCard();
@@ -485,7 +485,7 @@ describe("useCardPurchase", () => {
     });
 
     expect(onPurchased).not.toHaveBeenCalled();
-    expect(latest.label).toBe("Buy USDC with card");
+    expect(latest.label).toBe("Buy with a card");
     expect(stored.size).toBe(0);
   });
 
@@ -523,7 +523,7 @@ describe("useCardPurchase", () => {
     privy.fund.mockRejectedValueOnce(new Error("Transaction cancelled"));
     await act(async () => latest.buyWithCard());
     expect(toast.error).not.toHaveBeenCalled();
-    expect(latest.label).toBe("Buy USDC with card");
+    expect(latest.label).toBe("Buy with a card");
     expect(stored.size).toBe(0);
 
     privy.fund.mockRejectedValueOnce(new Error("Provider unavailable"));

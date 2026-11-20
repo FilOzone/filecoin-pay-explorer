@@ -1,7 +1,8 @@
 import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import Logo from "@/public/foc-logo-dark.svg";
+import LogoDark from "@/public/foc-logo-dark.svg";
+import LogoLight from "@/public/foc-logo-light.svg";
 
 type ConsoleHeaderProps = {
   /**
@@ -22,13 +23,16 @@ export const ConsoleHeader = ({ walletControls, navTrigger }: ConsoleHeaderProps
     <Container>
       <div className='flex flex-wrap items-center gap-x-3 gap-y-8 py-8 md:flex-nowrap md:gap-x-4'>
         <Link href='/' aria-label='Go to homepage' className='focus:brand-outline mr-auto inline-block shrink-0'>
-          <Logo height={40} />
+          <LogoDark aria-hidden='true' className='dark:hidden' height={40} />
+          <LogoLight aria-hidden='true' className='hidden dark:block' height={40} />
         </Link>
 
         {navTrigger ? <div className='order-2 shrink-0 md:order-3 lg:hidden'>{navTrigger}</div> : null}
 
         {walletControls ? (
-          <div className='order-3 flex w-full items-center gap-2 md:order-2 md:w-auto md:gap-3'>{walletControls}</div>
+          <div className='order-3 flex w-full items-center gap-2 empty:hidden md:order-2 md:w-auto md:gap-3'>
+            {walletControls}
+          </div>
         ) : null}
       </div>
     </Container>

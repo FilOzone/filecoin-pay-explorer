@@ -1,7 +1,9 @@
 "use client";
 
 import { Button } from "@filecoin-foundation/ui-filecoin/Button";
+import { Button as ActionButton } from "@filecoin-pay/ui/components/button";
 import { useConnectWallet, useLogin, usePrivy, useWallets } from "@privy-io/react-auth";
+import { ArrowRight, Mail, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { trackWalletConnected } from "@/utils/funnel-analytics";
@@ -9,6 +11,8 @@ import { getWalletEntryState, isUserCancelledFlow } from "./state";
 import { useWalletExit } from "./useWalletExit";
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : undefined);
+const signInButtonClassName =
+  "h-auto min-h-14 w-full justify-start gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold whitespace-normal has-[>svg]:px-4";
 
 const CustomConnectButton = () => {
   const { ready, authenticated, error } = usePrivy();
@@ -65,40 +69,37 @@ const CustomConnectButton = () => {
     );
 
   return (
-    <div className='flex w-full max-w-md flex-col gap-3 text-left'>
-      <div className='rounded-lg border p-4'>
-        <div className='mb-2 flex items-center justify-between gap-3'>
-          <h3 className='font-medium'>Email or Google</h3>
-          <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>New to crypto</span>
-        </div>
-        <p className='mb-4 text-sm text-muted-foreground'>
-          We’ll create a Filecoin Pay wallet if you don’t have one yet. Fund it by card after a one-time identity check.
-        </p>
-        <Button
-          className='w-full'
-          variant='primary'
+    <div className='grid gap-5'>
+      <div>
+        <ActionButton
+          className={signInButtonClassName}
+          aria-describedby='email-wallet-description'
           onClick={() => login({ loginMethods: ["email", "google"] })}
           type='button'
         >
+          <Mail aria-hidden='true' className='size-5' />
           Continue with email or Google
-        </Button>
-      </div>
-
-      <div className='flex items-center gap-3 text-xs text-muted-foreground' aria-hidden='true'>
-        <span className='h-px flex-1 bg-border' />
-        or
-        <span className='h-px flex-1 bg-border' />
-      </div>
-
-      <div className='rounded-lg border p-4'>
-        <h3 className='mb-2 font-medium'>Existing crypto wallet</h3>
-        <p className='mb-4 text-sm text-muted-foreground'>
-          Use MetaMask or another wallet you already control. No sign-up needed. Card payments need a one-time
-          signature.
+          <ArrowRight aria-hidden='true' className='ml-auto hidden size-4 @sm:block' />
+        </ActionButton>
+        <p id='email-wallet-description' className='mt-2 px-1 text-sm leading-relaxed text-muted-foreground'>
+          New here? We’ll create your wallet when you sign in.
         </p>
-        <Button className='w-full' variant='primary' type='button' onClick={() => connectWallet()}>
+      </div>
+      <div>
+        <ActionButton
+          className={signInButtonClassName}
+          variant='outline'
+          type='button'
+          aria-describedby='existing-wallet-description'
+          onClick={() => connectWallet()}
+        >
+          <Wallet aria-hidden='true' className='size-5' />
           Connect existing wallet
-        </Button>
+          <ArrowRight aria-hidden='true' className='ml-auto hidden size-4 @sm:block' />
+        </ActionButton>
+        <p id='existing-wallet-description' className='mt-2 px-1 text-sm leading-relaxed text-muted-foreground'>
+          Use MetaMask or another wallet you own. Card payments need a one-time signature.
+        </p>
       </div>
     </div>
   );

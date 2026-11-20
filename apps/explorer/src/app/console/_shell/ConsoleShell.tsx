@@ -3,6 +3,7 @@ import { Container } from "@filecoin-foundation/ui-filecoin/Container";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import clsx from "clsx";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { useConnection } from "wagmi";
 import { BetaWarning } from "@/components/UserConsole/BetaWarning";
@@ -12,8 +13,10 @@ import { ConsoleSidebar } from "@/components/UserConsole/ConsoleSidebar";
 import { FundingHost } from "@/components/UserConsole/FundingHost";
 import { useConsoleAccount } from "@/components/UserConsole/providers/ConsoleAccountContext";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
+import { SignInFundingPrompt } from "@/components/UserConsole/SignInFundingPrompt";
 import { AccountUnavailable, ConnectingWallet, NotConnected, UnsupportedChain } from "@/components/UserConsole/States";
 import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
+import { mainnet } from "@/constants/chains";
 import { trackConsoleView } from "@/utils/funnel-analytics";
 import { ConsoleWalletControls } from "./ConsoleWalletControls";
 import {
@@ -62,6 +65,7 @@ export const ConsoleShell = ({
   intro?: ReactNode;
 }) => {
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
+  const pathname = usePathname();
   const { network } = useConsoleNetwork();
   const { address, isConnected, isReconnecting, chainId } = useConnection();
   const { account } = useConsoleAccount();
@@ -97,6 +101,7 @@ export const ConsoleShell = ({
     setLastReady((previous) => rememberReadyConnection(walletAccessState, address, chainId, previous));
   }, [walletAccessState, address, chainId]);
   const displayAccessState = getConsoleDisplayAccessState(walletAccessState, isTopUpActive);
+  const signingIn = displayAccessState === "not-connected";
 
   return (
     <div className='flex min-h-full flex-col bg-background text-foreground'>
@@ -113,9 +118,13 @@ export const ConsoleShell = ({
 
       <div className='flex-1 pt-4 pb-12'>
         <Container>
-          <div className={clsx("flex flex-col gap-6", focused && "mx-auto w-full max-w-2xl")}>
-            {/* BetaWarning sits above the row so it shows on every console page. */}
-            <BetaWarning />
+          <div
+            className={clsx(
+              "flex flex-col gap-6",
+              focused ? "mx-auto w-full max-w-2xl" : signingIn && "mx-auto w-full max-w-5xl",
+            )}
+          >
+            {!signingIn && <BetaWarning />}
             {displayAccessState !== "ready" && intro}
             <ConsoleAccessGate accessState={displayAccessState}>
               {/* Keyed by account, so nothing started for one account survives a switch to another. */}
@@ -130,8 +139,18 @@ export const ConsoleShell = ({
                 </div>
               )}
             </ConsoleAccessGate>
+            {signingIn && <BetaWarning />}
             {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
             {accountState === "active" ? <FundingHost /> : null}
+            {pathname === "/console" && !isAddServiceOpen && !isTopUpActive && (
+              <SignInFundingPrompt
+                address={
+                  walletAccessState === "ready" && chainId === mainnet.id && account?.walletClientType === "privy"
+                    ? address
+                    : undefined
+                }
+              />
+            )}
             {isAddServiceOpen ? <AddServiceDialog network={network} open onOpenChange={setIsAddServiceOpen} /> : null}
           </div>
         </Container>

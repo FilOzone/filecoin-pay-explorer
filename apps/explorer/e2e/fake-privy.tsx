@@ -219,7 +219,14 @@ type Wallet = {
   signAuthorization?: (request: AuthorizationRequest) => Promise<SignedAuthorization>;
 };
 type User = { id: string; wallet?: { address: string; walletClientType: string }; linkedAccounts: object[] };
-type LoginComplete = (event: { user: User; isNewUser: boolean; loginAccount: { type: string } }) => void;
+type SignInMethod = "email" | "google";
+type LoginComplete = (event: {
+  user: User;
+  isNewUser: boolean;
+  wasAlreadyAuthenticated: boolean;
+  loginMethod: SignInMethod;
+  loginAccount: { type: string };
+}) => void;
 type ConnectSuccess = (event: { wallet: Wallet }) => void;
 
 type FakePrivy = {
@@ -243,13 +250,19 @@ function useFakePrivy(): FakePrivy {
   return value;
 }
 
-function LoginModal({ onDone, onClose }: { onDone: (email: string) => void; onClose: () => void }) {
+function LoginModal({
+  onDone,
+  onClose,
+}: {
+  onDone: (email: string, method: SignInMethod) => void;
+  onClose: () => void;
+}) {
   const [email, setEmail] = useState<string | null>(null);
   const [code, setCode] = useState<string[]>(Array(6).fill(""));
   const setDigit = (i: number, digit: string) => {
     const next = code.with(i, digit);
     setCode(next);
-    if (email && next.every(Boolean)) onDone(email);
+    if (email && next.every(Boolean)) onDone(email, "email");
   };
   return (
     <div role='dialog' aria-label='log in or sign up' id='privy-dialog'>
@@ -263,6 +276,9 @@ function LoginModal({ onDone, onClose }: { onDone: (email: string) => void; onCl
         >
           <input name='email' type='email' placeholder='your@email.com' />
           <button type='submit'>Submit</button>
+          <button type='button' onClick={() => onDone("google@fake-privy.test", "google")}>
+            Continue with Google
+          </button>
         </form>
       ) : (
         <>
@@ -465,17 +481,19 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("fake-privy:connect-extension", onConnectExtension);
   }, [extension, onConnect]);
 
-  const completeLogin = (email: string) => {
+  const completeLogin = (email: string, loginMethod: SignInMethod) => {
     setModalOpen(false);
-    const emailAccount = { type: "email", address: email };
-    const newUser: User = { id: `did:privy:fake-${email}`, linkedAccounts: [emailAccount] };
+    const loginAccount = loginMethod === "email" ? { type: "email", address: email } : { type: "google_oauth", email };
+    const newUser: User = { id: `did:privy:fake-${email}`, linkedAccounts: [loginAccount] };
     setUser(newUser);
-    for (const listener of onLogin) listener({ user: newUser, isNewUser: true, loginAccount: emailAccount });
+    for (const listener of onLogin) {
+      listener({ user: newUser, isNewUser: true, wasAlreadyAuthenticated: false, loginMethod, loginAccount });
+    }
     // createOnLogin: "users-without-wallets" provisions the embedded wallet after the user exists.
     setTimeout(() => {
       const wallet = createEmbeddedWallet(email);
       const walletAccount = { type: "wallet", address: wallet.address, walletClientType: "privy" };
-      setUser({ ...newUser, wallet: walletAccount, linkedAccounts: [emailAccount, walletAccount] });
+      setUser({ ...newUser, wallet: walletAccount, linkedAccounts: [loginAccount, walletAccount] });
       setWallets([wallet]);
     });
   };
@@ -521,6 +539,11 @@ export function PrivyProvider({ children }: { children: ReactNode }) {
 export function usePrivy() {
   const { ready, user, openLogin, logout } = useFakePrivy();
   return { ready, authenticated: user !== null, user, error: null, login: openLogin, logout };
+}
+
+// The fake signs no identity tokens. A quote-response fixture can exercise the signed-in preview.
+export async function getIdentityToken() {
+  return "fake-privy-identity";
 }
 
 export function useWallets() {
