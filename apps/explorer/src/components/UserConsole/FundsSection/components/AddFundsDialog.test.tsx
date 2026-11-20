@@ -62,7 +62,7 @@ describe("AddFundsDialog", () => {
     ]);
     const preview = renderer.root.findByProps({ "aria-label": "Preview Apple Pay top-up" });
     expect(renderer.root.findByProps({ id: preview.props["aria-describedby"] }).children).toEqual([
-      "Coinbase estimate only · $5–$50 for US guests",
+      "Preview a $5 US guest purchase, including fees.",
     ]);
     act(() => preview.props.onClick());
     expect(onSelect).toHaveBeenLastCalledWith("guest");

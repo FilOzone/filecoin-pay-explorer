@@ -287,7 +287,7 @@ export function AddFundsDialog({
               <span>
                 <span className='block text-sm font-semibold'>Preview Apple Pay top-up</span>
                 <span className='mt-0.5 block text-xs leading-[1.1rem]' id={guestDescriptionId}>
-                  Coinbase estimate only · $5–$50 for US guests
+                  Preview a $5 US guest purchase, including fees.
                 </span>
               </span>
               <ArrowRight

@@ -588,6 +588,44 @@ test("a new email account can preview the $5 guest purchase only in sandbox mode
   await expect(page.getByRole("button", { name: "Buy with a card" })).toBeVisible();
 });
 
+test("a preview without Coinbase credentials shows a read-only $5 receipt and a way back to Add funds", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.E2E_MODE === "real" || process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX !== "true",
+    "uses a local identity and the sandbox preview",
+  );
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page);
+  const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+  await expect(addFunds.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
+  const checkoutRequests: string[] = [];
+  await page.route("**/api/coinbase/**", (route) => {
+    checkoutRequests.push(new URL(route.request().url()).pathname);
+    return route.fulfill({
+      status: 503,
+      json: {
+        code: "sandbox_unconfigured",
+        error: "Coinbase sandbox quotes require CDP_API_KEY_ID and CDP_API_KEY_SECRET.",
+      },
+    });
+  });
+  await addFunds.getByRole("button", { name: "Preview Apple Pay top-up" }).click();
+  const receipt = page.getByRole("dialog", { name: "Coinbase Apple Pay estimate" });
+  await expect(receipt.getByText("Example receipt", { exact: true })).toBeVisible();
+  await expect(receipt.getByText(/figures illustrate a \$5 purchase/i)).toBeVisible();
+  await expect(receipt.getByRole("definition").filter({ hasText: "4.0875 USDFC" })).toBeVisible();
+  await expect(receipt.getByRole("definition").filter({ hasText: "0.05 FIL" })).toBeVisible();
+  await expect(receipt.getByRole("button", { name: /^pay\b/i })).toHaveCount(0);
+  await expect(receipt.getByRole("textbox")).toHaveCount(0);
+  await expect(receipt.getByRole("button", { name: "Check live pricing" })).toBeEnabled();
+  await receipt.getByRole("button", { name: "Other funding options" }).click();
+  await expect(addFunds.getByRole("button", { name: "Buy with a card" })).toBeVisible();
+  await expect(addFunds.getByRole("button", { name: "Swap from another network" })).toBeVisible();
+  expect(checkoutRequests).toEqual(["/api/coinbase/quote"]);
+});
+
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {
   test.skip(process.env.E2E_MODE === "real", "the fake's card purchase window shows the destination");
   await stubAccountBackgroundRequests(page);

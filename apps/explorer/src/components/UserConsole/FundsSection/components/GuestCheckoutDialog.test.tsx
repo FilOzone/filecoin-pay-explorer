@@ -22,6 +22,12 @@ const routeEstimate = {
   paymentBlocker,
 };
 const request = vi.fn();
+function receiptAmounts() {
+  return Object.fromEntries(
+    screen.getAllByRole("term").map((term) => [term.textContent?.trim(), term.nextElementSibling?.textContent?.trim()]),
+  );
+}
+
 function mount(onOtherMethods = vi.fn()) {
   const client = new QueryClient();
   render(
@@ -59,17 +65,17 @@ describe("Coinbase guest estimate", () => {
     expect(breakdown.closest("details")?.open).toBe(false);
     fireEvent.click(breakdown);
     expect(breakdown.closest("details")?.open).toBe(true);
-    expect(screen.getAllByRole("definition").map((row) => row.textContent)).toEqual([
-      "4.187824 USDFC",
-      "0.05 FIL",
-      "$5.00",
-      "$0.12",
-      "4.863241 USDC",
-      "Up to 0.5 USDC",
-      "4.363241 USDC",
-      "Up to 0.01 USDC",
-      "0.036 USDFC",
-    ]);
+    expect(receiptAmounts()).toEqual({
+      "Minimum Filecoin Pay deposit": "4.187824 USDFC",
+      "FIL for wallet network fees": "0.05 FIL",
+      "Total charge": "$5.00",
+      "Coinbase fees": "$0.12",
+      "USDC delivered on Base": "4.863241 USDC",
+      "Base gas and bridge fee budget": "Up to 0.5 USDC",
+      "Base USDC to convert": "4.363241 USDC",
+      "Bridge fee within the budget": "Up to 0.01 USDC",
+      "USDFC budget for FIL": "0.036 USDFC",
+    });
     expect(screen.queryByRole("button", { name: /Pay with|Verify/i })).toBeNull();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
   });
@@ -105,6 +111,7 @@ describe("Coinbase guest estimate", () => {
     const otherMethods = vi.fn();
     mount(otherMethods);
     await screen.findByText(/Apple Pay estimates are unavailable right now/);
+    expect(screen.queryByText("Example receipt")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Refresh estimate" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     expect(request.mock.calls.map(([url]) => url)).toEqual(["/api/coinbase/quote", "/api/coinbase/quote"]);
@@ -113,11 +120,29 @@ describe("Coinbase guest estimate", () => {
     expect(otherMethods).toHaveBeenCalledOnce();
   });
 
-  it("shows the preview setup blocker even when Privy has no browser-readable identity", async () => {
+  it("shows a read-only $5 example when the preview is unconfigured, including for cookie-based sign-in", async () => {
     identity.mockResolvedValue(null);
     request.mockResolvedValue(Response.json({ code: "sandbox_unconfigured" }, { status: 503 }));
-    mount();
-    expect((await screen.findByRole("alert")).textContent).toContain("Live Apple Pay estimates haven’t been enabled");
+    const otherMethods = vi.fn();
+    mount(otherMethods);
+    await screen.findByText("Example receipt");
+    expect(screen.getByText(/figures illustrate a \$5 purchase/i)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Preset amounts" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /pay with|verify/i })).toBeNull();
+    fireEvent.click(screen.getByText("Example conversion details"));
+    expect(receiptAmounts()).toEqual({
+      "Illustrative Filecoin Pay deposit": "4.0875 USDFC",
+      "FIL for wallet network fees": "0.05 FIL",
+      "Total charge": "$5.00",
+      "Coinbase fees": "$0.10",
+      "USDC delivered on Base": "4.90 USDC",
+      "Base gas and bridge fee budget": "Up to 0.5 USDC",
+      "Base USDC to convert": "4.4 USDC",
+      "Bridge fee within the budget": "Up to 0.01515 USDC",
+      "USDFC budget for FIL": "0.3125 USDFC",
+    });
     expect(request).toHaveBeenCalledWith(
       "/api/coinbase/quote",
       expect.objectContaining({
@@ -125,6 +150,47 @@ describe("Coinbase guest estimate", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
+    expect(request).toHaveBeenCalledOnce();
+    expect(route).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Other funding options" }));
+    expect(otherMethods).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the example fixed at $5 after selecting $25 and retries live pricing for the chosen amount", async () => {
+    mount();
+    await screen.findByText(paymentBlocker);
+    request.mockResolvedValueOnce(Response.json({ code: "sandbox_unconfigured" }, { status: 503 }));
+    fireEvent.click(screen.getByRole("button", { name: "$25" }));
+    await screen.findByText("Example receipt");
+    expect(screen.getByText("$5.00")).toBeTruthy();
+    expect(screen.queryByText("$25.00")).toBeNull();
+    expect(screen.queryByText("4.863241 USDC")).toBeNull();
+    expect(route).toHaveBeenCalledOnce();
+
+    request.mockResolvedValueOnce(
+      Response.json({ paymentTotal: "25.00", feeTotal: "0.20", purchaseAmount: "24.800000" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Check live pricing" }));
+    await screen.findByText(paymentBlocker);
+    expect(screen.queryByText("Example receipt")).toBeNull();
+    expect(screen.queryByText("4.90 USDC")).toBeNull();
+    expect(screen.getByText("$25.00")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Purchase amount (USD)" }) as HTMLInputElement).value).toBe("25.00");
+    expect(request.mock.calls.map(([url, init]) => [url, JSON.parse(init.body).paymentAmount])).toEqual([
+      ["/api/coinbase/quote", "5.00"],
+      ["/api/coinbase/quote", "25.00"],
+      ["/api/coinbase/quote", "25.00"],
+    ]);
+    expect(route).toHaveBeenCalledTimes(2);
+    expect(route).toHaveBeenLastCalledWith({ wallet, receivedUsdc: 24_800_000n });
+  });
+
+  it("keeps a sign-in error actionable even if the response carries the preview configuration code", async () => {
+    const error = "Your sign-in could not be verified. Sign in again to check this estimate.";
+    request.mockResolvedValueOnce(Response.json({ code: "sandbox_unconfigured", error }, { status: 401 }));
+    mount();
+    expect((await screen.findByRole("alert")).textContent).toContain(error);
+    expect(screen.queryByText("Example receipt")).toBeNull();
     expect(route).not.toHaveBeenCalled();
   });
 
@@ -133,6 +199,16 @@ describe("Coinbase guest estimate", () => {
     mount();
     await screen.findByText(paymentBlocker);
     expect(request.mock.lastCall?.[1].headers).toEqual({ "Content-Type": "application/json" });
+  });
+
+  it("keeps the Coinbase quote when Squid cannot price the conversion", async () => {
+    const error = "Squid could not quote a native FIL reserve for this purchase.";
+    route.mockRejectedValueOnce(new Error(error));
+    mount();
+    expect((await screen.findByRole("alert")).textContent).toContain(error);
+    expect(screen.getByText("4.863241 USDC")).toBeTruthy();
+    expect(screen.queryByText("Example receipt")).toBeNull();
+    expect(screen.queryByText("Minimum Filecoin Pay deposit")).toBeNull();
   });
 
   it("drops expired deposit terms while retaining the Coinbase estimate", async () => {

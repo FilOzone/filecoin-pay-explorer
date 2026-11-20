@@ -137,7 +137,7 @@ Optional Explorer configuration:
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only Coinbase CDP credentials. The preview uses Headless Onramp's sandbox user reference and requests pricing only. |
 | `PRIVY_VERIFICATION_KEY` | Server-side public verification key for `NEXT_PUBLIC_PRIVY_APP_ID`. Enable identity tokens in that Privy app so the server can verify the receiving wallet. |
 
-The Coinbase preview shows the quoted Base USDC, the Filecoin Pay minimum and the native FIL reserve before guest verification. Checkout stays at the estimate until a fresh wallet can cover the complete Base operation before payment. The existing Privy card purchase and token deposit paths remain available. [Coinbase Headless Onramp sandbox setup](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#testing)
+With CDP credentials configured, the Coinbase preview shows the quoted Base USDC, the Filecoin Pay minimum and the native FIL reserve before guest verification. When the preview has no CDP credentials, it shows a labeled, read-only $5 example using the figures from the recorded browser test. Users can inspect the fee breakdown, retry live pricing or return to the existing funding options. Checkout stays at the estimate until a fresh wallet can cover the complete Base operation before payment. [Coinbase Headless Onramp sandbox setup](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#testing)
 
 Build the generated types, then start the Explorer:
 
