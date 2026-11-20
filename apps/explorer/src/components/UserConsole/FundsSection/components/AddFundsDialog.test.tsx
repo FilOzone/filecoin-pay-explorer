@@ -45,26 +45,48 @@ describe("AddFundsDialog", () => {
 
     act(() =>
       renderer.update(
-        <AddFundsDialog cardFirst onOpenChange={() => undefined} onSelect={onSelect} open squidAvailable />,
+        <AddFundsDialog
+          cardFirst
+          guestAvailable
+          onOpenChange={() => undefined}
+          onSelect={onSelect}
+          open
+          squidAvailable
+        />,
       ),
     );
     expect(renderer.root.findAllByType("button").map((node) => node.props["aria-label"])).toEqual([
+      "Preview Apple Pay top-up",
       "Buy USDC with card",
       "Swap to USDFC",
       "Deposit token",
     ]);
+    const preview = renderer.root.findByProps({ "aria-label": "Preview Apple Pay top-up" });
+    expect(renderer.root.findByProps({ id: preview.props["aria-describedby"] }).children).toEqual([
+      "Get a Coinbase sandbox estimate for a $5–$50 US guest purchase.",
+    ]);
+    act(() => preview.props.onClick());
+    expect(onSelect).toHaveBeenLastCalledWith("guest");
   });
 
   it("refuses to close while a card purchase is busy", () => {
     const onOpenChange = vi.fn();
     let renderer!: ReturnType<typeof create>;
     const render = (isBusy: boolean) => (
-      <AddFundsDialog isBusy={isBusy} onOpenChange={onOpenChange} onSelect={vi.fn()} open squidAvailable />
+      <AddFundsDialog
+        guestAvailable
+        isBusy={isBusy}
+        onOpenChange={onOpenChange}
+        onSelect={vi.fn()}
+        open
+        squidAvailable
+      />
     );
     act(() => {
       renderer = create(render(true));
     });
 
+    expect(renderer.root.findByProps({ "aria-label": "Preview Apple Pay top-up" }).props.disabled).toBe(true);
     act(() => dialog.onOpenChange?.(false));
     expect(onOpenChange).not.toHaveBeenCalled();
 
@@ -79,6 +101,7 @@ describe("AddFundsDialog", () => {
     act(() => {
       renderer = create(
         <AddFundsDialog
+          guestAvailable
           isCardChecking
           onCardStartOver={vi.fn()}
           onOpenChange={onOpenChange}
@@ -91,6 +114,7 @@ describe("AddFundsDialog", () => {
 
     const isDisabled = (label: string) => renderer.root.findByProps({ "aria-label": label }).props.disabled;
     expect(isDisabled("Buy USDC with card")).toBe(true);
+    expect(isDisabled("Preview Apple Pay top-up")).toBe(false);
     expect(isDisabled("Deposit token")).toBe(false);
     expect(isDisabled("Swap to USDFC")).toBe(false);
     const startOver = renderer.root.find((node) => node.type === "button" && node.children.includes("Start over"));

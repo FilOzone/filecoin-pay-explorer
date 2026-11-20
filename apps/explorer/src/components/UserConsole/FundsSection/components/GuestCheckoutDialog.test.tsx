@@ -55,16 +55,20 @@ describe("Coinbase guest estimate", () => {
       }),
     );
     expect(route).toHaveBeenCalledWith({ wallet, receivedUsdc: 4863241n });
+    const breakdown = screen.getByText("Conversion details");
+    expect(breakdown.closest("details")?.open).toBe(false);
+    fireEvent.click(breakdown);
+    expect(breakdown.closest("details")?.open).toBe(true);
     expect(screen.getAllByRole("definition").map((row) => row.textContent)).toEqual([
+      "4.187824 USDFC",
+      "0.05 FIL",
       "$5.00",
       "$0.12",
       "4.863241 USDC",
-      "4.363241 USDC",
       "Up to 0.5 USDC",
+      "4.363241 USDC",
       "Up to 0.01 USDC",
       "0.036 USDFC",
-      "0.05 FIL",
-      "4.187824 USDFC",
     ]);
     expect(screen.queryByRole("button", { name: /Pay with|Verify/i })).toBeNull();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
@@ -76,7 +80,7 @@ describe("Coinbase guest estimate", () => {
     const field = screen.getByRole("textbox", { name: "Purchase amount (USD)" });
     fireEvent.change(field, { target: { value: "4.99" } });
     expect(field.getAttribute("aria-invalid")).toBe("true");
-    expect(screen.queryByText("4.187824 USDFC")).toBeNull();
+    expect(screen.queryByText("Minimum Filecoin Pay deposit")).toBeNull();
     fireEvent.change(field, { target: { value: "50.01" } });
     expect(field.getAttribute("aria-invalid")).toBe("true");
     fireEvent.change(field, { target: { value: "49.99" } });
@@ -84,11 +88,23 @@ describe("Coinbase guest estimate", () => {
     expect(JSON.parse(request.mock.lastCall?.[1].body)).toEqual({ address: wallet, paymentAmount: "49.99" });
   });
 
+  it("requests new terms for the chosen preset and keeps the amount editable", async () => {
+    mount();
+    await screen.findByText(paymentBlocker);
+    expect(screen.getByRole("button", { name: "$5", pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "$25" }));
+    expect((screen.getByRole("textbox", { name: "Purchase amount (USD)" }) as HTMLInputElement).value).toBe("25.00");
+    expect(screen.getByRole("button", { name: "$25", pressed: true })).toBeTruthy();
+    expect(screen.queryByText("Minimum Filecoin Pay deposit")).toBeNull();
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(request.mock.lastCall?.[1].body)).toEqual({ address: wallet, paymentAmount: "25.00" });
+  });
+
   it("shows the quote blocker and lets the user leave without creating an order", async () => {
     request.mockImplementation(async () => Response.json({ error: "Sandbox quotes unavailable." }, { status: 503 }));
     const otherMethods = vi.fn();
     mount(otherMethods);
-    await screen.findByText("Sandbox quotes unavailable.");
+    await screen.findByText(/Apple Pay estimates are unavailable right now/);
     fireEvent.click(screen.getByRole("button", { name: "Refresh estimate" }));
     await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
     expect(request.mock.calls.map(([url]) => url)).toEqual(["/api/coinbase/quote", "/api/coinbase/quote"]);

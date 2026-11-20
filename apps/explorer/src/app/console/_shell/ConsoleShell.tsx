@@ -97,6 +97,7 @@ export const ConsoleShell = ({
     setLastReady((previous) => rememberReadyConnection(walletAccessState, address, chainId, previous));
   }, [walletAccessState, address, chainId]);
   const displayAccessState = getConsoleDisplayAccessState(walletAccessState, isTopUpActive);
+  const signingIn = displayAccessState === "not-connected";
 
   return (
     <div className='flex min-h-full flex-col bg-background text-foreground'>
@@ -113,9 +114,13 @@ export const ConsoleShell = ({
 
       <div className='flex-1 pt-4 pb-12'>
         <Container>
-          <div className={clsx("flex flex-col gap-6", focused && "mx-auto w-full max-w-2xl")}>
-            {/* BetaWarning sits above the row so it shows on every console page. */}
-            <BetaWarning />
+          <div
+            className={clsx(
+              "flex flex-col gap-6",
+              focused ? "mx-auto w-full max-w-2xl" : signingIn && "mx-auto w-full max-w-5xl",
+            )}
+          >
+            {!signingIn && <BetaWarning />}
             {displayAccessState !== "ready" && intro}
             <ConsoleAccessGate accessState={displayAccessState}>
               {/* Keyed by account, so nothing started for one account survives a switch to another. */}
@@ -130,6 +135,7 @@ export const ConsoleShell = ({
                 </div>
               )}
             </ConsoleAccessGate>
+            {signingIn && <BetaWarning />}
             {/* Funding dialogs read the wagmi address, so they mount only while it is the console account. */}
             {accountState === "active" ? <FundingHost /> : null}
             {isAddServiceOpen ? <AddServiceDialog network={network} open onOpenChange={setIsAddServiceOpen} /> : null}
