@@ -68,7 +68,7 @@ export const mainnet = {
   },
 } satisfies Chain;
 
-const calibrationNet: Chain = {
+export const calibration: Chain = {
   ...synapseCalibration,
   label: "Calibration",
   slug: "calibration",
@@ -114,29 +114,29 @@ const calibrationNet: Chain = {
   ],
 };
 
-// Development against a local foc-devnet only; never deploy with it set. NEXT_PUBLIC_DEVNET_INFO (the devnet's
-// devnet-info.json) stands the devnet in for calibration, so every calibration page runs on it, and setup links
-// name it network=devnet (see parseNetworkParam). RPC goes through the /api/devnet-rpc rewrite in next.config.ts:
-// Lotus sends no CORS headers.
-// ponytail: the devnet takes calibration's place instead of being a network of its own; give it one if the console
-// ever needs both at once.
-function devnetAsCalibration(json: string): Chain {
-  const devnet = toChain(validateDevnetInfo(JSON.parse(json)));
-  const rpc = `${process.env.NEXT_PUBLIC_DEVNET_ORIGIN ?? "http://localhost:3000"}/api/devnet-rpc`;
-  return {
-    ...calibrationNet,
-    ...devnet,
-    label: "Devnet",
-    slug: "calibration",
-    rpcUrls: { default: { http: [rpc] } },
-    contracts: { ...calibrationNet.contracts, ...devnet.contracts, payments: devnet.contracts.filecoinPay },
-    faucets: undefined,
-  } as unknown as Chain; // calibration-only fields (such as sushi) come from calibrationNet
-}
+/**
+ * A local foc-devnet, for console development only: `next dev` with NEXT_PUBLIC_DEVNET_INFO set (the devnet's
+ * devnet-info.json). Undefined in any other build, so the env var leaking into a deployment adds nothing.
+ * It has no subgraph (see getSubgraphUrl). In the browser, RPC goes through the /api/devnet-rpc rewrite in
+ * next.config.ts, since Lotus sends no CORS headers; on the server it goes to Lotus directly.
+ */
+export const devnet: Chain | undefined =
+  process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEVNET_INFO
+    ? devnetChain(process.env.NEXT_PUBLIC_DEVNET_INFO)
+    : undefined;
 
-export const calibration: Chain = process.env.NEXT_PUBLIC_DEVNET_INFO
-  ? devnetAsCalibration(process.env.NEXT_PUBLIC_DEVNET_INFO)
-  : calibrationNet;
+function devnetChain(json: string): Chain {
+  const chain = toChain(validateDevnetInfo(JSON.parse(json)));
+  const lotus = chain.rpcUrls.default.http[0];
+  const rpc = typeof window === "undefined" ? lotus : `${window.location.origin}/api/devnet-rpc`;
+  return {
+    ...chain,
+    label: "Devnet",
+    slug: "devnet",
+    rpcUrls: { default: { http: [rpc] } },
+    contracts: { ...chain.contracts, payments: chain.contracts.filecoinPay },
+  } as unknown as Chain; // synapse-core's devnet chain carries its own (older) ABI types
+}
 
 export const SQUID_SOURCE_CHAINS = [
   mainnet,
@@ -159,7 +159,9 @@ export function getChain(network: Network = "calibration"): Chain {
       return mainnet;
     case "calibration":
       return calibration;
-    default:
-      throw new Error(`Chain with network ${network} not found`);
+    case "devnet":
+      if (devnet) return devnet;
+      break;
   }
+  throw new Error(`Chain with network ${network} not found`);
 }

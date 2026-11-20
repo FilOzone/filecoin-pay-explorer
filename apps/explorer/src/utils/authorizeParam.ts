@@ -9,6 +9,8 @@
  *   and when nothing valid remains the param collapses to null (full-menu default).
  */
 import { getAddress, isAddress } from "viem";
+import { devnet } from "@/constants/chains";
+import type { Network } from "@/types";
 import { type ScopeId, SESSION_KEY_SCOPES } from "./sessionKeys";
 
 /**
@@ -84,16 +86,11 @@ export function presetScopeStates(
  * network is refused: the CLI always sends one, so its absence means a
  * malformed link, not a request the wallet's chain may satisfy.
  */
-export function parseNetworkParam(value: string | null | undefined): "mainnet" | "calibration" | null {
+export function parseNetworkParam(value: string | null | undefined): Network | null {
   if (typeof value !== "string") return null;
   const network = value.trim().toLowerCase();
-  // A console run against a local foc-devnet (NEXT_PUBLIC_DEVNET_INFO, see constants/chains.ts) serves the devnet in
-  // calibration's place: it answers to network=devnet, as filecoin-pin's login sends it, and not to calibration.
-  if (process.env.NEXT_PUBLIC_DEVNET_INFO) {
-    if (network === "devnet") return "calibration";
-    if (network === "mainnet") return "mainnet";
-    return null;
-  }
+  // filecoin-pin's `login --network devnet` sends network=devnet; only a console run against one serves it.
+  if (network === "devnet") return devnet ? "devnet" : null;
   return network === "mainnet" || network === "calibration" ? network : null;
 }
 
@@ -118,7 +115,7 @@ export const LINK_PARAMS = ["authorize", "scopes", "network", "name", "days", "r
 
 export interface RevokeLink {
   address: `0x${string}`;
-  network: "mainnet" | "calibration";
+  network: Network;
 }
 
 /** `?revoke=&network=`, as `filecoin-pin logout` prints it. Same rules as the pairing link; network required. */

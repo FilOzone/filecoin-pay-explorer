@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { getAddress } from "viem";
-import { afterEach, describe, it, vi } from "vitest";
+import { describe, it } from "vitest";
 import {
   parseAuthorizeParam,
   parseNetworkParam,
@@ -142,22 +142,8 @@ describe("parseNetworkParam", () => {
     assert.equal(parseNetworkParam(undefined), null);
   });
 
-  describe("on a console run against a local foc-devnet (NEXT_PUBLIC_DEVNET_INFO)", () => {
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
-    it("answers to network=devnet, in calibration's place, and to mainnet", () => {
-      vi.stubEnv("NEXT_PUBLIC_DEVNET_INFO", "{}");
-      assert.equal(parseNetworkParam("devnet"), "calibration");
-      assert.equal(parseNetworkParam("DevNet"), "calibration");
-      assert.equal(parseNetworkParam("mainnet"), "mainnet");
-    });
-
-    it("refuses calibration, which it does not serve", () => {
-      vi.stubEnv("NEXT_PUBLIC_DEVNET_INFO", "{}");
-      assert.equal(parseNetworkParam("calibration"), null);
-    });
+  it("refuses devnet, which only `next dev` against a foc-devnet serves", () => {
+    assert.equal(parseNetworkParam("devnet"), null);
   });
 });
 

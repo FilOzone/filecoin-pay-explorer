@@ -3,7 +3,7 @@ import { GlobeIcon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { getChain } from "@/constants/chains";
 import useNetwork from "@/hooks/useNetwork";
-import { supportedChains } from "@/services/wagmi/config";
+import { publicChains, supportedChains } from "@/services/wagmi/config";
 
 const NetworkOptions = () => {
   const pathname = usePathname();
@@ -33,7 +33,7 @@ const NetworkOptions = () => {
   return (
     <Listbox
       Icon={GlobeIcon}
-      options={supportedChains}
+      options={publicChains}
       selected={getChain(network)}
       setSelected={(option) => handleNetworkChange(option.slug)}
     />
