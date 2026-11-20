@@ -397,7 +397,7 @@ describe("groupKeyPhase", () => {
       walletReady: false,
       issueError: declined,
     };
-    assert.deepEqual(groupKeyPhase(after), { phase: "issued", grant: "fgr1_x" });
+    assert.deepEqual(groupKeyPhase(after), { phase: "issued" });
   });
 
   it("follows its precedence where reads overlap", () => {

@@ -258,7 +258,7 @@ export function isSetupComplete({
 
 /** Where the group key step stands: one value per render, so it shows one status and one notice. */
 export type GroupKeyPhase =
-  | { phase: "issued"; grant: string }
+  | { phase: "issued" }
   /** `pubkeysig` does not recover to the session key: nothing may be signed for this link. */
   | { phase: "unsigned-pubkey" }
   /** The session key is not authorized yet, and the Grant's claim ends with that authorization. */
@@ -306,7 +306,7 @@ export function signingFailure(error: unknown): string {
  * mid-request, and Retry is never offered without a wallet.
  */
 export function groupKeyPhase(reads: GroupKeyReads): GroupKeyPhase {
-  if (reads.grant !== undefined) return { phase: "issued", grant: reads.grant };
+  if (reads.grant !== undefined) return { phase: "issued" };
   if (reads.signatureValid === false) return { phase: "unsigned-pubkey" };
   if (reads.signatureValid === undefined) return { phase: "choosing" };
   if (reads.choiceFailed) return { phase: "read-failed" };
