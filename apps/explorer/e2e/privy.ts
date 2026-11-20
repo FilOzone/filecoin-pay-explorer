@@ -15,8 +15,9 @@ export async function loginWithTestAccount(
   const email = real ? requireEnv("E2E_PRIVY_TEST_EMAIL") : (options.email ?? "e2e@fake-privy.test");
   const otp = real ? requireEnv("E2E_PRIVY_TEST_OTP") : "000000";
 
-  if (options.dismissFundingPrompt) {
-    const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+  const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+  if (options.dismissFundingPrompt && real) {
+    // The live account may already hold funds and skip the prompt.
     await page.addLocatorHandler(
       addFunds.getByRole("heading", { name: "Add funds" }),
       () => addFunds.getByRole("button", { name: "Close" }).click(),
@@ -30,6 +31,11 @@ export async function loginWithTestAccount(
   await modal.getByRole("heading", { name: "Enter confirmation code" }).waitFor();
   const boxes = modal.getByRole("textbox");
   for (const [i, digit] of [...otp].entries()) await boxes.nth(i).fill(digit);
+  if (options.dismissFundingPrompt && !real) {
+    // These fixtures start empty. Finish onboarding before the spec opens another menu or dialog.
+    await addFunds.getByRole("button", { name: "Close" }).click();
+    await addFunds.getByRole("heading", { name: "Add funds", exact: true }).waitFor({ state: "hidden" });
+  }
 }
 
 export async function logoutFromConsole(page: Page): Promise<void> {

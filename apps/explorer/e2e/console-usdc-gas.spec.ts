@@ -66,7 +66,7 @@ async function stubAccountBackgroundRequests(page: Page): Promise<void> {
 const EMAIL = "usdc-gas@fake-privy.test";
 
 async function openSquidDialog(page: Page) {
-  await page.getByRole("button", { name: "Swap to USDFC" }).click();
+  await page.getByRole("button", { name: "Swap from another network" }).click();
   return page.getByRole("dialog", { name: "Pay with another token" });
 }
 

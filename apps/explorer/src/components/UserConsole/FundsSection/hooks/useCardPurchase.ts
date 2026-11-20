@@ -347,7 +347,7 @@ export function useCardPurchase({
     return verifyThenPurchase(recipientWallet, { contextKey, recipient: getAddress(address) });
   };
 
-  const purchaseLabel = isLoggedInAsRecipient ? "Buy USDC with card" : "Verify wallet to buy USDC with card";
+  const purchaseLabel = isLoggedInAsRecipient ? "Buy with a card" : "Verify wallet to buy USDC with card";
   // Privy reports "submitted" both for a payment still settling and for a provider window closed without paying.
   const statusMessages = {
     delayed:

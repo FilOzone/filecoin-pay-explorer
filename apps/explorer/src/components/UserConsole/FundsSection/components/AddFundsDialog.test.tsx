@@ -24,19 +24,18 @@ describe("AddFundsDialog", () => {
       renderer = create(<AddFundsDialog onOpenChange={() => undefined} onSelect={onSelect} open squidAvailable />);
     });
 
-    const deposit = renderer.root.findByProps({ "aria-label": "Deposit token" });
-    const swap = renderer.root.findByProps({ "aria-label": "Swap to USDFC" });
-    const card = renderer.root.findByProps({ "aria-label": "Buy USDC with card" });
+    const deposit = renderer.root.findByProps({ "aria-label": "Deposit from Filecoin" });
+    const swap = renderer.root.findByProps({ "aria-label": "Swap from another network" });
+    const card = renderer.root.findByProps({ "aria-label": "Buy with a card" });
     const visibleText = renderer.root.findAllByType("span").flatMap((node) => node.children);
-    expect(visibleText).toContain("Deposit token");
-    expect(visibleText).toContain("Swap to USDFC");
-    expect(visibleText).toContain("Buy USDC with card");
-    expect(visibleText).toContain("Already hold USDFC or another token on Filecoin? Deposit it directly.");
-    expect(visibleText).toContain(
-      "Buy USDC on Base, then swap and deposit it into Filecoin Pay. Requires identity verification.",
-    );
+    expect(visibleText).toContain("Deposit from Filecoin");
+    expect(visibleText).toContain("Swap from another network");
+    expect(visibleText).toContain("Buy with a card");
+    expect(visibleText).toContain("Move USDFC or another Filecoin token into your Pay balance.");
+    expect(visibleText).toContain("Receive USDC on Base, then convert it to USDFC for Filecoin Pay.");
+    expect(visibleText.join(" ")).toContain("Identity verification required");
     const methodOrder = renderer.root.findAllByType("button").map((node) => node.props["aria-label"]);
-    expect(methodOrder).toEqual(["Swap to USDFC", "Buy USDC with card", "Deposit token"]);
+    expect(methodOrder).toEqual(["Swap from another network", "Buy with a card", "Deposit from Filecoin"]);
 
     act(() => card.props.onClick());
     act(() => deposit.props.onClick());
@@ -56,14 +55,14 @@ describe("AddFundsDialog", () => {
       ),
     );
     expect(renderer.root.findAllByType("button").map((node) => node.props["aria-label"])).toEqual([
+      "Buy with a card",
       "Preview Apple Pay top-up",
-      "Buy USDC with card",
-      "Swap to USDFC",
-      "Deposit token",
+      "Swap from another network",
+      "Deposit from Filecoin",
     ]);
     const preview = renderer.root.findByProps({ "aria-label": "Preview Apple Pay top-up" });
     expect(renderer.root.findByProps({ id: preview.props["aria-describedby"] }).children).toEqual([
-      "Get a Coinbase sandbox estimate for a $5–$50 US guest purchase.",
+      "Coinbase estimate only · $5–$50 for US guests",
     ]);
     act(() => preview.props.onClick());
     expect(onSelect).toHaveBeenLastCalledWith("guest");
@@ -101,6 +100,9 @@ describe("AddFundsDialog", () => {
     act(() => {
       renderer = create(
         <AddFundsDialog
+          cardFirst
+          cardLabel='Check for purchased USDC'
+          cardStatus='Looking for purchased USDC on Base.'
           guestAvailable
           isCardChecking
           onCardStartOver={vi.fn()}
@@ -113,10 +115,11 @@ describe("AddFundsDialog", () => {
     });
 
     const isDisabled = (label: string) => renderer.root.findByProps({ "aria-label": label }).props.disabled;
-    expect(isDisabled("Buy USDC with card")).toBe(true);
+    expect(isDisabled("Check for purchased USDC")).toBe(true);
+    expect(renderer.root.findByProps({ role: "status" }).children).toEqual(["Looking for purchased USDC on Base."]);
     expect(isDisabled("Preview Apple Pay top-up")).toBe(false);
-    expect(isDisabled("Deposit token")).toBe(false);
-    expect(isDisabled("Swap to USDFC")).toBe(false);
+    expect(isDisabled("Deposit from Filecoin")).toBe(false);
+    expect(isDisabled("Swap from another network")).toBe(false);
     const startOver = renderer.root.find((node) => node.type === "button" && node.children.includes("Start over"));
     expect(startOver.props.disabled).toBe(false);
 

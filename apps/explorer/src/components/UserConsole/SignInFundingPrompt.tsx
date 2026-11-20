@@ -1,7 +1,7 @@
 "use client";
 
 import { useLogin, usePrivy } from "@privy-io/react-auth";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type Address, erc20Abi, multicall3Abi } from "viem";
 import { useReadContracts } from "wagmi";
 import { mainnet } from "@/constants/chains";
@@ -11,11 +11,13 @@ import { useFundingLaunch } from "./providers/FundingLaunchContext";
 export function SignInFundingPrompt({ address }: { address?: Address }) {
   const { user } = usePrivy();
   const [signedInUser, setSignedInUser] = useState<string | null>(null);
+  const userTookAction = useRef(false);
   const { isAddFundsOpen, isSquidOpen, openAddFunds } = useFundingLaunch();
   useLogin({
     onComplete: ({ user, wasAlreadyAuthenticated, loginMethod, loginAccount }) => {
       if (wasAlreadyAuthenticated) return;
       const method = loginMethod ?? loginAccount?.type;
+      userTookAction.current = false;
       setSignedInUser(method === "email" || method === "google" || method === "google_oauth" ? user.id : null);
     },
   });
@@ -24,10 +26,34 @@ export function SignInFundingPrompt({ address }: { address?: Address }) {
     if (isAddFundsOpen || isSquidOpen) setSignedInUser(null);
   }, [isAddFundsOpen, isSquidOpen]);
 
+  useEffect(() => {
+    if (!signedInUser) return;
+    // Let a menu or link the user chose keep focus while identity and balances finish loading.
+    const onActivation = (event: Event) => {
+      if (!(event.target instanceof Element)) return;
+      const control = event.target.closest(
+        'button, a[href], input, select, textarea, summary, [role="button"], [role="menuitem"]',
+      );
+      if (!control || control.matches(':disabled, [aria-disabled="true"]')) return;
+      if (event instanceof KeyboardEvent) {
+        const opensMenu = event.key === "ArrowDown" && control.hasAttribute("aria-haspopup");
+        if (event.key !== "Enter" && event.key !== " " && !opensMenu) return;
+      }
+      userTookAction.current = true;
+      setSignedInUser(null);
+    };
+    const controller = new AbortController();
+    const options = { capture: true, signal: controller.signal };
+    document.addEventListener("pointerdown", onActivation, options);
+    document.addEventListener("keydown", onActivation, options);
+    document.addEventListener("click", onActivation, options);
+    return () => controller.abort();
+  }, [signedInUser]);
+
   const finish = useCallback(
     (empty: boolean) => {
       setSignedInUser(null);
-      if (empty) openAddFunds();
+      if (empty && !userTookAction.current) openAddFunds();
     },
     [openAddFunds],
   );

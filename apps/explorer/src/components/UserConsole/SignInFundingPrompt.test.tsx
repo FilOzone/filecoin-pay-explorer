@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SignInFundingPrompt } from "./SignInFundingPrompt";
 
@@ -101,4 +101,45 @@ it.each(["isAddFundsOpen", "isSquidOpen"] as const)("drops the pending check whe
   mocks.read.mockReturnValue(balance());
   view.rerender(<SignInFundingPrompt address={address} />);
   expect(mocks.open).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["pointer press", (control: HTMLElement) => fireEvent.pointerDown(control)],
+  ["keyboard activation", (control: HTMLElement) => fireEvent.keyDown(control, { key: "Enter" })],
+  ["menu shortcut", (control: HTMLElement) => fireEvent.keyDown(control, { key: "ArrowDown" })],
+  ["assistive click", (control: HTMLElement) => fireEvent.click(control)],
+])("lets a %s on the wallet menu take precedence over a late empty balance", (_, activate) => {
+  const page = () => (
+    <>
+      <button type='button' aria-haspopup='menu'>
+        <span>Wallet menu</span>
+      </button>
+      <SignInFundingPrompt address={address} />
+    </>
+  );
+  mocks.read.mockReturnValue({ ...balance(), isFetching: true });
+  const view = render(page());
+  login();
+  activate(view.getByText("Wallet menu"));
+  mocks.read.mockReturnValue(balance());
+  view.rerender(page());
+  expect(mocks.open).not.toHaveBeenCalled();
+});
+
+it("keeps the suggestion during background clicks and keyboard focus traversal", () => {
+  const page = () => (
+    <>
+      <p>Dashboard</p>
+      <button type='button'>Wallet menu</button>
+      <SignInFundingPrompt address={address} />
+    </>
+  );
+  mocks.read.mockReturnValue({ ...balance(), isFetching: true });
+  const view = render(page());
+  login();
+  fireEvent.pointerDown(view.getByText("Dashboard"));
+  fireEvent.keyDown(view.getByRole("button"), { key: "Tab" });
+  mocks.read.mockReturnValue(balance());
+  view.rerender(page());
+  expect(mocks.open).toHaveBeenCalledOnce();
 });
