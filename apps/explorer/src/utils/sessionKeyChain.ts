@@ -14,6 +14,7 @@ import type { DecodedAuthorizationEvent } from "@/utils/sessionKeySync";
 const REGISTRY_DEPLOY_BLOCK: Record<Network, bigint> = {
   mainnet: 5459604n,
   calibration: 3185523n,
+  devnet: 0n,
 };
 
 /** Shape of one entry in Blockscout's Etherscan-compatible `getLogs` response. */
