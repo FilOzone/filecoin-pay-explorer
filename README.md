@@ -133,7 +133,7 @@ Optional Explorer configuration:
 | `NEXT_PUBLIC_NOTIFICATIONS_API_URL` | Enables notification registration and settings against a matching notification API |
 | `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS` | Selects the Filecoin network where notification UI is available; defaults to `mainnet` |
 | `PIMLICO_API_KEY` | Server-only key for the `/api/bundler` proxy that sends USDC-gas deposits to Pimlico's Base bundler; without it the route answers 503 |
-| `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX` | Set to `true` to show the $5–$50 guest Apple Pay estimate in Add funds for an embedded mainnet wallet. Defaults to off. |
+| `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX` | Shows the $5–$50 guest Apple Pay estimate in Add funds for an embedded Filecoin mainnet wallet. PR previews set this to `true`. Elsewhere it defaults to off. |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only Coinbase CDP credentials. The preview uses Headless Onramp's sandbox user reference and requests pricing only. |
 | `PRIVY_VERIFICATION_KEY` | Server-side public verification key for `NEXT_PUBLIC_PRIVY_APP_ID`. Enable identity tokens in that Privy app so the server can verify the receiving wallet. |
 
