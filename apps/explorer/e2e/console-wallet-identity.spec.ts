@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 import { base } from "viem/chains";
 import { SOURCE_RPC_URLS } from "../src/services/wagmi/transports";
 import { installFakeSquid } from "./fake-squid";
+import { installFakeUsdcGas } from "./fake-usdc-gas";
 import { consoleLink, filecoinPin } from "./filecoin-pin";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount, logoutFromConsole } from "./privy";
@@ -443,18 +444,63 @@ test("after a switch, the extension's new account verifies for itself before buy
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
 });
 
-test("an email account's Add funds lists card first", async ({ page }) => {
+test("an email account's Add funds lists fiat funding before token deposits", async ({ page }) => {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await loginWithTestAccount(page);
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   await openAddFunds(page);
 
+  const preview =
+    process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX === "true" ? '- button "Preview Apple Pay top-up"' : "";
   await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+    ${preview}
     - button "Buy USDC with card"
     - button "Swap to USDFC"
     - button "Deposit token"
   `);
+});
+
+test("a new email account can preview the $5 guest purchase only in sandbox mode", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "uses local Coinbase and chain fixtures");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await loginWithTestAccount(page, { email: "first-purchase@fake-privy.test" });
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await openAddFunds(page);
+  const preview = page.getByRole("button", { name: "Preview Apple Pay top-up" });
+  if (process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX !== "true") {
+    await expect(page.getByRole("button", { name: "Buy USDC with card" })).toBeVisible();
+    await expect(preview).toHaveCount(0);
+    return;
+  }
+
+  const payer = await page.evaluate(
+    () => (window as unknown as { __fakePrivyEmbeddedAccount: Hex }).__fakePrivyEmbeddedAccount,
+  );
+  const bundler = await installFakeUsdcGas(page, payer);
+  const routes = await installFakeSquid(page, payer, {
+    alsoRead: bundler.read,
+    executableRoute: () => ({ expiresInSeconds: 90 }),
+    nativeFee: 6_000_000_000_000n,
+    payerUsdc: 0n,
+    payerEth: 0n,
+  });
+  const quotes: unknown[] = [];
+  await page.route("**/api/coinbase/quote", (route) => {
+    quotes.push(route.request().postDataJSON());
+    return route.fulfill({ json: { paymentTotal: "5.00", feeTotal: "0.10", purchaseAmount: "4.900000" } });
+  });
+  await preview.click();
+  const dialog = page.getByRole("dialog", { name: "Coinbase Apple Pay estimate" });
+  await expect(dialog.getByLabel("Purchase amount (USD)")).toHaveValue("5.00");
+  await expect(dialog.getByText(/0\.05 FIL/).first()).toBeVisible({ timeout: 30_000 });
+  expect(quotes).toEqual([{ address: payer, paymentAmount: "5.00" }]);
+  expect(routes.at(-1)).toMatchObject({ fromAmount: "4400000", fromChain: "8453", toAddress: payer });
+  await expect(dialog.getByRole("button", { name: /^pay\b/i })).toHaveCount(0);
+  expect(bundler.operations).toHaveLength(0);
+  await dialog.getByRole("button", { name: "Other funding options" }).click();
+  await expect(page.getByRole("button", { name: "Buy USDC with card" })).toBeVisible();
 });
 
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {

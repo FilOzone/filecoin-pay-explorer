@@ -523,6 +523,11 @@ export function usePrivy() {
   return { ready, authenticated: user !== null, user, error: null, login: openLogin, logout };
 }
 
+// The fake signs no identity tokens. A quote-response fixture can exercise the signed-in preview.
+export async function getIdentityToken() {
+  return "fake-privy-identity";
+}
+
 export function useWallets() {
   const { ready, wallets } = useFakePrivy();
   return { ready, wallets };

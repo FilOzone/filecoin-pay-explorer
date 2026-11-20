@@ -7,12 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@filecoin-pay/ui/components/dialog";
-import { ArrowRight, CreditCard, type LucideIcon, Repeat, Wallet } from "lucide-react";
+import { ArrowRight, CreditCard, type LucideIcon, Repeat, Smartphone, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type AddFundsMethod = "card" | "deposit" | "squid";
+export type AddFundsMethod = "card" | "deposit" | "squid" | "guest";
 
 type AddFundsDialogProps = {
+  guestAvailable?: boolean;
   cardFirst?: boolean;
   cardLabel?: string;
   cardStatus?: string | null;
@@ -96,6 +97,7 @@ function MethodCard({
 }
 
 export function AddFundsDialog({
+  guestAvailable = false,
   cardFirst = false,
   cardLabel = "Buy USDC with card",
   cardStatus,
@@ -146,12 +148,21 @@ export function AddFundsDialog({
   );
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className='sm:max-w-[520px]'>
+      <DialogContent className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[520px]'>
         <DialogHeader>
           <DialogTitle>Add funds</DialogTitle>
           <DialogDescription>Choose how you want to fund your Filecoin Pay account.</DialogDescription>
         </DialogHeader>
         <div className='grid gap-3'>
+          {guestAvailable ? (
+            <MethodCard
+              description='See what $5–$50 could add to your account with Coinbase guest checkout in the US.'
+              disabled={isBusy}
+              icon={Smartphone}
+              label='Preview Apple Pay top-up'
+              onSelect={() => onSelect("guest")}
+            />
+          ) : null}
           {cardFirst ? cardMethod : null}
           <MethodCard
             description={
