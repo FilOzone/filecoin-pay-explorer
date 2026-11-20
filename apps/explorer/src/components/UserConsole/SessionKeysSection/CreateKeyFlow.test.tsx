@@ -29,8 +29,12 @@ vi.mock("@/hooks/useContractTransaction", () => ({ useContractTransaction: () =>
 const registryReads = vi.hoisted(() => ({ data: undefined as unknown }));
 vi.mock("wagmi", () => ({ useReadContracts: () => ({ data: registryReads.data }) }));
 
+const trackSessionKeyCreated = vi.hoisted(() => vi.fn());
+vi.mock("@/utils/funnel-analytics", () => ({ trackSessionKeyCreated }));
+
 beforeEach(() => {
   registryReads.data = undefined;
+  trackSessionKeyCreated.mockClear();
 });
 
 const OWNER = "0x00000000000000000000000000000000000000aa" as Hex;
@@ -186,5 +190,78 @@ describe("CreateKeyFlow confirmation from the registry", () => {
     readBack(2n ** 64n, 0n);
 
     expect(onCreated.mock.calls.map(([record]) => record.sessionKeyPublic)).toEqual([SIGNER]);
+  });
+});
+
+describe("CreateKeyFlow funnel event", () => {
+  const submit = async (extra: Partial<React.ComponentProps<typeof CreateKeyFlow>>, button: string) => {
+    let walletConfirmed = () => undefined;
+    let walletReverted = () => undefined;
+    execute.mockImplementation((options: { onConfirmed: () => undefined; onReverted: () => undefined }) => {
+      walletConfirmed = options.onConfirmed;
+      walletReverted = options.onReverted;
+      return new Promise(() => undefined);
+    });
+    const props = {
+      open: true,
+      onOpenChange: () => undefined,
+      network: "mainnet" as const,
+      account: OWNER,
+      registry: REGISTRY,
+      onCreated: () => undefined,
+      ...extra,
+    };
+    let renderer!: ReturnType<typeof create>;
+    act(() => {
+      renderer = create(<CreateKeyFlow {...props} />);
+    });
+    act(() => renderer.root.findAllByProps({ type: "checkbox" })[0].props.onChange({ target: { checked: true } }));
+    await act(async () => {
+      renderer.root.findByProps({ children: button }).props.onClick();
+    });
+    return {
+      walletConfirms: () => act(() => walletConfirmed()),
+      walletReverts: () => act(() => walletReverted()),
+      registryConfirms: () => {
+        registryReads.data = [{ status: "success", result: 2n ** 64n }];
+        act(() => renderer.update(<CreateKeyFlow {...props} />));
+      },
+    };
+  };
+
+  it("reports a key the console generated when the wallet confirms its login", async () => {
+    const { walletConfirms } = await submit({}, "Create session key");
+    expect(trackSessionKeyCreated).not.toHaveBeenCalled();
+
+    walletConfirms();
+
+    expect(trackSessionKeyCreated.mock.calls).toEqual([["mainnet"]]);
+  });
+
+  it("reports a generated key when the registry confirms it, and not again when the wallet does", async () => {
+    const { registryConfirms, walletConfirms } = await submit({}, "Create session key");
+
+    registryConfirms();
+    expect(trackSessionKeyCreated.mock.calls).toEqual([["mainnet"]]);
+
+    walletConfirms();
+
+    expect(trackSessionKeyCreated.mock.calls).toEqual([["mainnet"]]);
+  });
+
+  it("does not report a generated key whose login reverts", async () => {
+    const { walletReverts } = await submit({}, "Create session key");
+
+    walletReverts();
+
+    expect(trackSessionKeyCreated).not.toHaveBeenCalled();
+  });
+
+  it("does not report an address the owner brought, which may already hold a login", async () => {
+    const { walletConfirms } = await submit({ prefillAddress: SIGNER }, "Authorize as 0x0000...00aa");
+
+    walletConfirms();
+
+    expect(trackSessionKeyCreated).not.toHaveBeenCalled();
   });
 });

@@ -194,3 +194,19 @@ describe("trackDepositConfirmed", () => {
     assert.equal(plausible.mock.calls.length, 0);
   });
 });
+
+describe("trackSessionKeyCreated", () => {
+  it("sends a mainnet key with the visit's labels", async () => {
+    stubWindow(`?${SITE_QUERY}`);
+    const { trackSessionKeyCreated } = await load();
+    trackSessionKeyCreated("mainnet");
+    assert.deepEqual(plausible.mock.calls, [["console_session_key_created", { props: SITE }]]);
+  });
+
+  it("ignores calibration", async () => {
+    stubWindow("");
+    const { trackSessionKeyCreated } = await load();
+    trackSessionKeyCreated("calibration");
+    assert.equal(plausible.mock.calls.length, 0);
+  });
+});
