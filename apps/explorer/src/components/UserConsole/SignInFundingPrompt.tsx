@@ -1,0 +1,60 @@
+"use client";
+
+import { useLogin, usePrivy } from "@privy-io/react-auth";
+import { useCallback, useEffect, useState } from "react";
+import { type Address, erc20Abi, multicall3Abi } from "viem";
+import { useReadContracts } from "wagmi";
+import { mainnet } from "@/constants/chains";
+import { isLinkedWallet } from "./console-wallet";
+import { useFundingLaunch } from "./providers/FundingLaunchContext";
+
+export function SignInFundingPrompt({ address }: { address?: Address }) {
+  const { user } = usePrivy();
+  const [signedInUser, setSignedInUser] = useState<string | null>(null);
+  const { isAddFundsOpen, isSquidOpen, openAddFunds } = useFundingLaunch();
+  useLogin({
+    onComplete: ({ user, wasAlreadyAuthenticated, loginMethod, loginAccount }) => {
+      if (wasAlreadyAuthenticated) return;
+      const method = loginMethod ?? loginAccount?.type;
+      setSignedInUser(method === "email" || method === "google" || method === "google_oauth" ? user.id : null);
+    },
+  });
+
+  useEffect(() => {
+    if (isAddFundsOpen || isSquidOpen) setSignedInUser(null);
+  }, [isAddFundsOpen, isSquidOpen]);
+
+  const finish = useCallback(
+    (empty: boolean) => {
+      setSignedInUser(null);
+      if (empty) openAddFunds();
+    },
+    [openAddFunds],
+  );
+
+  // Login can finish before Privy has attached the new wallet or wagmi has connected it.
+  if (!address || signedInUser !== user?.id || !isLinkedWallet(user, address) || isAddFundsOpen || isSquidOpen) {
+    return null;
+  }
+  return <CheckFundingBalance address={address} key={address} onResult={finish} />;
+}
+
+function CheckFundingBalance({ address, onResult }: { address: Address; onResult: (empty: boolean) => void }) {
+  const { multicall3, usdfc, payments } = mainnet.contracts;
+  const { data, isError, isFetchedAfterMount, isFetching } = useReadContracts({
+    allowFailure: false,
+    chainId: mainnet.id,
+    contracts: [
+      { address: multicall3.address, abi: multicall3Abi, functionName: "getEthBalance", args: [address] },
+      { address: usdfc.address, abi: erc20Abi, functionName: "balanceOf", args: [address] },
+      { address: payments.address, abi: payments.abi, functionName: "accounts", args: [usdfc.address, address] },
+    ],
+    query: { refetchOnMount: "always", refetchOnWindowFocus: false, retry: 1 },
+  });
+  useEffect(() => {
+    // A previous session's cached zeros and an unreadable balance cannot establish an empty wallet.
+    if (!isFetchedAfterMount || isFetching) return;
+    onResult(!isError && data?.[0] === 0n && data[1] === 0n && data[2][0] === 0n);
+  }, [data, isError, isFetchedAfterMount, isFetching, onResult]);
+  return null;
+}

@@ -26,7 +26,7 @@ test("Add Service opens the dialog when the approvals query fails", async ({ pag
   );
 
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "add-service@fake-privy.test" });
+  await loginWithTestAccount(page, { email: "add-service@fake-privy.test", dismissFundingPrompt: true });
   await expect(page.getByText("Failed to load authorized services")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Add Service", exact: true }).click();

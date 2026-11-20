@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import type { Hex } from "viem";
+import { type Hex, toFunctionSelector } from "viem";
 import { base } from "viem/chains";
 import { SOURCE_RPC_URLS } from "../src/services/wagmi/transports";
 import { installFakeSquid } from "./fake-squid";
@@ -30,26 +30,26 @@ async function stubAccountBackgroundRequests(page: Page): Promise<void> {
 test("logging in with a different identity after logout reaches the console, not stuck preparing", async ({ page }) => {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "first@fake-privy.test" });
+  await loginWithTestAccount(page, { email: "first@fake-privy.test", dismissFundingPrompt: true });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
   await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
-  await loginWithTestAccount(page, { email: "second@fake-privy.test" });
+  await loginWithTestAccount(page, { email: "second@fake-privy.test", dismissFundingPrompt: true });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 });
 
 test("logging out and back in with the same identity reconnects without getting stuck", async ({ page }) => {
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
+  await loginWithTestAccount(page, { email: "repeat@fake-privy.test", dismissFundingPrompt: true });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 
   await logoutFromConsole(page);
   await expect(page.getByRole("button", { name: "Continue with email or Google" })).toBeVisible();
 
-  await loginWithTestAccount(page, { email: "repeat@fake-privy.test" });
+  await loginWithTestAccount(page, { email: "repeat@fake-privy.test", dismissFundingPrompt: true });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
 });
 
@@ -70,6 +70,7 @@ async function openAddFundsFromWalletMenu(page: Page): Promise<void> {
   await page.goto("/console");
   await page.getByRole("button", { name: "Connect existing wallet" }).click();
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeHidden();
   await openAddFunds(page);
   await expect(page.getByRole("heading", { name: "Add funds" })).toBeVisible();
   // Let the menu finish closing, as a person would.
@@ -341,7 +342,7 @@ test("an email user's console stays on their own wallet when an extension connec
   test.skip(process.env.E2E_MODE === "real", "needs the fake extension");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await loginWithTestAccount(page);
+  await loginWithTestAccount(page, { dismissFundingPrompt: true });
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   const own = await consoleAccount(page);
 
@@ -444,21 +445,71 @@ test("after a switch, the extension's new account verifies for itself before buy
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(end);
 });
 
-test("an email account's Add funds lists fiat funding before token deposits", async ({ page }) => {
+test("an empty email account automatically opens Add funds with fiat funding first", async ({ page }) => {
+  const real = process.env.E2E_MODE === "real";
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
-  await loginWithTestAccount(page);
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
-  await openAddFunds(page);
+  await loginWithTestAccount(page, { dismissFundingPrompt: real });
+  const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+  if (real) {
+    // The live account can already hold funds. Its funding choices are also available from the wallet menu.
+    await walletMenu(page).click();
+    await page.getByRole("menuitem", { name: "Add funds" }).click();
+    await page.removeLocatorHandler(addFunds.getByRole("heading", { name: "Add funds" }));
+  }
+  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeVisible({ timeout: 30_000 });
 
   const preview =
     process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX === "true" ? '- button "Preview Apple Pay top-up"' : "";
-  await expect(page.getByRole("dialog", { name: "Add funds" })).toMatchAriaSnapshot(`
+  await expect(addFunds).toMatchAriaSnapshot(`
     ${preview}
     - button "Buy USDC with card"
     - button "Swap to USDFC"
     - button "Deposit token"
   `);
+  await addFunds.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("link", { name: "Session Keys" }).click();
+  await expect(page).toHaveURL(/\/console\/session-keys$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/console$/);
+  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible();
+  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeHidden();
+  await openAddFunds(page);
+  await expect(addFunds.getByRole("heading", { name: "Add funds" })).toBeVisible();
+});
+
+test("Google sign-in opens Add funds for an empty wallet", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "uses the fake Google identity");
+  await stubAccountBackgroundRequests(page);
+  await page.goto("/console");
+  await page.getByRole("button", { name: "Continue with email or Google" }).click();
+  await page
+    .getByRole("dialog", { name: "log in or sign up" })
+    .getByRole("button", { name: "Continue with Google" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
+});
+
+test("a wallet holding FIL and USDFC can use the console without a funding prompt", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "supplies the wallet balances");
+  await stubAccountBackgroundRequests(page);
+  await page.addInitScript(() => {
+    const wallet = window as typeof window & { __fakeUsdfcBalance: string; __fakeFilBalance: string };
+    wallet.__fakeUsdfcBalance = String(5n * 10n ** 18n);
+    wallet.__fakeFilBalance = String(10n ** 17n);
+  });
+  await page.goto("/console");
+  const accountSelector = toFunctionSelector("accounts(address,address)").slice(2);
+  const balancesRead = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).hostname.endsWith("glif.io") &&
+      (response.request().postData() ?? "").includes(accountSelector),
+  );
+  await loginWithTestAccount(page);
+  await balancesRead;
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeHidden();
+  await openAddFunds(page);
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible();
 });
 
 test("a new email account can preview the $5 guest purchase only in sandbox mode", async ({ page }) => {
@@ -466,8 +517,7 @@ test("a new email account can preview the $5 guest purchase only in sandbox mode
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await loginWithTestAccount(page, { email: "first-purchase@fake-privy.test" });
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
-  await openAddFunds(page);
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
   const preview = page.getByRole("button", { name: "Preview Apple Pay top-up" });
   if (process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX !== "true") {
     await expect(page.getByRole("button", { name: "Buy USDC with card" })).toBeVisible();
@@ -504,16 +554,15 @@ test("a new email account can preview the $5 guest purchase only in sandbox mode
 });
 
 test("an email account opens the card purchase without another sign-in", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "the fake's card purchase window shows the destination");
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await loginWithTestAccount(page);
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Add funds", exact: true })).toBeVisible({ timeout: 30_000 });
   const account = await consoleAccount(page);
-  await openAddFunds(page);
 
   await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
 
-  test.skip(process.env.E2E_MODE === "real", "the fake's card purchase window shows the destination");
   await expect(page.getByRole("dialog", { name: "signature request" })).toBeHidden();
   const [start, end] = account.split("...");
   await expect(page.getByRole("dialog", { name: "buy usdc" })).toContainText(start);
@@ -527,9 +576,7 @@ test("closing an unpaid card purchase leaves Add funds dismissible and recoverab
   await stubAccountBackgroundRequests(page);
   await page.goto("/console");
   await loginWithTestAccount(page);
-  await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
-  await openAddFunds(page);
-  await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click();
+  await page.getByRole("button", { name: "Buy USDC with card", exact: true }).click({ timeout: 30_000 });
   await page.getByRole("dialog", { name: "buy usdc" }).getByRole("button", { name: "Done" }).click();
 
   const addFunds = page.getByRole("dialog", { name: "Add funds" });

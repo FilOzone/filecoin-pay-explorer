@@ -7,11 +7,22 @@ function requireEnv(name: string): string {
 }
 
 /** Logs in with the configured real account or a selectable fake identity. */
-export async function loginWithTestAccount(page: Page, options: { email?: string } = {}): Promise<void> {
+export async function loginWithTestAccount(
+  page: Page,
+  options: { email?: string; dismissFundingPrompt?: boolean } = {},
+): Promise<void> {
   const real = process.env.E2E_MODE === "real";
   const email = real ? requireEnv("E2E_PRIVY_TEST_EMAIL") : (options.email ?? "e2e@fake-privy.test");
   const otp = real ? requireEnv("E2E_PRIVY_TEST_OTP") : "000000";
 
+  if (options.dismissFundingPrompt) {
+    const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+    await page.addLocatorHandler(
+      addFunds.getByRole("heading", { name: "Add funds" }),
+      () => addFunds.getByRole("button", { name: "Close" }).click(),
+      { times: 1 },
+    );
+  }
   await page.getByRole("button", { name: "Continue with email or Google" }).click();
   const modal = page.getByRole("dialog", { name: "log in or sign up" });
   await modal.getByPlaceholder(/email/i).fill(email);
