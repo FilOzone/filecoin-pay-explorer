@@ -1,4 +1,5 @@
 import { exportSPKI, generateKeyPair, SignJWT } from "jose";
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
@@ -35,11 +36,11 @@ function identity(claims: Record<string, unknown> = {}) {
     .sign(keys.privateKey);
 }
 
-async function call(body: unknown = total, token: string | null = null) {
+async function call(body: unknown = total, token: string | null = null, headers: Record<string, string> = {}) {
   return POST(
-    new Request("http://localhost/api/coinbase/quote", {
+    new NextRequest("http://localhost/api/coinbase/quote", {
       method: "POST",
-      headers: token === null ? {} : { authorization: `Bearer ${token}` },
+      headers: { ...headers, ...(token && { authorization: `Bearer ${token}` }) },
       body: typeof body === "string" ? body : JSON.stringify(body),
     }),
   );
@@ -133,7 +134,9 @@ describe("guest Apple Pay quote", () => {
     ["PRIVY_VERIFICATION_KEY", 503],
   ] as const)("fails closed without %s", async (key, status) => {
     vi.stubEnv(key, "");
-    expect((await call()).status).toBe(status);
+    const response = await call();
+    expect(response.status).toBe(status);
+    if (status === 503) expect(await response.json()).toMatchObject({ code: "sandbox_unconfigured" });
     expect(fetchQuote).not.toHaveBeenCalled();
   });
 
@@ -154,6 +157,19 @@ describe("guest Apple Pay quote", () => {
     expect((await call()).status).toBe(401);
     expect((await call(total, "invalid-token")).status).toBe(401);
     expect(fetchQuote).not.toHaveBeenCalled();
+  });
+
+  it("verifies a same-origin Privy identity cookie for the requested wallet", async () => {
+    const headers = { cookie: `privy-id-token=${await identity()}`, origin: "http://localhost" };
+    fetchQuote.mockResolvedValue(Response.json({ order }));
+    expect((await call(total, null, headers)).status).toBe(200);
+    expect(
+      (await call({ ...total, address: "0x2222222222222222222222222222222222222222" }, null, headers)).status,
+    ).toBe(401);
+    expect((await call(total, null, { ...headers, origin: "https://example.com" })).status).toBe(401);
+    expect((await call(total, null, { cookie: headers.cookie })).status).toBe(401);
+    expect((await call(total, "invalid-token", headers)).status).toBe(401);
+    expect(fetchQuote).toHaveBeenCalledTimes(1);
   });
 
   it.each([

@@ -113,6 +113,28 @@ describe("Coinbase guest estimate", () => {
     expect(otherMethods).toHaveBeenCalledOnce();
   });
 
+  it("shows the preview setup blocker even when Privy has no browser-readable identity", async () => {
+    identity.mockResolvedValue(null);
+    request.mockResolvedValue(Response.json({ code: "sandbox_unconfigured" }, { status: 503 }));
+    mount();
+    expect((await screen.findByRole("alert")).textContent).toContain("Live Apple Pay estimates haven’t been enabled");
+    expect(request).toHaveBeenCalledWith(
+      "/api/coinbase/quote",
+      expect.objectContaining({
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(route).not.toHaveBeenCalled();
+  });
+
+  it("can quote with the browser's identity cookie when the SDK cannot supply a token", async () => {
+    identity.mockRejectedValue(new Error("Identity unavailable"));
+    mount();
+    await screen.findByText(paymentBlocker);
+    expect(request.mock.lastCall?.[1].headers).toEqual({ "Content-Type": "application/json" });
+  });
+
   it("drops expired deposit terms while retaining the Coinbase estimate", async () => {
     route.mockResolvedValue({ ...routeEstimate, expiresAt: Date.now() - 1 });
     mount();

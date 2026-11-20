@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
 import { importSPKI, jwtVerify } from "jose";
+import type { NextRequest } from "next/server";
 import { isRecord, parseQuoteInput, readQuote } from "./quote";
 
 const orders = new URL("https://api.cdp.coinbase.com/platform/v2/onramp/orders");
 const noStore = { "cache-control": "no-store" };
 
-function error(message: string, status: number) {
-  return Response.json({ error: message }, { headers: noStore, status });
+function error(message: string, status: number, code?: "sandbox_unconfigured") {
+  return Response.json({ error: message, code }, { headers: noStore, status });
 }
 
 async function verifiedUser(token: string, appId: string, verificationKey: string, address: string) {
@@ -35,17 +36,21 @@ async function verifiedUser(token: string, appId: string, verificationKey: strin
   return ownsWallet ? payload.sub : null;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   if (process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX !== "true")
     return error("Coinbase sandbox preview is disabled.", 404);
   const apiKeyId = process.env.CDP_API_KEY_ID?.trim();
   const apiKeySecret = process.env.CDP_API_KEY_SECRET?.trim();
   if (!apiKeyId || !apiKeySecret)
-    return error("Coinbase sandbox quotes require CDP_API_KEY_ID and CDP_API_KEY_SECRET.", 503);
+    return error("Coinbase sandbox quotes require CDP_API_KEY_ID and CDP_API_KEY_SECRET.", 503, "sandbox_unconfigured");
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
   const verificationKey = process.env.PRIVY_VERIFICATION_KEY?.trim();
   if (!appId || !verificationKey)
-    return error("Sandbox wallet verification requires NEXT_PUBLIC_PRIVY_APP_ID and PRIVY_VERIFICATION_KEY.", 503);
+    return error(
+      "Sandbox wallet verification requires NEXT_PUBLIC_PRIVY_APP_ID and PRIVY_VERIFICATION_KEY.",
+      503,
+      "sandbox_unconfigured",
+    );
 
   if (Number(request.headers.get("content-length")) > 1024) return error("Quote request is too large.", 413);
   const raw = await request.text();
@@ -58,8 +63,12 @@ export async function POST(request: Request) {
   }
   const input = parseQuoteInput(body);
   if (!input) return error("Choose an embedded wallet and an amount from $5 to $50.", 400);
-  const token = request.headers.get("authorization")?.match(/^Bearer (\S+)$/)?.[1];
-  if (!token) return error("Sign in to verify the destination wallet.", 401);
+  const authorization = request.headers.get("authorization");
+  // Browsers may keep the Privy identity in an HttpOnly cookie. Only accept it on same-origin POSTs.
+  const cookie =
+    request.headers.get("origin") === request.nextUrl.origin ? request.cookies.get("privy-id-token") : null;
+  const token = authorization === null ? cookie?.value : authorization.match(/^Bearer (\S+)$/)?.[1];
+  if (!token) return error("Wallet verification is unavailable for this estimate. Choose another funding option.", 401);
   const userId = await verifiedUser(token, appId, verificationKey, input.address).catch(() => null);
   if (!userId) return error("The signed-in session could not verify this embedded wallet.", 401);
 

@@ -37,19 +37,22 @@ function paymentAmount(input: string) {
 }
 
 async function getCoinbaseQuote(address: Address, amount: string, signal: AbortSignal): Promise<GuestCoinbaseQuote> {
-  const token = await getIdentityToken();
-  if (!token) throw new Error("Your sign-in could not be verified. Sign in again to check this estimate.");
+  const token = await getIdentityToken().catch(() => null);
   const response = await fetch("/api/coinbase/quote", {
     body: JSON.stringify({ address, paymentAmount: amount }),
     cache: "no-store",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
     method: "POST",
     signal,
   });
+  const body = await response.json().catch(() => null);
   if (response.status === 503) {
+    if (body?.code === "sandbox_unconfigured") {
+      throw new Error("Live Apple Pay estimates haven’t been enabled for this preview. Choose another funding option.");
+    }
     throw new Error("Apple Pay estimates are unavailable right now. Try another funding option or check again later.");
   }
-  const body = await response.json().catch(() => null);
   if (!response.ok || !body) {
     throw new Error(
       typeof body?.error === "string" ? body.error : "Coinbase could not provide an estimate. Try again.",
