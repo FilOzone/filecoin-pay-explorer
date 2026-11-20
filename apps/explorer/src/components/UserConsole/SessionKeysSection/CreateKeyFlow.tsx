@@ -26,6 +26,7 @@ import type { Network } from "@/types";
 import { presetScopeStates } from "@/utils/authorizeParam";
 import { download } from "@/utils/download";
 import { formatAddress, formatDateTime } from "@/utils/formatter";
+import { trackSessionKeyCreated } from "@/utils/funnel-analytics";
 import {
   buildEnvSnippet,
   buildLoginArgs,
@@ -298,6 +299,7 @@ export const CreateKeyFlow: React.FC<CreateKeyFlowProps> = ({
         setStep((prev) => (prev === "form" ? "registered" : prev)); // BYO path lands on the success state
       }
       onConfirmed?.(signerAddress);
+      if (key) trackSessionKeyCreated(network);
     };
     // Confirming at the submitted expiry, not any expiry, keeps a renewal from matching the old grant.
     const grant: AwaitedGrant = { signer: signerAddress, permissions: loginArgs[2], expiry, finish };

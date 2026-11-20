@@ -1,11 +1,12 @@
 /**
  * Plausible funnel events for the console: console_view → console_wallet_connected →
- * console_deposit_confirmed. Labels only: never a wallet address, visitor ID, or a hash of either.
+ * console_deposit_confirmed → console_session_key_created. Labels only: never a wallet address, visitor ID, or a hash of either.
  * Plausible attaches the session's utm_* to these events itself.
  */
 
 import { type Address, formatUnits } from "viem";
 import { mainnet } from "@/constants/chains";
+import type { Network } from "@/types";
 
 type FunnelProps = Record<string, string>;
 
@@ -102,4 +103,9 @@ export function trackWalletConnected(walletType: "embedded" | "external", isNewU
 export function trackDepositConfirmed(chainId: number, token: Address, amount: bigint) {
   if (chainId !== mainnet.id || token.toLowerCase() !== mainnet.contracts.usdfc.address.toLowerCase()) return;
   trackFunnelEvent("console_deposit_confirmed", formatUnits(amount, 18));
+}
+
+export function trackSessionKeyCreated(network: Network) {
+  if (network !== "mainnet") return;
+  trackFunnelEvent("console_session_key_created");
 }
