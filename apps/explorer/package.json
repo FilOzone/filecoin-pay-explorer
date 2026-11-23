@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:apple-pay": "next dev --hostname localhost --port 3105",
     "build": "next build",
     "start": "next start",
     "lint": "biome check --write",
@@ -14,6 +15,7 @@
     "test:e2e:real": "E2E_MODE=real playwright test"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "1.56.0",
     "@filecoin-foundation/ui-filecoin": "^0.9.0",
     "@filecoin-pay/types": "workspace:*",
     "@filecoin-pay/ui": "workspace:*",
@@ -29,6 +31,7 @@
     "clsx": "^2.1.1",
     "ethers": "^6.17.0",
     "graphql-request": "^7.4.0",
+    "jose": "6.2.12",
     "lucide-react": "^1.46.0",
     "next": "^16.3.5",
     "react": "^19.3.0",

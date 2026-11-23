@@ -52,7 +52,14 @@ jobs:
       - name: Deploy
         id: deploy
         run: |
-          url=$(vercel deploy ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --yes --token="$VERCEL_TOKEN")
+          flags=(--yes)
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            # Next.js reads the public flag when bundling the picker; the quote API also checks it.
+            flags+=(--build-env NEXT_PUBLIC_COINBASE_GUEST_SANDBOX=true --env NEXT_PUBLIC_COINBASE_GUEST_SANDBOX=true)
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            flags+=(--prod)
+          fi
+          url=$(vercel deploy "${flags[@]}" --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       # PR previews get a stable host under *.preview.pay.filecoin.cloud, which the

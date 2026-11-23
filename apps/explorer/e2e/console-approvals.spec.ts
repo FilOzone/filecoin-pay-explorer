@@ -51,7 +51,7 @@ async function openApprovals(page: Page, email: string, failBeyondFirstPage = ()
   );
 
   await page.goto("/console");
-  await loginWithTestAccount(page, { email });
+  await loginWithTestAccount(page, { email, dismissFundingPrompt: true });
   const increaseButtons = page.getByRole("button", { name: "Increase", exact: true });
   await expect(increaseButtons).toHaveCount(10, { timeout: 30_000 });
   return increaseButtons;

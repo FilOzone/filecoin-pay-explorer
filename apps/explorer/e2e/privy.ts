@@ -7,11 +7,23 @@ function requireEnv(name: string): string {
 }
 
 /** Logs in with the configured real account or a selectable fake identity. */
-export async function loginWithTestAccount(page: Page, options: { email?: string } = {}): Promise<void> {
+export async function loginWithTestAccount(
+  page: Page,
+  options: { email?: string; dismissFundingPrompt?: boolean } = {},
+): Promise<void> {
   const real = process.env.E2E_MODE === "real";
   const email = real ? requireEnv("E2E_PRIVY_TEST_EMAIL") : (options.email ?? "e2e@fake-privy.test");
   const otp = real ? requireEnv("E2E_PRIVY_TEST_OTP") : "000000";
 
+  const addFunds = page.getByRole("dialog", { name: "Add funds", exact: true });
+  if (options.dismissFundingPrompt && real) {
+    // The live account may already hold funds and skip the prompt.
+    await page.addLocatorHandler(
+      addFunds.getByRole("heading", { name: "Add funds" }),
+      () => addFunds.getByRole("button", { name: "Close" }).click(),
+      { times: 1 },
+    );
+  }
   await page.getByRole("button", { name: "Continue with email or Google" }).click();
   const modal = page.getByRole("dialog", { name: "log in or sign up" });
   await modal.getByPlaceholder(/email/i).fill(email);
@@ -19,6 +31,11 @@ export async function loginWithTestAccount(page: Page, options: { email?: string
   await modal.getByRole("heading", { name: "Enter confirmation code" }).waitFor();
   const boxes = modal.getByRole("textbox");
   for (const [i, digit] of [...otp].entries()) await boxes.nth(i).fill(digit);
+  if (options.dismissFundingPrompt && !real) {
+    // These fixtures start empty. Finish onboarding before the spec opens another menu or dialog.
+    await addFunds.getByRole("button", { name: "Close" }).click();
+    await addFunds.getByRole("heading", { name: "Add funds", exact: true }).waitFor({ state: "hidden" });
+  }
 }
 
 export async function logoutFromConsole(page: Page): Promise<void> {

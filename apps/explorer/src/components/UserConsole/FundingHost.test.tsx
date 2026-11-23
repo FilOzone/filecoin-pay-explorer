@@ -1,5 +1,5 @@
 import { act, create } from "react-test-renderer";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingLaunchProvider, useFundingLaunch } from "@/components/UserConsole/providers/FundingLaunchContext";
 import { TopUpActivityProvider } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { FundingHost } from "./FundingHost";
@@ -9,6 +9,7 @@ const wallet = vi.hoisted(() => ({
   address: "0xABCDEF0000000000000000000000000000000001" as string | undefined,
   chainId: 314 as number | undefined,
 }));
+const wallets = vi.hoisted(() => [] as { address: string; walletClientType: string }[]);
 const dialogs = vi.hoisted(() => ({
   accountId: "",
   onSelect: undefined as ((method: "card" | "deposit" | "squid") => void) | undefined,
@@ -23,15 +24,24 @@ const card = vi.hoisted(() => ({
   statusMessage: null as string | null,
 }));
 
+vi.mock("@privy-io/react-auth", () => ({ useWallets: () => ({ wallets }) }));
 vi.mock("wagmi", () => ({ useConnection: () => wallet }));
 vi.mock("@/hooks/useAccountDetails", () => ({
   CONSOLE_TOKEN_PAGE_SIZE: 100,
   useAccountTokens: () => ({ data: { userTokens: [{ id: "token-1" }] } }),
 }));
 vi.mock("./FundsSection/components", () => ({
-  AddFundsDialog: ({ onSelect, open }: { onSelect: (method: "card" | "deposit" | "squid") => void; open: boolean }) => {
+  AddFundsDialog: ({
+    onSelect,
+    open,
+    guestAvailable,
+  }: {
+    onSelect: (method: "card" | "deposit" | "squid") => void;
+    open: boolean;
+    guestAvailable: boolean;
+  }) => {
     dialogs.onSelect = onSelect;
-    return <div data-picker-open={open} />;
+    return <div data-guest-available={guestAvailable} data-picker-open={open} />;
   },
 }));
 vi.mock("./FundsSection/hooks/useCardPurchase", () => ({
@@ -126,7 +136,10 @@ async function rerenderHost(renderer: ReturnType<typeof create>) {
 const find = (renderer: ReturnType<typeof create>, prop: string) =>
   renderer.root.find((node) => typeof node.type === "string" && prop in node.props);
 
+afterEach(() => vi.unstubAllEnvs());
+
 beforeEach(() => {
+  wallets.length = 0;
   wallet.address = "0xABCDEF0000000000000000000000000000000001";
   wallet.chainId = 314;
   dialogs.accountId = "";
@@ -137,6 +150,23 @@ beforeEach(() => {
 });
 
 describe("FundingHost", () => {
+  it("offers the guest preview only for the active embedded wallet with the sandbox flag enabled", async () => {
+    wallets.push({ address: "0xabcdef0000000000000000000000000000000001", walletClientType: "privy" });
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_GUEST_SANDBOX", "");
+    const renderer = await renderHost();
+    const available = () => find(renderer, "data-guest-available").props["data-guest-available"];
+    expect(available()).toBe(false);
+
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_GUEST_SANDBOX", "true");
+    await rerenderHost(renderer);
+    expect(available()).toBe(true);
+
+    wallet.address = "0xABCDEF0000000000000000000000000000000002";
+    wallets.push({ address: wallet.address, walletClientType: "metamask" });
+    await rerenderHost(renderer);
+    expect(available()).toBe(false);
+  });
+
   it("routes mainnet funding to a direct deposit or direct Squid deposit", async () => {
     const renderer = await renderHost();
     expect(dialogs.accountId).toBe("0xabcdef0000000000000000000000000000000001");

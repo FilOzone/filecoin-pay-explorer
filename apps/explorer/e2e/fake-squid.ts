@@ -55,11 +55,13 @@ export async function installFakeSquid(
   // The bridge fee is the route's native `value`, as Axelar's fee is on a real route.
   {
     executableRoute = () => ({}),
+    payerUsdc = PAYER_USDC,
     payerEth = PAYER_ETH,
     nativeFee = 0n,
     alsoRead,
   }: {
     executableRoute?: (n: number) => { minimumShortfall?: bigint; expiresInSeconds?: number };
+    payerUsdc?: bigint;
     payerEth?: bigint;
     nativeFee?: bigint;
     /** Another fake's reads, so a batched multicall mixing both is still answered. */
@@ -93,7 +95,7 @@ export async function installFakeSquid(
   const readUsdc = (txs: SentTransaction[], data: Hex): Hex | undefined => {
     const { functionName, args } = decodeFunctionData({ abi: erc20Abi, data });
     if (functionName === "balanceOf") {
-      const result = isPayer(args[0] as string) ? PAYER_USDC : 0n;
+      const result = isPayer(args[0] as string) ? payerUsdc : 0n;
       return encodeFunctionResult({ abi: erc20Abi, functionName, result });
     }
     if (functionName === "allowance") {

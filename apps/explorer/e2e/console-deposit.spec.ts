@@ -37,7 +37,7 @@ test("Deposit tokens says how to fix an amount it cannot deposit", async ({ page
   await expect(page.getByRole("link", { name: "Session Keys" })).toBeVisible({ timeout: 30_000 });
   await page.locator('[data-slot="dropdown-menu-trigger"]:not([aria-label])').click();
   await page.getByRole("menuitem", { name: "Add funds" }).click();
-  await page.getByRole("button", { name: "Deposit token" }).click();
+  await page.getByRole("button", { name: "Deposit from Filecoin" }).click();
 
   const deposit = page.getByRole("dialog", { name: "Deposit tokens" });
   await deposit

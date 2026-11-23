@@ -22,6 +22,10 @@ export const FILECOIN_CHAIN_ID = 314;
 export const SQUID_API_BASE_URL = "https://v2.api.squidrouter.com/v2";
 export const DEFAULT_SQUID_SLIPPAGE = 1;
 
+export function getSquidIntegratorId(): string {
+  return process.env.NEXT_PUBLIC_SQUID_INTEGRATOR_ID?.trim() || "filecoin-testing-94a4a25a-d40b-41cb-b148-e96098862";
+}
+
 // Squid multicall call type that overwrites the argument at `payload.inputPos`
 // with the full token balance the multicall holds when the hook runs, so the
 // deposit moves exactly the USDFC that arrived rather than a pre-computed amount.
