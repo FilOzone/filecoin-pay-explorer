@@ -1,39 +1,14 @@
 import { createHash } from "node:crypto";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
-import { importSPKI, jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
-import { isRecord, parseQuoteInput, readQuote } from "./quote";
+import { privyIdentityToken, verifiedUser } from "./privy";
+import { parseQuoteInput, readQuote } from "./quote";
 
 const orders = new URL("https://api.cdp.coinbase.com/platform/v2/onramp/orders");
 const noStore = { "cache-control": "no-store" };
 
 function error(message: string, status: number, code?: "sandbox_unconfigured") {
   return Response.json({ error: message, code }, { headers: noStore, status });
-}
-
-async function verifiedUser(token: string, appId: string, verificationKey: string, address: string) {
-  const key = await importSPKI(verificationKey.replaceAll("\\n", "\n"), "ES256");
-  const { payload } = await jwtVerify(token, key, {
-    typ: "JWT",
-    algorithms: ["ES256"],
-    issuer: "privy.io",
-    audience: appId,
-    requiredClaims: ["exp", "sub", "iat", "linked_accounts"],
-  });
-  if (!payload.sub?.startsWith("did:privy:") || typeof payload.linked_accounts !== "string") return null;
-  const accounts: unknown = JSON.parse(payload.linked_accounts);
-  const ownsWallet =
-    Array.isArray(accounts) &&
-    accounts.some(
-      (account: unknown) =>
-        isRecord(account) &&
-        account.type === "wallet" &&
-        account.chain_type === "ethereum" &&
-        account.wallet_client_type === "privy" &&
-        typeof account.address === "string" &&
-        account.address.toLowerCase() === address.toLowerCase(),
-    );
-  return ownsWallet ? payload.sub : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -63,11 +38,7 @@ export async function POST(request: NextRequest) {
   }
   const input = parseQuoteInput(body);
   if (!input) return error("Choose an embedded wallet and an amount from $5 to $50.", 400);
-  const authorization = request.headers.get("authorization");
-  // Browsers may keep the Privy identity in an HttpOnly cookie. Only accept it on same-origin POSTs.
-  const cookie =
-    request.headers.get("origin") === request.nextUrl.origin ? request.cookies.get("privy-id-token") : null;
-  const token = authorization === null ? cookie?.value : authorization.match(/^Bearer (\S+)$/)?.[1];
+  const token = privyIdentityToken(request);
   if (!token) return error("Wallet verification is unavailable for this estimate. Choose another funding option.", 401);
   const userId = await verifiedUser(token, appId, verificationKey, input.address).catch(() => null);
   if (!userId) return error("The signed-in session could not verify this embedded wallet.", 401);

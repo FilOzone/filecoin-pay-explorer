@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { generateJwt } from "@coinbase/cdp-sdk/auth";
+import type { NextRequest } from "next/server";
+import { privyIdentityToken, verifiedUser } from "../quote/privy";
 import { isRecord, parseQuoteInput, readQuote } from "../quote/quote";
+import { getSandboxAccess, isHostedSandboxConfigured } from "./access";
 
 const orders = new URL("https://api.cdp.coinbase.com/platform/v2/onramp/orders");
 const applePayPage = "https://pay.coinbase.com/v2/api-onramp/apple-pay";
@@ -9,8 +12,23 @@ const uuid = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const maxRequestBytes = 1024;
 
 // A partnerOrderRef is a correlation ID, not a provider idempotency guarantee.
-// Retain IDs, including ambiguous failures, for this development route instance. Never retain payment URLs.
+// Retain IDs, including ambiguous failures, for this server instance. Never retain payment URLs.
 const submittedAttempts = new Set<string>();
+
+// The shared preview limits signed provider requests per Privy user within each warm server instance.
+const previewRequests = new Map<string, number>();
+let requestMinute = 0;
+function allowPreviewRequest(userId: string) {
+  const minute = Math.floor(Date.now() / 60_000);
+  if (requestMinute !== minute) {
+    previewRequests.clear();
+    requestMinute = minute;
+  }
+  const count = previewRequests.get(userId) ?? 0;
+  if (count >= 10 || (count === 0 && previewRequests.size >= 1024)) return false;
+  previewRequests.set(userId, count + 1);
+  return true;
+}
 
 function error(message: string, status: number) {
   return Response.json({ error: message }, { headers: noStore, status });
@@ -46,24 +64,17 @@ function sandboxPaymentUrl(link: unknown) {
   if (!url || url.username || url.password || url.hash || `${url.origin}${url.pathname}` !== applePayPage) return null;
   const tokens = url.searchParams.getAll("sessionToken");
   if (tokens.length !== 1 || !tokens[0].trim()) return null;
-  // Keep Coinbase's widget parameters, such as locale. Local sessions stay in this iframe.
+  // Keep Coinbase's widget parameters, such as locale. Sandbox sessions stay in this iframe.
   url.searchParams.delete("redirect_url");
   url.searchParams.set("useApplePaySandbox", "true");
   return url.href;
 }
 
-export async function POST(request: Request) {
-  const url = new URL(request.url);
-  if (
-    process.env.NODE_ENV !== "development" ||
-    process.env.VERCEL ||
-    url.protocol !== "http:" ||
-    url.hostname !== "localhost" ||
-    (request.headers.get("x-forwarded-proto") ?? "http") !== "http"
-  )
-    return error("The simulator is only available on a local development server.", 404);
-  if (request.headers.get("host") !== url.host || request.headers.get("origin") !== url.origin)
-    return error("Open the simulator on the same localhost origin.", 403);
+export async function POST(request: NextRequest) {
+  const access = getSandboxAccess(request.headers);
+  if (!access || request.nextUrl.origin !== access.origin)
+    return error("This host is not configured for Coinbase sandbox sessions.", 404);
+  if (request.headers.get("origin") !== access.origin) return error("Open the simulator on the same origin.", 403);
   if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
     return error("The simulator requires a JSON request.", 415);
 
@@ -90,6 +101,23 @@ export async function POST(request: Request) {
     typeof body.attemptId === "string" && uuid.test(body.attemptId) ? body.attemptId.toLowerCase() : null;
   if (!isQuote && !attemptId) return error("The simulated order needs a checkout attempt ID.", 400);
 
+  let sandboxUser: string = input.address;
+  if (access.mode === "preview") {
+    if (!isHostedSandboxConfigured())
+      return error("The preview’s Coinbase or Privy sandbox integration is incomplete.", 503);
+    const token = privyIdentityToken(request);
+    const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
+    const verificationKey = process.env.PRIVY_VERIFICATION_KEY?.trim();
+    const userId =
+      token && appId && verificationKey
+        ? await verifiedUser(token, appId, verificationKey, input.address).catch(() => null)
+        : null;
+    if (!userId) return error("Sign in with the embedded wallet that will receive this sandbox purchase.", 401);
+    if (!allowPreviewRequest(userId))
+      return error("Please wait a minute before requesting another sandbox session.", 429);
+    sandboxUser = userId;
+  }
+
   const apiKeyId = process.env.CDP_API_KEY_ID?.trim();
   const apiKeySecret = process.env.CDP_API_KEY_SECRET?.trim();
   if (!apiKeyId || !apiKeySecret) return error("Set CDP_API_KEY_ID and CDP_API_KEY_SECRET on the local server.", 503);
@@ -103,18 +131,18 @@ export async function POST(request: Request) {
       requestPath: orders.pathname,
     });
   } catch {
-    return error("The local CDP credentials could not sign the sandbox request.", 503);
+    return error("The CDP credentials could not sign the sandbox request.", 503);
   }
 
   const now = new Date().toISOString();
-  const partnerUserRef = `sandbox-${createHash("sha256").update(input.address).digest("hex").slice(0, 32)}`;
+  const partnerUserRef = `sandbox-${createHash("sha256").update(sandboxUser).digest("hex").slice(0, 32)}`;
   if (attemptId) {
-    if (submittedAttempts.has(attemptId))
+    const key = `${partnerUserRef}:${attemptId}`;
+    if (submittedAttempts.has(key))
       return error("This sandbox attempt was already submitted. Resume the original session.", 409);
-    // Keep the local simulator bounded without evicting previous attempts and making them replayable.
-    if (submittedAttempts.size >= 1024)
-      return error("This development session has reached its sandbox order limit.", 429);
-    submittedAttempts.add(attemptId);
+    // Keep the simulator bounded without evicting previous attempts and making them replayable.
+    if (submittedAttempts.size >= 1024) return error("This server instance has reached its sandbox order limit.", 429);
+    submittedAttempts.add(key);
   }
 
   try {
@@ -134,7 +162,7 @@ export async function POST(request: Request) {
         purchaseCurrency: "USDC",
         destinationAddress: input.address,
         destinationNetwork: "base",
-        domain: "localhost",
+        domain: access.domain,
         // Standard sandbox orders require simulated contacts, a verification time and a test public IP.
         email: "tester@sandbox.test",
         phoneNumber: "+12025550142",

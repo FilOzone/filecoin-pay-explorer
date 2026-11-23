@@ -9,11 +9,20 @@ import { type GuestCoinbaseQuote, isRecord } from "@/app/api/coinbase/quote/quot
 import CoinbasePayment from "./CoinbasePayment";
 import { type Attempt, isOrder, isQuote, readAttempt, sameQuote } from "./session";
 
-async function requestSandbox(address: Address, action: "quote" | "order", attemptId?: string): Promise<unknown> {
+type IdentityToken = () => Promise<string | null>;
+
+async function requestSandbox(
+  address: Address,
+  action: "quote" | "order",
+  identity?: IdentityToken,
+  attemptId?: string,
+): Promise<unknown> {
+  const token = await identity?.().catch(() => null);
   const response = await fetch("/api/coinbase/sandbox", {
     method: "POST",
     cache: "no-store",
-    headers: { "content-type": "application/json" },
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", ...(token && { authorization: `Bearer ${token}` }) },
     body: JSON.stringify({ address, action, acceptedTerms: true, attemptId }),
   });
   const body: unknown = await response.json();
@@ -47,10 +56,12 @@ export default function ApplePaySandbox({
   address,
   example,
   configured,
+  identity,
 }: {
   address: Address;
   example: boolean;
   configured: boolean;
+  identity?: IdentityToken;
 }) {
   const storageKey = `filecoin-pay:apple-pay-sandbox:v1:${address.toLowerCase()}`;
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -84,7 +95,7 @@ export default function ApplePaySandbox({
 
   const pricing = useMutation({
     mutationFn: async () => {
-      const reply = await requestSandbox(address, "quote");
+      const reply = await requestSandbox(address, "quote", identity);
       if (!isRecord(reply) || !isQuote(reply.quote)) throw new Error("Coinbase returned an incomplete $5 quote.");
       return reply.quote;
     },
@@ -98,7 +109,7 @@ export default function ApplePaySandbox({
       } catch {
         throw new Error("Enable tab storage to keep this test payment recoverable.");
       }
-      const reply = await requestSandbox(address, "order", attemptId);
+      const reply = await requestSandbox(address, "order", identity, attemptId);
       if (!isOrder(reply)) throw new Error("Coinbase did not return a valid sandbox payment link.");
       save({
         attemptId,

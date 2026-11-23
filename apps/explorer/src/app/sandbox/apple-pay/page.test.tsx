@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import HostedApplePaySandbox from "./HostedApplePaySandbox";
+import PreviewApplePayDemo from "./PreviewApplePayDemo";
 import SandboxPage from "./page";
 
 const getHeaders = vi.hoisted(() => vi.fn());
@@ -9,10 +11,58 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("./ApplePaySandbox", () => ({ default: () => null }));
+vi.mock("./HostedApplePaySandbox", () => ({ default: () => null }));
+vi.mock("./PreviewApplePayDemo", () => ({ default: () => null }));
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
+});
+
+describe("shared PR checkout", () => {
+  const host = "review.example.org";
+  const wallet = "0x0000000000000000000000000000000000000001";
+  function preview() {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_GUEST_SANDBOX", "true");
+  }
+  it("opens the anonymous sample checkout with no Coinbase settings", async () => {
+    preview();
+    vi.stubEnv("COINBASE_SANDBOX_PREVIEW_HOST", undefined);
+    const result = await page(host, "https");
+    expect(result.props.children[0].type).toBe(PreviewApplePayDemo);
+    expect(result.props.children[0].props.example).toBe(true);
+    expect(result.props.children[1]).toBe(false);
+    expect((await page(host, "https", wallet)).props.children[0].props).toEqual({ address: wallet, example: false });
+  });
+  it("offers the signed-wallet sandbox only after the exact host has been enabled", async () => {
+    preview();
+    vi.stubEnv("COINBASE_SANDBOX_PREVIEW_HOST", host);
+    vi.stubEnv("COINBASE_SANDBOX_PREVIEW_ENABLED", "true");
+    for (const name of [
+      "CDP_API_KEY_ID",
+      "CDP_API_KEY_SECRET",
+      "NEXT_PUBLIC_PRIVY_APP_ID",
+      "NEXT_PUBLIC_PRIVY_CLIENT_ID",
+      "PRIVY_VERIFICATION_KEY",
+    ])
+      vi.stubEnv(name, "test-setting");
+    expect((await page(host, "https", wallet)).type).toBe(HostedApplePaySandbox);
+    expect((await page(host, "https", wallet)).props).toEqual({ address: wallet });
+    expect((await page(host, "https")).props.children[0].type).toBe(PreviewApplePayDemo);
+    expect((await page("other.example.org", "https", wallet)).props.children[0].type).toBe(PreviewApplePayDemo);
+    vi.stubEnv("COINBASE_SANDBOX_PREVIEW_ENABLED", undefined);
+    expect((await page(host, "https", wallet)).props.children[0].type).toBe(PreviewApplePayDemo);
+  });
+  it("hides the page outside an enabled preview", async () => {
+    preview();
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_GUEST_SANDBOX", "false");
+    await expect(page(host, "https")).rejects.toThrow("Not found");
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_GUEST_SANDBOX", "true");
+    vi.stubEnv("VERCEL_ENV", "production");
+    await expect(page(host, "https")).rejects.toThrow("Not found");
+  });
 });
 
 function page(host = "localhost:3105", protocol = "http", wallet?: string | string[]) {

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { getHostedSandboxDomain } from "./src/app/api/coinbase/sandbox/access";
 
 const svgrRule = {
   test: /\.svg$/,
@@ -53,12 +54,21 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_COINBASE_PR_DEMO:
+      isVercelPreview && process.env.NEXT_PUBLIC_COINBASE_GUEST_SANDBOX === "true" ? "true" : "false",
+  },
   allowedDevOrigins: ["192.168.0.*"],
   headers: async () => {
-    const rules = [{ source: "/(.*)", headers: securityHeaders }];
-    if (isDevelopment) {
+    const rules: Awaited<ReturnType<NonNullable<NextConfig["headers"]>>> = [
+      { source: "/(.*)", headers: securityHeaders },
+    ];
+    const domain = getHostedSandboxDomain();
+    const frameHost = domain ?? (isDevelopment && !process.env.VERCEL && !process.env.VERCEL_ENV ? "localhost" : null);
+    if (frameHost) {
       rules.push({
         source: "/sandbox/apple-pay",
+        has: [{ type: "host", value: frameHost.replaceAll(".", "\\.") }],
         headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy(" https://pay.coinbase.com") }],
       });
     }

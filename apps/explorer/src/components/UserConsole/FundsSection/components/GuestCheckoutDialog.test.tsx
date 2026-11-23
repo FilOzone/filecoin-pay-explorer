@@ -45,6 +45,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
@@ -121,13 +122,14 @@ describe("Coinbase guest estimate", () => {
   });
 
   it("shows a read-only $5 example when the preview is unconfigured, including for cookie-based sign-in", async () => {
+    vi.stubEnv("NEXT_PUBLIC_COINBASE_PR_DEMO", "true");
     identity.mockResolvedValue(null);
     request.mockResolvedValue(Response.json({ code: "sandbox_unconfigured" }, { status: 503 }));
     const otherMethods = vi.fn();
     mount(otherMethods);
     await screen.findByText("Example receipt");
-    expect(screen.getByRole("link", { name: /coinbase’s no-charge apple pay demo/i }).getAttribute("href")).toBe(
-      "https://onramp-demo-application-git-main-coinbase-vercel.vercel.app/apple-pay",
+    expect(screen.getByRole("link", { name: "Try the $5 Apple Pay checkout" }).getAttribute("href")).toBe(
+      `/sandbox/apple-pay?wallet=${wallet}`,
     );
     expect(screen.getByText(/figures illustrate a \$5 purchase/i)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();

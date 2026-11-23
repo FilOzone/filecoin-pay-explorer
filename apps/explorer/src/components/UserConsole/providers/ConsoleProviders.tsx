@@ -24,7 +24,7 @@ export const PRIVY_DEVELOPMENT_APP = {
   clientId: "client-WY6d6QKpTJMyLAHudjThbGxFZiCsX4oQwkvMVSLRUKmLf",
 } as const;
 
-const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
+export function ConsolePrivyProvider({ children }: { children: React.ReactNode }) {
   const configuredAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim();
   const configuredClientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID?.trim();
   const privyApp =
@@ -34,6 +34,14 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <PrivyProvider {...privyApp} config={PRIVY_CONFIG}>
+      {children}
+    </PrivyProvider>
+  );
+}
+
+const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <ConsolePrivyProvider>
       <ConsoleAccountProvider>
         <SynapseProvider>
           <TopUpActivityProvider>
@@ -41,7 +49,7 @@ const ConsoleProviders = ({ children }: { children: React.ReactNode }) => {
           </TopUpActivityProvider>
         </SynapseProvider>
       </ConsoleAccountProvider>
-    </PrivyProvider>
+    </ConsolePrivyProvider>
   );
 };
 

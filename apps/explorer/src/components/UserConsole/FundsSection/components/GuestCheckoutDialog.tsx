@@ -105,6 +105,34 @@ function LiveReceipt({ quote, estimate }: { quote: GuestCoinbaseQuote; estimate?
   );
 }
 
+function getTestLink(address: Address, example: boolean) {
+  const localSimulator =
+    process.env.NODE_ENV === "development" &&
+    typeof window !== "undefined" &&
+    window.location.protocol === "http:" &&
+    window.location.hostname === "localhost";
+  const href = `/sandbox/apple-pay?wallet=${encodeURIComponent(address)}`;
+  if (localSimulator)
+    return {
+      href,
+      label: "Test the $5 Apple Pay simulator",
+      description: "Opens a local test using this wallet address. No funds move.",
+    };
+  if (process.env.NEXT_PUBLIC_COINBASE_PR_DEMO === "true")
+    return {
+      href,
+      label: "Try the $5 Apple Pay checkout",
+      description: "Try the checkout in this preview. Your card charge is $0.",
+    };
+  if (example)
+    return {
+      href: "https://onramp-demo-application-git-main-coinbase-vercel.vercel.app/apple-pay",
+      label: "Try Coinbase’s no-charge Apple Pay demo",
+      description: "Opens Coinbase’s demo in a new tab with its own test wallet.",
+    };
+  return null;
+}
+
 export default function GuestCheckoutDialog({ address, onClose, onOtherMethods }: GuestCheckoutProps) {
   const [input, setInput] = useState("5.00");
   const amount = paymentAmount(input);
@@ -130,11 +158,7 @@ export default function GuestCheckoutDialog({ address, onClose, onOtherMethods }
     refetchOnWindowFocus: false,
   });
   const estimate = !route.isFetching && route.isSuccess ? route.data : undefined;
-  const localSimulator =
-    process.env.NODE_ENV === "development" &&
-    typeof window !== "undefined" &&
-    window.location.protocol === "http:" &&
-    window.location.hostname === "localhost";
+  const testLink = getTestLink(address, example);
 
   return (
     <Dialog
@@ -220,26 +244,18 @@ export default function GuestCheckoutDialog({ address, onClose, onOtherMethods }
             </>
           )}
         </section>
-        {(localSimulator || example) && (
+        {testLink && (
           <div className='text-sm'>
             <a
               className='inline-flex items-center gap-1.5 font-medium underline underline-offset-4'
-              href={
-                localSimulator
-                  ? `/sandbox/apple-pay?wallet=${encodeURIComponent(address)}`
-                  : "https://onramp-demo-application-git-main-coinbase-vercel.vercel.app/apple-pay"
-              }
+              href={testLink.href}
               rel='noopener noreferrer'
               target='_blank'
             >
-              {localSimulator ? "Test the $5 Apple Pay simulator" : "Try Coinbase’s no-charge Apple Pay demo"}
+              {testLink.label}
               <ExternalLink aria-hidden className='size-3.5' />
             </a>
-            <p className='mt-1 text-xs text-muted-foreground'>
-              {localSimulator
-                ? "Opens a local test using this wallet address. No funds move."
-                : "Opens Coinbase’s demo in a new tab with its own test wallet."}
-            </p>
+            <p className='mt-1 text-xs text-muted-foreground'>{testLink.description}</p>
           </div>
         )}
         <DialogFooter className='gap-2 sm:items-center sm:justify-between'>

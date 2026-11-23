@@ -134,7 +134,7 @@ Optional Explorer configuration:
 | `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS` | Selects the Filecoin network where notification UI is available; defaults to `mainnet` |
 | `PIMLICO_API_KEY` | Server-only key for the `/api/bundler` proxy that sends USDC-gas deposits to Pimlico's Base bundler; without it the route answers 503 |
 | `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX` | Shows the $5–$50 guest Apple Pay estimate in Add funds for an embedded Filecoin mainnet wallet. PR previews set this to `true`. Elsewhere it defaults to off. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only credentials from a CDP Live-environment Secret API Key. The hosted console requests pricing only. The local Apple Pay simulator can also create a sandbox order. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only CDP Live-environment credentials for Coinbase quotes and explicitly enabled sandbox orders. |
 | `PRIVY_VERIFICATION_KEY` | Server-side public verification key for `NEXT_PUBLIC_PRIVY_APP_ID`. Enable identity tokens in that Privy app so the server can verify the receiving wallet. |
 
 With CDP credentials configured, the Coinbase preview shows the quoted Base USDC, the Filecoin Pay minimum and the native FIL reserve before guest verification. When the preview has no CDP credentials, it shows a labeled, read-only $5 example using the figures from the recorded browser test. Users can inspect the fee breakdown, retry live pricing or return to the existing funding options. Checkout stays at the estimate until a fresh wallet can cover the complete Base operation before payment. [Coinbase Headless Onramp sandbox setup](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#testing)
@@ -154,7 +154,18 @@ Open [http://localhost:3000](http://localhost:3000). A local subgraph is not req
 2. From the repository root, run `pnpm --filter @filecoin-pay/explorer dev:apple-pay` and open the [local simulator](http://localhost:3105/sandbox/apple-pay). The standalone test uses a sample wallet address. To use the signed-in Privy wallet address, open **Add funds → Preview Apple Pay top-up → Test the $5 Apple Pay simulator** in the local console with `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX=true`.
 3. Review the terms and request a $5 quote. Check the Coinbase fee and estimated Base USDC, then start the simulated order and use the button in the Coinbase frame. The standard sandbox uses synthetic contact details, a `sandbox-` user reference and `useApplePaySandbox=true`. It exercises payment approval without charging a card or moving funds.
 
-The simulator runs in local development. Hosted guest email and phone verification requires Coinbase to enable Embedded Orders. Proving that a zero-ETH wallet can convert the purchased USDC and fund Filecoin Pay is a separate funded test.
+### Share the $5 checkout on a PR preview
+
+Share the preview URL ending in `/sandbox/apple-pay`. Anyone can open it, review the sample receipt, and step through payment approval, conversion and deposit confirmation. It costs $0 and requires no sign-in or Apple device. The browser remembers the demo step when the tester refreshes the same tab. Signed-in testers can also reach it from **Add funds → Preview Apple Pay top-up → Try the $5 Apple Pay checkout**.
+
+To test the **Coinbase-issued payment sheet** on a shared preview:
+
+1. Register the exact preview hostname in **CDP → Payments → Onramp & Offramp → Domain Allowlist**. Coinbase supplies the public Apple Pay domain association file. [Coinbase web app requirements](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#web-app-requirements)
+2. In the Explorer’s Vercel project, scope the Preview settings to the PR branch. Set `COINBASE_SANDBOX_PREVIEW_HOST` to the hostname without a scheme or path. Set `COINBASE_APPLE_PAY_DOMAIN_FILE_BASE64` to the base64 encoding of the exact file Coinbase supplied. Redeploy the PR. The verification service can now fetch the original bytes at `/.well-known/apple-developer-merchantid-domain-association`. Complete verification in CDP.
+3. On that same branch, set the server-side `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` and `PRIVY_VERIFICATION_KEY`. Use the matching `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_PRIVY_CLIENT_ID`, with identity tokens enabled in Privy. After Coinbase verifies the domain, set `COINBASE_SANDBOX_PREVIEW_ENABLED=true` and redeploy.
+4. Sign in to the preview console with email or Google. Open the $5 checkout from **Add funds**, review the terms and quote, then create the sandbox order and approve it inside Coinbase’s frame. The approved sandbox order uses synthetic US contact details and sends no funds. The public link without a wallet still opens the sample walkthrough.
+
+Hosted guest email and phone verification requires Coinbase to enable Embedded Orders. Confirming a zero-ETH wallet can convert a purchase and fund Filecoin Pay requires a separate funded test.
 
 ### Run notifications locally
 
