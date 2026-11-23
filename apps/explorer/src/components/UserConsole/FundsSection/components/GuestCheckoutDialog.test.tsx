@@ -126,6 +126,9 @@ describe("Coinbase guest estimate", () => {
     const otherMethods = vi.fn();
     mount(otherMethods);
     await screen.findByText("Example receipt");
+    expect(screen.getByRole("link", { name: /coinbase’s no-charge apple pay demo/i }).getAttribute("href")).toBe(
+      "https://onramp-demo-application-git-main-coinbase-vercel.vercel.app/apple-pay",
+    );
     expect(screen.getByText(/figures illustrate a \$5 purchase/i)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();

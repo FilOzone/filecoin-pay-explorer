@@ -13,7 +13,7 @@ import { Input } from "@filecoin-pay/ui/components/input";
 import { Label } from "@filecoin-pay/ui/components/label";
 import { getIdentityToken } from "@privy-io/react-auth";
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { ArrowRight, Clock3, Info, LoaderCircle, LockKeyhole, RotateCw, Wallet } from "lucide-react";
+import { ArrowRight, Clock3, ExternalLink, Info, LoaderCircle, LockKeyhole, RotateCw, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useDebounce } from "use-debounce";
 import { type Address, parseUnits } from "viem";
@@ -130,6 +130,11 @@ export default function GuestCheckoutDialog({ address, onClose, onOtherMethods }
     refetchOnWindowFocus: false,
   });
   const estimate = !route.isFetching && route.isSuccess ? route.data : undefined;
+  const localSimulator =
+    process.env.NODE_ENV === "development" &&
+    typeof window !== "undefined" &&
+    window.location.protocol === "http:" &&
+    window.location.hostname === "localhost";
 
   return (
     <Dialog
@@ -215,6 +220,28 @@ export default function GuestCheckoutDialog({ address, onClose, onOtherMethods }
             </>
           )}
         </section>
+        {(localSimulator || example) && (
+          <div className='text-sm'>
+            <a
+              className='inline-flex items-center gap-1.5 font-medium underline underline-offset-4'
+              href={
+                localSimulator
+                  ? `/sandbox/apple-pay?wallet=${encodeURIComponent(address)}`
+                  : "https://onramp-demo-application-git-main-coinbase-vercel.vercel.app/apple-pay"
+              }
+              rel='noopener noreferrer'
+              target='_blank'
+            >
+              {localSimulator ? "Test the $5 Apple Pay simulator" : "Try Coinbase’s no-charge Apple Pay demo"}
+              <ExternalLink aria-hidden className='size-3.5' />
+            </a>
+            <p className='mt-1 text-xs text-muted-foreground'>
+              {localSimulator
+                ? "Opens a local test using this wallet address. No funds move."
+                : "Opens Coinbase’s demo in a new tab with its own test wallet."}
+            </p>
+          </div>
+        )}
         <DialogFooter className='gap-2 sm:items-center sm:justify-between'>
           <Button
             disabled={!requestedAmount || coinbase.isFetching || route.isFetching}

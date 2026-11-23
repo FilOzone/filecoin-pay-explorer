@@ -579,6 +579,10 @@ test("a new email account can preview the $5 guest purchase only in sandbox mode
   await preview.click();
   const dialog = page.getByRole("dialog", { name: "Coinbase Apple Pay estimate" });
   await expect(dialog.getByLabel("Purchase amount (USD)")).toHaveValue("5.00");
+  await expect(dialog.getByRole("link", { name: "Test the $5 Apple Pay simulator" })).toHaveAttribute(
+    "href",
+    `/sandbox/apple-pay?wallet=${payer}`,
+  );
   await expect(dialog.getByText(/0\.05 FIL/).first()).toBeVisible({ timeout: 30_000 });
   expect(quotes).toEqual([{ address: payer, paymentAmount: "5.00" }]);
   expect(routes.at(-1)).toMatchObject({ fromAmount: "4400000", fromChain: "8453", toAddress: payer });

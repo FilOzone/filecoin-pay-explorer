@@ -13,6 +13,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${DEFAULT_NETWORK}`, request.url));
   }
 
+  if (pathname === "/sandbox/apple-pay") return NextResponse.next();
+
   if (pathname.startsWith("/console")) {
     // Older CLIs still print the pre-setup-page links.
     const setupPath = legacySetupPath(pathname, request.nextUrl.searchParams);

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:apple-pay": "next dev --hostname localhost --port 3105",
     "build": "next build",
     "start": "next start",
     "lint": "biome check --write",

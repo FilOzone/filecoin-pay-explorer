@@ -134,7 +134,7 @@ Optional Explorer configuration:
 | `NEXT_PUBLIC_NOTIFICATIONS_ELIGIBLE_NETWORKS` | Selects the Filecoin network where notification UI is available; defaults to `mainnet` |
 | `PIMLICO_API_KEY` | Server-only key for the `/api/bundler` proxy that sends USDC-gas deposits to Pimlico's Base bundler; without it the route answers 503 |
 | `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX` | Shows the $5–$50 guest Apple Pay estimate in Add funds for an embedded Filecoin mainnet wallet. PR previews set this to `true`. Elsewhere it defaults to off. |
-| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only Coinbase CDP credentials. The preview uses Headless Onramp's sandbox user reference and requests pricing only. |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | Server-only credentials from a CDP Live-environment Secret API Key. The hosted console requests pricing only. The local Apple Pay simulator can also create a sandbox order. |
 | `PRIVY_VERIFICATION_KEY` | Server-side public verification key for `NEXT_PUBLIC_PRIVY_APP_ID`. Enable identity tokens in that Privy app so the server can verify the receiving wallet. |
 
 With CDP credentials configured, the Coinbase preview shows the quoted Base USDC, the Filecoin Pay minimum and the native FIL reserve before guest verification. When the preview has no CDP credentials, it shows a labeled, read-only $5 example using the figures from the recorded browser test. Users can inspect the fee breakdown, retry live pricing or return to the existing funding options. Checkout stays at the estimate until a fresh wallet can cover the complete Base operation before payment. [Coinbase Headless Onramp sandbox setup](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#testing)
@@ -147,6 +147,14 @@ pnpm dev --filter @filecoin-pay/explorer
 ```
 
 Open [http://localhost:3000](http://localhost:3000). A local subgraph is not required when the environment variables point to hosted Goldsky endpoints.
+
+### Test a $5 Apple Pay sandbox order
+
+1. In Coinbase Developer Platform, switch to **Live** and create a **Secret API Key** using Ed25519. Set `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` in the Explorer server environment or the Git-ignored `apps/explorer/.env.local`. Coinbase selects sandbox mode per order. [Coinbase sandbox testing](https://docs.cdp.coinbase.com/onramp/headless-onramp/overview#testing)
+2. From the repository root, run `pnpm --filter @filecoin-pay/explorer dev:apple-pay` and open the [local simulator](http://localhost:3105/sandbox/apple-pay). The standalone test uses a sample wallet address. To use the signed-in Privy wallet address, open **Add funds → Preview Apple Pay top-up → Test the $5 Apple Pay simulator** in the local console with `NEXT_PUBLIC_COINBASE_GUEST_SANDBOX=true`.
+3. Review the terms and request a $5 quote. Check the Coinbase fee and estimated Base USDC, then start the simulated order and use the button in the Coinbase frame. The standard sandbox uses synthetic contact details, a `sandbox-` user reference and `useApplePaySandbox=true`. It exercises payment approval without charging a card or moving funds.
+
+The simulator runs in local development. Hosted guest email and phone verification requires Coinbase to enable Embedded Orders. Proving that a zero-ETH wallet can convert the purchased USDC and fund Filecoin Pay is a separate funded test.
 
 ### Run notifications locally
 
