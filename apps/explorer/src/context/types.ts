@@ -8,5 +8,5 @@ export interface SynapseContextType {
 export interface NetworkContextType {
   network: Network;
   setNetwork: React.Dispatch<React.SetStateAction<Network>>;
-  subgraphUrl: string;
+  subgraphUrl: string | undefined;
 }

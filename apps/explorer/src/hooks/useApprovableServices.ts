@@ -10,7 +10,7 @@ import { useServiceMetadata } from "./useServiceMetadata";
 // Only operators with real adoption qualify for the curated "Select Service"
 // dropdown: at least this many distinct paying accounts. Calibration is a
 // testnet with a handful of real payers, so its bar is much lower.
-const MIN_UNIQUE_PAYERS: Record<Network, number> = { mainnet: 11, calibration: 3 };
+const MIN_UNIQUE_PAYERS: Record<Network, number> = { mainnet: 11, calibration: 3, devnet: 1 };
 
 interface ApprovedOperatorClientsResponse {
   operatorApprovals: Array<{

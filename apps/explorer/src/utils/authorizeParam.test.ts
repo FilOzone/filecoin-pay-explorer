@@ -141,6 +141,10 @@ describe("parseNetworkParam", () => {
     assert.equal(parseNetworkParam(null), null);
     assert.equal(parseNetworkParam(undefined), null);
   });
+
+  it("refuses devnet, which only `next dev` against a foc-devnet serves", () => {
+    assert.equal(parseNetworkParam("devnet"), null);
+  });
 });
 
 describe("a link that carries both a revoke and an authorize", () => {

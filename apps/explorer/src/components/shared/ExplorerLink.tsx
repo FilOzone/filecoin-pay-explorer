@@ -14,7 +14,7 @@ const ExplorerLink = ({ address, label = "address" }: ExplorerLinkProps) => {
   return (
     <ServiceAddress
       value={address}
-      to={`${explorerUrls[network]}/address/${address}`}
+      to={network === "devnet" ? undefined : `${explorerUrls[network]}/address/${address}`}
       external
       monospace={true}
       label={label}
