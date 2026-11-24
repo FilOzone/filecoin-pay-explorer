@@ -20,7 +20,13 @@ const knownAddresses: Record<string, string> = {
   "0x5b27dbc6efefbb5ba8106fb19433048d60d6878f": "FIL One",
 };
 
-const normalizeName = (name: string) => name.trim().toLowerCase();
+// NFKC folds full-width and other compatibility forms; stripping format characters (zero-width, bidi) and
+// whitespace stops invisible edits from slipping a copied label past the impersonation check.
+const normalizeName = (name: string) =>
+  name
+    .normalize("NFKC")
+    .replace(/[\p{Cf}\s]+/gu, "")
+    .toLowerCase();
 const knownNames = new Set(Object.values(knownAddresses).map(normalizeName));
 
 export type ResolvedAddressName =

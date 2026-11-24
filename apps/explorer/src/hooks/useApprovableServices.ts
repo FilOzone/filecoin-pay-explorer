@@ -57,6 +57,7 @@ export function getApprovableServiceCandidates(approvals: ApprovedOperatorClient
 export interface ApprovableService {
   address: string;
   name: string;
+  nameSource: "known" | "onchain";
   description?: string;
   homepage?: string;
   payerCount: number;
@@ -101,7 +102,15 @@ export function useApprovableServices(options?: { networkOverride?: Network }) {
           // Still gated on an onchain name; the resolver drops impersonators of curated labels.
           const resolved = meta?.name ? resolveAddressName(candidate.address, meta.name) : undefined;
           if (!resolved || resolved.source === "rejected") return [];
-          return [{ ...candidate, name: resolved.name, description: meta?.description, homepage: meta?.homepage }];
+          return [
+            {
+              ...candidate,
+              name: resolved.name,
+              nameSource: resolved.source,
+              description: meta?.description,
+              homepage: meta?.homepage,
+            },
+          ];
         })
         .sort((a, b) => b.payerCount - a.payerCount || a.address.localeCompare(b.address)),
     [candidates, metadata],
