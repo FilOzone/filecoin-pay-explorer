@@ -39,8 +39,8 @@ importers:
         specifier: ^0.3.3
         version: 0.3.3(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5)
       '@filoz/keysmith':
-        specifier: ^0.1.0
-        version: 0.1.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
+        specifier: ^0.2.0
+        version: 0.2.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
       '@filoz/synapse-core':
         specifier: ^0.9.0
         version: 0.9.0(typescript@6.0.3)(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))
@@ -1990,8 +1990,8 @@ packages:
     resolution: {integrity: sha512-O8fUzmMm6U29HJMsOZn9myxlRSd3cx0RnX7QSOIbrv7kLzaUAaLCj2XWZ34e49GTiAmcvURaHWQSOmGM0vs95w==}
     engines: {node: '>=18'}
 
-  '@filoz/keysmith@0.1.0':
-    resolution: {integrity: sha512-rHtKdR9YDZzto9hWGrJXyBI6NvEj8LsWWgFz7fAnLBgSf4rDJv7fyi232flbC3ICiuPz3IqNo8+avQtHb8ycfw==}
+  '@filoz/keysmith@0.2.0':
+    resolution: {integrity: sha512-fX2hcDKRUsjh13CGX75xOY5Gra0ueqfKkbSuu5B72CUO40qnB8LUHY+dPKWGN65i3EGHMjRF8U9r0r7KL0Xlxw==}
     peerDependencies:
       viem: 2.x
 
@@ -13510,7 +13510,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@filoz/keysmith@0.1.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
+  '@filoz/keysmith@0.2.0(viem@2.56.5(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
     dependencies:
       '@noble/curves': 2.4.0
       '@noble/hashes': 2.4.0
@@ -14858,7 +14858,7 @@ snapshots:
 
   '@ipld/dag-cbor@10.0.2':
     dependencies:
-      cborg: 6.1.2
+      cborg: 6.1.5
       multiformats: 14.0.5
 
   '@ipld/dag-cbor@9.2.6':
@@ -15145,7 +15145,7 @@ snapshots:
       '@multiformats/multiaddr-matcher': 3.0.2
       '@sindresorhus/fnv1a': 3.1.0
       any-signal: 4.2.0
-      cborg: 6.1.2
+      cborg: 6.1.5
       delay: 7.0.0
       is-loopback-addr: 2.1.0
       it-length-prefixed: 11.0.1

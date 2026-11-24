@@ -144,7 +144,7 @@ vi.mock("./GroupKeyStep", () => ({
     return (
       <li>
         <h2>
-          <span className='sr-only'>Step {props.number}: </span>Give this tool an encryption key
+          <span className='sr-only'>Step {props.number}: </span>Share encryption access with this key
         </h2>
         <button type='button' onClick={props.onIssued}>
           Issue
@@ -248,18 +248,18 @@ describe("SetupSection", () => {
   });
 
   it("adds the group key step right after the key, only for a link with a pubkey, waiting for the authorization", async () => {
-    const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`;
+    const link = `${KEY_LINK}&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=groupKey`;
     await open(link);
     expect(stepTitles()).toEqual([
       "Step 1: Deposit and add Warm Storage",
       "Step 2: Authorize a session key",
-      "Step 3: Give this tool an encryption key",
+      "Step 3: Share encryption access with this key",
     ]);
     const before = dialogs.groupKey.at(-1);
     expect({ sessionKey: before?.sessionKey, expires: before?.expires, keyAgreement: before?.keyAgreement }).toEqual({
       sessionKey: KEY,
       expires: null,
-      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "keyspace" },
+      keyAgreement: { pubkey: PUBKEY, pubkeysig: `0x${"cd".repeat(65)}`, node: "groupKey", maxDepth: 7 },
     });
     cleanup();
 
@@ -278,7 +278,7 @@ describe("SetupSection", () => {
       { status: "success", result: FUTURE },
     ];
     state.usdfcFunds = 2n * ONE_USDFC;
-    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=groupKey`);
     expect(screen.queryByText("Console steps complete — finish in your terminal")).toBeNull();
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
@@ -292,7 +292,7 @@ describe("SetupSection", () => {
       { status: "success", result: FUTURE },
     ];
     state.usdfcFunds = 2n * ONE_USDFC;
-    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=keyspace`);
+    await open(`${KEY_LINK}&balance=2&pubkey=${PUBKEY}&pubkeysig=0x${"cd".repeat(65)}&node=groupKey`);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Issue" })));
     expect(screen.getByText(/This package contains the group key encrypted for this session key/)).toBeTruthy();
     expect(screen.getByText(/Once you have imported it, you can close this window\./)).toBeTruthy();

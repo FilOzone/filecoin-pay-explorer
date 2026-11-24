@@ -2,7 +2,7 @@ import { type InfiniteData, useInfiniteQuery, useQuery } from "@tanstack/react-q
 import { request } from "graphql-request";
 import { useMemo } from "react";
 import type { Network } from "@/types";
-import { getSubgraphUrl } from "@/utils/network";
+import { getSubgraphUrl, subgraphUrlOrThrow } from "@/utils/network";
 import useNetwork from "./useNetwork";
 
 export interface UseGraphQLQueryOptions<TData, TResult = TData> {
@@ -25,7 +25,7 @@ export function useGraphQLQuery<TData, TResult = TData>(options: UseGraphQLQuery
   return useQuery({
     queryKey: [...options.queryKey, network] as const,
     queryFn: async () => {
-      return request<TData>(subgraphUrl, options.query, options.variables);
+      return request<TData>(subgraphUrlOrThrow(subgraphUrl), options.query, options.variables);
     },
     select: options.select,
     enabled: options.enabled,
@@ -64,7 +64,7 @@ export function useGraphQLInfiniteQuery<TData, TResult, TPageParam = number>(
       // `getNextPageParam` produced, both of which are `TPageParam`.
       const pageParam = context.pageParam as TPageParam;
       const variables = options.getVariables(pageParam);
-      const data = await request<TData>(subgraphUrl, options.query, variables);
+      const data = await request<TData>(subgraphUrlOrThrow(subgraphUrl), options.query, variables);
       return options.select(data, pageParam);
     },
     getNextPageParam: options.getNextPageParam,
@@ -90,7 +90,7 @@ export function useGraphQLClient(options?: UseGraphQLClientOptions) {
     // switched account or token stops the walk instead of finishing it unseen.
     signal?: AbortSignal,
   ): Promise<T> => {
-    return request<T>({ url: subgraphUrl, document: query, variables, signal });
+    return request<T>({ url: subgraphUrlOrThrow(subgraphUrl), document: query, variables, signal });
   };
 
   return { executeQuery, network };

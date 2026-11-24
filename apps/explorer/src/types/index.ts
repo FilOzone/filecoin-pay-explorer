@@ -10,7 +10,7 @@ export type TransactionType =
   | "authorizeSessionKey"
   | "revokeSessionKey";
 
-export type Network = "calibration" | "mainnet";
+export type Network = "calibration" | "mainnet" | "devnet";
 
 export interface TransactionMetadata {
   type: TransactionType;
