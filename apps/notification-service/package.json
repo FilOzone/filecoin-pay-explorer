@@ -41,7 +41,7 @@
     "@filecoin-pay/configs": "workspace:^",
     "@types/node": "^26.1.1",
     "@types/react": "^19.3.0",
-    "drizzle-kit": "1.0.0-rc.4",
+    "drizzle-kit": "1.0.0-rc.5-5935859",
     "react": "^19.3.0",
     "typescript": "^6",
     "vitest": "^4.1.0",
