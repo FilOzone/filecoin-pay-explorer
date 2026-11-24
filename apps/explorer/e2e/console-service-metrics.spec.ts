@@ -1,5 +1,4 @@
 import type { Page } from "@playwright/test";
-import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -54,7 +53,6 @@ const stubServicePage = async (page: Page, answer: (request: SubgraphRequest) =>
       return route.fulfill({ json: { data } });
     },
   );
-  await answerServicePageRpc(page, OPERATOR);
   await page.route(
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),

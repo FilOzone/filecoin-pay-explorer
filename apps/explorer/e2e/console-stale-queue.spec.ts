@@ -1,4 +1,3 @@
-import { answerServicePageRpc } from "./fake-chain";
 import { expect, test } from "./fixtures";
 import { loginWithTestAccount } from "./privy";
 
@@ -53,7 +52,6 @@ test("an inactivity email link opens the queue on its dataset's page, scrolled t
       return route.fulfill({ json: { data: { accounts: [], userTokens: [], rails: [], dataSets: [] } } });
     },
   );
-  await answerServicePageRpc(page, warmStorage);
   await page.route(
     (url) => url.hostname === "notification-api-production.filoz.workers.dev",
     (route) => route.fulfill({ json: { subscribed: false } }),

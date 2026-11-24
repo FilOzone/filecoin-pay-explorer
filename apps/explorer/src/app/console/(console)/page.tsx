@@ -2,7 +2,7 @@
 import { LoadingStateCard } from "@filecoin-foundation/ui-filecoin/LoadingStateCard";
 import type { Account } from "@filecoin-pay/types";
 import { useConnection } from "wagmi";
-import { AlertsBanner, FundsSection, OperatorApprovalsSection, ServicesSection } from "@/components/UserConsole";
+import { AlertsBanner, FundsSection, ServicesSection } from "@/components/UserConsole";
 import { useTopUpActivity } from "@/components/UserConsole/providers/TopUpActivityContext";
 import { AccountNotFound, ErrorState, UnsupportedChain } from "@/components/UserConsole/States";
 import { useConsoleNetwork } from "@/components/UserConsole/useConsoleNetwork";
@@ -53,7 +53,6 @@ const AccountSections = ({ account, error, isLoading, network, alertsBanner }: A
         {alertsBanner}
       </div>
       <ServicesSection accountId={account.id} network={network} />
-      <OperatorApprovalsSection account={account} network={network} />
 
       {/* A failed background refetch still leaves the last good account on screen. */}
       {error ? <ErrorState error={error} /> : null}
