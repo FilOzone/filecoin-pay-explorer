@@ -1,19 +1,19 @@
 /**
- * Group key Grants for the setup page. filecoin-pin calls a Keysmith
- * *keyspace* a **group key**; the on-chain labels keep Keysmith's names
- * (`foc/ks`, `foc/kc`). The owner's wallet signs for one group key, and the
- * page wraps that key to the session key's key-agreement key, so the CLI can
- * encrypt and decrypt without the wallet.
+ * Group key Grants for the setup page (Keysmith format 2). Data sets record
+ * their group key as `foc/gkid` and its commitment as `foc/kc`. The owner's
+ * wallet signs for one group key, and the page wraps that key to the session
+ * key's key-agreement key, so the CLI can encrypt and decrypt without the wallet.
  *
  * Which group key is a rule shared with `filecoin-pin add --encrypt`
  * (`src/common/group-key.ts` there), so the console and the CLI always agree.
  */
 import {
   COMMITMENT_KEY,
+  deriveGroupKey,
   encodeDelivery,
   grantDescriptor,
-  KEYSPACE_ID_KEY,
-  keyspaceKeys,
+  groupPath as keysmithGroupPath,
+  MAX_CHAIN_LENGTH,
   rootClaim,
   type TypedDataSigner,
   wrapTo,
@@ -24,8 +24,36 @@ import { type Address, concat, type Hex, keccak256, slice, toHex } from "viem";
 export const ENCRYPTION_VERSION_KEY = "foc/enc";
 const ENCRYPTION_VERSION = "1";
 
+/** Data set metadata key naming its group key, as filecoin-pin writes it. */
+export const GROUP_KEY_ID_KEY = "foc/gkid";
+
 /** What the console text calls the Grant: a prefix the CLI checks, then base64url without padding. */
 export const GRANT_PREFIX = "fgr1_";
+
+/** What a Grant opens: the whole group key, or one group and everything beneath it. */
+export type GroupGrantNode = "groupKey" | `group:${string}`;
+
+/**
+ * The most onward delegation a Grant can allow: Keysmith caps a claim chain at
+ * {@link MAX_CHAIN_LENGTH} links, root included, so a higher `maxDepth` allows nothing more.
+ */
+export const MAX_GRANT_DEPTH = MAX_CHAIN_LENGTH - 1;
+
+/**
+ * A group path in Keysmith's canonical form (NFC names joined by "/"), or null
+ * when Keysmith would refuse it: an empty name, a name with leading or trailing
+ * whitespace, or a lone surrogate. Never throws.
+ */
+export function groupPath(path: string): string | null {
+  try {
+    return keysmithGroupPath(path);
+  } catch {
+    return null;
+  }
+}
+
+/** The group a node names, or null for the whole group key. */
+export const groupOf = (node: GroupGrantNode) => (node === "groupKey" ? null : node.slice("group:".length));
 
 /** A live data set that records a group key; others never take part in the choice. */
 export interface GroupKeyDataSet {
@@ -52,15 +80,15 @@ export type GroupKeyChoice =
 const CANONICAL_GROUP_KEY_ID = /^0x[0-9a-f]{32}$/;
 
 /**
- * "Oldest wins": skip data sets whose `foc/ks` is not a canonical id, group the
+ * "Oldest wins": skip data sets whose `foc/gkid` is not a canonical id, group the
  * rest by it, skip any group whose data sets disagree on `foc/kc` or are not all
  * `foc/enc` "1", and take the group holding the lowest data set id. With none
  * left, the owner's default group key. Ids are never case-folded: a reused id
  * must match the data sets that record it exactly.
  */
 export function chooseGroupKey(owner: Address, dataSets: readonly GroupKeyDataSet[]): GroupKeyChoice {
-  const canonical = dataSets.filter((dataSet) => CANONICAL_GROUP_KEY_ID.test(dataSet.metadata[KEYSPACE_ID_KEY] ?? ""));
-  const groups = Map.groupBy(canonical, (dataSet) => dataSet.metadata[KEYSPACE_ID_KEY] as Hex);
+  const canonical = dataSets.filter((dataSet) => CANONICAL_GROUP_KEY_ID.test(dataSet.metadata[GROUP_KEY_ID_KEY] ?? ""));
+  const groups = Map.groupBy(canonical, (dataSet) => dataSet.metadata[GROUP_KEY_ID_KEY] as Hex);
   let best: { groupKeyId: Hex; commitment: string; oldest: bigint } | undefined;
   for (const [groupKeyId, members] of groups) {
     const commitment = members[0]?.metadata[COMMITMENT_KEY];
@@ -73,7 +101,7 @@ export function chooseGroupKey(owner: Address, dataSets: readonly GroupKeyDataSe
   if (best) return { groupKeyId: best.groupKeyId, commitment: best.commitment };
 
   const groupKeyId = defaultGroupKeyId(owner);
-  const invalid = canonical.filter((dataSet) => dataSet.metadata[KEYSPACE_ID_KEY] === groupKeyId);
+  const invalid = canonical.filter((dataSet) => dataSet.metadata[GROUP_KEY_ID_KEY] === groupKeyId);
   if (invalid.length > 0) {
     return { error: "default-group-key-invalid", groupKeyId, dataSetIds: invalid.map(({ dataSetId }) => dataSetId) };
   }
@@ -93,8 +121,10 @@ export interface GroupKeyGrantInput {
   bearer: Address;
   /** The session key's key-agreement key, which the Grant is wrapped to. */
   pubkey: Hex;
-  /** The Keysmith node the Grant opens, as the link asked for it. Only whole group keys for now. */
-  node: "keyspace";
+  /** The Keysmith node the Grant opens: the link's, or a group beneath it the owner narrowed to. */
+  node: GroupGrantNode;
+  /** How many links the session key may add below the root claim, 0 to {@link MAX_GRANT_DEPTH}. */
+  maxDepth: number;
   /** Unix seconds: the session key's authorization expiry. Revoking the key does not end the claim sooner. */
   expires: bigint;
 }
@@ -108,16 +138,16 @@ export interface GroupKeyGrantInput {
  * a key that does not match the recorded commitment.
  */
 export async function issueGroupKeyGrant(wallet: TypedDataSigner, input: GroupKeyGrantInput): Promise<string> {
-  const ref = { owner: input.owner, keyspace: input.groupKeyId };
-  const { kk } = await keyspaceKeys(wallet, ref, input.commitment ? { commitment: input.commitment } : {});
+  const ref = { owner: input.owner, groupKeyId: input.groupKeyId };
+  const { groupKey } = await deriveGroupKey(wallet, ref, input.commitment ? { commitment: input.commitment } : {});
   try {
     const { chain, nodeKey } = await rootClaim(wallet, {
       ...ref,
       chainId: BigInt(input.chainId),
-      kk,
+      groupKey,
       node: input.node,
       bearer: input.bearer,
-      maxDepth: 0,
+      maxDepth: input.maxDepth,
       expires: Number(input.expires),
     });
     try {
@@ -127,7 +157,7 @@ export async function issueGroupKeyGrant(wallet: TypedDataSigner, input: GroupKe
       nodeKey.fill(0);
     }
   } finally {
-    kk.fill(0);
+    groupKey.fill(0);
   }
 }
 

@@ -2,7 +2,7 @@ export const formatPercentage = (value: number): string => `${value >= 0 ? "+" :
 
 export const formatAddress = (address: string): string => `${address.slice(0, 6)}...${address.slice(-4)}`;
 
-export const formatDate = (timestamp: bigint): string =>
+export const formatDate = (timestamp: bigint | string): string =>
   new Date(Number(timestamp) * 1000).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -17,7 +17,7 @@ export function formatCompactNumber(value: number | string | bigint, decimals: n
 
 export function formatToken(
   value: number | string | bigint,
-  tokenDecimals: number | bigint = 18,
+  tokenDecimals: number | string | bigint = 18,
   symbol: string = "",
   decimals: number = 2,
 ) {

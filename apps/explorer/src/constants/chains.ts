@@ -1,3 +1,4 @@
+import { toChain, validateDevnetInfo } from "@filoz/synapse-core/devnet";
 import { calibration as synapseCalibration, mainnet as synapseMainnet } from "@filoz/synapse-sdk";
 import type { Address } from "viem";
 import { arbitrum, avalanche, base, bsc, mainnet as ethereum, optimism, polygon } from "viem/chains";
@@ -113,6 +114,30 @@ export const calibration: Chain = {
   ],
 };
 
+/**
+ * A local foc-devnet, for console development only: `next dev` with NEXT_PUBLIC_DEVNET_INFO set (the devnet's
+ * devnet-info.json). Undefined in any other build, so the env var leaking into a deployment adds nothing.
+ * It has no subgraph (see getSubgraphUrl). In the browser, RPC goes through the /api/devnet-rpc rewrite in
+ * next.config.ts, since Lotus sends no CORS headers; on the server it goes to Lotus directly.
+ */
+export const devnet: Chain | undefined =
+  process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DEVNET_INFO
+    ? devnetChain(process.env.NEXT_PUBLIC_DEVNET_INFO)
+    : undefined;
+
+function devnetChain(json: string): Chain {
+  const chain = toChain(validateDevnetInfo(JSON.parse(json)));
+  const lotus = chain.rpcUrls.default.http[0];
+  const rpc = typeof window === "undefined" ? lotus : `${window.location.origin}/api/devnet-rpc`;
+  return {
+    ...chain,
+    label: "Devnet",
+    slug: "devnet",
+    rpcUrls: { default: { http: [rpc] } },
+    contracts: { ...chain.contracts, payments: chain.contracts.filecoinPay },
+  } as unknown as Chain; // synapse-core's devnet chain carries its own (older) ABI types
+}
+
 export const SQUID_SOURCE_CHAINS = [
   mainnet,
   { ...arbitrum, name: "Arbitrum" },
@@ -134,7 +159,9 @@ export function getChain(network: Network = "calibration"): Chain {
       return mainnet;
     case "calibration":
       return calibration;
-    default:
-      throw new Error(`Chain with network ${network} not found`);
+    case "devnet":
+      if (devnet) return devnet;
+      break;
   }
+  throw new Error(`Chain with network ${network} not found`);
 }

@@ -10,6 +10,7 @@ import {
   ServiceErrorState,
   ServiceHeader,
   ServiceLoadingState,
+  ServiceMetrics,
   ServiceNotFoundState,
   ServicePricing,
 } from "./components";
@@ -70,6 +71,10 @@ export const ServiceDetail: React.FC<ServiceDetailProps> = ({
       <ServiceHeader operatorAddress={operatorId} profile={profile} />
 
       {profile.pricing ? <ServicePricing pricing={profile.pricing} /> : null}
+
+      {BigInt(service.totalRails) > 0n ? (
+        <ServiceMetrics accountId={accountId} network={network} operatorId={operatorId} />
+      ) : null}
 
       <RailsSection
         key={`${network}:${accountId}:${operatorId}`}

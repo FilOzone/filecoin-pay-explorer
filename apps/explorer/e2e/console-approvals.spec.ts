@@ -80,3 +80,22 @@ test("a failed Load more keeps the loaded approvals and can be retried", async (
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(increaseButtons).toHaveCount(APPROVAL_COUNT);
 });
+
+// A real viem multicall (aggregate3, allowFailure, string decoding) turns the contract's metadata into the name.
+test("a service with on-chain metadata shows its self-reported name", async ({ page }) => {
+  test.skip(process.env.E2E_MODE === "real", "sets the service's metadata in the fake chain");
+  const named = approval(0).operator.address;
+  await page.addInitScript((address) => {
+    const fake = window as unknown as { __fakeServiceMetadata: Record<string, { name: string; description: string }> };
+    fake.__fakeServiceMetadata = { [address]: { name: "Acme Storage", description: "Warm storage by Acme" } };
+  }, named);
+  await openApprovals(page, "approvals-metadata@fake-privy.test");
+
+  const row = page.getByRole("row").filter({ hasText: "Acme Storage" });
+  await expect(row.getByRole("img", { name: "Self-reported on-chain name" })).toBeVisible();
+  await expect(row.locator("[title]", { hasText: "Acme Storage" })).toHaveAttribute(
+    "title",
+    `Self-reported on-chain name: Acme Storage\nWarm storage by Acme\n${named}`,
+  );
+  await expect(page.getByRole("row").filter({ hasText: "0x00000000...0000000002" })).toHaveCount(1);
+});

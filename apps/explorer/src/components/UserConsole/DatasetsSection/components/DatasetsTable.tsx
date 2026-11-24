@@ -9,15 +9,17 @@ import { getDatasetColumns } from "../data/columnDefinitions";
 export type DatasetsTableProps = {
   data: DataSet[];
   network: Network;
-  currentEpoch: bigint | undefined;
 };
 
-function DatasetsTable({ data, network, currentEpoch }: DatasetsTableProps) {
-  const columns = useMemo(() => getDatasetColumns(network, currentEpoch), [network, currentEpoch]);
+function DatasetsTable({ data, network }: DatasetsTableProps) {
+  // Rebuilt columns would remount every cell, dropping an open or pending termination.
+  const columns = useMemo(() => getDatasetColumns(network), [network]);
 
   const table = useReactTable({
     data,
     columns,
+    // Index-based ids would hand a row's cell state to another dataset when a refresh reorders the page.
+    getRowId: (dataSet) => dataSet.id,
     getCoreRowModel: getCoreRowModel(),
     enableSorting: false,
   });

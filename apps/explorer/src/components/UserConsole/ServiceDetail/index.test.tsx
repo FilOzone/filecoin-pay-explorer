@@ -26,6 +26,9 @@ vi.mock("@/components/shared", () => ({
   CopyableText: ({ value }: { value: string }) => <span>{value}</span>,
 }));
 
+vi.mock("./components/ServiceMetrics", () => ({
+  default: () => <div>Spend and funding</div>,
+}));
 vi.mock("../RailsSection", () => ({
   RailsSection: () => <div>Payment rails</div>,
 }));
@@ -60,6 +63,24 @@ describe("ServiceDetail", () => {
 
     expect(screen.getByText("Payment rails")).toBeTruthy();
     expect(screen.queryByTestId("datasets")).toBeNull();
+  });
+
+  it("shows the metrics above the rails for any operator", () => {
+    mocks.service = { totalRails: "1" };
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+
+    const metrics = screen.getByText("Spend and funding");
+    const rails = screen.getByText("Payment rails");
+    expect(metrics.compareDocumentPosition(rails) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // An approval alone would otherwise show a row of zeros for a service never used.
+  it("hides the metrics for a pair with no rails", () => {
+    mocks.service = { totalRails: "0" };
+    render(<ServiceDetail network='mainnet' isFilecoinChain={true} operatorAddress={OPERATOR} userAddress={PAYER} />);
+
+    expect(screen.queryByText("Spend and funding")).toBeNull();
+    expect(screen.getByText("Payment rails")).toBeTruthy();
   });
 
   it("remounts datasets when the payer changes", () => {

@@ -19,7 +19,9 @@ export function getNotificationsEligibleNetwork(): Network {
   return parseEligibleNetwork();
 }
 
-export function getSubgraphUrl(network: Network): string {
+/** Undefined for the devnet, which has no subgraph: queries against it fail with noIndexer. */
+export function getSubgraphUrl(network: Network): string | undefined {
+  if (network === "devnet") return undefined;
   const urls = {
     mainnet: process.env.NEXT_PUBLIC_SUBGRAPH_URL_MAINNET,
     calibration: process.env.NEXT_PUBLIC_SUBGRAPH_URL_CALIBRATION,
@@ -31,5 +33,13 @@ export function getSubgraphUrl(network: Network): string {
     throw new Error(`Missing environment variable: NEXT_PUBLIC_SUBGRAPH_URL_${network.toUpperCase()}`);
   }
 
+  return url;
+}
+
+export const noIndexer = new Error("No indexer on devnet: this list needs a subgraph, and foc-devnet has none.");
+
+/** The subgraph URL to query, or the noIndexer error. */
+export function subgraphUrlOrThrow(url: string | undefined): string {
+  if (url === undefined) throw noIndexer;
   return url;
 }

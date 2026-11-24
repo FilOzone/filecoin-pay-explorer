@@ -11,8 +11,7 @@ export type RankedDataSet = {
 };
 
 /** Whole days since the dataset's last write, floored, never negative. */
-export function daysInactive(lastWriteAt: bigint, nowSeconds: bigint): bigint {
-  // GraphQL BigInt values arrive as decimal strings.
+export function daysInactive(lastWriteAt: string | bigint, nowSeconds: bigint): bigint {
   const elapsed = nowSeconds - BigInt(lastWriteAt);
   return elapsed > 0n ? elapsed / SECONDS_PER_DAY : 0n;
 }

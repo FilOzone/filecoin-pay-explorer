@@ -5,12 +5,12 @@ export type TransactionType =
   | "approveOperator"
   | "increaseApproval"
   | "settleRail"
-  | "terminateRail"
+  | "terminateDataSet"
   | "createSessionKey"
   | "authorizeSessionKey"
   | "revokeSessionKey";
 
-export type Network = "calibration" | "mainnet";
+export type Network = "calibration" | "mainnet" | "devnet";
 
 export interface TransactionMetadata {
   type: TransactionType;

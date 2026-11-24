@@ -8,10 +8,9 @@ import {
   GET_ACCOUNT_RATE_PERIODS,
   GET_ACCOUNT_TOKEN,
   GET_ACCOUNT_TOKENS,
-  GET_SUBGRAPH_BLOCK,
 } from "@/services/grapql/queries";
 import type { Network } from "@/types";
-import { fetchAllPages, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
+import { fetchAllPages, fetchSubgraphMeta, SUBGRAPH_PAGE_SIZE } from "@/utils/fetchAllPages";
 import { toAccountId } from "@/utils/hexUtils";
 import { useGraphQLClient, useGraphQLInfiniteQuery, useGraphQLQuery } from "./useGraphQLQuery";
 import useNetwork from "./useNetwork";
@@ -235,17 +234,9 @@ export const useAccountSpendHistory = (
       // the two walks see different states, and cursor paging can miss rows
       // outright: ids are not ordered in time, so an entity written mid-walk can
       // land below the cursor.
-      // Nullable here and only here: the subgraph omits `_meta` while a
-      // deployment is starting up. Throwing lets Query retry, where falling back
-      // to the clock would let open periods accrue past the data that exists —
-      // and it is what lets everything downstream treat the block as given.
-      const { _meta } = await executeQuery<{ _meta: AccountSpendHistoryResponse["_meta"] | null }>(
-        GET_SUBGRAPH_BLOCK,
-        undefined,
-        signal,
-      );
-
-      if (!_meta) throw new Error("Subgraph has not reported an indexed block yet");
+      // A missing block fails the read: falling back to the clock would let open
+      // periods accrue past the data that exists.
+      const _meta = await fetchSubgraphMeta(executeQuery, signal);
       const block = _meta.block.number;
 
       // Ids are transaction hash plus log index, so they carry no order in time.

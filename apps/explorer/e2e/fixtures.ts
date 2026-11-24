@@ -12,6 +12,7 @@ export const test = base.extend<{ noNetwork: undefined }>({
     async ({ context, page }, use) => {
       if (process.env.E2E_MODE === "real") return use(undefined);
       const blocked: string[] = [];
+      let testEnded = false;
       await context.route(
         (url) => url.hostname !== "localhost",
         (route) => {
@@ -19,6 +20,9 @@ export const test = base.extend<{ noNetwork: undefined }>({
           if (new URL(request.url()).hostname === "plausible.io") {
             return route.fulfill({ contentType: "text/javascript", body: "" });
           }
+          // Refetches the page starts once the test is over are cut off without failing it. A fake still mid-answer
+          // during unrouteAll may have fulfilled this route already.
+          if (testEnded) return route.abort("blockedbyclient").catch(() => {});
           blocked.push(`${request.method()} ${request.url()} ${request.postData()?.slice(0, 120) ?? ""}`.trim());
           return route.abort("blockedbyclient");
         },
@@ -32,6 +36,7 @@ export const test = base.extend<{ noNetwork: undefined }>({
       );
       await installFakeChain(page);
       await use(undefined);
+      testEnded = true;
       // Balance polls can still be mid-answer when the test ends.
       await page.unrouteAll({ behavior: "ignoreErrors" });
       expect(blocked, "requests that would have left the machine").toEqual([]);
