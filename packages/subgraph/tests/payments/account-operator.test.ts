@@ -8,7 +8,12 @@ import {
   handleRailRateModified,
   handleRailTerminated,
 } from "../../src/payments";
-import { getAccountOperatorEntityId, getOperatorApprovalEntityId, getRailEntityId } from "../../src/utils/keys";
+import {
+  getAccountOperatorEntityId,
+  getOperatorApprovalEntityId,
+  getOperatorTokenEntityId,
+  getRailEntityId,
+} from "../../src/utils/keys";
 import { ZERO_BIG_INT } from "../../src/utils/metrics";
 import { mockERC20Contract } from "../mocks";
 import {
@@ -165,6 +170,38 @@ describe("AccountOperator projection", () => {
 
     assertAccountOperatorState(TEST_ADDRESSES.ACCOUNT, TEST_ADDRESSES.OPERATOR, "1", "0", "0", "0");
     assert.fieldEquals("Rail", getRailEntityId(railId).toHexString(), "state", "TERMINATED");
+  });
+
+  test("removes only the terminated rail's rate from operator usage", () => {
+    updateApproval(TEST_ADDRESSES.TOKEN, true);
+    createRail(21);
+    createRail(22);
+
+    const railId = GraphBN.fromI32(21);
+    const rate = TEST_AMOUNTS.PAYMENT_RATE_LOW;
+    const remainingRate = TEST_AMOUNTS.PAYMENT_RATE_MEDIUM;
+    handleRailRateModified(createRailRateModifiedEvent(railId, ZERO_BIG_INT, rate));
+    handleRailRateModified(createRailRateModifiedEvent(GraphBN.fromI32(22), ZERO_BIG_INT, remainingRate));
+
+    const approvalId = getOperatorApprovalEntityId(
+      TEST_ADDRESSES.ACCOUNT,
+      TEST_ADDRESSES.OPERATOR,
+      TEST_ADDRESSES.TOKEN,
+    ).toHexString();
+    const tokenId = getOperatorTokenEntityId(TEST_ADDRESSES.OPERATOR, TEST_ADDRESSES.TOKEN).toHexString();
+    const initialRate = rate.plus(remainingRate).toString();
+    assert.fieldEquals("OperatorApproval", approvalId, "rateUsage", initialRate);
+    assert.fieldEquals("OperatorToken", tokenId, "rateUsage", initialRate);
+
+    const termination = createRailTerminatedEvent(railId, TEST_ADDRESSES.ACCOUNT, GraphBN.fromI32(100));
+    handleRailTerminated(termination);
+    assert.fieldEquals("OperatorApproval", approvalId, "rateUsage", remainingRate.toString());
+    assert.fieldEquals("OperatorToken", tokenId, "rateUsage", remainingRate.toString());
+
+    handleRailTerminated(termination);
+    handleRailRateModified(createRailRateModifiedEvent(railId, rate, remainingRate));
+    assert.fieldEquals("OperatorApproval", approvalId, "rateUsage", remainingRate.toString());
+    assert.fieldEquals("OperatorToken", tokenId, "rateUsage", remainingRate.toString());
   });
 
   test("clamps an unexpected active-rail decrement at zero", () => {

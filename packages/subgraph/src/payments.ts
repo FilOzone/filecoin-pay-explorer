@@ -15,6 +15,7 @@ import {
 import {
   FeeAuctionPurchase,
   OperatorApproval,
+  OperatorToken,
   ProcessedRailRateModification,
   Rail,
   RailRatePeriod,
@@ -46,7 +47,13 @@ import {
   updateOperatorTokenLockup,
   updateOperatorTokenRate,
 } from "./utils/helpers";
-import { getIdFromTxHashAndLogIndex, getRailEntityId, getRateChangeQueueEntityId } from "./utils/keys";
+import {
+  getIdFromTxHashAndLogIndex,
+  getOperatorApprovalEntityId,
+  getOperatorTokenEntityId,
+  getRailEntityId,
+  getRateChangeQueueEntityId,
+} from "./utils/keys";
 import { MetricsCollectionOrchestrator, ONE_BIG_INT, ZERO_BIG_INT } from "./utils/metrics";
 
 function failRatePeriodInvariant(
@@ -280,6 +287,18 @@ export function handleRailTerminated(event: RailTerminatedEvent): void {
   currentRatePeriod.save();
 
   if (previousRailState == "ACTIVE") {
+    const operatorApproval = OperatorApproval.load(getOperatorApprovalEntityId(rail.payer, rail.operator, rail.token));
+    if (operatorApproval) {
+      updateOperatorRate(operatorApproval, rail.paymentRate, ZERO_BIG_INT);
+      operatorApproval.save();
+    }
+
+    const operatorToken = OperatorToken.load(getOperatorTokenEntityId(rail.operator, rail.token));
+    if (operatorToken) {
+      updateOperatorTokenRate(operatorToken, rail.paymentRate, ZERO_BIG_INT);
+      operatorToken.save();
+    }
+
     const accountOperator = createOrLoadAccountOperator(rail.payer, rail.operator).accountOperator;
     accountOperator.totalActiveRails = accountOperator.totalActiveRails.gt(ZERO_BIG_INT)
       ? accountOperator.totalActiveRails.minus(ONE_BIG_INT)
